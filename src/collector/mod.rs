@@ -19,6 +19,9 @@ use std::collections::HashMap;
 use anyhow::{bail, Result};
 use log::{error, warn};
 
+mod skb;
+use skb::SkbCollector;
+
 /// Generic trait representing a collector. All collectors are required to
 /// implement this, as they'll be manipulated through this trait.
 trait Collector {
@@ -114,6 +117,10 @@ impl CollectorsCollection {
 /// manipulating the collectors.
 pub(crate) fn get_collectors() -> Result<CollectorsCollection> {
     let mut collection = CollectorsCollection::new();
+
+    collection
+        .register(Box::new(SkbCollector::new()?))?;
+
     Ok(collection)
 }
 
