@@ -1,0 +1,17 @@
+container:
+  image: rust:latest
+
+test_task:
+  registry_cache:
+    folder: $CARGO_HOME/registry
+    fingerprint_script: cat Cargo.lock
+  target_cache:
+    folder: target
+    fingerprint_script:
+      - rustc --version
+      - cat Cargo.lock
+  build_script: cargo build --verbose
+  test_script: cargo test --verbose
+  install_fmt_script: rustup component add rustfmt
+  fmt_check_script: cargo fmt --check
+  before_cache_script: rm -rf $CARGO_HOME/registry/index
