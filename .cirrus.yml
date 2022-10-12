@@ -12,6 +12,10 @@ test_task:
       - cat Cargo.lock
   build_script: cargo build --verbose
   test_script: cargo test --verbose
-  install_fmt_script: rustup component add rustfmt
-  fmt_check_script: cargo fmt --check
+  install_cargo_deps_script:
+    - rustup component add rustfmt
+    - rustup component add clippy
+  check_script:
+    - cargo fmt --check
+    - cargo clippy -- -D warnings
   before_cache_script: rm -rf $CARGO_HOME/registry/index
