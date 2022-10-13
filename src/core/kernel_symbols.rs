@@ -44,7 +44,7 @@ macro_rules! get_symbols {
                 let symbol: &str = data[2]
                     .split('\t')
                     .next()
-                    .ok_or(anyhow!("Couldn't get symbol name for {}", data[0]))?;
+                    .ok_or_else(|| anyhow!("Couldn't get symbol name for {}", data[0]))?;
 
                 map.insert(u64::from_str_radix(data[0], 16)?, String::from(symbol));
             }
@@ -58,7 +58,7 @@ macro_rules! get_symbols {
 pub(crate) fn get_symbol_name(addr: u64) -> Result<String> {
     Ok(get_symbols!()?
         .get_by_left(&addr)
-        .ok_or(anyhow!("Can't get symbol name for {}", addr))?
+        .ok_or_else(|| anyhow!("Can't get symbol name for {}", addr))?
         .clone())
 }
 
@@ -66,7 +66,7 @@ pub(crate) fn get_symbol_name(addr: u64) -> Result<String> {
 pub(crate) fn get_symbol_addr(name: &str) -> Result<u64> {
     Ok(*get_symbols!()?
         .get_by_right(name)
-        .ok_or(anyhow!("Can't get symbol address for {}", name))?)
+        .ok_or_else(|| anyhow!("Can't get symbol address for {}", name))?)
 }
 
 /// Given an address, try to find the nearest symbol, if any.
