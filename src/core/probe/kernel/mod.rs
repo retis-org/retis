@@ -11,12 +11,14 @@
 use anyhow::Result;
 
 mod kprobe;
+mod raw_tracepoint;
 
 /// Probes types supported by this crate.
 #[allow(dead_code)]
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) enum ProbeType {
     Kprobe,
+    RawTracepoint,
     Max,
 }
 
@@ -45,6 +47,7 @@ impl Kernel {
         // Keep synced with the order of ProbeType!
         let probes: [ProbeSet; ProbeType::Max as usize] = [
             ProbeSet::new(Box::new(kprobe::KprobeBuilder::new())),
+            ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new())),
         ];
 
         Ok(Kernel { probes })

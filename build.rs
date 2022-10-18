@@ -33,6 +33,7 @@ fn build_probe(source: &str) {
 fn main() {
     // core::probe::kernel
     build_probe("src/core/probe/kernel/bpf/kprobe.bpf.c");
+    build_probe("src/core/probe/kernel/bpf/raw_tracepoint.bpf.c");
 
     println!("cargo:rerun-if-changed={}", INCLUDE_PATH);
 }
