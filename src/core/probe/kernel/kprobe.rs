@@ -30,6 +30,8 @@ impl ProbeBuilder for KprobeBuilder {
         }
 
         let open_obj = KprobeSkelBuilder::default().open()?.obj;
+        reuse_map_fds(&open_obj, &map_fds)?;
+
         let obj = open_obj.load()?;
         self.obj = Some(obj);
         Ok(())

@@ -8,9 +8,9 @@
 
 #![allow(dead_code)] // FIXME
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use anyhow::Result;
+use anyhow::{anyhow, bail, Result};
 use log::info;
 
 mod kprobe;
@@ -31,6 +31,7 @@ pub(crate) struct Kernel {
     /// Probes sets, one per probe type. Used to keep track of all non-specific
     /// probes.
     probes: [ProbeSet; ProbeType::Max as usize],
+    maps: HashMap<String, i32>,
 }
 
 struct ProbeSet {
@@ -55,7 +56,10 @@ impl Kernel {
             ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new())),
         ];
 
-        Ok(Kernel { probes })
+        Ok(Kernel {
+            probes,
+            maps: HashMap::new(),
+        })
     }
 
     /// Request to attach a probe of type r#type to a target identifier.
@@ -75,12 +79,33 @@ impl Kernel {
         Ok(())
     }
 
+    /// Request to reuse a map fd. Useful for sharing maps across probes, for
+    /// configuration, event reporting, or other use cases.
+    ///
+    /// ```
+    /// kernel.reuse_map("config", fd).unwrap();
+    /// ```
+    pub(crate) fn reuse_map(&mut self, name: &str, fd: i32) -> Result<()> {
+        let name = name.to_string();
+
+        if self.maps.contains_key(&name) {
+            bail!("Map {} already reused, or name is conflicting", name);
+        }
+
+        self.maps.insert(name, fd);
+        Ok(())
+    }
+
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
         for set in self.probes.iter_mut() {
             if set.targets.is_empty() {
                 continue;
             }
+
+            // Initialize the probe builder, only once for all targets.
+            let map_fds = self.maps.clone().into_iter().collect();
+            set.builder.init(map_fds, Vec::new())?;
 
             // Attach a probe to all the targets in the set.
             for target in set.targets.iter() {
@@ -109,6 +134,18 @@ trait ProbeBuilder {
     fn attach(&mut self, target: &str) -> Result<()>;
 }
 
+fn reuse_map_fds(open_obj: &libbpf_rs::OpenObject, map_fds: &Vec<(String, i32)>) -> Result<()> {
+    if !map_fds.is_empty() {
+        for map in map_fds {
+            open_obj
+                .map(map.0.clone())
+                .ok_or_else(|| anyhow!("Couldn't get map {}", map.0.clone()))?
+                .reuse_fd(map.1)?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,5 +166,14 @@ mod tests {
         assert!(kernel
             .add_probe(ProbeType::RawTracepoint, "kfree_skb")
             .is_ok());
+    }
+
+    #[test]
+    fn reuse_map() {
+        let mut kernel = Kernel::new().unwrap();
+
+        assert!(kernel.reuse_map("config", 0).is_ok());
+        assert!(kernel.reuse_map("event", 0).is_ok());
+        assert!(kernel.reuse_map("event", 0).is_err());
     }
 }
