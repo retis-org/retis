@@ -10,13 +10,44 @@
 
 use anyhow::Result;
 
+mod kprobe;
+
+/// Probes types supported by this crate.
+#[allow(dead_code)]
+#[derive(Clone, Eq, PartialEq)]
+pub(crate) enum ProbeType {
+    Kprobe,
+    Max,
+}
+
 /// Main object representing the kernel probes and providing an API for
 /// consumers to register probes, hooks, maps, etc.
-pub(crate) struct Kernel {}
+pub(crate) struct Kernel {
+    /// Probes sets, one per probe type. Used to keep track of all non-specific
+    /// probes.
+    probes: [ProbeSet; ProbeType::Max as usize],
+}
+
+struct ProbeSet {
+    builder: Box<dyn ProbeBuilder>,
+}
+
+impl ProbeSet {
+    fn new(builder: Box<dyn ProbeBuilder>) -> ProbeSet {
+        ProbeSet {
+            builder,
+        }
+    }
+}
 
 impl Kernel {
     pub(crate) fn new() -> Result<Kernel> {
-        Ok(Kernel {})
+        // Keep synced with the order of ProbeType!
+        let probes: [ProbeSet; ProbeType::Max as usize] = [
+            ProbeSet::new(Box::new(kprobe::KprobeBuilder::new())),
+        ];
+
+        Ok(Kernel { probes })
     }
 
     /// Attach all probes.
