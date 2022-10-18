@@ -22,6 +22,9 @@ use log::{error, warn};
 
 use crate::core::probe;
 
+mod skb;
+use skb::SkbCollector;
+
 /// Generic trait representing a collector. All collectors are required to
 /// implement this, as they'll be manipulated through this trait.
 trait Collector {
@@ -132,6 +135,7 @@ pub(crate) fn get_collectors() -> Result<Group> {
     let mut group = Group::new()?;
 
     // Register all collectors here.
+    group.register(Box::new(SkbCollector::new()?))?;
 
     Ok(group)
 }
