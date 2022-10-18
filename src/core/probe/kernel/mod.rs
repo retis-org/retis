@@ -8,7 +8,10 @@
 
 #![allow(dead_code)] // FIXME
 
+use std::collections::HashSet;
+
 use anyhow::Result;
+use log::info;
 
 mod kprobe;
 mod raw_tracepoint;
@@ -32,12 +35,14 @@ pub(crate) struct Kernel {
 
 struct ProbeSet {
     builder: Box<dyn ProbeBuilder>,
+    targets: HashSet<String>,
 }
 
 impl ProbeSet {
     fn new(builder: Box<dyn ProbeBuilder>) -> ProbeSet {
         ProbeSet {
             builder,
+            targets: HashSet::new(),
         }
     }
 }
@@ -53,8 +58,37 @@ impl Kernel {
         Ok(Kernel { probes })
     }
 
+    /// Request to attach a probe of type r#type to a target identifier.
+    ///
+    /// ```
+    /// kernel.add_probe(ProbeType::Kprobe, "kfree_skb_reason").unwrap();
+    /// kernel.add_probe(ProbeType::RawTracepoint, "kfree_skb").unwrap();
+    /// ```
+    pub(crate) fn add_probe(&mut self, r#type: ProbeType, target: &str) -> Result<()> {
+        let target = target.to_string();
+
+        let set = &mut self.probes[r#type as usize];
+        if !set.targets.contains(&target) {
+            set.targets.insert(target);
+        }
+
+        Ok(())
+    }
+
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
+        for set in self.probes.iter_mut() {
+            if set.targets.is_empty() {
+                continue;
+            }
+
+            // Attach a probe to all the targets in the set.
+            for target in set.targets.iter() {
+                info!("Attaching probe to {}", target);
+                set.builder.attach(target)?;
+            }
+        }
+
         Ok(())
     }
 }
@@ -73,4 +107,27 @@ trait ProbeBuilder {
     fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<&'static [u8]>) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
     fn attach(&mut self, target: &str) -> Result<()>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_probe() {
+        let mut kernel = Kernel::new().unwrap();
+
+        assert!(kernel
+            .add_probe(ProbeType::Kprobe, "kfree_skb_reason")
+            .is_ok());
+        assert!(kernel.add_probe(ProbeType::Kprobe, "consume_skb").is_ok());
+        assert!(kernel.add_probe(ProbeType::Kprobe, "consume_skb").is_ok());
+
+        assert!(kernel
+            .add_probe(ProbeType::RawTracepoint, "kfree_skb")
+            .is_ok());
+        assert!(kernel
+            .add_probe(ProbeType::RawTracepoint, "kfree_skb")
+            .is_ok());
+    }
 }
