@@ -1,6 +1,7 @@
 use anyhow::Result;
 
-pub(crate) mod core;
+mod collector;
+mod core;
 
 fn main() -> Result<()> {
     Ok(())
