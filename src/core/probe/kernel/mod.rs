@@ -24,3 +24,19 @@ impl Kernel {
         Ok(())
     }
 }
+
+/// Trait representing the interface used to create and handle probes. We use a
+/// trait here as we're supporting various attach types.
+trait ProbeBuilder {
+    /// Allocate and return a new instance of the probe builder, with default
+    /// values.
+    fn new() -> Self
+    where
+        Self: Sized;
+    /// Initialize the probe builder before attaching programs to probes. It
+    /// takes an option vector of map fds so that maps can be reused and shared
+    /// accross builders.
+    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<&'static [u8]>) -> Result<()>;
+    /// Attach a probe to a given target (function, tracepoint, etc).
+    fn attach(&mut self, target: &str) -> Result<()>;
+}
