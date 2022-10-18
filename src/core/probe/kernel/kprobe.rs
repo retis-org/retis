@@ -51,3 +51,19 @@ impl ProbeBuilder for KprobeBuilder {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg_attr(not(feature = "test_cap_bpf"), ignore)]
+    fn init_and_attach() {
+        let mut builder = KprobeBuilder::new();
+
+        assert!(builder.init(Vec::new(), Vec::new()).is_ok());
+        assert!(builder.attach("kfree_skb_reason").is_ok());
+        assert!(builder.attach("consume_skb").is_ok());
+        assert!(builder.attach("foobar").is_err());
+    }
+}

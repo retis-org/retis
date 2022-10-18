@@ -3,6 +3,9 @@ name = "packet-tracer"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+test_cap_bpf = []
+
 [dependencies]
 anyhow = "1.0"
 bimap = "0.6"
