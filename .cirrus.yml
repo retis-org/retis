@@ -12,7 +12,7 @@ test_task:
       - cat Cargo.lock
   setup_script:
     - apt-get update
-    - apt-get -y install libelf-dev
+    - apt-get -y install clang libelf-dev
   build_script: cargo build --verbose
   test_script: cargo test --verbose
   install_cargo_deps_script:
