@@ -11,7 +11,10 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Result};
+use btf_rs::{Btf, Type};
 use log::info;
+
+use crate::core::kernel_symbols;
 
 mod kprobe;
 mod raw_tracepoint;
@@ -32,6 +35,7 @@ pub(crate) struct Kernel {
     /// probes.
     probes: [ProbeSet; ProbeType::Max as usize],
     maps: HashMap<String, i32>,
+    btf: Btf,
 }
 
 struct ProbeSet {
@@ -56,6 +60,10 @@ impl ProbeSet {
 
 impl Kernel {
     pub(crate) fn new() -> Result<Kernel> {
+        Self::new_from_btf_file("/sys/kernel/btf/vmlinux")
+    }
+
+    fn new_from_btf_file(btf_file: &str) -> Result<Kernel> {
         // Keep synced with the order of ProbeType!
         let probes: [ProbeSet; ProbeType::Max as usize] = [
             ProbeSet::new(Box::new(kprobe::KprobeBuilder::new())),
@@ -65,6 +73,7 @@ impl Kernel {
         Ok(Kernel {
             probes,
             maps: HashMap::new(),
+            btf: Btf::from_file(btf_file)?,
         })
     }
 
@@ -78,11 +87,18 @@ impl Kernel {
         let target = target.to_string();
 
         let set = &mut self.probes[r#type as usize];
-        if !set.targets.contains_key(&target) {
-            let mut desc = TargetDesc::default();
-
-            set.targets.insert(target, desc);
+        if set.targets.contains_key(&target) {
+            return Ok(());
         }
+
+        // Filling the probe description here helps in returning errors early to
+        // the caller if a target isn't found or is incompatible.
+        let desc = self.inspect_target(&r#type, &target)?;
+
+        // Yes, we do it twice, because of the other mut ref for
+        // self.inspect_target.
+        let set = &mut self.probes[r#type as usize];
+        set.targets.insert(target, desc);
 
         Ok(())
     }
@@ -118,11 +134,78 @@ impl Kernel {
             // Attach a probe to all the targets in the set.
             for (target, desc) in set.targets.iter() {
                 info!("Attaching probe to {}", target);
-                set.builder.attach(target, &desc)?;
+                set.builder.attach(target, desc)?;
             }
         }
 
         Ok(())
+    }
+
+    /// Inspect a target using BTF and fill its description.
+    fn inspect_target(&self, r#type: &ProbeType, target: &str) -> Result<TargetDesc> {
+        // First look at the symbol address. Some probe types might need to
+        // modify the target format.
+        let ksym_target = match r#type {
+            ProbeType::Kprobe => target.to_string(),
+            ProbeType::RawTracepoint => format!("__tracepoint_{}", target),
+            ProbeType::Max => bail!("Invalid probe type"),
+        };
+        let mut desc = TargetDesc {
+            ksym: kernel_symbols::get_symbol_addr(ksym_target.as_str())?,
+            ..Default::default()
+        };
+
+        // Then look at the BTF info and inspect the type. Some probe types
+        // might need to change the target format (again).
+        let proto = match r#type {
+            ProbeType::Kprobe => {
+                // Kprobes are using directly the target function definition, no
+                // change to make to the target format and the prototype
+                // resolution is straightforward: Func -> FuncProto.
+                let func = match self.btf.resolve_type_by_name(target)? {
+                    Type::Func(func) => func,
+                    _ => bail!("{} is not a function", target),
+                };
+
+                match self.btf.resolve_chained_type(&func)? {
+                    Type::FuncProto(proto) => proto,
+                    _ => bail!("Function {} does not have a prototype", target),
+                }
+            }
+            ProbeType::RawTracepoint => {
+                // Raw tracepoints need to access a symbol derived from
+                // TP_PROTO(), which is named "btf_trace_<func>". The prototype
+                // resolution is: Typedef -> Ptr -> FuncProto.
+                let target = format!("btf_trace_{}", target);
+
+                let func = match self.btf.resolve_type_by_name(target.as_str())? {
+                    Type::Typedef(func) => func,
+                    _ => bail!("{} is not a typedef", target),
+                };
+
+                let ptr = match self.btf.resolve_chained_type(&func)? {
+                    Type::Ptr(ptr) => ptr,
+                    _ => bail!("{} typedef does not point to a ptr", target),
+                };
+
+                match self.btf.resolve_chained_type(&ptr)? {
+                    Type::FuncProto(proto) => proto,
+                    _ => bail!("Function {} does not have a prototype", target),
+                }
+            }
+            ProbeType::Max => bail!("Invalid probe type"),
+        };
+
+        desc.nargs = proto.parameters.len() as u32;
+
+        // Raw tracepoints have a void* pointing to the data as their first
+        // argument, which does not end up in their context. We have to skip it.
+        // See include/trace/bpf_probe.h in the __DEFINE_EVENT definition.
+        if *r#type == ProbeType::RawTracepoint {
+            desc.nargs -= 1;
+        }
+
+        Ok(desc)
     }
 }
 
@@ -158,7 +241,7 @@ mod tests {
 
     #[test]
     fn add_probe() {
-        let mut kernel = Kernel::new().unwrap();
+        let mut kernel = Kernel::new_from_btf_file("test_data/vmlinux").unwrap();
 
         assert!(kernel
             .add_probe(ProbeType::Kprobe, "kfree_skb_reason")
@@ -176,7 +259,7 @@ mod tests {
 
     #[test]
     fn reuse_map() {
-        let mut kernel = Kernel::new().unwrap();
+        let mut kernel = Kernel::new_from_btf_file("test_data/vmlinux").unwrap();
 
         assert!(kernel.reuse_map("config", 0).is_ok());
         assert!(kernel.reuse_map("event", 0).is_ok());
