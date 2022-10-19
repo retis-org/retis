@@ -332,6 +332,7 @@ dependencies = [
  "libbpf-cargo",
  "libbpf-rs",
  "log",
+ "memmap2",
  "once_cell",
 ]
 
