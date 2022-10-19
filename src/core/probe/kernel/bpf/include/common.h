@@ -2,6 +2,7 @@
 #define __CORE_PROBE_KERNEL_BPF_COMMON__
 
 #include <vmlinux.h>
+#include <bpf/bpf_helpers.h>
 
 /* Common representation of the register values provided to the probes, as this
  * is done in a per-probe type fashion.
@@ -41,5 +42,84 @@ struct trace_context {
 #define trace_get_param(ctx, offset, type)	\
 	(type)(((offset) >= 0 && (offset) < REG_MAX && (offset) < ctx->regs.num) ?	\
        ctx->regs.reg[offset] : 0)
+
+/* Helper to define a hook (mostly in collectors) while not having to duplicate
+ * the common part everywhere. This also ensure hooks are doing the right thing
+ * and should help with maintenance.
+ *
+ * To define a hook in a collector hook, say hook.bpf.c,
+ * ```
+ * #include <common.h>
+ *
+ * DEFINE_HOOK(
+ *	do_something(ctx);
+ *	return 0;
+ * )
+ *
+ * char __license[] SEC("license") = "GPL";
+ * ```
+ *
+ * Do not forget to add the hook to build.rs
+ */
+#define DEFINE_HOOK(inst)			\
+	SEC("ext/hook")				\
+	int hook(struct trace_context *ctx)	\
+	{					\
+		/* Let the verifier be happy */	\
+		if (!ctx)			\
+			return 0;		\
+		inst				\
+	}
+
+/* Number of hooks installed, used to micro-optimize the call chain */
+const volatile u32 nhooks = 0;
+
+/* Hook definition, aimed at being replaced before the program is attached. The
+ * temporary retval is volatile to not let the compiler think he can optimize
+ * it. Credits to the XDP dispatcher.
+ */
+#define HOOK(x)						\
+	__attribute__ ((noinline))			\
+	int hook##x(struct trace_context *ctx) {	\
+		volatile int ret = 0;			\
+		if (!ctx)				\
+			return 0;			\
+		return ret;				\
+	}
+HOOK(0)
+HOOK(1)
+HOOK(2)
+HOOK(3)
+HOOK(4)
+HOOK(5)
+HOOK(6)
+HOOK(7)
+HOOK(8)
+HOOK(9)
+/* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
+#define HOOK_MAX 10
+
+/* The chaining function, which contains all our core probe logic. This is
+ * called from each probe specific part after filling the common context and
+ * just before returning.
+ */
+static __always_inline int chain(struct trace_context *ctx)
+{
+#define CALL_HOOK(x)		\
+	if (x < nhooks)		\
+		hook##x(ctx);
+	CALL_HOOK(0)
+	CALL_HOOK(1)
+	CALL_HOOK(2)
+	CALL_HOOK(3)
+	CALL_HOOK(4)
+	CALL_HOOK(5)
+	CALL_HOOK(6)
+	CALL_HOOK(7)
+	CALL_HOOK(8)
+	CALL_HOOK(9)
+
+	return 0;
+}
 
 #endif /* __CORE_PROBE_KERNEL_BPF_COMMON__ */

@@ -50,7 +50,7 @@ int probe_raw_tracepoint(struct bpf_raw_tracepoint_args *ctx)
 	context.ksym = ksym;
 	get_regs(&context.regs, ctx);
 
-	return 0;
+	return chain(&context);
 }
 
 char __license[] SEC("license") = "GPL";

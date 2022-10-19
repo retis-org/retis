@@ -23,7 +23,7 @@ int probe_kprobe(struct pt_regs *ctx)
 	context.ksym = PT_REGS_IP(ctx) - 1;
 	get_regs(&context.regs, ctx);
 
-	return 0;
+	return chain(&context);
 }
 
 char __license[] SEC("license") = "GPL";
