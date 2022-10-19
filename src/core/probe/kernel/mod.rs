@@ -35,8 +35,12 @@ pub(crate) struct Kernel {
     /// probes.
     probes: [ProbeSet; ProbeType::Max as usize],
     maps: HashMap<String, i32>,
+    hooks: Vec<&'static [u8]>,
     btf: Btf,
 }
+
+// Keep in sync with its BPF counterpart in bpf/include/common.h
+const HOOK_MAX: usize = 10;
 
 struct ProbeSet {
     builder: Box<dyn ProbeBuilder>,
@@ -73,6 +77,7 @@ impl Kernel {
         Ok(Kernel {
             probes,
             maps: HashMap::new(),
+            hooks: Vec::new(),
             btf: Btf::from_file(btf_file)?,
         })
     }
@@ -120,6 +125,26 @@ impl Kernel {
         Ok(())
     }
 
+    /// Request a hook to be attached to all probes.
+    ///
+    /// ```
+    /// mod hook {
+    ///     include!("bpf/.out/hook.rs");
+    /// }
+    ///
+    /// [...]
+    ///
+    /// kernel.register_hook(hook::DATA)?;
+    /// ```
+    pub(crate) fn register_hook(&mut self, hook: &'static [u8]) -> Result<()> {
+        if self.hooks.len() == HOOK_MAX {
+            bail!("Hook list is already full");
+        }
+
+        self.hooks.push(hook);
+        Ok(())
+    }
+
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
         for set in self.probes.iter_mut() {
@@ -129,7 +154,7 @@ impl Kernel {
 
             // Initialize the probe builder, only once for all targets.
             let map_fds = self.maps.clone().into_iter().collect();
-            set.builder.init(map_fds, Vec::new())?;
+            set.builder.init(map_fds, self.hooks.clone())?;
 
             // Attach a probe to all the targets in the set.
             for (target, desc) in set.targets.iter() {
@@ -233,6 +258,31 @@ fn reuse_map_fds(open_obj: &libbpf_rs::OpenObject, map_fds: &[(String, i32)]) ->
             .reuse_fd(map.1)?;
     }
     Ok(())
+}
+
+fn replace_hooks(fd: i32, hooks: &[&[u8]]) -> Result<Vec<libbpf_rs::Link>> {
+    let mut links = Vec::new();
+
+    for (i, hook) in hooks.iter().enumerate() {
+        let target = format!("hook{}", i);
+
+        let mut open_obj = libbpf_rs::ObjectBuilder::default().open_memory("hook", hook)?;
+        let open_prog = open_obj
+            .prog_mut("hook")
+            .ok_or_else(|| anyhow!("Couldn't get hook program"))?;
+
+        open_prog.set_prog_type(libbpf_rs::ProgramType::Ext);
+        open_prog.set_attach_target(fd, Some(target))?;
+
+        let mut obj = open_obj.load()?;
+        links.push(
+            obj.prog_mut("hook")
+                .ok_or_else(|| anyhow!("Couldn't get hook program"))?
+                .attach_trace()?,
+        );
+    }
+
+    Ok(links)
 }
 
 #[cfg(test)]

@@ -18,6 +18,7 @@ use raw_tracepoint_bpf::RawTracepointSkelBuilder;
 pub(super) struct RawTracepointBuilder {
     links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, i32)>,
+    hooks: Vec<&'static [u8]>,
 }
 
 impl ProbeBuilder for RawTracepointBuilder {
@@ -25,8 +26,9 @@ impl ProbeBuilder for RawTracepointBuilder {
         RawTracepointBuilder::default()
     }
 
-    fn init(&mut self, map_fds: Vec<(String, i32)>, _hooks: Vec<&'static [u8]>) -> Result<()> {
+    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<&'static [u8]>) -> Result<()> {
         self.map_fds = map_fds;
+        self.hooks = hooks;
         Ok(())
     }
 
@@ -35,6 +37,7 @@ impl ProbeBuilder for RawTracepointBuilder {
 
         skel.rodata().ksym = desc.ksym;
         skel.rodata().nargs = desc.nargs;
+        skel.rodata().nhooks = self.hooks.len() as u32;
 
         let open_obj = skel.obj;
         reuse_map_fds(&open_obj, &self.map_fds)?;
@@ -43,6 +46,10 @@ impl ProbeBuilder for RawTracepointBuilder {
         let prog = obj
             .prog_mut("probe_raw_tracepoint")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
+
+        let mut links = replace_hooks(prog.fd(), &self.hooks)?;
+        self.links.append(&mut links);
+
         self.links.push(prog.attach_raw_tracepoint(target)?);
         Ok(())
     }
