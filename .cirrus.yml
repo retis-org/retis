@@ -13,11 +13,10 @@ test_task:
   setup_script:
     - apt-get update
     - apt-get -y install clang libelf-dev
-  build_script: cargo build --verbose
-  test_script: cargo test --verbose
-  install_cargo_deps_script:
     - rustup component add rustfmt
     - rustup component add clippy
+  build_script: cargo build --verbose
+  test_script: cargo test --verbose
   check_script:
     - cargo fmt --check
     - cargo clippy -- -D warnings
