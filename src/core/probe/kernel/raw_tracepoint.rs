@@ -30,8 +30,11 @@ impl ProbeBuilder for RawTracepointBuilder {
         Ok(())
     }
 
-    fn attach(&mut self, target: &str) -> Result<()> {
-        let skel = RawTracepointSkelBuilder::default().open()?;
+    fn attach(&mut self, target: &str, desc: &TargetDesc) -> Result<()> {
+        let mut skel = RawTracepointSkelBuilder::default().open()?;
+
+        skel.rodata().ksym = desc.ksym;
+        skel.rodata().nargs = desc.nargs;
 
         let open_obj = skel.obj;
         reuse_map_fds(&open_obj, &self.map_fds)?;
@@ -54,9 +57,12 @@ mod tests {
     fn init_and_attach() {
         let mut builder = RawTracepointBuilder::new();
 
+        // It's for now, the probes below won't do much.
+        let desc = TargetDesc::default();
+
         assert!(builder.init(Vec::new(), Vec::new()).is_ok());
-        assert!(builder.attach("kfree_skb").is_ok());
-        assert!(builder.attach("consume_skb").is_ok());
-        assert!(builder.attach("foobar").is_err());
+        assert!(builder.attach("kfree_skb", &desc).is_ok());
+        assert!(builder.attach("consume_skb", &desc).is_ok());
+        assert!(builder.attach("foobar", &desc).is_err());
     }
 }

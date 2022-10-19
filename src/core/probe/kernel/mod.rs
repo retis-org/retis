@@ -8,7 +8,7 @@
 
 #![allow(dead_code)] // FIXME
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Result};
 use log::info;
@@ -36,14 +36,20 @@ pub(crate) struct Kernel {
 
 struct ProbeSet {
     builder: Box<dyn ProbeBuilder>,
-    targets: HashSet<String>,
+    targets: HashMap<String, TargetDesc>,
+}
+
+#[derive(Default)]
+struct TargetDesc {
+    ksym: u64,
+    nargs: u32,
 }
 
 impl ProbeSet {
     fn new(builder: Box<dyn ProbeBuilder>) -> ProbeSet {
         ProbeSet {
             builder,
-            targets: HashSet::new(),
+            targets: HashMap::new(),
         }
     }
 }
@@ -72,8 +78,10 @@ impl Kernel {
         let target = target.to_string();
 
         let set = &mut self.probes[r#type as usize];
-        if !set.targets.contains(&target) {
-            set.targets.insert(target);
+        if !set.targets.contains_key(&target) {
+            let mut desc = TargetDesc::default();
+
+            set.targets.insert(target, desc);
         }
 
         Ok(())
@@ -108,9 +116,9 @@ impl Kernel {
             set.builder.init(map_fds, Vec::new())?;
 
             // Attach a probe to all the targets in the set.
-            for target in set.targets.iter() {
+            for (target, desc) in set.targets.iter() {
                 info!("Attaching probe to {}", target);
-                set.builder.attach(target)?;
+                set.builder.attach(target, &desc)?;
             }
         }
 
@@ -131,7 +139,7 @@ trait ProbeBuilder {
     /// accross builders.
     fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<&'static [u8]>) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
-    fn attach(&mut self, target: &str) -> Result<()>;
+    fn attach(&mut self, target: &str, desc: &TargetDesc) -> Result<()>;
 }
 
 fn reuse_map_fds(open_obj: &libbpf_rs::OpenObject, map_fds: &[(String, i32)]) -> Result<()> {

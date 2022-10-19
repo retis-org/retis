@@ -37,7 +37,7 @@ impl ProbeBuilder for KprobeBuilder {
         Ok(())
     }
 
-    fn attach(&mut self, target: &str) -> Result<()> {
+    fn attach(&mut self, target: &str, _: &TargetDesc) -> Result<()> {
         let obj = match &mut self.obj {
             Some(obj) => obj,
             _ => bail!("Kprobe builder is uninitialized"),
@@ -61,9 +61,12 @@ mod tests {
     fn init_and_attach() {
         let mut builder = KprobeBuilder::new();
 
+        // It's for now, the probes below won't do much.
+        let desc = TargetDesc::default();
+
         assert!(builder.init(Vec::new(), Vec::new()).is_ok());
-        assert!(builder.attach("kfree_skb_reason").is_ok());
-        assert!(builder.attach("consume_skb").is_ok());
-        assert!(builder.attach("foobar").is_err());
+        assert!(builder.attach("kfree_skb_reason", &desc).is_ok());
+        assert!(builder.attach("consume_skb", &desc).is_ok());
+        assert!(builder.attach("foobar", &desc).is_err());
     }
 }
