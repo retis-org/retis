@@ -13,12 +13,6 @@ use anyhow::{anyhow, bail, Result};
 use bimap::BiHashMap;
 use once_cell::sync::OnceCell;
 
-/// Path to the kernel symbols file. It should be under /proc/kallsyms (and this
-/// is the default, see below). To allow unit tests to run, as /proc/kallsyms
-/// might vary and requires privileged access, a OnceCell is used to allow unit
-/// tests to override it.
-static KALLSYMS: OnceCell<String> = OnceCell::new();
-
 /// Kernel symbols bidirectional map. To retrieve it, please use:
 /// ```
 /// let symbols = get_symbols!().unwrap();
@@ -31,7 +25,14 @@ static SYMBOLS: OnceCell<BiHashMap<u64, String>> = OnceCell::new();
 macro_rules! get_symbols {
     () => {
         SYMBOLS.get_or_try_init(|| {
-            let kallsyms_file = KALLSYMS.get_or_init(|| String::from("/proc/kallsyms"));
+            // Use a different kallsyms file source when running tests to ensure
+            // 1) we use a known one so we can look up addresses 2) we have
+            // access to it.
+            #[cfg(not(test))]
+            let kallsyms_file = String::from("/proc/kallsyms");
+            #[cfg(test)]
+            let kallsyms_file = String::from("test_data/kallsyms");
+
             let file = fs::read_to_string(kallsyms_file)?;
             let mut map = BiHashMap::new();
 
@@ -103,26 +104,18 @@ pub(crate) fn find_nearest_symbol(target: u64) -> Result<u64> {
 mod tests {
     use super::*;
 
-    fn init() {
-        KALLSYMS.get_or_init(|| String::from("test_data/kallsyms"));
-    }
-
     #[test]
     fn symbol_name() {
-        init();
         assert!(get_symbol_name(0xffffffff95617530).unwrap() == "consume_skb");
     }
 
     #[test]
     fn symbol_addr() {
-        init();
         assert!(get_symbol_addr("consume_skb").unwrap() == 0xffffffff95617530);
     }
 
     #[test]
     fn test_bijection() {
-        init();
-
         let symbol = "consume_skb";
         let addr = get_symbol_addr(symbol).unwrap();
         let name = get_symbol_name(addr).unwrap();
@@ -132,8 +125,6 @@ mod tests {
 
     #[test]
     fn nearest_symbol() {
-        init();
-
         let addr = get_symbol_addr("consume_skb").unwrap();
 
         assert!(find_nearest_symbol(addr + 1).unwrap() == addr);
