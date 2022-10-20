@@ -5,6 +5,18 @@
 //! come from various sources (different collectors, the user, etc) and as such
 //! some kind of synchronization and common logic is required; which is provided
 //! here.
+//!
+//! Additional BPF function (defined outside this module) can be registered and
+//! dynamically attached to the probes. These are refered as hooks. We support
+//! registering hooks in different ways:
+//!
+//! 1. Hooks can be attached to all probes, using the generic register_hook()
+//!    API. Those hooks will be attached to all running probes in the kernel.
+//!    Note: for the hook to actually run, at least one probe must be added,
+//!    with the add_probe() API.
+//!
+//! 2. Targeted hooks, attached to a specific probe, using the
+//!    register_hook_to() API.
 
 #![allow(dead_code)] // FIXME
 
@@ -21,7 +33,7 @@ mod raw_tracepoint;
 
 /// Probes types supported by this crate.
 #[allow(dead_code)]
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum ProbeType {
     Kprobe,
     RawTracepoint,
@@ -34,6 +46,9 @@ pub(crate) struct Kernel {
     /// Probes sets, one per probe type. Used to keep track of all non-specific
     /// probes.
     probes: [ProbeSet; ProbeType::Max as usize],
+    /// List of targeted probes, aka. probes running a specific set of hooks.
+    /// Targeted probes only have one target to keep things reasonable.
+    targeted_probes: Vec<ProbeSet>,
     maps: HashMap<String, i32>,
     hooks: Vec<&'static [u8]>,
     btf: Btf,
@@ -43,8 +58,10 @@ pub(crate) struct Kernel {
 const HOOK_MAX: usize = 10;
 
 struct ProbeSet {
+    r#type: ProbeType,
     builder: Box<dyn ProbeBuilder>,
     targets: HashMap<String, TargetDesc>,
+    hooks: Vec<&'static [u8]>,
 }
 
 #[derive(Default)]
@@ -54,10 +71,12 @@ struct TargetDesc {
 }
 
 impl ProbeSet {
-    fn new(builder: Box<dyn ProbeBuilder>) -> ProbeSet {
+    fn new(r#type: ProbeType, builder: Box<dyn ProbeBuilder>) -> ProbeSet {
         ProbeSet {
+            r#type,
             builder,
             targets: HashMap::new(),
+            hooks: Vec::new(),
         }
     }
 }
@@ -70,12 +89,16 @@ impl Kernel {
     fn new_from_btf_file(btf_file: &str) -> Result<Kernel> {
         // Keep synced with the order of ProbeType!
         let probes: [ProbeSet; ProbeType::Max as usize] = [
-            ProbeSet::new(Box::new(kprobe::KprobeBuilder::new())),
-            ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new())),
+            ProbeSet::new(ProbeType::Kprobe, Box::new(kprobe::KprobeBuilder::new())),
+            ProbeSet::new(
+                ProbeType::RawTracepoint,
+                Box::new(raw_tracepoint::RawTracepointBuilder::new()),
+            ),
         ];
 
         Ok(Kernel {
             probes,
+            targeted_probes: Vec::new(),
             maps: HashMap::new(),
             hooks: Vec::new(),
             btf: Btf::from_file(btf_file)?,
@@ -91,9 +114,17 @@ impl Kernel {
     pub(crate) fn add_probe(&mut self, r#type: ProbeType, target: &str) -> Result<()> {
         let target = target.to_string();
 
+        // First check if it is already in the generic probe list.
         let set = &mut self.probes[r#type as usize];
         if set.targets.contains_key(&target) {
             return Ok(());
+        }
+
+        // Then if it is already in the targeted probe list.
+        for set in self.targeted_probes.iter_mut() {
+            if r#type == set.r#type && set.targets.get(&target).is_some() {
+                return Ok(());
+            }
         }
 
         // Filling the probe description here helps in returning errors early to
@@ -137,7 +168,13 @@ impl Kernel {
     /// kernel.register_hook(hook::DATA)?;
     /// ```
     pub(crate) fn register_hook(&mut self, hook: &'static [u8]) -> Result<()> {
-        if self.hooks.len() == HOOK_MAX {
+        let mut max: usize = 0;
+        for set in self.targeted_probes.iter_mut() {
+            if max < set.hooks.len() {
+                max = set.hooks.len();
+            }
+        }
+        if self.hooks.len() + max == HOOK_MAX {
             bail!("Hook list is already full");
         }
 
@@ -145,22 +182,97 @@ impl Kernel {
         Ok(())
     }
 
+    /// Request a hook to be attached to a specific target.
+    ///
+    /// ```
+    /// mod hook {
+    ///     include!("bpf/.out/hook.rs");
+    /// }
+    ///
+    /// [...]
+    ///
+    /// kernel.register_hook_to(hook::DATA, ProbeType::Kprobe, "kfree_skb_reason")?;
+    /// ```
+    pub(crate) fn register_hook_to(
+        &mut self,
+        hook: &'static [u8],
+        r#type: ProbeType,
+        target: &str,
+    ) -> Result<()> {
+        let target = target.to_string();
+
+        // First check if the target isn't already registered to the generic
+        // probes list. If so, remove it from there.
+        let target_set = &mut self.probes[r#type as usize];
+        target_set.targets.remove(&target);
+
+        // Now check if we already have a targeted probe for this. If so, append
+        // the new hook to it.
+        for set in self.targeted_probes.iter_mut() {
+            if r#type == set.r#type && set.targets.get(&target).is_some() {
+                if self.hooks.len() + set.hooks.len() == HOOK_MAX {
+                    bail!("Hook list is already full");
+                }
+                set.hooks.push(hook);
+                return Ok(());
+            }
+        }
+
+        // New target, let's build a new probe set.
+        let mut set = ProbeSet::new(
+            r#type,
+            match r#type {
+                ProbeType::Kprobe => Box::new(kprobe::KprobeBuilder::new()),
+                ProbeType::RawTracepoint => Box::new(raw_tracepoint::RawTracepointBuilder::new()),
+                ProbeType::Max => bail!("Invalid probe type"),
+            },
+        );
+
+        let desc = self.inspect_target(&r#type, &target)?;
+        set.targets.insert(target.to_string(), desc);
+
+        if self.hooks.len() == HOOK_MAX {
+            bail!("Hook list is already full");
+        }
+        set.hooks.push(hook);
+
+        self.targeted_probes.push(set);
+        Ok(())
+    }
+
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
+        // Take care of generic probes first.
         for set in self.probes.iter_mut() {
-            if set.targets.is_empty() {
-                continue;
-            }
+            Self::attach_set(set, self.maps.clone(), self.hooks.clone())?;
+        }
 
-            // Initialize the probe builder, only once for all targets.
-            let map_fds = self.maps.clone().into_iter().collect();
-            set.builder.init(map_fds, self.hooks.clone())?;
+        // Then take care of targeted probes.
+        for set in self.targeted_probes.iter_mut() {
+            let hooks = [set.hooks.clone(), self.hooks.clone()].concat();
+            Self::attach_set(set, self.maps.clone(), hooks)?;
+        }
 
-            // Attach a probe to all the targets in the set.
-            for (target, desc) in set.targets.iter() {
-                info!("Attaching probe to {}", target);
-                set.builder.attach(target, desc)?;
-            }
+        Ok(())
+    }
+
+    fn attach_set(
+        set: &mut ProbeSet,
+        maps: HashMap<String, i32>,
+        hooks: Vec<&'static [u8]>,
+    ) -> Result<()> {
+        if set.targets.is_empty() {
+            return Ok(());
+        }
+
+        // Initialize the probe builder, only once for all targets.
+        let map_fds = maps.into_iter().collect();
+        set.builder.init(map_fds, hooks)?;
+
+        // Attach a probe to all the targets in the set.
+        for (target, desc) in set.targets.iter() {
+            info!("Attaching probe to {}", target);
+            set.builder.attach(target, desc)?;
         }
 
         Ok(())
@@ -289,6 +401,9 @@ fn replace_hooks(fd: i32, hooks: &[&[u8]]) -> Result<Vec<libbpf_rs::Link>> {
 mod tests {
     use super::*;
 
+    // Dummy hook.
+    const HOOK: &[u8] = &[0];
+
     #[test]
     fn add_probe() {
         let mut kernel = Kernel::new_from_btf_file("test_data/vmlinux").unwrap();
@@ -305,6 +420,50 @@ mod tests {
         assert!(kernel
             .add_probe(ProbeType::RawTracepoint, "kfree_skb")
             .is_ok());
+    }
+
+    #[test]
+    fn register_hooks() {
+        let mut kernel = Kernel::new_from_btf_file("test_data/vmlinux").unwrap();
+
+        assert!(kernel.register_hook(HOOK).is_ok());
+        assert!(kernel.register_hook(HOOK).is_ok());
+
+        assert!(kernel
+            .register_hook_to(HOOK, ProbeType::Kprobe, "kfree_skb_reason")
+            .is_ok());
+        assert!(kernel
+            .add_probe(ProbeType::Kprobe, "kfree_skb_reason")
+            .is_ok());
+
+        kernel
+            .add_probe(ProbeType::RawTracepoint, "kfree_skb")
+            .unwrap();
+        assert!(kernel
+            .register_hook_to(HOOK, ProbeType::RawTracepoint, "kfree_skb")
+            .is_ok());
+        assert!(kernel
+            .register_hook_to(HOOK, ProbeType::RawTracepoint, "kfree_skb")
+            .is_ok());
+
+        for _ in 0..HOOK_MAX - 4 {
+            assert!(kernel.register_hook(HOOK).is_ok());
+        }
+
+        // We should hit the hook limit here.
+        assert!(kernel.register_hook(HOOK).is_err());
+
+        assert!(kernel
+            .register_hook_to(HOOK, ProbeType::Kprobe, "kfree_skb_reason")
+            .is_ok());
+
+        // We should hit the hook limit here as well.
+        assert!(kernel
+            .register_hook_to(HOOK, ProbeType::Kprobe, "kfree_skb_reason")
+            .is_err());
+        assert!(kernel
+            .register_hook_to(HOOK, ProbeType::RawTracepoint, "kfree_skb")
+            .is_err());
     }
 
     #[test]
