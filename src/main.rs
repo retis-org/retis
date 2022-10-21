@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 mod collector;
+mod config;
 mod core;
 use collector::get_collectors;
 

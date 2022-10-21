@@ -1,0 +1,8 @@
+# This is a comment
+[mod1]
+choice = "noexists"
+
+# non existing flags don't make the profile fail
+[mod2]
+noexists = "baz"
+

@@ -1,0 +1,8 @@
+# This is a comment
+[mod1]
+someopt = "foo" # inline comment
+flag = false
+choice = "bar"
+
+[mod2]
+someopt = "baz"
