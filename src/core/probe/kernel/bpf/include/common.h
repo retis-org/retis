@@ -4,6 +4,35 @@
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 
+/* Per-probe parameter offsets; keep in sync with its Rust counterpart in
+ * core::probe::kernel::config. A value of -1 means the argument isn't
+ * available. Please try to reuse the targeted object names.
+ */
+struct trace_probe_offsets {
+	s8 sk_buff;
+	s8 skb_drop_reason;
+	s8 net_device;
+	s8 net;		/* netns */
+};
+
+/* Per-probe configuration; keep in sync with its Rust counterpart in
+ * core::probe::kernel::config.
+ */
+struct trace_probe_config {
+	struct trace_probe_offsets offsets;
+};
+
+/* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
+#define PROBE_MAX	128
+
+/* Probe configuration; the key is the target symbol address */
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, PROBE_MAX);
+	__type(key, u64);
+	__type(value, struct trace_probe_config);
+} config_map SEC(".maps");
+
 /* Common representation of the register values provided to the probes, as this
  * is done in a per-probe type fashion.
  *
@@ -35,6 +64,7 @@ struct trace_regs {
 struct trace_context {
 	u64 timestamp;
 	u64 ksym;
+	struct trace_probe_offsets offsets;
 	struct trace_regs regs;
 };
 
@@ -42,6 +72,26 @@ struct trace_context {
 #define trace_get_param(ctx, offset, type)	\
 	(type)(((offset) >= 0 && (offset) < REG_MAX && (offset) < ctx->regs.num) ?	\
        ctx->regs.reg[offset] : 0)
+
+/* Check if a given argument is valid */
+#define trace_arg_valid(ctx, name)	\
+	(ctx->offsets.name >= 0)
+
+/* Argument specific helpers for use in generic hooks (and easier use in
+ * targeted ones.
+ */
+#define TRACE_GET(ctx, name, type)		\
+	(trace_arg_valid(ctx, name) ?		\
+	 trace_get_param(ctx, ctx->offsets.name, type) : NULL)
+
+#define trace_get_sk_buff(ctx)		\
+	TRACE_GET(ctx, sk_buff, struct sk_buff *)
+#define trace_get_skb_drop_reason(ctx)	\
+	TRACE_GET(ctx, skb_drop_reason, enum skb_drop_reason)
+#define trace_get_net_device(ctx)	\
+	TRACE_GET(ctx, net_device, struct net_device *)
+#define trace_get_net(ctx)		\
+	TRACE_GET(ctx, net, struct net *)
 
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
@@ -105,6 +155,14 @@ HOOK(9)
  */
 static __always_inline int chain(struct trace_context *ctx)
 {
+	struct trace_probe_config *cfg;
+
+	cfg = bpf_map_lookup_elem(&config_map, &ctx->ksym);
+	if (!cfg)
+		return 0;
+
+	ctx->offsets = cfg->offsets;
+
 #define CALL_HOOK(x)		\
 	if (x < nhooks)		\
 		hook##x(ctx);

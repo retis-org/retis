@@ -28,8 +28,13 @@ use log::info;
 
 use crate::core::kernel_symbols;
 
+mod config;
 mod kprobe;
 mod raw_tracepoint;
+
+#[cfg(not(test))]
+use config::init_config_map;
+use config::ProbeConfig;
 
 /// Probes types supported by this crate.
 #[allow(dead_code)]
@@ -51,10 +56,13 @@ pub(crate) struct Kernel {
     targeted_probes: Vec<ProbeSet>,
     maps: HashMap<String, i32>,
     hooks: Vec<&'static [u8]>,
+    #[cfg(not(test))]
+    config_map: libbpf_rs::Map,
     btf: Btf,
 }
 
-// Keep in sync with its BPF counterpart in bpf/include/common.h
+// Keep in sync with their BPF counterparts in bpf/include/common.h
+const PROBE_MAX: usize = 128; // TODO add checks on probe registration.
 const HOOK_MAX: usize = 10;
 
 struct ProbeSet {
@@ -68,6 +76,7 @@ struct ProbeSet {
 struct TargetDesc {
     ksym: u64,
     nargs: u32,
+    probe_cfg: ProbeConfig,
 }
 
 impl ProbeSet {
@@ -96,13 +105,25 @@ impl Kernel {
             ),
         ];
 
-        Ok(Kernel {
+        // When testing the kernel object is not modified later to reuse the
+        // config map is this map is hidden.
+        #[allow(unused_mut)]
+        let mut kernel = Kernel {
             probes,
             targeted_probes: Vec::new(),
             maps: HashMap::new(),
             hooks: Vec::new(),
+            #[cfg(not(test))]
+            config_map: init_config_map()?,
             btf: Btf::from_file(btf_file)?,
-        })
+        };
+
+        #[cfg(not(test))]
+        kernel
+            .maps
+            .insert("config_map".to_string(), kernel.config_map.fd());
+
+        Ok(kernel)
     }
 
     /// Request to attach a probe of type r#type to a target identifier.
@@ -244,13 +265,25 @@ impl Kernel {
     pub(crate) fn attach(&mut self) -> Result<()> {
         // Take care of generic probes first.
         for set in self.probes.iter_mut() {
-            Self::attach_set(set, self.maps.clone(), self.hooks.clone())?;
+            Self::attach_set(
+                set,
+                #[cfg(not(test))]
+                &mut self.config_map,
+                self.maps.clone(),
+                self.hooks.clone(),
+            )?;
         }
 
         // Then take care of targeted probes.
         for set in self.targeted_probes.iter_mut() {
             let hooks = [set.hooks.clone(), self.hooks.clone()].concat();
-            Self::attach_set(set, self.maps.clone(), hooks)?;
+            Self::attach_set(
+                set,
+                #[cfg(not(test))]
+                &mut self.config_map,
+                self.maps.clone(),
+                hooks,
+            )?;
         }
 
         Ok(())
@@ -258,6 +291,7 @@ impl Kernel {
 
     fn attach_set(
         set: &mut ProbeSet,
+        #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
         maps: HashMap<String, i32>,
         hooks: Vec<&'static [u8]>,
     ) -> Result<()> {
@@ -269,8 +303,19 @@ impl Kernel {
         let map_fds = maps.into_iter().collect();
         set.builder.init(map_fds, hooks)?;
 
-        // Attach a probe to all the targets in the set.
+        // Then handle all targets in the set.
         for (target, desc) in set.targets.iter() {
+            // First load the probe configuration.
+            #[cfg(not(test))]
+            let config = unsafe { plain::as_bytes(&desc.probe_cfg) };
+            #[cfg(not(test))]
+            config_map.update(
+                &desc.ksym.to_ne_bytes(),
+                config,
+                libbpf_rs::MapFlags::NO_EXIST,
+            )?;
+
+            // Finally attach a probe to the target.
             info!("Attaching probe to {}", target);
             set.builder.attach(target, desc)?;
         }
@@ -278,23 +323,42 @@ impl Kernel {
         Ok(())
     }
 
-    /// Inspect a target using BTF and fill its description.
-    fn inspect_target(&self, r#type: &ProbeType, target: &str) -> Result<TargetDesc> {
-        // First look at the symbol address. Some probe types might need to
-        // modify the target format.
-        let ksym_target = match r#type {
-            ProbeType::Kprobe => target.to_string(),
-            ProbeType::RawTracepoint => format!("__tracepoint_{}", target),
-            ProbeType::Max => bail!("Invalid probe type"),
-        };
-        let mut desc = TargetDesc {
-            ksym: kernel_symbols::get_symbol_addr(ksym_target.as_str())?,
-            ..Default::default()
+    /// Get a parameter offset given its type in a given kernel function, if
+    /// any. Can be used to check a function has a given parameter by using
+    /// `function_parameter_offset()?.is_some()`
+    pub(crate) fn function_parameter_offset(
+        &self,
+        r#type: ProbeType,
+        target: &str,
+        parameter_type: &str,
+    ) -> Result<Option<u32>> {
+        // Raw tracepoints have a void* pointing to the data as their first
+        // argument, which does not end up in their context. We have to skip it.
+        // See include/trace/bpf_probe.h in the __DEFINE_EVENT definition.
+        let fix = match r#type {
+            ProbeType::RawTracepoint => 1,
+            _ => 0,
         };
 
-        // Then look at the BTF info and inspect the type. Some probe types
-        // might need to change the target format (again).
-        let proto = match r#type {
+        let proto = self.get_function_prototype(&r#type, target)?;
+        for (offset, param) in proto.parameters.iter().enumerate() {
+            if self.is_param_type(param, parameter_type)? {
+                if offset < fix {
+                    continue;
+                }
+                return Ok(Some((offset - fix) as u32));
+            }
+        }
+        Ok(None)
+    }
+
+    fn get_function_prototype(
+        &self,
+        r#type: &ProbeType,
+        target: &str,
+    ) -> Result<btf_rs::FuncProto> {
+        // Some probe types might need to change the target format.
+        Ok(match r#type {
             ProbeType::Kprobe => {
                 // Kprobes are using directly the target function definition, no
                 // change to make to the target format and the prototype
@@ -331,15 +395,101 @@ impl Kernel {
                 }
             }
             ProbeType::Max => bail!("Invalid probe type"),
-        };
+        })
+    }
 
-        desc.nargs = proto.parameters.len() as u32;
+    // Check if a given parameter is a specific type.
+    fn is_param_type(&self, param: &btf_rs::Parameter, r#type: &str) -> Result<bool> {
+        let mut resolved = self.btf.resolve_chained_type(param)?;
+        let mut full_name = String::new();
+
+        // First, traverse the type definition until we find the actual type.
+        // Only support valid resolve_chained_type calls and exclude function
+        // pointers, static/global variables and especially typedef as we don't
+        // want to traverse its full definition!
+        let mut is_pointer = false;
+        loop {
+            resolved = match resolved {
+                Type::Ptr(t) => {
+                    is_pointer = true;
+                    self.btf.resolve_chained_type(&t)?
+                }
+                Type::Volatile(t) => {
+                    full_name.push_str("volatile ");
+                    self.btf.resolve_chained_type(&t)?
+                }
+                Type::Const(t) => {
+                    full_name.push_str("const ");
+                    self.btf.resolve_chained_type(&t)?
+                }
+                Type::Array(_) => bail!("Arrays are not supported at the moment"),
+                _ => break,
+            }
+        }
+
+        // Then resolve the type name.
+        let type_name = match resolved {
+            Type::Int(t) => self.btf.resolve_name(&t)?,
+            Type::Struct(t) => format!("struct {}", self.btf.resolve_name(&t)?),
+            Type::Union(t) => format!("union {}", self.btf.resolve_name(&t)?),
+            Type::Enum(t) => format!("enum {}", self.btf.resolve_name(&t)?),
+            Type::Typedef(t) => self.btf.resolve_name(&t)?,
+            Type::Float(t) => self.btf.resolve_name(&t)?,
+            Type::Enum64(t) => format!("enum {}", self.btf.resolve_name(&t)?),
+            _ => return Ok(false),
+        };
+        full_name.push_str(type_name.as_str());
+
+        // Set the pointer information C style.
+        if is_pointer {
+            full_name.push_str(" *");
+        }
+
+        // We do not get the symbol name; useless and not always there (e.g.
+        // raw tracepoints).
+
+        Ok(r#type == full_name)
+    }
+
+    /// Inspect a target using BTF and fill its description.
+    fn inspect_target(&self, r#type: &ProbeType, target: &str) -> Result<TargetDesc> {
+        // First look at the symbol address. Some probe types might need to
+        // modify the target format.
+        let ksym_target = match r#type {
+            ProbeType::Kprobe => target.to_string(),
+            ProbeType::RawTracepoint => format!("__tracepoint_{}", target),
+            ProbeType::Max => bail!("Invalid probe type"),
+        };
+        let mut desc = TargetDesc {
+            ksym: kernel_symbols::get_symbol_addr(ksym_target.as_str())?,
+            ..Default::default()
+        };
 
         // Raw tracepoints have a void* pointing to the data as their first
         // argument, which does not end up in their context. We have to skip it.
         // See include/trace/bpf_probe.h in the __DEFINE_EVENT definition.
-        if *r#type == ProbeType::RawTracepoint {
-            desc.nargs -= 1;
+        let fix = match r#type {
+            &ProbeType::RawTracepoint => 1,
+            _ => 0,
+        };
+
+        // Get parameter offsets.
+        let proto = self.get_function_prototype(r#type, target)?;
+        desc.nargs = (proto.parameters.len() - fix) as u32;
+
+        for (offset, param) in proto.parameters.iter().enumerate() {
+            if offset < fix {
+                continue;
+            }
+            if self.is_param_type(param, "struct sk_buff *")? {
+                desc.probe_cfg.offsets.sk_buff = (offset - fix) as i8;
+            } else if self.is_param_type(param, "enum skb_drop_reason")? {
+                desc.probe_cfg.offsets.skb_drop_reason = (offset - fix) as i8;
+            } else if self.is_param_type(param, "struct net_device *")? {
+                desc.probe_cfg.offsets.net_device = (offset - fix) as i8;
+            } else if self.is_param_type(param, "struct net *")? {
+                desc.probe_cfg.offsets.net = (offset - fix) as i8;
+            }
         }
 
         Ok(desc)
@@ -473,5 +623,64 @@ mod tests {
         assert!(kernel.reuse_map("config", 0).is_ok());
         assert!(kernel.reuse_map("event", 0).is_ok());
         assert!(kernel.reuse_map("event", 0).is_err());
+    }
+
+    #[test]
+    fn parameter_offset() {
+        let kernel = Kernel::new_from_btf_file("test_data/vmlinux").unwrap();
+
+        assert!(
+            kernel
+                .function_parameter_offset(
+                    ProbeType::Kprobe,
+                    "kfree_skb_reason",
+                    "struct sk_buff *"
+                )
+                .unwrap()
+                == Some(0)
+        );
+        assert!(
+            kernel
+                .function_parameter_offset(ProbeType::Kprobe, "kfree_skb_reason", "struct sk_buff")
+                .unwrap()
+                == None
+        );
+
+        assert!(
+            kernel
+                .function_parameter_offset(
+                    ProbeType::RawTracepoint,
+                    "kfree_skb",
+                    "struct sk_buff *"
+                )
+                .unwrap()
+                == Some(0)
+        );
+        assert!(
+            kernel
+                .function_parameter_offset(
+                    ProbeType::RawTracepoint,
+                    "kfree_skb",
+                    "enum skb_drop_reason"
+                )
+                .unwrap()
+                == Some(2)
+        );
+    }
+
+    #[test]
+    fn inspect_target() {
+        let kernel = Kernel::new_from_btf_file("test_data/vmlinux").unwrap();
+
+        let desc = kernel.inspect_target(&ProbeType::RawTracepoint, "kfree_skb");
+        assert!(desc.is_ok());
+
+        let desc = desc.unwrap();
+        assert!(desc.ksym == 0xffffffff983c29a0);
+        assert!(desc.nargs == 3);
+        assert!(desc.probe_cfg.offsets.sk_buff == 0);
+        assert!(desc.probe_cfg.offsets.skb_drop_reason == 2);
+        assert!(desc.probe_cfg.offsets.net_device == -1);
+        assert!(desc.probe_cfg.offsets.net == -1);
     }
 }

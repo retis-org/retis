@@ -11,8 +11,10 @@ anyhow = "1.0"
 bimap = "0.6"
 btf-rs = {git = "https://github.com/net-trace/btf-rs"}
 libbpf-rs = "0.19"
+libbpf-sys = "1.0"
 log = "0.4"
 once_cell = "1.15"
+plain = "0.2"
 
 [build-dependencies]
 libbpf-cargo = "0.13"
