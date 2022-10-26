@@ -47,6 +47,8 @@ fn build_hook(source: &str) {
         obj
     )
     .unwrap();
+
+    println!("cargo:rerun-if-changed={}", source);
 }
 
 fn build_probe(source: &str) {
