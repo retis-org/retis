@@ -36,6 +36,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
+name = "btf-rs"
+version = "0.1.0"
+source = "git+https://github.com/net-trace/btf-rs#a8ffd76a4b21c1aaa735af380241bb0300fc8cfb"
+dependencies = [
+ "anyhow",
+ "byteorder",
+]
+
+[[package]]
+name = "byteorder"
+version = "1.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
+
+[[package]]
 name = "camino"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -313,9 +328,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bimap",
+ "btf-rs",
  "libbpf-cargo",
  "libbpf-rs",
  "log",
+ "memmap2",
  "once_cell",
 ]
 
