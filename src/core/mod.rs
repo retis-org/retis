@@ -4,3 +4,4 @@
 //! within the tool.
 
 pub(crate) mod kernel_symbols;
+pub(crate) mod probe;
