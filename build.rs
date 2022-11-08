@@ -36,7 +36,7 @@ fn build_hook(source: &str) {
     }
 
     let obj = File::open(output).unwrap();
-    let obj: &[u8] = &*unsafe { Mmap::map(&obj).unwrap() };
+    let obj: &[u8] = &unsafe { Mmap::map(&obj).unwrap() };
 
     let mut rs = File::create(skel).unwrap();
     write!(
