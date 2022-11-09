@@ -69,7 +69,7 @@ pub(crate) struct Kernel {
 }
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
-pub(super) const PROBE_MAX: usize = 128; // TODO add checks on probe registration.
+pub(crate) const PROBE_MAX: usize = 128; // TODO add checks on probe registration.
 pub(super) const HOOK_MAX: usize = 10;
 
 struct ProbeSet {
