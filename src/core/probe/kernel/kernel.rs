@@ -25,6 +25,8 @@ pub(crate) enum ProbeType {
 pub(crate) struct Hook {
     /// Hook BPF binary data.
     bpf_prog: &'static [u8],
+    /// HashMap of maps names and their fd, for reuse by the hook.
+    maps: HashMap<String, i32>,
 }
 
 impl Hook {
@@ -32,7 +34,21 @@ impl Hook {
     pub(crate) fn from(bpf_prog: &'static [u8]) -> Hook {
         Hook {
             bpf_prog,
+            maps: HashMap::new(),
         }
+    }
+
+    /// Request to reuse a map specifically in the hook. For maps being globally
+    /// reused please use Kernel::reuse_map() instead.
+    pub(crate) fn reuse_map(&mut self, name: &str, fd: i32) -> Result<&mut Self> {
+        let name = name.to_string();
+
+        if self.maps.contains_key(&name) {
+            bail!("Map {} already reused, or name is conflicting", name);
+        }
+
+        self.maps.insert(name, fd);
+        Ok(self)
     }
 }
 
@@ -524,6 +540,12 @@ pub(super) fn replace_hooks(fd: i32, hooks: &[Hook]) -> Result<Vec<libbpf_rs::Li
 
         let mut open_obj =
             libbpf_rs::ObjectBuilder::default().open_memory("hook", hook.bpf_prog)?;
+
+        // We have to explicitly use a Vec below to avoid having an unknown size
+        // at build time.
+        let map_fds: Vec<(String, i32)> = hook.maps.clone().into_iter().collect();
+        reuse_map_fds(&open_obj, &map_fds)?;
+
         let open_prog = open_obj
             .prog_mut("hook")
             .ok_or_else(|| anyhow!("Couldn't get hook program"))?;
