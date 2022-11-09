@@ -24,7 +24,7 @@ impl ProbeBuilder for KprobeBuilder {
         KprobeBuilder::default()
     }
 
-    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<&'static [u8]>) -> Result<()> {
+    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<Hook>) -> Result<()> {
         if self.obj.is_some() {
             bail!("Kprobe builder already initialized");
         }

@@ -18,7 +18,7 @@ use raw_tracepoint_bpf::RawTracepointSkelBuilder;
 pub(super) struct RawTracepointBuilder {
     links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, i32)>,
-    hooks: Vec<&'static [u8]>,
+    hooks: Vec<Hook>,
 }
 
 impl ProbeBuilder for RawTracepointBuilder {
@@ -26,7 +26,7 @@ impl ProbeBuilder for RawTracepointBuilder {
         RawTracepointBuilder::default()
     }
 
-    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<&'static [u8]>) -> Result<()> {
+    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<Hook>) -> Result<()> {
         self.map_fds = map_fds;
         self.hooks = hooks;
         Ok(())

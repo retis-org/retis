@@ -20,6 +20,22 @@ pub(crate) enum ProbeType {
     Max,
 }
 
+/// Hook provided by modules for registering them on kernel probes.
+#[derive(Clone)]
+pub(crate) struct Hook {
+    /// Hook BPF binary data.
+    bpf_prog: &'static [u8],
+}
+
+impl Hook {
+    /// Create a new hook given a BPF binary data.
+    pub(crate) fn from(bpf_prog: &'static [u8]) -> Hook {
+        Hook {
+            bpf_prog,
+        }
+    }
+}
+
 /// Main object representing the kernel probes and providing an API for
 /// consumers to register probes, hooks, maps, etc.
 pub(crate) struct Kernel {
@@ -30,7 +46,7 @@ pub(crate) struct Kernel {
     /// Targeted probes only have one target to keep things reasonable.
     targeted_probes: Vec<ProbeSet>,
     maps: HashMap<String, i32>,
-    hooks: Vec<&'static [u8]>,
+    hooks: Vec<Hook>,
     #[cfg(not(test))]
     config_map: libbpf_rs::Map,
     btf: Btf,
@@ -44,7 +60,7 @@ struct ProbeSet {
     r#type: ProbeType,
     builder: Box<dyn ProbeBuilder>,
     targets: HashMap<String, TargetDesc>,
-    hooks: Vec<&'static [u8]>,
+    hooks: Vec<Hook>,
 }
 
 #[derive(Default)]
@@ -161,9 +177,9 @@ impl Kernel {
     ///
     /// [...]
     ///
-    /// kernel.register_hook(hook::DATA)?;
+    /// kernel.register_hook(Hook::from(hook::DATA))?;
     /// ```
-    pub(crate) fn register_hook(&mut self, hook: &'static [u8]) -> Result<()> {
+    pub(crate) fn register_hook(&mut self, hook: Hook) -> Result<()> {
         let mut max: usize = 0;
         for set in self.targeted_probes.iter_mut() {
             if max < set.hooks.len() {
@@ -191,7 +207,7 @@ impl Kernel {
     /// ```
     pub(crate) fn register_hook_to(
         &mut self,
-        hook: &'static [u8],
+        hook: Hook,
         r#type: ProbeType,
         target: &str,
     ) -> Result<()> {
@@ -268,7 +284,7 @@ impl Kernel {
         set: &mut ProbeSet,
         #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
         maps: HashMap<String, i32>,
-        hooks: Vec<&'static [u8]>,
+        hooks: Vec<Hook>,
     ) -> Result<()> {
         if set.targets.is_empty() {
             return Ok(());
@@ -482,7 +498,7 @@ pub(super) trait ProbeBuilder {
     /// Initialize the probe builder before attaching programs to probes. It
     /// takes an option vector of map fds so that maps can be reused and shared
     /// accross builders.
-    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<&'static [u8]>) -> Result<()>;
+    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<Hook>) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
     fn attach(&mut self, target: &str, desc: &TargetDesc) -> Result<()>;
 }
@@ -500,13 +516,14 @@ pub(super) fn reuse_map_fds(
     Ok(())
 }
 
-pub(super) fn replace_hooks(fd: i32, hooks: &[&[u8]]) -> Result<Vec<libbpf_rs::Link>> {
+pub(super) fn replace_hooks(fd: i32, hooks: &[Hook]) -> Result<Vec<libbpf_rs::Link>> {
     let mut links = Vec::new();
 
     for (i, hook) in hooks.iter().enumerate() {
         let target = format!("hook{}", i);
 
-        let mut open_obj = libbpf_rs::ObjectBuilder::default().open_memory("hook", hook)?;
+        let mut open_obj =
+            libbpf_rs::ObjectBuilder::default().open_memory("hook", hook.bpf_prog)?;
         let open_prog = open_obj
             .prog_mut("hook")
             .ok_or_else(|| anyhow!("Couldn't get hook program"))?;
@@ -554,11 +571,11 @@ mod tests {
     fn register_hooks() {
         let mut kernel = Kernel::new_from_btf_file("test_data/vmlinux").unwrap();
 
-        assert!(kernel.register_hook(HOOK).is_ok());
-        assert!(kernel.register_hook(HOOK).is_ok());
+        assert!(kernel.register_hook(Hook::from(HOOK)).is_ok());
+        assert!(kernel.register_hook(Hook::from(HOOK)).is_ok());
 
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::Kprobe, "kfree_skb_reason")
+            .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
             .is_ok());
         assert!(kernel
             .add_probe(ProbeType::Kprobe, "kfree_skb_reason")
@@ -568,29 +585,29 @@ mod tests {
             .add_probe(ProbeType::RawTracepoint, "kfree_skb")
             .unwrap();
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::RawTracepoint, "kfree_skb")
+            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "kfree_skb")
             .is_ok());
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::RawTracepoint, "kfree_skb")
+            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "kfree_skb")
             .is_ok());
 
         for _ in 0..HOOK_MAX - 4 {
-            assert!(kernel.register_hook(HOOK).is_ok());
+            assert!(kernel.register_hook(Hook::from(HOOK)).is_ok());
         }
 
         // We should hit the hook limit here.
-        assert!(kernel.register_hook(HOOK).is_err());
+        assert!(kernel.register_hook(Hook::from(HOOK)).is_err());
 
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::Kprobe, "kfree_skb_reason")
+            .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
             .is_ok());
 
         // We should hit the hook limit here as well.
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::Kprobe, "kfree_skb_reason")
+            .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
             .is_err());
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::RawTracepoint, "kfree_skb")
+            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "kfree_skb")
             .is_err());
     }
 
