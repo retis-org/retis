@@ -458,17 +458,22 @@ impl Kernel {
         Ok(r#type == full_name)
     }
 
-    /// Inspect a target using BTF and fill its description.
-    fn inspect_target(&self, r#type: &ProbeType, target: &str) -> Result<TargetDesc> {
-        // First look at the symbol address. Some probe types might need to
-        // modify the target format.
+    pub(crate) fn get_ksym(&self, r#type: &ProbeType, target: &str) -> Result<u64> {
+        // Some probe types might need to modify the target format.
         let ksym_target = match r#type {
             ProbeType::Kprobe => target.to_string(),
             ProbeType::RawTracepoint => format!("__tracepoint_{}", target),
             ProbeType::Max => bail!("Invalid probe type"),
         };
+
+        kernel_symbols::get_symbol_addr(ksym_target.as_str())
+    }
+
+    /// Inspect a target using BTF and fill its description.
+    fn inspect_target(&self, r#type: &ProbeType, target: &str) -> Result<TargetDesc> {
+        // First look at the symbol address.
         let mut desc = TargetDesc {
-            ksym: kernel_symbols::get_symbol_addr(ksym_target.as_str())?,
+            ksym: self.get_ksym(r#type, target)?,
             ..Default::default()
         };
 
