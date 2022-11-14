@@ -7,7 +7,7 @@
 
 use anyhow::{anyhow, Result};
 
-use super::*;
+use super::{inspect::TargetDesc, *};
 use crate::core::probe::get_ebpf_debug;
 
 mod raw_tracepoint_bpf {
