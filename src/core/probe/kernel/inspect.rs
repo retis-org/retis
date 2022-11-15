@@ -1,7 +1,10 @@
 #![allow(dead_code)] // FIXME
 
+use std::{collections::HashSet, fs};
+
 use anyhow::{bail, Result};
 use btf_rs::{Btf, Type};
+use log::warn;
 
 use super::{config::ProbeConfig, ProbeType};
 use crate::core::kernel_symbols;
@@ -20,16 +23,44 @@ pub(super) struct TargetDesc {
 /// Provides helpers to inspect probe related information in the kernel.
 pub(crate) struct Inspector {
     btf: Btf,
+    /// Set of traceable functions (e.g. kprobes).
+    traceable_funcs: Option<HashSet<String>>,
 }
 
 impl Inspector {
     pub(crate) fn new() -> Result<Inspector> {
-        Ok(Inspector {
+        let inspector = Inspector {
             #[cfg(not(test))]
             btf: Btf::from_file("/sys/kernel/btf/vmlinux")?,
             #[cfg(test)]
             btf: Btf::from_file("test_data/vmlinux")?,
-        })
+            // Not all functions we'll get from BTF/kallsyms are traceable. Use
+            // the following, when available, to narrow down our checks.
+            traceable_funcs: Self::file_to_hashset(
+                "/sys/kernel/debug/tracing/available_filter_functions",
+            ),
+        };
+
+        if inspector.traceable_funcs.is_none() {
+            warn!(
+                "Consider mounting debugfs to /sys/kernel/debug to better filter available probes"
+            );
+        }
+
+        Ok(inspector)
+    }
+
+    /// Convert a file containing a list of str (one per line) into a HashSet.
+    fn file_to_hashset(target: &str) -> Option<HashSet<String>> {
+        if let Ok(file) = fs::read_to_string(target) {
+            let mut set = HashSet::new();
+            for line in file.lines() {
+                set.insert(line.to_string());
+            }
+
+            return Some(set);
+        }
+        None
     }
 
     /// Get a parameter offset given its type in a given kernel function, if
@@ -178,7 +209,35 @@ impl Inspector {
             ProbeType::Max => bail!("Invalid probe type"),
         };
 
+        // If we got the list of functions/events available for tracing, which
+        // is a subset of what kernel_symbols below supports, use it to bail out
+        // early if a function isn't traceable.
+        if let Some(res) = self.is_symbol_traceable(r#type, target) {
+            if !res {
+                bail!("{} isn't traceable", target);
+            }
+        }
+
         kernel_symbols::get_symbol_addr(ksym_target.as_str())
+    }
+
+    /// Checks if a kprobe target is valid. Returns None in case we can't know.
+    pub(crate) fn is_symbol_traceable(&self, r#type: &ProbeType, target: &str) -> Option<bool> {
+        // Get the right set of valid targets depending on the probe type.
+        let set = match r#type {
+            ProbeType::Kprobe => &self.traceable_funcs,
+            ProbeType::RawTracepoint => &None,
+            ProbeType::Max => &None,
+        };
+
+        // If we can't check further, we don't know if the target is traceable
+        // and we return None.
+        if set.is_none() {
+            return None;
+        }
+
+        // Unwrap as we checked above we have a set of valid targets.
+        Some(set.as_ref().unwrap().get(target).is_some())
     }
 
     /// Inspect a target using BTF and fill its description.
