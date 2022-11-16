@@ -9,6 +9,7 @@ use anyhow::{bail, Result};
 use clap::error::Error as ClapError;
 use clap::{ArgMatches, Args, Command, FromArgMatches};
 
+use super::cmd::Collect;
 use super::dynamic::DynamicCommand;
 
 /// SubCommand defines the way to handle SubCommands.
@@ -237,7 +238,8 @@ pub(crate) struct CliConfig {
 
 /// Create and register a ThinCli
 pub(crate) fn get_cli() -> Result<ThinCli> {
-    let cli = ThinCli::new()?;
+    let mut cli = ThinCli::new()?;
+    cli.add_subcommand(Box::new(Collect::new()?))?;
     Ok(cli)
 }
 
