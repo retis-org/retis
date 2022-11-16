@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::any::Any;
 
 use clap::error::Error as ClapError;
-use clap::{error::ErrorKind, ArgMatches, Args, Command};
+use clap::{builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command};
 
 use super::super::dynamic::DynamicCommand;
 use super::super::SubCommand;
@@ -15,6 +15,10 @@ use super::super::SubCommand;
 pub(crate) struct CollectArgs {
     #[arg(long, default_value = "false")]
     pub(crate) ebpf_debug: Option<bool>,
+    // Some of the options that we want for this arg are not available in clap's derive interface
+    // so both the argument definition and the field population will be done manually.
+    #[arg(skip)]
+    pub(crate) collectors: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -31,7 +35,13 @@ impl SubCommand for Collect {
         Ok(Collect {
             args: CollectArgs::default(),
             collectors: DynamicCommand::new(
-                CollectArgs::augment_args(Command::new("collect")),
+                CollectArgs::augment_args(Command::new("collect")).arg(
+                    Arg::new("collectors")
+                        .long("collectors")
+                        .short('c')
+                        .value_delimiter(',')
+                        .help("comma-separated list of collectors to enable"),
+                ),
                 "collector",
             )?,
         })
@@ -60,12 +70,21 @@ impl SubCommand for Collect {
             using ebpf."
             .to_string();
 
+        // Determine all registerd collectors and specify both de possible values and the default
+        // value if the "collectors" argument
+        let possible_collectors =
+            Vec::from_iter(self.collectors.modules().iter().map(|x| x.to_owned()));
+
         let full_command = self
             .collectors
             .command()
             .to_owned()
             .about("Collect events")
-            .long_about(long_about);
+            .long_about(long_about)
+            .mut_arg("collectors", |a| {
+                a.value_parser(PossibleValuesParser::new(possible_collectors.clone()))
+                    .default_value(possible_collectors.join(","))
+            });
 
         Ok(full_command)
     }
@@ -78,6 +97,13 @@ impl SubCommand for Collect {
             .collectors
             .get_main::<CollectArgs>()
             .map_err(|_| ClapError::new(ErrorKind::InvalidValue))?;
+
+        // Manually set collectors argument.
+        self.args.collectors = args
+            .get_many("collectors")
+            .ok_or_else(|| ClapError::new(ErrorKind::MissingRequiredArgument))?
+            .map(|x: &String| x.to_owned())
+            .collect();
         Ok(())
     }
 
