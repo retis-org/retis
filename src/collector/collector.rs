@@ -79,6 +79,8 @@ impl Group {
             .downcast_ref::<Collect>()
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
+        probe::common::set_ebpf_debug(collect.args()?.ebpf_debug.unwrap_or(false))?;
+
         // Try initializing all collectors in the group. Failing ones are
         // put on a list for future removal.
         let mut to_remove = Vec::new();
