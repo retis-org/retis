@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use log::{error, warn};
 
 use super::skb::SkbCollector;
-use crate::cli::{dynamic::DynamicCommand, CliConfig};
+use crate::cli::{cmd::collect::Collect, dynamic::DynamicCommand, CliConfig};
 use crate::core::probe;
 
 /// Generic trait representing a collector. All collectors are required to
@@ -73,11 +73,20 @@ impl Group {
     /// Initialize all collectors by calling their `init()` function. Collectors
     /// failing to initialize will be removed from the group.
     pub(crate) fn init(&mut self, cli: &CliConfig) -> Result<()> {
-        let mut to_remove = Vec::new();
+        let collect = cli
+            .subcommand
+            .as_any()
+            .downcast_ref::<Collect>()
+            .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
         // Try initializing all collectors in the group. Failing ones are
         // put on a list for future removal.
-        for (_, c) in self.list.iter_mut() {
+        let mut to_remove = Vec::new();
+        for name in &collect.args()?.collectors {
+            let c = self
+                .list
+                .get_mut(name)
+                .ok_or_else(|| anyhow!(format!("unknown collector: {}", &name)))?;
             if let Err(e) = c.init(cli, &mut self.kernel) {
                 to_remove.push(c.name());
                 error!(
