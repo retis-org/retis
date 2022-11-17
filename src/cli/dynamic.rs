@@ -66,6 +66,18 @@ impl DynamicCommand {
         Ok(())
     }
 
+    /// Register a module with no arguments
+    ///
+    /// The module name has to be unique.
+    pub(crate) fn register_module_noargs(&mut self, name: &'static str) -> Result<()> {
+        let name = String::from(name);
+        if self.modules.get(&name).is_some() {
+            bail!("module with name {} already registered", name);
+        }
+        self.modules.insert(name);
+        Ok(())
+    }
+
     /// Stores a copy of the ArgMatches that will be used to render module section arguments.
     pub(crate) fn set_matches(&mut self, matches: &ArgMatches) -> Result<&mut Self> {
         self.matches = Some(matches.clone());
@@ -198,6 +210,11 @@ mod tests {
         assert!(cmd.register_module::<Mod1>("mod1").is_ok());
         assert!(cmd.register_module::<Mod1>("mod1").is_err());
         assert!(cmd.register_module::<Mod2>("mod2").is_ok());
+        assert!(cmd.register_module_noargs("mod3").is_ok());
+        assert!(cmd.register_module_noargs("mod3").is_err());
+        assert!(cmd.modules().contains("mod1"));
+        assert!(cmd.modules().contains("mod2"));
+        assert!(cmd.modules().contains("mod3"));
         Ok(())
     }
 

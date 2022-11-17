@@ -26,7 +26,7 @@ pub(super) trait Collector {
     /// as part of the collector registration and only then feed the collector
     /// with data coming from the core. Checks for the mandatory part of the
     /// collector should be done here.
-    fn init(&mut self, kernel: &mut probe::Kernel, cli: &CliConfig) -> Result<()>;
+    fn init(&mut self, cli: &CliConfig, kernel: &mut probe::Kernel) -> Result<()>;
     /// Start the group of events (non-probes).
     fn start(&mut self) -> Result<()>;
 }
@@ -78,7 +78,7 @@ impl Group {
         // Try initializing all collectors in the group. Failing ones are
         // put on a list for future removal.
         for (_, c) in self.list.iter_mut() {
-            if let Err(e) = c.init(&mut self.kernel, cli) {
+            if let Err(e) = c.init(cli, &mut self.kernel) {
                 to_remove.push(c.name());
                 error!(
                     "Could not initialize collector '{}', unregistering: {}",
@@ -151,7 +151,7 @@ mod tests {
         fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
             Ok(())
         }
-        fn init(&mut self, _: &mut probe::Kernel, _: &CliConfig) -> Result<()> {
+        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel) -> Result<()> {
             Ok(())
         }
         fn start(&mut self) -> Result<()> {
@@ -169,7 +169,7 @@ mod tests {
         fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
             Ok(())
         }
-        fn init(&mut self, _: &mut probe::Kernel, _: &CliConfig) -> Result<()> {
+        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel) -> Result<()> {
             bail!("Could not initialize")
         }
         fn start(&mut self) -> Result<()> {
@@ -213,8 +213,8 @@ mod tests {
 
         let mut kernel = probe::Kernel::new()?;
 
-        assert!(dummy_a.init(&mut kernel, &config).is_ok());
-        assert!(dummy_b.init(&mut kernel, &config).is_err());
+        assert!(dummy_a.init(&config, &mut kernel).is_ok());
+        assert!(dummy_b.init(&config, &mut kernel).is_err());
         assert!(group.init(&config).is_ok());
         Ok(())
     }

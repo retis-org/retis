@@ -19,7 +19,7 @@ impl Collector for SkbCollector {
         Ok(())
     }
 
-    fn init(&mut self, _kernel: &mut kernel::Kernel, _: &CliConfig) -> Result<()> {
+    fn init(&mut self, _: &CliConfig, _kernel: &mut kernel::Kernel) -> Result<()> {
         Ok(())
     }
 
