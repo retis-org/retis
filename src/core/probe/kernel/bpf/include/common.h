@@ -82,7 +82,7 @@ struct trace_context {
  */
 #define TRACE_GET(ctx, name, type)		\
 	(trace_arg_valid(ctx, name) ?		\
-	 trace_get_param(ctx, ctx->offsets.name, type) : NULL)
+	 trace_get_param(ctx, ctx->offsets.name, type) : 0)
 
 #define trace_get_sk_buff(ctx)		\
 	TRACE_GET(ctx, sk_buff, struct sk_buff *)
