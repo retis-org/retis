@@ -1,5 +1,6 @@
 use anyhow::Result;
 
+use crate::cli::{dynamic::DynamicCommand, CliConfig};
 use crate::collector::Collector;
 use crate::core::probe::kernel;
 
@@ -14,7 +15,11 @@ impl Collector for SkbCollector {
         "skb"
     }
 
-    fn init(&mut self, _kernel: &mut kernel::Kernel) -> Result<()> {
+    fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
+        Ok(())
+    }
+
+    fn init(&mut self, _kernel: &mut kernel::Kernel, _: &CliConfig) -> Result<()> {
         Ok(())
     }
 

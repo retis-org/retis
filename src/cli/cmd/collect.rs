@@ -1,6 +1,7 @@
 //! # Collect
 //!
 //! Collect is a dynamic CLI subcommand that allows collectors to register their arguments.
+#![allow(dead_code)] // FIXME
 
 use anyhow::Result;
 use std::any::Any;
@@ -70,8 +71,8 @@ impl SubCommand for Collect {
             using ebpf."
             .to_string();
 
-        // Determine all registerd collectors and specify both de possible values and the default
-        // value if the "collectors" argument
+        // Determine all registerd collectors and specify both the possible values and the default
+        // value of the "collectors" argument
         let possible_collectors =
             Vec::from_iter(self.collectors.modules().iter().map(|x| x.to_owned()));
 
