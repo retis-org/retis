@@ -51,11 +51,7 @@ impl DynamicCommand {
     where
         T: Args,
     {
-        let name = String::from(name);
-        if self.modules.get(&name).is_some() {
-            bail!("module with name {} already registered", name);
-        }
-        self.modules.insert(name.to_owned());
+        self.register_module_noargs(name)?;
 
         let command = self
             .command

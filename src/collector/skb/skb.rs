@@ -15,8 +15,8 @@ impl Collector for SkbCollector {
         "skb"
     }
 
-    fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
-        Ok(())
+    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
+        cmd.register_module_noargs("skb")
     }
 
     fn init(&mut self, _: &CliConfig, _kernel: &mut kernel::Kernel) -> Result<()> {
