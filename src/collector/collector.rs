@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::{anyhow, bail, Result};
 use log::{error, warn};
 
+use super::ovs::OvsCollector;
 use super::skb::SkbCollector;
 use crate::cli::{cmd::collect::Collect, dynamic::DynamicCommand, CliConfig};
 use crate::core::probe;
@@ -139,7 +140,9 @@ pub(crate) fn get_collectors() -> Result<Group> {
     let mut group = Group::new()?;
 
     // Register all collectors here.
-    group.register(Box::new(SkbCollector::new()?))?;
+    group
+        .register(Box::new(SkbCollector::new()?))?
+        .register(Box::new(OvsCollector::new()?))?;
 
     Ok(group)
 }
