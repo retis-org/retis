@@ -5,7 +5,7 @@
 #![allow(dead_code)] // FIXME
 use std::{any::Any, collections::HashMap, env, ffi::OsString, fmt::Debug};
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use clap::error::Error as ClapError;
 use clap::{ArgMatches, Args, Command, FromArgMatches};
 
@@ -234,6 +234,24 @@ impl FullCli {
 pub(crate) struct CliConfig {
     pub(crate) main_config: MainConfig,
     pub(crate) subcommand: Box<dyn SubCommand>,
+}
+
+impl CliConfig {
+    /// Creates and returns a new instance of dynamic module argument type M
+    pub(crate) fn get_section<M>(&self, name: &str) -> Result<M>
+    where
+        M: Default + FromArgMatches,
+    {
+        self.subcommand
+            .dynamic()
+            .ok_or_else(|| {
+                anyhow!(format!(
+                    "subcommand {} does not support dynamic arguments",
+                    self.subcommand.name()
+                ))
+            })?
+            .get_section::<M>(name)
+    }
 }
 
 /// Create and register a ThinCli
