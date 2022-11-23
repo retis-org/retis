@@ -10,6 +10,7 @@
 /* Please keep in sync with its Rust counterpart in crate::core::events::raw. */
 enum trace_event_owners {
 	COMMON = 1,
+	COLLECTOR_SKB_TRACKING = 2,
 };
 
 struct trace_raw_event {
