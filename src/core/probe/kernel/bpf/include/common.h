@@ -159,6 +159,7 @@ static __always_inline int chain(struct trace_context *ctx)
 {
 	struct trace_probe_config *cfg;
 	struct trace_raw_event *event;
+	struct common_event *e;
 
 	cfg = bpf_map_lookup_elem(&config_map, &ctx->ksym);
 	if (!cfg)
@@ -169,6 +170,15 @@ static __always_inline int chain(struct trace_context *ctx)
 	event = get_event();
 	if (!event)
 		return 0;
+
+	e = get_event_section(event, COMMON, 1, sizeof(*e));
+	if (!e) {
+		discard_event(event);
+		return 0;
+	}
+
+	e->symbol = ctx->ksym;
+	e->timestamp = ctx->timestamp;
 
 #define CALL_HOOK(x)		\
 	if (x < nhooks)		\

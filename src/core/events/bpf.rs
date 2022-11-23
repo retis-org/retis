@@ -10,7 +10,10 @@ use log::error;
 use plain::Plain;
 
 use super::{Event, EventField};
-use crate::core::workaround::SendableRingBuffer;
+use crate::{
+    core::{kernel_symbols, workaround::SendableRingBuffer},
+    event_field,
+};
 
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
@@ -49,10 +52,38 @@ impl BpfEvents {
         )
         .or_else(|e| bail!("Failed to create events map: {}", e))?;
 
-        Ok(BpfEvents {
+        let mut events = BpfEvents {
             map,
             unmarshalers: Arc::new(HashMap::new()),
-        })
+        };
+
+        events.register_unmarshaler(
+            BpfEventOwner::Common,
+            Box::new(|raw_section, fields| {
+                if raw_section.header.data_type != 1 {
+                    bail!("Unknown data type");
+                }
+
+                if raw_section.data.len() != 16 {
+                    bail!(
+                        "Section data is not the expected size {} != 16",
+                        raw_section.data.len()
+                    );
+                }
+
+                let symbol = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
+                let timestamp = u64::from_ne_bytes(raw_section.data[8..16].try_into()?);
+
+                fields.push(event_field!(
+                    "symbol",
+                    kernel_symbols::get_symbol_name(symbol)?
+                ));
+                fields.push(event_field!("timestamp", timestamp));
+                Ok(())
+            }),
+        )?;
+
+        Ok(events)
     }
 
     /// Register a new unmarshaler closure to convert raw sections into event
@@ -285,19 +316,26 @@ unsafe impl Plain for BpfRawSectionHeader {}
 /// owner is a module responsible of given sections types. The section "unique
 /// id" is (owner id, data type id).
 #[derive(Debug, Eq, Hash, PartialEq)]
-pub(crate) enum BpfEventOwner {}
+pub(crate) enum BpfEventOwner {
+    Common = 1,
+}
 
 impl BpfEventOwner {
     pub(super) fn from_u8(val: u8) -> Result<BpfEventOwner> {
         use BpfEventOwner::*;
         let owner = match val {
+            1 => Common,
             x => bail!("Can't construct a BpfEventOwner from {}", x),
         };
         Ok(owner)
     }
 
     pub(super) fn to_str_ref(&self) -> Result<&str> {
-        bail!("Unsupported");
+        use BpfEventOwner::*;
+        let ret = match self {
+            Common => "common",
+        };
+        Ok(ret)
     }
 }
 
