@@ -7,7 +7,7 @@ use super::ovs::OvsCollector;
 use super::skb::SkbCollector;
 use super::skb_tracking::SkbTrackingCollector;
 use crate::cli::{cmd::collect::Collect, dynamic::DynamicCommand, CliConfig};
-use crate::core::probe;
+use crate::core::{events::bpf::BpfEvents, probe};
 
 /// Generic trait representing a collector. All collectors are required to
 /// implement this, as they'll be manipulated through this trait.
@@ -28,7 +28,12 @@ pub(super) trait Collector {
     /// as part of the collector registration and only then feed the collector
     /// with data coming from the core. Checks for the mandatory part of the
     /// collector should be done here.
-    fn init(&mut self, cli: &CliConfig, kernel: &mut probe::Kernel) -> Result<()>;
+    fn init(
+        &mut self,
+        cli: &CliConfig,
+        kernel: &mut probe::Kernel,
+        events: &mut BpfEvents,
+    ) -> Result<()>;
     /// Start the group of events (non-probes).
     fn start(&mut self) -> Result<()>;
 }
@@ -38,13 +43,18 @@ pub(super) trait Collector {
 pub(crate) struct Group {
     list: HashMap<String, Box<dyn Collector>>,
     kernel: probe::Kernel,
+    events: BpfEvents,
 }
 
 impl Group {
     fn new() -> Result<Group> {
+        let events = BpfEvents::new()?;
+        let kernel = probe::Kernel::new(&events)?;
+
         Ok(Group {
             list: HashMap::new(),
-            kernel: probe::Kernel::new()?,
+            kernel,
+            events,
         })
     }
 
@@ -91,7 +101,7 @@ impl Group {
                 .list
                 .get_mut(name)
                 .ok_or_else(|| anyhow!("unknown collector: {}", &name))?;
-            if let Err(e) = c.init(cli, &mut self.kernel) {
+            if let Err(e) = c.init(cli, &mut self.kernel, &mut self.events) {
                 to_remove.push(c.name());
                 error!(
                     "Could not initialize collector '{}', unregistering: {}",
@@ -123,6 +133,7 @@ impl Group {
     /// their `start()` function. Collectors failing to start the event
     /// retrieval will be kept in the group.
     pub(crate) fn start(&mut self, _: &CliConfig) -> Result<()> {
+        self.events.start_polling()?;
         self.kernel.attach()?;
 
         for (_, c) in self.list.iter_mut() {
@@ -167,7 +178,7 @@ mod tests {
         fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
             Ok(())
         }
-        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel) -> Result<()> {
+        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel, _: &mut BpfEvents) -> Result<()> {
             Ok(())
         }
         fn start(&mut self) -> Result<()> {
@@ -185,7 +196,7 @@ mod tests {
         fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
             Ok(())
         }
-        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel) -> Result<()> {
+        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel, _: &mut BpfEvents) -> Result<()> {
             bail!("Could not initialize")
         }
         fn start(&mut self) -> Result<()> {
@@ -227,10 +238,11 @@ mod tests {
         group.register(Box::new(DummyCollectorA::new()?))?;
         group.register(Box::new(DummyCollectorB::new()?))?;
 
-        let mut kernel = probe::Kernel::new()?;
+        let mut events = BpfEvents::new()?;
+        let mut kernel = probe::Kernel::new(&events)?;
 
-        assert!(dummy_a.init(&config, &mut kernel).is_ok());
-        assert!(dummy_b.init(&config, &mut kernel).is_err());
+        assert!(dummy_a.init(&config, &mut kernel, &mut events).is_ok());
+        assert!(dummy_b.init(&config, &mut kernel, &mut events).is_err());
         assert!(group.init(&config).is_ok());
         Ok(())
     }
