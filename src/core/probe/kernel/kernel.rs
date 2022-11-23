@@ -11,6 +11,7 @@ use super::{
     inspect::{Inspector, TargetDesc},
     kprobe, raw_tracepoint,
 };
+use crate::core::events::bpf::BpfEvents;
 
 /// Probes types supported by this crate.
 #[allow(dead_code)]
@@ -92,7 +93,7 @@ impl ProbeSet {
 }
 
 impl Kernel {
-    pub(crate) fn new() -> Result<Kernel> {
+    pub(crate) fn new(events: &BpfEvents) -> Result<Kernel> {
         // Keep synced with the order of ProbeType!
         let probes: [ProbeSet; ProbeType::Max as usize] = [
             ProbeSet::new(ProbeType::Kprobe, Box::new(kprobe::KprobeBuilder::new())),
@@ -119,6 +120,9 @@ impl Kernel {
         kernel
             .maps
             .insert("config_map".to_string(), kernel.config_map.fd());
+        kernel
+            .maps
+            .insert("events_map".to_string(), events.map_fd());
 
         Ok(kernel)
     }
@@ -391,7 +395,8 @@ mod tests {
 
     #[test]
     fn add_probe() {
-        let mut kernel = Kernel::new().unwrap();
+        let events = BpfEvents::new().unwrap();
+        let mut kernel = Kernel::new(&events).unwrap();
 
         assert!(kernel
             .add_probe(ProbeType::Kprobe, "kfree_skb_reason")
@@ -409,7 +414,8 @@ mod tests {
 
     #[test]
     fn register_hooks() {
-        let mut kernel = Kernel::new().unwrap();
+        let events = BpfEvents::new().unwrap();
+        let mut kernel = Kernel::new(&events).unwrap();
 
         assert!(kernel.register_hook(Hook::from(HOOK)).is_ok());
         assert!(kernel.register_hook(Hook::from(HOOK)).is_ok());
@@ -453,7 +459,8 @@ mod tests {
 
     #[test]
     fn reuse_map() {
-        let mut kernel = Kernel::new().unwrap();
+        let events = BpfEvents::new().unwrap();
+        let mut kernel = Kernel::new(&events).unwrap();
 
         assert!(kernel.reuse_map("config", 0).is_ok());
         assert!(kernel.reuse_map("event", 0).is_ok());

@@ -10,6 +10,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collector::Collector,
     core::{
+        events::BpfEvents,
         probe::kernel::{self, Hook, ProbeType},
         workaround::SendableMap,
     },
@@ -44,8 +45,12 @@ impl Collector for SkbTrackingCollector {
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
         cmd.register_module_noargs(SKB_TRACKING_COLLECTOR)
     }
-
-    fn init(&mut self, _: &CliConfig, kernel: &mut kernel::Kernel) -> Result<()> {
+    fn init(
+        &mut self,
+        _: &CliConfig,
+        kernel: &mut kernel::Kernel,
+        _: &mut BpfEvents,
+    ) -> Result<()> {
         self.init_tracking(kernel)?;
 
         // We'd like to track free reasons as well.

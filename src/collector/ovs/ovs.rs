@@ -1,8 +1,10 @@
 use anyhow::Result;
 
-use crate::cli::{dynamic::DynamicCommand, CliConfig};
-use crate::collector::Collector;
-use crate::core::probe::kernel;
+use crate::{
+    cli::{dynamic::DynamicCommand, CliConfig},
+    collector::Collector,
+    core::{events::bpf::BpfEvents, probe::kernel},
+};
 
 const OVS_COLLECTOR: &str = "ovs";
 
@@ -21,7 +23,12 @@ impl Collector for OvsCollector {
         cmd.register_module_noargs(OVS_COLLECTOR)
     }
 
-    fn init(&mut self, _: &CliConfig, _kernel: &mut kernel::Kernel) -> Result<()> {
+    fn init(
+        &mut self,
+        _: &CliConfig,
+        _kernel: &mut kernel::Kernel,
+        _events: &mut BpfEvents,
+    ) -> Result<()> {
         Ok(())
     }
 
