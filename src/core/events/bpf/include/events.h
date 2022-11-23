@@ -9,6 +9,7 @@
 
 /* Please keep in sync with its Rust counterpart in crate::core::events::raw. */
 enum trace_event_owners {
+	COMMON = 1,
 };
 
 struct trace_raw_event {
@@ -71,5 +72,10 @@ static __always_inline void *get_event_section(struct trace_raw_event *event,
 
 	return section;
 }
+
+struct common_event {
+	u64 symbol;
+	u64 timestamp;
+} __attribute__((packed));
 
 #endif /* __CORE_PROBE_KERNEL_BPF_EVENTS__ */
