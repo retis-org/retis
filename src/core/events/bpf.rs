@@ -318,6 +318,7 @@ unsafe impl Plain for BpfRawSectionHeader {}
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub(crate) enum BpfEventOwner {
     Common = 1,
+    CollectorSkbTracking = 2,
 }
 
 impl BpfEventOwner {
@@ -325,6 +326,7 @@ impl BpfEventOwner {
         use BpfEventOwner::*;
         let owner = match val {
             1 => Common,
+            2 => CollectorSkbTracking,
             x => bail!("Can't construct a BpfEventOwner from {}", x),
         };
         Ok(owner)
@@ -334,6 +336,7 @@ impl BpfEventOwner {
         use BpfEventOwner::*;
         let ret = match self {
             Common => "common",
+            CollectorSkbTracking => "skb-tracking",
         };
         Ok(ret)
     }

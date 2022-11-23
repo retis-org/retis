@@ -47,13 +47,22 @@ struct {
 	__type(value, struct tracking_info);
 } tracking_map SEC(".maps");
 
+/* Please keep in sync with its Rust counterpart */
+struct skb_tracking_event {
+	u64 orig_head;
+	u64 timestamp;
+	u64 skb;
+	u32 drop_reason;
+} __attribute__((packed));
+
 /* Must be called with a valid skb pointer */
 static __always_inline int track_skb(struct trace_context *ctx,
-				     struct sk_buff *skb)
+				     struct event *event, struct sk_buff *skb)
 {
 	enum skb_drop_reason drop_reason = 0;
 	struct tracking_info *ti = NULL, new;
 	bool free = false, inv_head = false;
+	struct skb_tracking_event *e;
 	struct tracking_config *cfg;
 	u64 head, ksym = ctx->ksym;
 
@@ -123,6 +132,15 @@ static __always_inline int track_skb(struct trace_context *ctx,
 	if (trace_arg_valid(ctx, skb_drop_reason))
 		drop_reason = trace_get_skb_drop_reason(ctx);
 
+	e = get_event_section(event, COLLECTOR_SKB_TRACKING, 1, sizeof(*e));
+	if (!e)
+		return 0;
+
+	e->orig_head = ti->orig_head;
+	e->timestamp = ti->timestamp;
+	e->skb = (u64)skb;
+	e->drop_reason = drop_reason;
+
 	return 0;
 }
 
@@ -133,7 +151,7 @@ DEFINE_HOOK(
 	if (!skb)
 		return 0;
 
-	return track_skb(ctx, skb);
+	return track_skb(ctx, event, skb);
 )
 
 char __license[] SEC("license") = "GPL";
