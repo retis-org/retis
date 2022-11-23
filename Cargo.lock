@@ -456,6 +456,7 @@ dependencies = [
  "nix 0.25.0",
  "once_cell",
  "plain",
+ "serde_json",
  "simplelog",
 ]
 
