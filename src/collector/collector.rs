@@ -89,7 +89,7 @@ impl Group {
             let c = self
                 .list
                 .get_mut(name)
-                .ok_or_else(|| anyhow!(format!("unknown collector: {}", &name)))?;
+                .ok_or_else(|| anyhow!("unknown collector: {}", &name))?;
             if let Err(e) = c.init(cli, &mut self.kernel) {
                 to_remove.push(c.name());
                 error!(
