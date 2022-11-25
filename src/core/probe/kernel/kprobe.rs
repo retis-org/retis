@@ -7,6 +7,7 @@
 use anyhow::{anyhow, bail, Result};
 
 use super::*;
+use crate::core::probe::get_ebpf_debug;
 
 mod kprobe_bpf {
     include!("bpf/.out/kprobe.skel.rs");
@@ -29,7 +30,9 @@ impl ProbeBuilder for KprobeBuilder {
             bail!("Kprobe builder already initialized");
         }
 
-        let mut skel = KprobeSkelBuilder::default().open()?;
+        let mut skel = KprobeSkelBuilder::default();
+        skel.obj_builder.debug(get_ebpf_debug());
+        let mut skel = skel.open()?;
         skel.rodata().nhooks = hooks.len() as u32;
 
         let open_obj = skel.obj;

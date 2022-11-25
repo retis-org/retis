@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use log::{error, warn};
 
+use super::ovs::OvsCollector;
 use super::skb::SkbCollector;
+use crate::cli::{cmd::collect::Collect, dynamic::DynamicCommand, CliConfig};
 use crate::core::probe;
 
 /// Generic trait representing a collector. All collectors are required to
@@ -14,6 +16,8 @@ pub(super) trait Collector {
     fn new() -> Result<Self>
     where
         Self: Sized;
+    ///Register command line arguments on the provided DynamicCommand object
+    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()>;
     /// Return the name of the collector. It *has* to be unique among all the
     /// collectors.
     fn name(&self) -> &'static str;
@@ -23,7 +27,7 @@ pub(super) trait Collector {
     /// as part of the collector registration and only then feed the collector
     /// with data coming from the core. Checks for the mandatory part of the
     /// collector should be done here.
-    fn init(&mut self, kernel: &mut probe::Kernel) -> Result<()>;
+    fn init(&mut self, cli: &CliConfig, kernel: &mut probe::Kernel) -> Result<()>;
     /// Start the group of events (non-probes).
     fn start(&mut self) -> Result<()>;
 }
@@ -69,13 +73,24 @@ impl Group {
 
     /// Initialize all collectors by calling their `init()` function. Collectors
     /// failing to initialize will be removed from the group.
-    pub(crate) fn init(&mut self) -> Result<()> {
-        let mut to_remove = Vec::new();
+    pub(crate) fn init(&mut self, cli: &CliConfig) -> Result<()> {
+        let collect = cli
+            .subcommand
+            .as_any()
+            .downcast_ref::<Collect>()
+            .ok_or_else(|| anyhow!("wrong subcommand"))?;
+
+        probe::common::set_ebpf_debug(collect.args()?.ebpf_debug.unwrap_or(false))?;
 
         // Try initializing all collectors in the group. Failing ones are
         // put on a list for future removal.
-        for (_, c) in self.list.iter_mut() {
-            if let Err(e) = c.init(&mut self.kernel) {
+        let mut to_remove = Vec::new();
+        for name in &collect.args()?.collectors {
+            let c = self
+                .list
+                .get_mut(name)
+                .ok_or_else(|| anyhow!(format!("unknown collector: {}", &name)))?;
+            if let Err(e) = c.init(cli, &mut self.kernel) {
                 to_remove.push(c.name());
                 error!(
                     "Could not initialize collector '{}', unregistering: {}",
@@ -94,10 +109,19 @@ impl Group {
         Ok(())
     }
 
+    /// Register all collectors' command line arguments by calling their register_cli function.
+    pub(crate) fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
+        for (_, c) in self.list.iter() {
+            // Cli registration errors are fatal.
+            c.register_cli(cmd)?;
+        }
+        Ok(())
+    }
+
     /// Start the event retrieval for all collectors in the group by calling
     /// their `start()` function. Collectors failing to start the event
     /// retrieval will be kept in the group.
-    pub(crate) fn start(&mut self) -> Result<()> {
+    pub(crate) fn start(&mut self, _: &CliConfig) -> Result<()> {
         self.kernel.attach()?;
 
         for (_, c) in self.list.iter_mut() {
@@ -116,7 +140,9 @@ pub(crate) fn get_collectors() -> Result<Group> {
     let mut group = Group::new()?;
 
     // Register all collectors here.
-    group.register(Box::new(SkbCollector::new()?))?;
+    group
+        .register(Box::new(SkbCollector::new()?))?
+        .register(Box::new(OvsCollector::new()?))?;
 
     Ok(group)
 }
@@ -124,6 +150,7 @@ pub(crate) fn get_collectors() -> Result<Group> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::{cmd::collect::Collect, MainConfig, SubCommand};
 
     struct DummyCollectorA;
     struct DummyCollectorB;
@@ -135,7 +162,10 @@ mod tests {
         fn name(&self) -> &'static str {
             "dummy-a"
         }
-        fn init(&mut self, _: &mut probe::Kernel) -> Result<()> {
+        fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
+            Ok(())
+        }
+        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel) -> Result<()> {
             Ok(())
         }
         fn start(&mut self) -> Result<()> {
@@ -150,8 +180,11 @@ mod tests {
         fn name(&self) -> &'static str {
             "dummy-b"
         }
-        fn init(&mut self, _: &mut probe::Kernel) -> Result<()> {
-            bail!("Could not initialize");
+        fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
+            Ok(())
+        }
+        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel) -> Result<()> {
+            bail!("Could not initialize")
         }
         fn start(&mut self) -> Result<()> {
             bail!("Could not start");
@@ -181,6 +214,10 @@ mod tests {
 
     #[test]
     fn init_collectors() -> Result<()> {
+        let config = CliConfig {
+            main_config: MainConfig::default(),
+            subcommand: Box::new(Collect::new()?),
+        };
         let mut group = Group::new()?;
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
@@ -190,14 +227,18 @@ mod tests {
 
         let mut kernel = probe::Kernel::new()?;
 
-        assert!(dummy_a.init(&mut kernel).is_ok());
-        assert!(dummy_b.init(&mut kernel).is_err());
-        assert!(group.init().is_ok());
+        assert!(dummy_a.init(&config, &mut kernel).is_ok());
+        assert!(dummy_b.init(&config, &mut kernel).is_err());
+        assert!(group.init(&config).is_ok());
         Ok(())
     }
 
     #[test]
     fn start_collectors() -> Result<()> {
+        let config = CliConfig {
+            main_config: MainConfig::default(),
+            subcommand: Box::new(Collect::new()?),
+        };
         let mut group = Group::new()?;
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
@@ -207,7 +248,7 @@ mod tests {
 
         assert!(dummy_a.start().is_ok());
         assert!(dummy_b.start().is_err());
-        assert!(group.start().is_ok());
+        assert!(group.start(&config).is_ok());
         Ok(())
     }
 }

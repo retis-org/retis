@@ -8,6 +8,7 @@
 use anyhow::{anyhow, Result};
 
 use super::*;
+use crate::core::probe::get_ebpf_debug;
 
 mod raw_tracepoint_bpf {
     include!("bpf/.out/raw_tracepoint.skel.rs");
@@ -33,7 +34,9 @@ impl ProbeBuilder for RawTracepointBuilder {
     }
 
     fn attach(&mut self, target: &str, desc: &TargetDesc) -> Result<()> {
-        let mut skel = RawTracepointSkelBuilder::default().open()?;
+        let mut skel = RawTracepointSkelBuilder::default();
+        skel.obj_builder.debug(get_ebpf_debug());
+        let mut skel = skel.open()?;
 
         skel.rodata().ksym = desc.ksym;
         skel.rodata().nargs = desc.nargs;

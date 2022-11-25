@@ -10,6 +10,7 @@ test_cap_bpf = []
 anyhow = "1.0"
 bimap = "0.6"
 btf-rs = {git = "https://github.com/net-trace/btf-rs"}
+clap = { version = "4.0", features = ["derive", "string"] }
 libbpf-rs = "0.19"
 libbpf-sys = "1.0"
 log = "0.4"

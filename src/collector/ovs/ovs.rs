@@ -4,19 +4,21 @@ use crate::cli::{dynamic::DynamicCommand, CliConfig};
 use crate::collector::Collector;
 use crate::core::probe::kernel;
 
-pub(in crate::collector) struct SkbCollector {}
+const OVS_COLLECTOR: &str = "ovs";
 
-impl Collector for SkbCollector {
-    fn new() -> Result<SkbCollector> {
-        Ok(SkbCollector {})
+pub(in crate::collector) struct OvsCollector {}
+
+impl Collector for OvsCollector {
+    fn new() -> Result<OvsCollector> {
+        Ok(OvsCollector {})
     }
 
     fn name(&self) -> &'static str {
-        "skb"
+        OVS_COLLECTOR
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs("skb")
+        cmd.register_module_noargs("ovs")
     }
 
     fn init(&mut self, _: &CliConfig, _kernel: &mut kernel::Kernel) -> Result<()> {
