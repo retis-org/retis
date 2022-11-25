@@ -6,10 +6,14 @@ use btf_rs::{Btf, Type};
 use super::{config::ProbeConfig, ProbeType};
 use crate::core::kernel_symbols;
 
+/// Holds the result of a kernel symbol inspection and describes it.
 #[derive(Default)]
 pub(super) struct TargetDesc {
+    /// Symbol address.
     pub(super) ksym: u64,
+    /// Number of arguments the symbol has.
     pub(super) nargs: u32,
+    /// Holds the different offsets to known parameters.
     pub(super) probe_cfg: ProbeConfig,
 }
 
