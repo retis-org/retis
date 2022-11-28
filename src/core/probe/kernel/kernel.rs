@@ -400,10 +400,10 @@ mod tests {
         assert!(kernel.add_probe(ProbeType::Kprobe, "consume_skb").is_ok());
 
         assert!(kernel
-            .add_probe(ProbeType::RawTracepoint, "kfree_skb")
+            .add_probe(ProbeType::RawTracepoint, "skb:kfree_skb")
             .is_ok());
         assert!(kernel
-            .add_probe(ProbeType::RawTracepoint, "kfree_skb")
+            .add_probe(ProbeType::RawTracepoint, "skb:kfree_skb")
             .is_ok());
     }
 
@@ -422,13 +422,13 @@ mod tests {
             .is_ok());
 
         kernel
-            .add_probe(ProbeType::RawTracepoint, "kfree_skb")
+            .add_probe(ProbeType::RawTracepoint, "skb:kfree_skb")
             .unwrap();
         assert!(kernel
-            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "kfree_skb")
+            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "skb:kfree_skb")
             .is_ok());
         assert!(kernel
-            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "kfree_skb")
+            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "skb:kfree_skb")
             .is_ok());
 
         for _ in 0..HOOK_MAX - 4 {
@@ -447,7 +447,7 @@ mod tests {
             .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
             .is_err());
         assert!(kernel
-            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "kfree_skb")
+            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "skb:kfree_skb")
             .is_err());
     }
 

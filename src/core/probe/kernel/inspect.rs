@@ -86,7 +86,10 @@ impl Inspector {
                 // Raw tracepoints need to access a symbol derived from
                 // TP_PROTO(), which is named "btf_trace_<func>". The prototype
                 // resolution is: Typedef -> Ptr -> FuncProto.
-                let target = format!("btf_trace_{}", target);
+                let target = match target.split_once(':') {
+                    Some((_, tgt)) => format!("btf_trace_{}", tgt),
+                    None => bail!("Invalid tracepoint format for {}", target),
+                };
 
                 let func = match self.btf.resolve_type_by_name(target.as_str())? {
                     Type::Typedef(func) => func,
@@ -165,7 +168,13 @@ impl Inspector {
         // Some probe types might need to modify the target format.
         let ksym_target = match r#type {
             ProbeType::Kprobe => target.to_string(),
-            ProbeType::RawTracepoint => format!("__tracepoint_{}", target),
+            ProbeType::RawTracepoint => {
+                // Raw tracepoints should have a group:target format.
+                match target.split_once(':') {
+                    Some((_, tgt)) => format!("__tracepoint_{}", tgt),
+                    None => bail!("Invalid tracepoint format for {}", target),
+                }
+            }
             ProbeType::Max => bail!("Invalid probe type"),
         };
 
@@ -240,7 +249,7 @@ mod tests {
             inspect
                 .function_parameter_offset(
                     ProbeType::RawTracepoint,
-                    "kfree_skb",
+                    "skb:kfree_skb",
                     "struct sk_buff *"
                 )
                 .unwrap()
@@ -250,7 +259,7 @@ mod tests {
             inspect
                 .function_parameter_offset(
                     ProbeType::RawTracepoint,
-                    "kfree_skb",
+                    "skb:kfree_skb",
                     "enum skb_drop_reason"
                 )
                 .unwrap()
@@ -262,7 +271,7 @@ mod tests {
     fn inspect_target() {
         let inspect = Inspector::new().unwrap();
 
-        let desc = inspect.inspect_target(&ProbeType::RawTracepoint, "kfree_skb");
+        let desc = inspect.inspect_target(&ProbeType::RawTracepoint, "skb:kfree_skb");
         assert!(desc.is_ok());
 
         let desc = desc.unwrap();
