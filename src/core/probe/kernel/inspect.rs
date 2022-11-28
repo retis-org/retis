@@ -25,6 +25,8 @@ pub(crate) struct Inspector {
     btf: Btf,
     /// Set of traceable functions (e.g. kprobes).
     traceable_funcs: Option<HashSet<String>>,
+    /// Set of traceable events (e.g. tracepoints).
+    traceable_events: Option<HashSet<String>>,
 }
 
 impl Inspector {
@@ -39,9 +41,13 @@ impl Inspector {
             traceable_funcs: Self::file_to_hashset(
                 "/sys/kernel/debug/tracing/available_filter_functions",
             ),
+            // We also filter tracepoints using BTF but this doesn't include the
+            // group part. Use the following, when available, to narrow down our
+            // checks for a better ux.
+            traceable_events: Self::file_to_hashset("/sys/kernel/debug/tracing/available_events"),
         };
 
-        if inspector.traceable_funcs.is_none() {
+        if inspector.traceable_funcs.is_none() || inspector.traceable_events.is_none() {
             warn!(
                 "Consider mounting debugfs to /sys/kernel/debug to better filter available probes"
             );
@@ -226,7 +232,7 @@ impl Inspector {
         // Get the right set of valid targets depending on the probe type.
         let set = match r#type {
             ProbeType::Kprobe => &self.traceable_funcs,
-            ProbeType::RawTracepoint => &None,
+            ProbeType::RawTracepoint => &self.traceable_events,
             ProbeType::Max => &None,
         };
 
