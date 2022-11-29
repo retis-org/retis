@@ -20,6 +20,10 @@ fn main() -> Result<()> {
             let config = cli.run()?;
             collectors.init(&config)?;
             collectors.start(&config)?;
+            loop {
+                let event = collectors.poll_event()?;
+                println!("{}", event.to_json());
+            }
         }
         _ => {
             error!("not implemented");
