@@ -7,7 +7,10 @@ use super::ovs::OvsCollector;
 use super::skb::SkbCollector;
 use super::skb_tracking::SkbTrackingCollector;
 use crate::cli::{cmd::collect::Collect, dynamic::DynamicCommand, CliConfig};
-use crate::core::{events::bpf::BpfEvents, probe};
+use crate::core::{
+    events::{bpf::BpfEvents, Event},
+    probe,
+};
 
 /// Generic trait representing a collector. All collectors are required to
 /// implement this, as they'll be manipulated through this trait.
@@ -127,6 +130,11 @@ impl Group {
             c.register_cli(cmd)?;
         }
         Ok(())
+    }
+
+    /// Poll an event from the events channel. This is a blocking call.
+    pub(crate) fn poll_event(&self) -> Result<Event> {
+        self.events.poll()
     }
 
     /// Start the event retrieval for all collectors in the group by calling
