@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Result};
-use log::{error, warn};
+use log::warn;
 
 use super::ovs::OvsCollector;
 use super::skb::SkbCollector;
@@ -31,6 +31,11 @@ pub(super) trait Collector {
     /// as part of the collector registration and only then feed the collector
     /// with data coming from the core. Checks for the mandatory part of the
     /// collector should be done here.
+    ///
+    /// This function should only return an Error in case it's fatal as this
+    /// will make the whole program to fail. In general collectors should try
+    /// hard to run in various setups, see the `crate::collector` top
+    /// documentation for more information.
     fn init(
         &mut self,
         cli: &CliConfig,
@@ -85,8 +90,7 @@ impl Group {
         Ok(self)
     }
 
-    /// Initialize all collectors by calling their `init()` function. Collectors
-    /// failing to initialize will be removed from the group.
+    /// Initialize all collectors by calling their `init()` function.
     pub(crate) fn init(&mut self, cli: &CliConfig) -> Result<()> {
         let collect = cli
             .subcommand
@@ -96,28 +100,15 @@ impl Group {
 
         probe::common::set_ebpf_debug(collect.args()?.ebpf_debug.unwrap_or(false))?;
 
-        // Try initializing all collectors in the group. Failing ones are
-        // put on a list for future removal.
-        let mut to_remove = Vec::new();
+        // Try initializing all collectors in the group.
         for name in &collect.args()?.collectors {
             let c = self
                 .list
                 .get_mut(name)
                 .ok_or_else(|| anyhow!("unknown collector: {}", &name))?;
             if let Err(e) = c.init(cli, &mut self.kernel, &mut self.events) {
-                to_remove.push(c.name());
-                error!(
-                    "Could not initialize collector '{}', unregistering: {}",
-                    c.name(),
-                    e
-                );
+                bail!("Could not initialize the {} collector: {}", c.name(), e);
             }
-        }
-
-        // Remove all collectors that failed their initialization at the
-        // previous step.
-        for name in to_remove.iter() {
-            self.list.remove(*name);
         }
 
         Ok(())
