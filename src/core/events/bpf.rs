@@ -3,7 +3,13 @@
 #![allow(dead_code)] // FIXME
 #![cfg_attr(test, allow(unused_imports))]
 
-use std::{collections::HashMap, fmt, mem, sync::Arc, thread, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt, mem,
+    sync::{mpsc, Arc},
+    thread,
+    time::Duration,
+};
 
 use anyhow::{bail, Result};
 use log::error;
@@ -32,6 +38,8 @@ pub(crate) struct BpfEvents {
     map: libbpf_rs::Map,
     /// HashMap of unmarshalers.
     unmarshalers: Arc<Unmahrshalers>,
+    /// Receiver channel to retrieve events from the processing loop.
+    rxc: Option<mpsc::Receiver<Event>>,
 }
 
 #[cfg(not(test))]
@@ -55,6 +63,7 @@ impl BpfEvents {
         let mut events = BpfEvents {
             map,
             unmarshalers: Arc::new(HashMap::new()),
+            rxc: None,
         };
 
         events.register_unmarshaler(
@@ -109,8 +118,13 @@ impl BpfEvents {
         // unmarshalers map.
         let unmarshalers = self.unmarshalers.clone();
 
+        // Create the sending and receiving channels.
+        let (txc, rxc) = mpsc::channel();
+        self.rxc = Some(rxc);
+
         // Closure to handle the raw events coming from the BPF part. We're
-        // moving our Arc clone pointing to unmarshalers there.
+        // moving our Arc clone pointing to unmarshalers there and the tx
+        // channel.
         let process_event = move |data: &[u8]| -> i32 {
             // Parse the raw event.
             let event = match parse_raw_event(data, &unmarshalers) {
@@ -120,6 +134,11 @@ impl BpfEvents {
                     return 0;
                 }
             };
+
+            // Send the event into the events channel for future retrieval.
+            if let Err(e) = txc.send(event) {
+                error!("Could not send event: {}", e);
+            }
 
             0
         };
@@ -140,6 +159,14 @@ impl BpfEvents {
         });
 
         Ok(())
+    }
+
+    /// Retrieve the next event. This is a blocking call.
+    pub(crate) fn poll(&self) -> Result<Event> {
+        match &self.rxc {
+            Some(rxc) => Ok(rxc.recv()?),
+            None => bail!("Can't get event, no rx channel found."),
+        }
     }
 
     /// Get the events map fd for reuse.
@@ -268,6 +295,9 @@ impl BpfEvents {
     }
     pub(crate) fn start_polling(&self) -> Result<()> {
         Ok(())
+    }
+    pub(crate) fn poll(&self) -> Result<Event> {
+        Ok(Event::new())
     }
     pub(crate) fn map_fd(&self) -> i32 {
         0
