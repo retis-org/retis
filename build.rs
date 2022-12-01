@@ -1,5 +1,3 @@
-#![allow(dead_code)] // FIXME
-
 use std::{
     fs::{create_dir_all, File},
     io::Write,

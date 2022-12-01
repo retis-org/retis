@@ -32,6 +32,7 @@
 //! }
 
 #![allow(dead_code)] // FIXME
+#![cfg_attr(test, allow(dead_code))]
 
 use std::{any::Any, collections::HashMap};
 

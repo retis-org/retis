@@ -1,7 +1,6 @@
 //! # Collect
 //!
 //! Collect is a dynamic CLI subcommand that allows collectors to register their arguments.
-#![allow(dead_code)] // FIXME
 
 use anyhow::Result;
 use std::any::Any;
