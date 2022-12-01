@@ -20,6 +20,38 @@ pub(crate) enum ProbeType {
     Max,
 }
 
+/// Hook provided by modules for registering them on kernel probes.
+#[derive(Clone)]
+pub(crate) struct Hook {
+    /// Hook BPF binary data.
+    bpf_prog: &'static [u8],
+    /// HashMap of maps names and their fd, for reuse by the hook.
+    maps: HashMap<String, i32>,
+}
+
+impl Hook {
+    /// Create a new hook given a BPF binary data.
+    pub(crate) fn from(bpf_prog: &'static [u8]) -> Hook {
+        Hook {
+            bpf_prog,
+            maps: HashMap::new(),
+        }
+    }
+
+    /// Request to reuse a map specifically in the hook. For maps being globally
+    /// reused please use Kernel::reuse_map() instead.
+    pub(crate) fn reuse_map(&mut self, name: &str, fd: i32) -> Result<&mut Self> {
+        let name = name.to_string();
+
+        if self.maps.contains_key(&name) {
+            bail!("Map {} already reused, or name is conflicting", name);
+        }
+
+        self.maps.insert(name, fd);
+        Ok(self)
+    }
+}
+
 /// Main object representing the kernel probes and providing an API for
 /// consumers to register probes, hooks, maps, etc.
 pub(crate) struct Kernel {
@@ -30,21 +62,21 @@ pub(crate) struct Kernel {
     /// Targeted probes only have one target to keep things reasonable.
     targeted_probes: Vec<ProbeSet>,
     maps: HashMap<String, i32>,
-    hooks: Vec<&'static [u8]>,
+    hooks: Vec<Hook>,
     #[cfg(not(test))]
     config_map: libbpf_rs::Map,
     btf: Btf,
 }
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
-pub(super) const PROBE_MAX: usize = 128; // TODO add checks on probe registration.
+pub(crate) const PROBE_MAX: usize = 128; // TODO add checks on probe registration.
 pub(super) const HOOK_MAX: usize = 10;
 
 struct ProbeSet {
     r#type: ProbeType,
     builder: Box<dyn ProbeBuilder>,
     targets: HashMap<String, TargetDesc>,
-    hooks: Vec<&'static [u8]>,
+    hooks: Vec<Hook>,
 }
 
 #[derive(Default)]
@@ -161,9 +193,9 @@ impl Kernel {
     ///
     /// [...]
     ///
-    /// kernel.register_hook(hook::DATA)?;
+    /// kernel.register_hook(Hook::from(hook::DATA))?;
     /// ```
-    pub(crate) fn register_hook(&mut self, hook: &'static [u8]) -> Result<()> {
+    pub(crate) fn register_hook(&mut self, hook: Hook) -> Result<()> {
         let mut max: usize = 0;
         for set in self.targeted_probes.iter_mut() {
             if max < set.hooks.len() {
@@ -191,7 +223,7 @@ impl Kernel {
     /// ```
     pub(crate) fn register_hook_to(
         &mut self,
-        hook: &'static [u8],
+        hook: Hook,
         r#type: ProbeType,
         target: &str,
     ) -> Result<()> {
@@ -268,7 +300,7 @@ impl Kernel {
         set: &mut ProbeSet,
         #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
         maps: HashMap<String, i32>,
-        hooks: Vec<&'static [u8]>,
+        hooks: Vec<Hook>,
     ) -> Result<()> {
         if set.targets.is_empty() {
             return Ok(());
@@ -426,17 +458,22 @@ impl Kernel {
         Ok(r#type == full_name)
     }
 
-    /// Inspect a target using BTF and fill its description.
-    fn inspect_target(&self, r#type: &ProbeType, target: &str) -> Result<TargetDesc> {
-        // First look at the symbol address. Some probe types might need to
-        // modify the target format.
+    pub(crate) fn get_ksym(&self, r#type: &ProbeType, target: &str) -> Result<u64> {
+        // Some probe types might need to modify the target format.
         let ksym_target = match r#type {
             ProbeType::Kprobe => target.to_string(),
             ProbeType::RawTracepoint => format!("__tracepoint_{}", target),
             ProbeType::Max => bail!("Invalid probe type"),
         };
+
+        kernel_symbols::get_symbol_addr(ksym_target.as_str())
+    }
+
+    /// Inspect a target using BTF and fill its description.
+    fn inspect_target(&self, r#type: &ProbeType, target: &str) -> Result<TargetDesc> {
+        // First look at the symbol address.
         let mut desc = TargetDesc {
-            ksym: kernel_symbols::get_symbol_addr(ksym_target.as_str())?,
+            ksym: self.get_ksym(r#type, target)?,
             ..Default::default()
         };
 
@@ -482,7 +519,7 @@ pub(super) trait ProbeBuilder {
     /// Initialize the probe builder before attaching programs to probes. It
     /// takes an option vector of map fds so that maps can be reused and shared
     /// accross builders.
-    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<&'static [u8]>) -> Result<()>;
+    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<Hook>) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
     fn attach(&mut self, target: &str, desc: &TargetDesc) -> Result<()>;
 }
@@ -500,13 +537,20 @@ pub(super) fn reuse_map_fds(
     Ok(())
 }
 
-pub(super) fn replace_hooks(fd: i32, hooks: &[&[u8]]) -> Result<Vec<libbpf_rs::Link>> {
+pub(super) fn replace_hooks(fd: i32, hooks: &[Hook]) -> Result<Vec<libbpf_rs::Link>> {
     let mut links = Vec::new();
 
     for (i, hook) in hooks.iter().enumerate() {
         let target = format!("hook{}", i);
 
-        let mut open_obj = libbpf_rs::ObjectBuilder::default().open_memory("hook", hook)?;
+        let mut open_obj =
+            libbpf_rs::ObjectBuilder::default().open_memory("hook", hook.bpf_prog)?;
+
+        // We have to explicitly use a Vec below to avoid having an unknown size
+        // at build time.
+        let map_fds: Vec<(String, i32)> = hook.maps.clone().into_iter().collect();
+        reuse_map_fds(&open_obj, &map_fds)?;
+
         let open_prog = open_obj
             .prog_mut("hook")
             .ok_or_else(|| anyhow!("Couldn't get hook program"))?;
@@ -554,11 +598,11 @@ mod tests {
     fn register_hooks() {
         let mut kernel = Kernel::new_from_btf_file("test_data/vmlinux").unwrap();
 
-        assert!(kernel.register_hook(HOOK).is_ok());
-        assert!(kernel.register_hook(HOOK).is_ok());
+        assert!(kernel.register_hook(Hook::from(HOOK)).is_ok());
+        assert!(kernel.register_hook(Hook::from(HOOK)).is_ok());
 
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::Kprobe, "kfree_skb_reason")
+            .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
             .is_ok());
         assert!(kernel
             .add_probe(ProbeType::Kprobe, "kfree_skb_reason")
@@ -568,29 +612,29 @@ mod tests {
             .add_probe(ProbeType::RawTracepoint, "kfree_skb")
             .unwrap();
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::RawTracepoint, "kfree_skb")
+            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "kfree_skb")
             .is_ok());
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::RawTracepoint, "kfree_skb")
+            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "kfree_skb")
             .is_ok());
 
         for _ in 0..HOOK_MAX - 4 {
-            assert!(kernel.register_hook(HOOK).is_ok());
+            assert!(kernel.register_hook(Hook::from(HOOK)).is_ok());
         }
 
         // We should hit the hook limit here.
-        assert!(kernel.register_hook(HOOK).is_err());
+        assert!(kernel.register_hook(Hook::from(HOOK)).is_err());
 
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::Kprobe, "kfree_skb_reason")
+            .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
             .is_ok());
 
         // We should hit the hook limit here as well.
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::Kprobe, "kfree_skb_reason")
+            .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
             .is_err());
         assert!(kernel
-            .register_hook_to(HOOK, ProbeType::RawTracepoint, "kfree_skb")
+            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "kfree_skb")
             .is_err());
     }
 
