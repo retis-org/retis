@@ -9,17 +9,16 @@ use std::any::Any;
 use clap::error::Error as ClapError;
 use clap::{builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command};
 
-use super::super::dynamic::DynamicCommand;
-use super::super::SubCommand;
+use crate::cli::{dynamic::DynamicCommand, SubCommand};
 
 #[derive(Args, Debug, Default)]
 pub(crate) struct CollectArgs {
     #[arg(long, default_value = "false")]
-    pub(crate) ebpf_debug: Option<bool>,
+    pub(super) ebpf_debug: Option<bool>,
     // Some of the options that we want for this arg are not available in clap's derive interface
     // so both the argument definition and the field population will be done manually.
     #[arg(skip)]
-    pub(crate) collectors: Vec<String>,
+    pub(super) collectors: Vec<String>,
 }
 
 #[derive(Debug)]

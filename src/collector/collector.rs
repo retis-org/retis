@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use anyhow::{anyhow, bail, Result};
 use log::warn;
 
+use super::cli::Collect;
 use crate::{
-    cli::{cmd::collect::Collect, dynamic::DynamicCommand, CliConfig},
+    cli::{dynamic::DynamicCommand, CliConfig},
     core::{
         events::{bpf::BpfEvents, Event},
         probe,
@@ -162,7 +163,7 @@ pub(crate) fn get_collectors() -> Result<Group> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{cmd::collect::Collect, MainConfig, SubCommand};
+    use crate::cli::{MainConfig, SubCommand};
 
     struct DummyCollectorA;
     struct DummyCollectorB;
