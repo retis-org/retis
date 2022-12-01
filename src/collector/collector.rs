@@ -1,9 +1,13 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 
 use super::{cli::Collect, group::Group};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
-    core::{events::bpf::BpfEvents, probe},
+    core::{
+        events::bpf::BpfEvents,
+        kernel::Symbol,
+        probe::{self, kernel::ProbeType},
+    },
     module::{ovs::OvsCollector, skb::SkbCollector, skb_tracking::SkbTrackingCollector},
 };
 
@@ -82,6 +86,7 @@ impl Collectors {
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
         probe::common::set_ebpf_debug(collect.args()?.ebpf_debug.unwrap_or(false))?;
+        self.setup_probes(collect)?;
 
         // Then init all the collectors in our group.
         self.group.init(cli, &mut self.kernel, &mut self.events)?;
@@ -98,6 +103,43 @@ impl Collectors {
         }
         #[allow(unreachable_code)]
         Ok(())
+    }
+
+    /// Setup user defined probes (configured through cmdline arguments).
+    fn setup_probes(&mut self, collect: &Collect) -> Result<()> {
+        // Go through the user defined probes.
+        for probe in collect.args()?.probes.iter() {
+            let (r#type, target) = parse_probe(probe)?;
+
+            // Check if the target has access to an skb; `from_name` will return
+            // an error if the symbol isn't traceable or does not exist.
+            if Symbol::from_name(target)?
+                .parameter_offset("struct sk_buff *")?
+                .is_none()
+            {
+                bail!("Probe target {} does not have access to an skb", probe);
+            }
+
+            // Seems OK, probe it.
+            self.kernel.add_probe(r#type, target)?;
+        }
+        Ok(())
+    }
+}
+
+/// Parse a user defined probe (through cli parameters) and extract its type and
+/// target.
+fn parse_probe(probe: &str) -> Result<(ProbeType, &str)> {
+    match probe.split_once(':') {
+        Some((type_str, target)) => {
+            let r#type = match type_str {
+                "kprobe" => ProbeType::Kprobe,
+                "tp" => ProbeType::RawTracepoint,
+                x => bail!("Invalid TYPE {}. See the help.", x),
+            };
+            Ok((r#type, target))
+        }
+        None => bail!("No TYPE given. See the help."),
     }
 }
 
