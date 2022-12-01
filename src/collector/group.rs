@@ -59,8 +59,7 @@ impl Group {
         Ok(self)
     }
 
-    /// Initialize all collectors by calling their `init()` function. Collectors
-    /// failing to initialize will be removed from the group.
+    /// Initialize all collectors by calling their `init()` function.
     pub(crate) fn init(&mut self, cli: &CliConfig) -> Result<()> {
         let collect = cli
             .subcommand

@@ -36,25 +36,55 @@ pub(crate) trait Collector {
     fn start(&mut self) -> Result<()>;
 }
 
-/// Allocate collectors and retrieve a group containing them, used to perform
-/// batched operations. This is the primary entry point for manipulating the
-/// collectors.
-pub(crate) fn get_collectors() -> Result<Group> {
-    let mut group = Group::new()?;
+/// This is the main object responsible of collecting events, using cli
+/// parameters and a group of per-target collectors. This is the entry point of
+/// the collector module.
+pub(crate) struct Collectors {
+    group: Group,
+}
 
-    // Register all collectors here.
-    group
-        .register(Box::new(SkbTrackingCollector::new()?))?
-        .register(Box::new(SkbCollector::new()?))?
-        .register(Box::new(OvsCollector::new()?))?;
+impl Collectors {
+    /// Get a new collectors instance by registering all the collectors.
+    pub(crate) fn new() -> Result<Collectors> {
+        let mut group = Group::new()?;
 
-    Ok(group)
+        // Register all collectors here.
+        group
+            .register(Box::new(SkbTrackingCollector::new()?))?
+            .register(Box::new(SkbCollector::new()?))?
+            .register(Box::new(OvsCollector::new()?))?;
+
+        Ok(Collectors{
+            group,
+        })
+    }
+
+    /// Register the collect command line arguments.
+    pub(crate) fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
+        self.group.register_cli(cmd)
+    }
+
+    /// Initialize the collectors and starts the event collection. This function
+    /// is blocking and does not return.
+    pub(crate) fn init_and_collect(&mut self, cli: &CliConfig) -> Result<()> {
+        self.group.init(cli)?;
+        self.group.start(cli)?;
+
+        loop {
+            let event = self.group.poll_event()?;
+            println!("{}", event.to_json());
+        }
+        #[allow(unreachable_code)]
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn get_collectors() {
-        assert!(super::get_collectors().is_ok());
+        assert!(Collectors::new().is_ok());
     }
 }

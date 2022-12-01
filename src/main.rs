@@ -7,7 +7,7 @@ mod collector;
 mod core;
 mod module;
 use cli::get_cli;
-use collector::get_collectors;
+use collector::Collectors;
 
 fn main() -> Result<()> {
     let _ = SimpleLogger::init(LevelFilter::Debug, Config::default());
@@ -16,15 +16,10 @@ fn main() -> Result<()> {
     let command = cli.get_subcommand_mut()?;
     match command.name() {
         "collect" => {
-            let mut collectors = get_collectors()?;
+            let mut collectors = Collectors::new()?;
             collectors.register_cli(command.dynamic_mut().unwrap())?;
             let config = cli.run()?;
-            collectors.init(&config)?;
-            collectors.start(&config)?;
-            loop {
-                let event = collectors.poll_event()?;
-                println!("{}", event.to_json());
-            }
+            collectors.init_and_collect(&config)?;
         }
         _ => {
             error!("not implemented");
