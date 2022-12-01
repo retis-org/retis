@@ -6,7 +6,6 @@ use nix::time;
 use plain::Plain;
 
 use super::tracking_hook;
-use crate::event_field;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collector::Collector,
@@ -18,6 +17,7 @@ use crate::{
         probe::kernel::{self, Hook, ProbeType},
         workaround::SendableMap,
     },
+    event_field,
 };
 
 const SKB_TRACKING_COLLECTOR: &str = "skb-tracking";
@@ -44,7 +44,7 @@ struct SkbTrackingEvent {
 unsafe impl Plain for SkbTrackingEvent {}
 
 #[derive(Default)]
-pub(in crate::collector) struct SkbTrackingCollector {
+pub(crate) struct SkbTrackingCollector {
     garbage_collector: Option<thread::JoinHandle<()>>,
 }
 

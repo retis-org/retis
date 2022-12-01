@@ -3,18 +3,18 @@ use std::collections::HashMap;
 use anyhow::{anyhow, bail, Result};
 use log::warn;
 
-use super::ovs::OvsCollector;
-use super::skb::SkbCollector;
-use super::skb_tracking::SkbTrackingCollector;
-use crate::cli::{cmd::collect::Collect, dynamic::DynamicCommand, CliConfig};
-use crate::core::{
-    events::{bpf::BpfEvents, Event},
-    probe,
+use crate::{
+    cli::{cmd::collect::Collect, dynamic::DynamicCommand, CliConfig},
+    core::{
+        events::{bpf::BpfEvents, Event},
+        probe,
+    },
+    module::{ovs::OvsCollector, skb::SkbCollector, skb_tracking::SkbTrackingCollector},
 };
 
 /// Generic trait representing a collector. All collectors are required to
 /// implement this, as they'll be manipulated through this trait.
-pub(super) trait Collector {
+pub(crate) trait Collector {
     /// Allocate and return a new instance of the collector, using only default
     /// values for its internal fields.
     fn new() -> Result<Self>

@@ -8,7 +8,7 @@ use crate::{
 
 const OVS_COLLECTOR: &str = "ovs";
 
-pub(in crate::collector) struct OvsCollector {}
+pub(crate) struct OvsCollector {}
 
 impl Collector for OvsCollector {
     fn new() -> Result<OvsCollector> {

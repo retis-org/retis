@@ -6,5 +6,5 @@
 
 // Re-export skb.rs
 #[allow(clippy::module_inception)]
-pub(super) mod skb;
-pub(super) use skb::*;
+pub(crate) mod skb;
+pub(crate) use skb::*;

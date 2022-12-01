@@ -5,6 +5,7 @@ use simplelog::{Config, LevelFilter, SimpleLogger};
 mod cli;
 mod collector;
 mod core;
+mod module;
 use cli::get_cli;
 use collector::get_collectors;
 
