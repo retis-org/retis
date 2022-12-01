@@ -6,32 +6,17 @@ use log::warn;
 use super::{cli::Collect, Collector};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
-    core::{
-        events::{bpf::BpfEvents, Event},
-        probe,
-    },
+    core::{events::bpf::BpfEvents, probe},
 };
 
 /// Group of collectors. Used to handle a set of collectors and to perform
 /// group actions.
+#[derive(Default)]
 pub(crate) struct Group {
     list: HashMap<String, Box<dyn Collector>>,
-    kernel: probe::Kernel,
-    events: BpfEvents,
 }
 
 impl Group {
-    pub(in crate::collector) fn new() -> Result<Group> {
-        let events = BpfEvents::new()?;
-        let kernel = probe::Kernel::new(&events)?;
-
-        Ok(Group {
-            list: HashMap::new(),
-            kernel,
-            events,
-        })
-    }
-
     /// Register a collector to the group.
     ///
     /// ```
@@ -60,14 +45,17 @@ impl Group {
     }
 
     /// Initialize all collectors by calling their `init()` function.
-    pub(crate) fn init(&mut self, cli: &CliConfig) -> Result<()> {
+    pub(crate) fn init(
+        &mut self,
+        cli: &CliConfig,
+        kernel: &mut probe::Kernel,
+        events: &mut BpfEvents,
+    ) -> Result<()> {
         let collect = cli
             .subcommand
             .as_any()
             .downcast_ref::<Collect>()
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
-
-        probe::common::set_ebpf_debug(collect.args()?.ebpf_debug.unwrap_or(false))?;
 
         // Try initializing all collectors in the group.
         for name in &collect.args()?.collectors {
@@ -75,7 +63,7 @@ impl Group {
                 .list
                 .get_mut(name)
                 .ok_or_else(|| anyhow!("unknown collector: {}", &name))?;
-            if let Err(e) = c.init(cli, &mut self.kernel, &mut self.events) {
+            if let Err(e) = c.init(cli, kernel, events) {
                 bail!("Could not initialize the {} collector: {}", c.name(), e);
             }
         }
@@ -92,18 +80,10 @@ impl Group {
         Ok(())
     }
 
-    /// Poll an event from the events channel. This is a blocking call.
-    pub(crate) fn poll_event(&self) -> Result<Event> {
-        self.events.poll()
-    }
-
     /// Start the event retrieval for all collectors in the group by calling
     /// their `start()` function. Collectors failing to start the event
     /// retrieval will be kept in the group.
-    pub(crate) fn start(&mut self, _: &CliConfig) -> Result<()> {
-        self.events.start_polling()?;
-        self.kernel.attach()?;
-
+    pub(crate) fn start(&mut self) -> Result<()> {
         for (_, c) in self.list.iter_mut() {
             if c.start().is_err() {
                 warn!("Could not start '{}'", c.name());
@@ -159,7 +139,7 @@ mod tests {
 
     #[test]
     fn register_collectors() -> Result<()> {
-        let mut group = Group::new()?;
+        let mut group = Group::default();
         assert!(group.register(Box::new(DummyCollectorA::new()?)).is_ok());
         assert!(group.register(Box::new(DummyCollectorB::new()?)).is_ok());
         Ok(())
@@ -167,7 +147,7 @@ mod tests {
 
     #[test]
     fn register_uniqueness() -> Result<()> {
-        let mut group = Group::new()?;
+        let mut group = Group::default();
         assert!(group.register(Box::new(DummyCollectorA::new()?)).is_ok());
         assert!(group.register(Box::new(DummyCollectorA::new()?)).is_err());
         Ok(())
@@ -179,7 +159,7 @@ mod tests {
             main_config: MainConfig::default(),
             subcommand: Box::new(Collect::new()?),
         };
-        let mut group = Group::new()?;
+        let mut group = Group::default();
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
@@ -191,17 +171,13 @@ mod tests {
 
         assert!(dummy_a.init(&config, &mut kernel, &mut events).is_ok());
         assert!(dummy_b.init(&config, &mut kernel, &mut events).is_err());
-        assert!(group.init(&config).is_ok());
+        assert!(group.init(&config, &mut kernel, &mut events).is_ok());
         Ok(())
     }
 
     #[test]
     fn start_collectors() -> Result<()> {
-        let config = CliConfig {
-            main_config: MainConfig::default(),
-            subcommand: Box::new(Collect::new()?),
-        };
-        let mut group = Group::new()?;
+        let mut group = Group::default();
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
@@ -210,7 +186,7 @@ mod tests {
 
         assert!(dummy_a.start().is_ok());
         assert!(dummy_b.start().is_err());
-        assert!(group.start(&config).is_ok());
+        assert!(group.start().is_ok());
         Ok(())
     }
 }

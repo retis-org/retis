@@ -1,6 +1,6 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
-use super::group::Group;
+use super::{cli::Collect, group::Group};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     core::{events::bpf::BpfEvents, probe},
@@ -41,12 +41,14 @@ pub(crate) trait Collector {
 /// the collector module.
 pub(crate) struct Collectors {
     group: Group,
+    kernel: probe::Kernel,
+    events: BpfEvents,
 }
 
 impl Collectors {
     /// Get a new collectors instance by registering all the collectors.
     pub(crate) fn new() -> Result<Collectors> {
-        let mut group = Group::new()?;
+        let mut group = Group::default();
 
         // Register all collectors here.
         group
@@ -54,8 +56,13 @@ impl Collectors {
             .register(Box::new(SkbCollector::new()?))?
             .register(Box::new(OvsCollector::new()?))?;
 
-        Ok(Collectors{
+        let events = BpfEvents::new()?;
+        let kernel = probe::Kernel::new(&events)?;
+
+        Ok(Collectors {
             group,
+            kernel,
+            events,
         })
     }
 
@@ -67,11 +74,26 @@ impl Collectors {
     /// Initialize the collectors and starts the event collection. This function
     /// is blocking and does not return.
     pub(crate) fn init_and_collect(&mut self, cli: &CliConfig) -> Result<()> {
-        self.group.init(cli)?;
-        self.group.start(cli)?;
+        // First process our own cli parameters.
+        let collect = cli
+            .subcommand
+            .as_any()
+            .downcast_ref::<Collect>()
+            .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
+        probe::common::set_ebpf_debug(collect.args()?.ebpf_debug.unwrap_or(false))?;
+
+        // Then init all the collectors in our group.
+        self.group.init(cli, &mut self.kernel, &mut self.events)?;
+
+        // Finally start the polling logic, the collectors, attach the probes.
+        self.events.start_polling()?;
+        self.kernel.attach()?;
+        self.group.start()?;
+
+        // Last step, we can poll and process the events.
         loop {
-            let event = self.group.poll_event()?;
+            let event = self.events.poll()?;
             println!("{}", event.to_json());
         }
         #[allow(unreachable_code)]
