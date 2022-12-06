@@ -5,10 +5,10 @@
 //! in two parts, the Rust code (here) and the eBPF one
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 
 use super::{inspect::TargetDesc, *};
-use crate::core::probe::get_ebpf_debug;
+use crate::core::{kernel::Symbol, probe::get_ebpf_debug};
 
 mod raw_tracepoint_bpf {
     include!("bpf/.out/raw_tracepoint.skel.rs");
@@ -34,11 +34,7 @@ impl ProbeBuilder for RawTracepointBuilder {
     }
 
     fn attach(&mut self, target: &str, desc: &TargetDesc) -> Result<()> {
-        // Raw tracepoints should have a group:target format.
-        let target = match target.split_once(':') {
-            Some((_, tgt)) => tgt,
-            None => bail!("Invalid tracepoint format for {}", target),
-        };
+        let symbol = Symbol::from_name(target)?;
 
         let mut skel = RawTracepointSkelBuilder::default();
         skel.obj_builder.debug(get_ebpf_debug());
@@ -59,7 +55,8 @@ impl ProbeBuilder for RawTracepointBuilder {
         let mut links = replace_hooks(prog.fd(), &self.hooks)?;
         self.links.append(&mut links);
 
-        self.links.push(prog.attach_raw_tracepoint(target)?);
+        self.links
+            .push(prog.attach_raw_tracepoint(symbol.attach_name())?);
         Ok(())
     }
 }
