@@ -27,19 +27,27 @@ pub(crate) struct Inspector {
 
 impl Inspector {
     fn new() -> Result<Inspector> {
-        let inspector = Inspector {
-            #[cfg(not(test))]
-            btf: Btf::from_file("/sys/kernel/btf/vmlinux")?,
-            #[cfg(test)]
-            btf: Btf::from_file("test_data/vmlinux")?,
-            // Not all events we'll get from BTF/kallsyms are traceable. Use the
-            // following, when available, to narrow down our checks.
-            traceable_events: Self::file_to_hashset("/sys/kernel/debug/tracing/available_events"),
-            // Not all functions we'll get from BTF/kallsyms are traceable. Use
-            // the following, when available, to narrow down our checks.
-            traceable_funcs: Self::file_to_hashset(
+        let (btf_file, events_file, funcs_file) = match cfg!(test) {
+            false => (
+                "/sys/kernel/btf/vmlinux",
+                "/sys/kernel/debug/tracing/available_events",
                 "/sys/kernel/debug/tracing/available_filter_functions",
             ),
+            true => (
+                "test_data/vmlinux",
+                "test_data/available_events",
+                "test_data/available_filter_functions",
+            ),
+        };
+
+        let inspector = Inspector {
+            btf: Btf::from_file(btf_file)?,
+            // Not all events we'll get from BTF/kallsyms are traceable. Use the
+            // following, when available, to narrow down our checks.
+            traceable_events: Self::file_to_hashset(events_file),
+            // Not all functions we'll get from BTF/kallsyms are traceable. Use
+            // the following, when available, to narrow down our checks.
+            traceable_funcs: Self::file_to_hashset(funcs_file),
         };
 
         if inspector.traceable_funcs.is_none() || inspector.traceable_events.is_none() {
