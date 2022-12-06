@@ -103,7 +103,8 @@ impl Collector for SkbTrackingCollector {
         // available? In case we can't know, do not issue an error.
         match symbol.is_ok() {
             true => {
-                if let Err(e) = kernel.add_probe(ProbeType::Kprobe, "kfree_skb_reason") {
+                // Unwrap as we just checked the value is valid.
+                if let Err(e) = kernel.add_probe_to_symbol(ProbeType::Kprobe, symbol.unwrap()) {
                     error!("Could not attach to kfree_skb_reason: {}", e);
                 }
             }
@@ -172,24 +173,26 @@ impl SkbTrackingCollector {
 
         // For tracking skbs we only need the following two functions. First
         // track free events.
-        let key = Symbol::from_name("skb_free_head")?.addr()?.to_ne_bytes();
+        let symbol = Symbol::from_name("skb_free_head")?;
+        let key = symbol.addr()?.to_ne_bytes();
         let cfg = TrackingConfig {
             free: 1,
             inv_head: 0,
         };
         let cfg = unsafe { plain::as_bytes(&cfg) };
         tracking_config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
-        kernel.add_probe(ProbeType::Kprobe, "skb_free_head")?;
+        kernel.add_probe_to_symbol(ProbeType::Kprobe, symbol)?;
 
         // Then track invalidation head events.
-        let key = Symbol::from_name("pskb_expand_head")?.addr()?.to_ne_bytes();
+        let symbol = Symbol::from_name("pskb_expand_head")?;
+        let key = symbol.addr()?.to_ne_bytes();
         let cfg = TrackingConfig {
             free: 0,
             inv_head: 1,
         };
         let cfg = unsafe { plain::as_bytes(&cfg) };
         tracking_config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
-        kernel.add_probe(ProbeType::Kprobe, "pskb_expand_head")?;
+        kernel.add_probe_to_symbol(ProbeType::Kprobe, symbol)?;
 
         // Take care of gargabe collection of tracking info. This should be done
         // in the BPF part for most if not all skbs but we might lose some

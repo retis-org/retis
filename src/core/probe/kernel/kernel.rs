@@ -125,14 +125,15 @@ impl Kernel {
         Ok(kernel)
     }
 
-    /// Request to attach a probe of type r#type to a target identifier.
+    /// Request to attach a probe of type r#type to a symbol.
     ///
     /// ```
-    /// kernel.add_probe(ProbeType::Kprobe, "kfree_skb_reason").unwrap();
-    /// kernel.add_probe(ProbeType::RawTracepoint, "kfree_skb").unwrap();
+    /// kernel.add_probe_to_symbol(
+    ///     ProbeType::Kprobe, Symbol::from_name("kfree_skb_reason").unwrap()).unwrap();
+    /// kernel.add_probe_to_symbol(
+    ///     ProbeType::RawTracepoint, Symbol::from_name("kfree_skb").unwrap()).unwrap();
     /// ```
-    pub(crate) fn add_probe(&mut self, r#type: ProbeType, target: &str) -> Result<()> {
-        let symbol = Symbol::from_name(target)?;
+    pub(crate) fn add_probe_to_symbol(&mut self, r#type: ProbeType, symbol: Symbol) -> Result<()> {
         let key = symbol.func_name();
 
         // First check if it is already in the generic probe list.
@@ -150,6 +151,17 @@ impl Kernel {
 
         set.targets.insert(key, symbol);
         Ok(())
+    }
+
+    /// Request to attach a probe of type r#type to a target identifier.
+    ///
+    /// ```
+    /// kernel.add_probe(ProbeType::Kprobe, "kfree_skb_reason").unwrap();
+    /// kernel.add_probe(ProbeType::RawTracepoint, "kfree_skb").unwrap();
+    /// ```
+    pub(crate) fn add_probe(&mut self, r#type: ProbeType, target: &str) -> Result<()> {
+        let symbol = Symbol::from_name(target)?;
+        self.add_probe_to_symbol(r#type, symbol)
     }
 
     /// Request to reuse a map fd. Useful for sharing maps across probes, for
@@ -195,7 +207,7 @@ impl Kernel {
         Ok(())
     }
 
-    /// Request a hook to be attached to a specific target.
+    /// Request a hook to be attached to a specific symbol.
     ///
     /// ```
     /// mod hook {
@@ -204,15 +216,15 @@ impl Kernel {
     ///
     /// [...]
     ///
-    /// kernel.register_hook_to(hook::DATA, ProbeType::Kprobe, "kfree_skb_reason")?;
+    /// kernel.register_hook_to_symbol(
+    ///     hook::DATA, ProbeType::Kprobe, Symbol::from_name("kfree_skb_reason").unwrap())?;
     /// ```
-    pub(crate) fn register_hook_to(
+    pub(crate) fn register_hook_to_symbol(
         &mut self,
         hook: Hook,
         r#type: ProbeType,
-        target: &str,
+        symbol: Symbol,
     ) -> Result<()> {
-        let symbol = Symbol::from_name(target)?;
         let key = symbol.func_name();
 
         // First check if the target isn't already registered to the generic
@@ -251,6 +263,27 @@ impl Kernel {
 
         self.targeted_probes.push(set);
         Ok(())
+    }
+
+    /// Request a hook to be attached to a specific target.
+    ///
+    /// ```
+    /// mod hook {
+    ///     include!("bpf/.out/hook.rs");
+    /// }
+    ///
+    /// [...]
+    ///
+    /// kernel.register_hook_to(hook::DATA, ProbeType::Kprobe, "kfree_skb_reason")?;
+    /// ```
+    pub(crate) fn register_hook_to(
+        &mut self,
+        hook: Hook,
+        r#type: ProbeType,
+        target: &str,
+    ) -> Result<()> {
+        let symbol = Symbol::from_name(target)?;
+        self.register_hook_to_symbol(hook, r#type, symbol)
     }
 
     /// Attach all probes.
@@ -311,7 +344,7 @@ impl Kernel {
 
             // Finally attach a probe to the target.
             info!("Attaching probe to {}", symbol);
-            set.builder.attach(&symbol, &desc)?;
+            set.builder.attach(symbol, &desc)?;
         }
 
         Ok(())

@@ -110,18 +110,15 @@ impl Collectors {
         // Go through the user defined probes.
         for probe in collect.args()?.probes.iter() {
             let (r#type, target) = parse_probe(probe)?;
+            let symbol = Symbol::from_name(target)?;
 
-            // Check if the target has access to an skb; `from_name` will return
-            // an error if the symbol isn't traceable or does not exist.
-            if Symbol::from_name(target)?
-                .parameter_offset("struct sk_buff *")?
-                .is_none()
-            {
+            // Check if the target has access to an skb.
+            if symbol.parameter_offset("struct sk_buff *")?.is_none() {
                 bail!("Probe target {} does not have access to an skb", probe);
             }
 
             // Seems OK, probe it.
-            self.kernel.add_probe(r#type, target)?;
+            self.kernel.add_probe_to_symbol(r#type, symbol)?;
         }
         Ok(())
     }
