@@ -17,7 +17,7 @@ use plain::Plain;
 
 use super::{Event, EventField};
 use crate::{
-    core::{kernel_symbols, workaround::SendableRingBuffer},
+    core::{kernel::Symbol, workaround::SendableRingBuffer},
     event_field,
 };
 
@@ -85,7 +85,7 @@ impl BpfEvents {
 
                 fields.push(event_field!(
                     "symbol",
-                    kernel_symbols::get_symbol_name(symbol)?
+                    Symbol::from_addr(symbol)?.func_name()
                 ));
                 fields.push(event_field!("timestamp", timestamp));
                 Ok(())

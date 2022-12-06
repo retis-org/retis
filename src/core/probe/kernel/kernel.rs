@@ -8,7 +8,7 @@ use log::info;
 #[cfg(not(test))]
 use super::config::init_config_map;
 use super::{
-    inspect::{Inspector, TargetDesc},
+    inspect::{inspect_target, TargetDesc},
     kprobe, raw_tracepoint,
 };
 use crate::core::events::bpf::BpfEvents;
@@ -67,7 +67,6 @@ pub(crate) struct Kernel {
     hooks: Vec<Hook>,
     #[cfg(not(test))]
     config_map: libbpf_rs::Map,
-    pub(crate) inspect: Inspector,
 }
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
@@ -113,7 +112,6 @@ impl Kernel {
             hooks: Vec::new(),
             #[cfg(not(test))]
             config_map: init_config_map()?,
-            inspect: Inspector::new()?,
         };
 
         #[cfg(not(test))]
@@ -151,13 +149,9 @@ impl Kernel {
 
         // Filling the probe description here helps in returning errors early to
         // the caller if a target isn't found or is incompatible.
-        let desc = self.inspect.inspect_target(&r#type, &target)?;
+        let desc = inspect_target(&target)?;
 
-        // Yes, we do it twice, because of the other mut ref for
-        // self.inspect_target.
-        let set = &mut self.probes[r#type as usize];
         set.targets.insert(target, desc);
-
         Ok(())
     }
 
@@ -250,7 +244,7 @@ impl Kernel {
             },
         );
 
-        let desc = self.inspect.inspect_target(&r#type, &target)?;
+        let desc = inspect_target(&target)?;
         set.targets.insert(target.to_string(), desc);
 
         if self.hooks.len() == HOOK_MAX {
