@@ -17,9 +17,7 @@ pub(super) struct TargetDesc {
 }
 
 /// Inspect a target using BTF and fill its description.
-pub(super) fn inspect_target(target: &str) -> Result<TargetDesc> {
-    let symbol = Symbol::from_name(target)?;
-
+pub(super) fn inspect_symbol(symbol: &Symbol) -> Result<TargetDesc> {
     // First look at the symbol address.
     let mut desc = TargetDesc {
         ksym: symbol.addr()?,
@@ -48,10 +46,12 @@ pub(super) fn inspect_target(target: &str) -> Result<TargetDesc> {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::kernel::Symbol;
+
     #[test]
-    fn inspect_target() {
+    fn inspect_symbol() {
         // Inspect an event.
-        let desc = super::inspect_target("skb:kfree_skb");
+        let desc = super::inspect_symbol(&Symbol::from_name("skb:kfree_skb").unwrap());
         assert!(desc.is_ok());
 
         let desc = desc.unwrap();
@@ -63,7 +63,7 @@ mod tests {
         assert!(desc.probe_cfg.offsets.net == -1);
 
         // Inspect a function.
-        let desc = super::inspect_target("kfree_skb_reason");
+        let desc = super::inspect_symbol(&Symbol::from_name("kfree_skb_reason").unwrap());
         assert!(desc.is_ok());
 
         let desc = desc.unwrap();
@@ -75,7 +75,7 @@ mod tests {
         assert!(desc.probe_cfg.offsets.net == -1);
 
         // Inspect a function with net device and netns arguments.
-        let desc = super::inspect_target("inet_dev_addr_type");
+        let desc = super::inspect_symbol(&Symbol::from_name("inet_dev_addr_type").unwrap());
         assert!(desc.is_ok());
 
         let desc = desc.unwrap();
@@ -85,8 +85,5 @@ mod tests {
         assert!(desc.probe_cfg.offsets.skb_drop_reason == -1);
         assert!(desc.probe_cfg.offsets.net_device == 1);
         assert!(desc.probe_cfg.offsets.net == 0);
-
-        // Non-existing symbol.
-        assert!(super::inspect_target("kfree_skb").is_err());
     }
 }

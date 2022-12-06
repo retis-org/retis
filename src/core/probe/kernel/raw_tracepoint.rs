@@ -33,9 +33,7 @@ impl ProbeBuilder for RawTracepointBuilder {
         Ok(())
     }
 
-    fn attach(&mut self, target: &str, desc: &TargetDesc) -> Result<()> {
-        let symbol = Symbol::from_name(target)?;
-
+    fn attach(&mut self, symbol: &Symbol, desc: &TargetDesc) -> Result<()> {
         let mut skel = RawTracepointSkelBuilder::default();
         skel.obj_builder.debug(get_ebpf_debug());
         let mut skel = skel.open()?;
@@ -74,8 +72,11 @@ mod tests {
         let desc = TargetDesc::default();
 
         assert!(builder.init(Vec::new(), Vec::new()).is_ok());
-        assert!(builder.attach("skb:kfree_skb", &desc).is_ok());
-        assert!(builder.attach("skb:consume_skb", &desc).is_ok());
-        assert!(builder.attach("skb:foobar", &desc).is_err());
+        assert!(builder
+            .attach(&Symbol::from_name("skb:kfree_skb").unwrap(), &desc)
+            .is_ok());
+        assert!(builder
+            .attach(&Symbol::from_name("skb:consume_skb").unwrap(), &desc)
+            .is_ok());
     }
 }
