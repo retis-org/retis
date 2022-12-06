@@ -224,14 +224,8 @@ fn is_param_type(param: &btf_rs::Parameter, r#type: &str) -> Result<bool> {
                 is_pointer = true;
                 btf.resolve_chained_type(&t)?
             }
-            Type::Volatile(t) => {
-                full_name.push_str("volatile ");
-                btf.resolve_chained_type(&t)?
-            }
-            Type::Const(t) => {
-                full_name.push_str("const ");
-                btf.resolve_chained_type(&t)?
-            }
+            Type::Volatile(t) => btf.resolve_chained_type(&t)?,
+            Type::Const(t) => btf.resolve_chained_type(&t)?,
             Type::Array(_) => bail!("Arrays are not supported at the moment"),
             _ => break,
         }
