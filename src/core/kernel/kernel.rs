@@ -2,7 +2,7 @@ use std::fmt;
 
 use anyhow::{bail, Result};
 
-use super::{inspect, symbols};
+use super::inspect;
 use crate::core::probe::kernel::ProbeType;
 
 /// Kernel symbol representation. Only supports traceable symbols: events and
@@ -56,14 +56,14 @@ impl Symbol {
             // We might have an event, let's see if we can find a tracepoint
             // symbol.
             let tp_name = format!("__tracepoint_{}", tp_name);
-            if symbols::get_symbol_addr(&tp_name).is_ok() {
+            if inspect::get_symbol_addr(&tp_name).is_ok() {
                 return Ok(Symbol::new(SymbolType::Event, name));
             }
         }
 
         // Traceable functions should be in the kallsyms file. Let's see if we
         // find a match.
-        if symbols::get_symbol_addr(name).is_ok() {
+        if inspect::get_symbol_addr(name).is_ok() {
             return Ok(Symbol::new(SymbolType::Func, name));
         }
 
@@ -77,7 +77,7 @@ impl Symbol {
         // know it's a valid kernel symbol, but that doesn't mean it will map
         // 1:1 to a traceable one. Also we can't directly use the type detection
         // as we won't have a group:name format for events for example.
-        let target = symbols::get_symbol_name(addr)?;
+        let target = inspect::get_symbol_name(addr)?;
 
         // Check if the symbol is a tracepoint.
         let name = match target.strip_prefix("__tracepoint_") {
@@ -98,6 +98,14 @@ impl Symbol {
             // valid one. Let's still return an object, which might be limited.
             Err(_) => Symbol::new(SymbolType::Func, &name),
         })
+    }
+
+    /// Create a new symbol given an address near a symbol one. This is useful
+    /// when dealing with call traces.
+    #[allow(dead_code)] // FIXME
+    pub(crate) fn from_addr_near(addr: u64) -> Result<Symbol> {
+        let addr = inspect::find_nearest_symbol(addr)?;
+        Self::from_addr(addr)
     }
 
     /// Get the symbol function name.
@@ -149,7 +157,7 @@ impl Symbol {
 
     /// Get the symbol address.
     pub(crate) fn addr(&self) -> Result<u64> {
-        symbols::get_symbol_addr(&self.addr_name())
+        inspect::get_symbol_addr(&self.addr_name())
     }
 
     /// Get the symbol arguments number.
@@ -253,5 +261,36 @@ mod tests {
         // Try two invalid address.
         assert!(Symbol::from_addr(0xffffffff983c29a0 + 1).is_err());
         assert!(Symbol::from_addr(0xffffffff95612980 + 1).is_err());
+    }
+
+    #[test]
+    fn from_addr_near() {
+        // From an address (is an event).
+        let symbol = Symbol::from_addr_near(0xffffffff983c29a0 + 1).unwrap();
+        assert!(symbol.func_name() == "kfree_skb");
+        assert!(symbol.addr_name() == "__tracepoint_kfree_skb");
+        assert!(symbol.typedef_name() == "btf_trace_kfree_skb");
+        assert!(symbol.nargs().unwrap() == 3);
+        assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
+        assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(2));
+        assert!(symbol.parameter_offset("struct net_device *").unwrap() == None);
+
+        // Invalid version of the above.
+        let symbol = Symbol::from_addr_near(0xffffffff983c29a0 - 1).unwrap();
+        assert!(symbol.func_name() != "kfree_skb");
+
+        // From an address (is a function).
+        let symbol = Symbol::from_addr_near(0xffffffff95612980 + 1).unwrap();
+        assert!(symbol.func_name() == "kfree_skb_reason");
+        assert!(symbol.addr_name() == "kfree_skb_reason");
+        assert!(symbol.typedef_name() == "kfree_skb_reason");
+        assert!(symbol.nargs().unwrap() == 2);
+        assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
+        assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(1));
+        assert!(symbol.parameter_offset("struct net_device *").unwrap() == None);
+
+        // Invalid version of the above.
+        let symbol = Symbol::from_addr_near(0xffffffff95612980 - 1).unwrap();
+        assert!(symbol.func_name() != "kfree_skb_reason");
     }
 }

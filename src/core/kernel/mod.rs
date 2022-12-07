@@ -6,4 +6,3 @@ pub(crate) mod kernel;
 pub(crate) use kernel::*;
 
 mod inspect;
-mod symbols;
