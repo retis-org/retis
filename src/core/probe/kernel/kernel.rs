@@ -15,7 +15,7 @@ use crate::core::{events::bpf::BpfEvents, kernel::Symbol};
 
 /// Probes types supported by this crate.
 #[allow(dead_code)]
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ProbeType {
     Kprobe,
     RawTracepoint,
@@ -149,6 +149,11 @@ impl Kernel {
             }
         }
 
+        // Finally check the request type is compatible with the symbol type.
+        if !symbol.can_probe(r#type) {
+            bail!("Can't probe using probe type {:?} on {}", r#type, symbol);
+        }
+
         set.targets.insert(key, symbol);
         Ok(())
     }
@@ -242,6 +247,11 @@ impl Kernel {
                 set.hooks.push(hook);
                 return Ok(());
             }
+        }
+
+        // Finally check the request type is compatible with the symbol type.
+        if !symbol.can_probe(r#type) {
+            bail!("Can't probe using probe type {:?} on {}", r#type, symbol);
         }
 
         // New target, let's build a new probe set.

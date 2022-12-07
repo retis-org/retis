@@ -3,6 +3,7 @@ use std::fmt;
 use anyhow::{bail, Result};
 
 use super::{inspect, symbols};
+use crate::core::probe::kernel::ProbeType;
 
 /// Kernel symbol representation. Only supports traceable symbols: events and
 /// functions.
@@ -161,6 +162,23 @@ impl Symbol {
     /// `function_parameter_offset()?.is_some()`.
     pub(crate) fn parameter_offset(&self, parameter_type: &str) -> Result<Option<u32>> {
         inspect::parameter_offset(self.r#type, &self.typedef_name(), parameter_type)
+    }
+
+    /// Check if the symbol can be probed using a specific probe type.
+    pub(crate) fn can_probe(&self, probe_type: ProbeType) -> bool {
+        match self.r#type {
+            SymbolType::Event => {
+                if probe_type == ProbeType::RawTracepoint {
+                    return true;
+                }
+            }
+            SymbolType::Func => {
+                if probe_type == ProbeType::Kprobe {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
