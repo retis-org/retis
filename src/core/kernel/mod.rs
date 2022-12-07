@@ -1,8 +1,7 @@
 //! # Kernel helpers
 
-// Re-export kernel.rs
-#[allow(clippy::module_inception)]
-pub(crate) mod kernel;
-pub(crate) use kernel::*;
+// Re-export symbol::Symbol.
+pub(crate) use symbol::Symbol;
 
 mod inspect;
+mod symbol;

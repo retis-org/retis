@@ -6,7 +6,7 @@ use btf_rs::{Btf, Type};
 use log::warn;
 use once_cell::sync::OnceCell;
 
-use super::SymbolType;
+use super::symbol::SymbolType;
 
 static INSPECTOR: OnceCell<Inspector> = OnceCell::new();
 
