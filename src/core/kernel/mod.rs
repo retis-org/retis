@@ -5,4 +5,3 @@ pub(crate) use symbol::Symbol;
 
 mod inspect;
 mod symbol;
-mod symbols;    // This is temporary

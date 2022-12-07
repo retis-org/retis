@@ -2,7 +2,7 @@ use std::fmt;
 
 use anyhow::{bail, Result};
 
-use super::{inspect, symbols};
+use super::inspect;
 
 /// Kernel symbol representation. Only supports traceable symbols: events and
 /// functions.
@@ -49,14 +49,14 @@ impl Symbol {
             // We might have an event, let's see if we can find a tracepoint
             // symbol.
             let tp_name = format!("__tracepoint_{}", tp_name);
-            if symbols::get_symbol_addr(&tp_name).is_ok() {
+            if inspect::get_symbol_addr(&tp_name).is_ok() {
                 return Ok(Symbol::Event(name.to_string()));
             }
         }
 
         // Traceable functions should be in the kallsyms file. Let's see if we
         // find a match.
-        if symbols::get_symbol_addr(name).is_ok() {
+        if inspect::get_symbol_addr(name).is_ok() {
             return Ok(Symbol::Func(name.to_string()));
         }
 
@@ -70,7 +70,7 @@ impl Symbol {
         // know it's a valid kernel symbol, but that doesn't mean it will map
         // 1:1 to a traceable one. Also we can't directly use the type detection
         // as we won't have a group:name format for events for example.
-        let target = symbols::get_symbol_name(addr)?;
+        let target = inspect::get_symbol_name(addr)?;
 
         // Check if the symbol is a tracepoint.
         let name = match target.strip_prefix("__tracepoint_") {
@@ -94,7 +94,7 @@ impl Symbol {
     /// when dealing with call traces.
     #[allow(dead_code)] // FIXME
     pub(crate) fn from_addr_near(addr: u64) -> Result<Symbol> {
-        let addr = symbols::find_nearest_symbol(addr)?;
+        let addr = inspect::find_nearest_symbol(addr)?;
         Self::from_addr(addr)
     }
 
@@ -159,7 +159,7 @@ impl Symbol {
 
     /// Get the symbol address.
     pub(crate) fn addr(&self) -> Result<u64> {
-        symbols::get_symbol_addr(&self.addr_name())
+        inspect::get_symbol_addr(&self.addr_name())
     }
 
     /// Get the symbol arguments number.
