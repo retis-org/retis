@@ -546,6 +546,7 @@ dependencies = [
  "plain",
  "serde_json",
  "simplelog",
+ "thiserror",
 ]
 
 [[package]]

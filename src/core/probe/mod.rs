@@ -13,3 +13,5 @@ pub(crate) use kernel::Kernel;
 pub(crate) mod probe;
 // Re-export probe.
 pub(crate) use probe::*;
+
+pub(crate) mod user;
