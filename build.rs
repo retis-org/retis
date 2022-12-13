@@ -71,5 +71,8 @@ fn main() {
     build_probe("src/core/probe/kernel/bpf/kprobe.bpf.c");
     build_probe("src/core/probe/kernel/bpf/raw_tracepoint.bpf.c");
 
+    // collector::skb_tracking
+    build_hook("src/collector/skb_tracking/bpf/tracking_hook.bpf.c");
+
     println!("cargo:rerun-if-changed={}", INCLUDE_PATH);
 }

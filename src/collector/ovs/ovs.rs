@@ -18,7 +18,7 @@ impl Collector for OvsCollector {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs("ovs")
+        cmd.register_module_noargs(OVS_COLLECTOR)
     }
 
     fn init(&mut self, _: &CliConfig, _kernel: &mut kernel::Kernel) -> Result<()> {

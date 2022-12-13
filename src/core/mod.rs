@@ -5,3 +5,4 @@
 
 pub(crate) mod kernel_symbols;
 pub(crate) mod probe;
+pub(crate) mod workaround;

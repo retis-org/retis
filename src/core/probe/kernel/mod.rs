@@ -24,5 +24,6 @@ pub(crate) mod kernel;
 pub(crate) use kernel::*;
 
 mod config;
+mod inspect;
 mod kprobe;
 mod raw_tracepoint;

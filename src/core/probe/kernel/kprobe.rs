@@ -6,7 +6,7 @@
 
 use anyhow::{anyhow, bail, Result};
 
-use super::*;
+use super::{inspect::TargetDesc, *};
 use crate::core::probe::get_ebpf_debug;
 
 mod kprobe_bpf {

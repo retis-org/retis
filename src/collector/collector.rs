@@ -5,6 +5,7 @@ use log::{error, warn};
 
 use super::ovs::OvsCollector;
 use super::skb::SkbCollector;
+use super::skb_tracking::SkbTrackingCollector;
 use crate::cli::{cmd::collect::Collect, dynamic::DynamicCommand, CliConfig};
 use crate::core::probe;
 
@@ -89,7 +90,7 @@ impl Group {
             let c = self
                 .list
                 .get_mut(name)
-                .ok_or_else(|| anyhow!(format!("unknown collector: {}", &name)))?;
+                .ok_or_else(|| anyhow!("unknown collector: {}", &name))?;
             if let Err(e) = c.init(cli, &mut self.kernel) {
                 to_remove.push(c.name());
                 error!(
@@ -141,6 +142,7 @@ pub(crate) fn get_collectors() -> Result<Group> {
 
     // Register all collectors here.
     group
+        .register(Box::new(SkbTrackingCollector::new()?))?
         .register(Box::new(SkbCollector::new()?))?
         .register(Box::new(OvsCollector::new()?))?;
 

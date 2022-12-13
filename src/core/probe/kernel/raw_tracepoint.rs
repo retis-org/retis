@@ -5,9 +5,9 @@
 //! in two parts, the Rust code (here) and the eBPF one
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 
-use super::*;
+use super::{inspect::TargetDesc, *};
 use crate::core::probe::get_ebpf_debug;
 
 mod raw_tracepoint_bpf {
@@ -34,6 +34,12 @@ impl ProbeBuilder for RawTracepointBuilder {
     }
 
     fn attach(&mut self, target: &str, desc: &TargetDesc) -> Result<()> {
+        // Raw tracepoints should have a group:target format.
+        let target = match target.split_once(':') {
+            Some((_, tgt)) => tgt,
+            None => bail!("Invalid tracepoint format for {}", target),
+        };
+
         let mut skel = RawTracepointSkelBuilder::default();
         skel.obj_builder.debug(get_ebpf_debug());
         let mut skel = skel.open()?;
@@ -71,8 +77,8 @@ mod tests {
         let desc = TargetDesc::default();
 
         assert!(builder.init(Vec::new(), Vec::new()).is_ok());
-        assert!(builder.attach("kfree_skb", &desc).is_ok());
-        assert!(builder.attach("consume_skb", &desc).is_ok());
-        assert!(builder.attach("foobar", &desc).is_err());
+        assert!(builder.attach("skb:kfree_skb", &desc).is_ok());
+        assert!(builder.attach("skb:consume_skb", &desc).is_ok());
+        assert!(builder.attach("skb:foobar", &desc).is_err());
     }
 }

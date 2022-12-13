@@ -4,6 +4,8 @@ use crate::cli::{dynamic::DynamicCommand, CliConfig};
 use crate::collector::Collector;
 use crate::core::probe::kernel;
 
+const SKB_COLLECTOR: &str = "skb";
+
 pub(in crate::collector) struct SkbCollector {}
 
 impl Collector for SkbCollector {
@@ -12,11 +14,11 @@ impl Collector for SkbCollector {
     }
 
     fn name(&self) -> &'static str {
-        "skb"
+        SKB_COLLECTOR
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs("skb")
+        cmd.register_module_noargs(SKB_COLLECTOR)
     }
 
     fn init(&mut self, _: &CliConfig, _kernel: &mut kernel::Kernel) -> Result<()> {
