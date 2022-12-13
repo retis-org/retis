@@ -3,9 +3,13 @@
 //! Module providing an API to attach probes to userspace programs, e.g: using
 //! uprobes and USDT.
 
-// Re-export user.rs
 #[allow(clippy::module_inception)]
 pub(crate) mod user;
-
+// Re-export user.rs
 #[allow(unused_imports)]
 pub(crate) use user::*;
+
+mod proc;
+// Re-export user.rs
+#[allow(unused_imports)]
+pub(crate) use proc::*;
