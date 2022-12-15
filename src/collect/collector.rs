@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, bail, Result};
 use log::warn;
@@ -21,11 +21,15 @@ pub(crate) trait Collector {
     fn new() -> Result<Self>
     where
         Self: Sized;
-    ///Register command line arguments on the provided DynamicCommand object
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()>;
     /// Return the name of the collector. It *has* to be unique among all the
     /// collectors.
     fn name(&self) -> &'static str;
+    /// List of kernel data types the collector can retrieve data from, if any.
+    /// This is useful for registering dynamic collectors, and is used later for
+    /// checking requested probes are not a no-op.
+    fn known_kernel_types(&self) -> Option<Vec<&'static str>>;
+    ///Register command line arguments on the provided DynamicCommand object
+    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()>;
     /// Initialize the collector, likely to be used to pass configuration data
     /// such as filters or command line arguments. We need to split the new &
     /// the init phase for collectors, to allow giving information to the core
@@ -53,6 +57,7 @@ pub(crate) struct Group {
     list: HashMap<String, Box<dyn Collector>>,
     kernel: probe::Kernel,
     events: BpfEvents,
+    known_kernel_types: HashSet<String>,
 }
 
 impl Group {
@@ -64,6 +69,7 @@ impl Group {
             list: HashMap::new(),
             kernel,
             events,
+            known_kernel_types: HashSet::new(),
         })
     }
 
@@ -107,8 +113,17 @@ impl Group {
                 .list
                 .get_mut(name)
                 .ok_or_else(|| anyhow!("unknown collector: {}", &name))?;
+
             if let Err(e) = c.init(cli, &mut self.kernel, &mut self.events) {
                 bail!("Could not initialize the {} collector: {}", c.name(), e);
+            }
+
+            // If the collector provides known kernel types, meaning we have a
+            // dynamic collector, retrieve and store them for later processing.
+            if let Some(kt) = c.known_kernel_types() {
+                kt.into_iter().for_each(|x| {
+                    self.known_kernel_types.insert(x.to_string());
+                });
             }
         }
 
@@ -175,6 +190,9 @@ mod tests {
         fn name(&self) -> &'static str {
             "dummy-a"
         }
+        fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
+            None
+        }
         fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
             Ok(())
         }
@@ -192,6 +210,9 @@ mod tests {
         }
         fn name(&self) -> &'static str {
             "dummy-b"
+        }
+        fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
+            None
         }
         fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
             Ok(())

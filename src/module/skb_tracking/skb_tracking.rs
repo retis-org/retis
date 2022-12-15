@@ -58,6 +58,10 @@ impl Collector for SkbTrackingCollector {
         SKB_TRACKING_COLLECTOR
     }
 
+    fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
+        Some(vec!["struct sk_buff *"])
+    }
+
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
         cmd.register_module_noargs(SKB_TRACKING_COLLECTOR)
     }

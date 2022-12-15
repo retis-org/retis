@@ -19,6 +19,10 @@ impl Collector for SkbCollector {
         SKB_COLLECTOR
     }
 
+    fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
+        None
+    }
+
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
         cmd.register_module_noargs(SKB_COLLECTOR)
     }
