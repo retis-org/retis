@@ -8,7 +8,7 @@ use plain::Plain;
 use super::tracking_hook;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
-    collector::Collector,
+    collect::Collector,
     core::{
         events::{
             bpf::{BpfEventOwner, BpfEvents},

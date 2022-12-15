@@ -10,7 +10,7 @@ use clap::error::Error as ClapError;
 use clap::{ArgMatches, Args, Command, FromArgMatches};
 
 use super::dynamic::DynamicCommand;
-use crate::collector::cli::Collect;
+use crate::collect::cli::Collect;
 
 /// SubCommand defines the way to handle SubCommands.
 /// SubCommands arguments are parsed in two rounds, the "thin" and the "full" round.

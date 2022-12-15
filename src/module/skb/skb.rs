@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
-    collector::Collector,
+    collect::Collector,
     core::{events::bpf::BpfEvents, probe::kernel},
 };
 
