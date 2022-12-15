@@ -12,7 +12,11 @@ const FILTER_INCLUDE_PATH: &str = "src/core/filters/packets/bpf/include";
 const BINDGEN_HEADER: &str = "src/core/bpf_sys/include/bpf-sys.h";
 const INCLUDE_PATHS: &[&str] = &[
     "src/core/probe/kernel/bpf/include",
+    "src/core/probe/user/bpf/include",
     "src/core/events/bpf/include",
+    // Taking errno.h from libc instead of linux headers.
+    // TODO: Remove when we fix proper header dependencies.
+    "/usr/include/x86_64-linux-gnu",
 ];
 
 // Not super fail safe (not using Path).
@@ -143,6 +147,7 @@ fn main() {
     // core::probe::kernel
     build_probe("src/core/probe/kernel/bpf/kprobe.bpf.c");
     build_probe("src/core/probe/kernel/bpf/raw_tracepoint.bpf.c");
+    build_probe("src/core/probe/user/bpf/usdt.bpf.c");
 
     // module::skb_tracking
     build_hook("src/module/skb_tracking/bpf/tracking_hook.bpf.c");

@@ -172,7 +172,7 @@ impl SkbTrackingCollector {
         let tracking_fd = tracking_map.get().fd();
 
         // Register the tracking hook to all probes.
-        probes.register_hook(
+        probes.register_kernel_hook(
             Hook::from(tracking_hook::DATA)
                 .reuse_map("tracking_config_map", tracking_config_map.fd())?
                 .reuse_map("tracking_map", tracking_fd)?

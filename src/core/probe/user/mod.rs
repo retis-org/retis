@@ -9,7 +9,5 @@ pub(crate) mod user;
 #[allow(unused_imports)]
 pub(crate) use user::*;
 
-mod proc;
-// Re-export user.rs
-#[allow(unused_imports)]
-pub(crate) use proc::*;
+pub(crate) mod proc;
+pub(crate) mod usdt;

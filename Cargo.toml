@@ -14,7 +14,7 @@ btf-rs = {git = "https://github.com/net-trace/btf-rs"}
 byteorder = "1.4.3"
 clap = { version = "4.0", features = ["derive", "string"] }
 elf = "0.7.0"
-libbpf-rs = "0.19"
+libbpf-rs = {git = "https://github.com/libbpf/libbpf-rs.git", rev= "52ab250"}
 libbpf-sys = "1.0"
 libc = "0.2"
 log = "0.4"

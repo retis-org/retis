@@ -275,6 +275,14 @@ impl Process {
     pub(crate) fn usdt_info(&self) -> Option<&UsdtInfo> {
         self.usdt_info.as_ref()
     }
+
+    pub(crate) fn pid(&self) -> i32 {
+        self.pid
+    }
+
+    pub(crate) fn path(&self) -> &PathBuf {
+        &self.path
+    }
 }
 
 #[cfg(test)]

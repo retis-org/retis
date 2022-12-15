@@ -10,6 +10,7 @@ use super::*;
 use super::{
     builder::ProbeBuilder,
     kernel::{kprobe, raw_tracepoint},
+    user::usdt,
 };
 use crate::core::events::bpf::BpfEvents;
 
@@ -47,8 +48,10 @@ impl ProbeManager {
         let dynamic_probes: [ProbeSet; probe::PROBE_VARIANTS] = [
             ProbeSet::new(Box::new(kprobe::KprobeBuilder::new())),
             ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new())),
+            ProbeSet::new(Box::new(usdt::UsdtBuilder::new())),
         ];
-        let targeted_probes: [Vec<ProbeSet>; probe::PROBE_VARIANTS] = [Vec::new(), Vec::new()];
+        let targeted_probes: [Vec<ProbeSet>; probe::PROBE_VARIANTS] = Default::default();
+
         // When testing the kernel object is not modified later to reuse the
         // config map is this map is hidden.
         let mut mgr = ProbeManager {
@@ -80,6 +83,7 @@ impl ProbeManager {
     pub(crate) fn add_probe(&mut self, probe: Probe) -> Result<()> {
         let key = match &probe {
             Probe::Kprobe(probe) | Probe::RawTracepoint(probe) => probe.symbol.name(),
+            Probe::Usdt(probe) => probe.name(),
         };
 
         // First check if it is already in the generic probe list.
@@ -117,7 +121,7 @@ impl ProbeManager {
         Ok(())
     }
 
-    /// Request a hook to be attached to all probes.
+    /// Request a hook to be attached to all kernel probes.
     ///
     /// ```
     /// mod hook {
@@ -126,9 +130,9 @@ impl ProbeManager {
     ///
     /// [...]
     ///
-    /// mgr.register_hook(Hook::from(hook::DATA))?;
+    /// mgr.register_kernel_hook(Hook::from(hook::DATA))?;
     /// ```
-    pub(crate) fn register_hook(&mut self, hook: Hook) -> Result<()> {
+    pub(crate) fn register_kernel_hook(&mut self, hook: Hook) -> Result<()> {
         let mut max: usize = 0;
         for tgt_set in self.targeted_probes.iter_mut() {
             for set in tgt_set.iter_mut() {
@@ -160,6 +164,7 @@ impl ProbeManager {
     pub(crate) fn register_hook_to(&mut self, hook: Hook, probe: Probe) -> Result<()> {
         let key = match &probe {
             Probe::Kprobe(probe) | Probe::RawTracepoint(probe) => probe.symbol.name(),
+            Probe::Usdt(probe) => probe.name(),
         };
 
         // First check if the target isn't already registered to the generic
@@ -172,6 +177,9 @@ impl ProbeManager {
         let tgt_set = &mut self.targeted_probes[probe.as_key()];
         for set in tgt_set.iter_mut() {
             if set.targets.get(&key).is_some() {
+                if let Probe::Usdt(_) = probe {
+                    bail!("USDT probes only support a single hook")
+                }
                 if self.dynamic_hooks.len() + set.hooks.len() == HOOK_MAX {
                     bail!("Hook list is already full");
                 }
@@ -184,6 +192,7 @@ impl ProbeManager {
         let mut set = ProbeSet::new(match probe {
             Probe::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
             Probe::RawTracepoint(_) => Box::new(raw_tracepoint::RawTracepointBuilder::new()),
+            Probe::Usdt(_) => Box::new(usdt::UsdtBuilder::new()),
         });
 
         set.targets.insert(key, probe);
@@ -269,6 +278,7 @@ impl ProbeSet {
                         libbpf_rs::MapFlags::NO_EXIST,
                     )?;
                 }
+                _ => (),
             }
 
             // Finally attach a probe to the target.
@@ -319,8 +329,8 @@ mod tests {
         let events = BpfEvents::new().unwrap();
         let mut mgr = ProbeManager::new(&events).unwrap();
 
-        assert!(mgr.register_hook(Hook::from(HOOK)).is_ok());
-        assert!(mgr.register_hook(Hook::from(HOOK)).is_ok());
+        assert!(mgr.register_kernel_hook(Hook::from(HOOK)).is_ok());
+        assert!(mgr.register_kernel_hook(Hook::from(HOOK)).is_ok());
 
         assert!(mgr
             .register_hook_to(Hook::from(HOOK), kprobe!("kfree_skb_reason"))
@@ -336,11 +346,11 @@ mod tests {
             .is_ok());
 
         for _ in 0..HOOK_MAX - 4 {
-            assert!(mgr.register_hook(Hook::from(HOOK)).is_ok());
+            assert!(mgr.register_kernel_hook(Hook::from(HOOK)).is_ok());
         }
 
         // We should hit the hook limit here.
-        assert!(mgr.register_hook(Hook::from(HOOK)).is_err());
+        assert!(mgr.register_kernel_hook(Hook::from(HOOK)).is_err());
 
         assert!(mgr
             .register_hook_to(Hook::from(HOOK), kprobe!("kfree_skb_reason"))
