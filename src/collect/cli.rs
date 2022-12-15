@@ -19,6 +19,22 @@ pub(crate) struct CollectArgs {
     // so both the argument definition and the field population will be done manually.
     #[arg(skip)]
     pub(super) collectors: Vec<String>,
+    // Use the plural in the struct but singular for the cli parameter as we're
+    // dealing with a list here.
+    #[arg(
+        id = "probe",
+        short,
+        long,
+        help = "Add a probe on the given target. Can be used multiple times. Probes should
+follow the TYPE:TARGET pattern.
+
+Valid TYPEs:
+- kprobe: kernel probes.
+- tp: kernel tracepoints.
+
+Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
+    )]
+    pub(super) probes: Vec<String>,
 }
 
 #[derive(Debug)]

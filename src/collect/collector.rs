@@ -1,14 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, bail, Result};
-use log::warn;
+use log::{info, warn};
 
 use super::cli::Collect;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     core::{
         events::{bpf::BpfEvents, Event},
-        probe,
+        kernel::Symbol,
+        probe::{self, Probe},
     },
     module::{ovs::OvsCollector, skb::SkbCollector, skb_tracking::SkbTrackingCollector},
 };
@@ -127,6 +128,10 @@ impl Group {
             }
         }
 
+        // Setup user defined probes.
+        for probe in collect.args()?.probes.iter() {
+            self.kernel.add_probe(self.parse_probe(probe)?)?;
+        }
         Ok(())
     }
 
@@ -157,6 +162,44 @@ impl Group {
             }
         }
         Ok(())
+    }
+
+    /// Parse a user defined probe (through cli parameters) and extract its type and
+    /// target.
+    fn parse_probe(&self, probe: &str) -> Result<Probe> {
+        let (type_str, target) = match probe.split_once(':') {
+            Some((type_str, target)) => (type_str, target),
+            None => {
+                info!(
+                    "Invalid probe format, no TYPE given in '{}', using 'kprobe:{}'. See the help.",
+                    probe, probe
+                );
+                ("kprobe", probe)
+            }
+        };
+
+        let symbol = Symbol::from_name(target)?;
+
+        // Check if the probe would be used by a collector to retrieve data.
+        let mut valid = false;
+        for r#type in self.known_kernel_types.iter() {
+            if symbol.parameter_offset(r#type)?.is_some() {
+                valid = true;
+                break;
+            }
+        }
+        if !valid {
+            warn!(
+                "A probe to symbol {} is attached but no collector will retrieve data from it, only generic information will be retrieved",
+                symbol
+            );
+        }
+
+        match type_str {
+            "kprobe" => symbol.to_kprobe(),
+            "tp" => symbol.to_raw_tracepoint(),
+            x => bail!("Invalid TYPE {}. See the help.", x),
+        }
     }
 }
 
@@ -191,7 +234,7 @@ mod tests {
             "dummy-a"
         }
         fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
-            None
+            Some(vec!["struct sk_buff *", "struct net_device *"])
         }
         fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
             Ok(())
@@ -284,6 +327,37 @@ mod tests {
         assert!(dummy_a.start().is_ok());
         assert!(dummy_b.start().is_err());
         assert!(group.start(&config).is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn parse_probe() -> Result<()> {
+        let mut group = Group::new()?;
+        group.register(Box::new(DummyCollectorA::new()?))?;
+        group.register(Box::new(DummyCollectorB::new()?))?;
+
+        // Valid probes.
+        assert!(group.parse_probe("consume_skb").is_ok());
+        assert!(group.parse_probe("kprobe:kfree_skb_reason").is_ok());
+        assert!(group.parse_probe("tp:skb:kfree_skb").is_ok());
+
+        // Invalid probe: symbol does not exist.
+        assert!(group.parse_probe("foobar").is_err());
+        assert!(group.parse_probe("kprobe:foobar").is_err());
+        assert!(group.parse_probe("tp:42:foobar").is_err());
+
+        // Invalid probe: wrong TYPE.
+        assert!(group.parse_probe("kprobe:skb:kfree_skb").is_err());
+        assert!(group.parse_probe("skb:kfree_skb").is_err());
+        assert!(group.parse_probe("foo:kfree_skb").is_err());
+
+        // Invalid probe: empty parts.
+        assert!(group.parse_probe("").is_err());
+        assert!(group.parse_probe("kprobe:").is_err());
+        assert!(group.parse_probe("tp:").is_err());
+        assert!(group.parse_probe("tp:skb:").is_err());
+        assert!(group.parse_probe(":kfree_skb_reason").is_err());
+
         Ok(())
     }
 }
