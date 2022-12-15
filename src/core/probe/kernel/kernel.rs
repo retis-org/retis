@@ -11,16 +11,11 @@ use super::{
     inspect::{inspect_symbol, TargetDesc},
     kprobe, raw_tracepoint,
 };
-use crate::core::{events::bpf::BpfEvents, kernel::Symbol};
-
-/// Probes types supported by this crate.
-#[allow(dead_code)]
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub(crate) enum ProbeType {
-    Kprobe,
-    RawTracepoint,
-    Max,
-}
+use crate::core::{
+    events::bpf::BpfEvents,
+    kernel::Symbol,
+    probe::{self, Probe},
+};
 
 /// Hook provided by modules for registering them on kernel probes.
 #[derive(Clone)]
@@ -59,10 +54,10 @@ impl Hook {
 pub(crate) struct Kernel {
     /// Probes sets, one per probe type. Used to keep track of all non-specific
     /// probes.
-    probes: [ProbeSet; ProbeType::Max as usize],
+    probes: [ProbeSet; probe::PROBE_VARIANTS],
     /// List of targeted probes, aka. probes running a specific set of hooks.
     /// Targeted probes only have one target to keep things reasonable.
-    targeted_probes: Vec<ProbeSet>,
+    targeted_probes: [Vec<ProbeSet>; probe::PROBE_VARIANTS],
     maps: HashMap<String, i32>,
     hooks: Vec<Hook>,
     #[cfg(not(test))]
@@ -74,16 +69,14 @@ pub(crate) const PROBE_MAX: usize = 128; // TODO add checks on probe registratio
 pub(super) const HOOK_MAX: usize = 10;
 
 struct ProbeSet {
-    r#type: ProbeType,
     builder: Box<dyn ProbeBuilder>,
     targets: HashMap<String, Symbol>,
     hooks: Vec<Hook>,
 }
 
 impl ProbeSet {
-    fn new(r#type: ProbeType, builder: Box<dyn ProbeBuilder>) -> ProbeSet {
+    fn new(builder: Box<dyn ProbeBuilder>) -> ProbeSet {
         ProbeSet {
-            r#type,
             builder,
             targets: HashMap::new(),
             hooks: Vec::new(),
@@ -93,21 +86,19 @@ impl ProbeSet {
 
 impl Kernel {
     pub(crate) fn new(events: &BpfEvents) -> Result<Kernel> {
-        // Keep synced with the order of ProbeType!
-        let probes: [ProbeSet; ProbeType::Max as usize] = [
-            ProbeSet::new(ProbeType::Kprobe, Box::new(kprobe::KprobeBuilder::new())),
-            ProbeSet::new(
-                ProbeType::RawTracepoint,
-                Box::new(raw_tracepoint::RawTracepointBuilder::new()),
-            ),
+        // Keep synced with the order of Probe::into::<usize>()!
+        let probes: [ProbeSet; probe::PROBE_VARIANTS] = [
+            ProbeSet::new(Box::new(kprobe::KprobeBuilder::new())),
+            ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new())),
         ];
+        let targeted_probes: [Vec<ProbeSet>; probe::PROBE_VARIANTS] = [Vec::new(), Vec::new()];
 
         // When testing the kernel object is not modified later to reuse the
         // config map is this map is hidden.
         #[allow(unused_mut)]
         let mut kernel = Kernel {
             probes,
-            targeted_probes: Vec::new(),
+            targeted_probes,
             maps: HashMap::new(),
             hooks: Vec::new(),
             #[cfg(not(test))]
@@ -125,30 +116,37 @@ impl Kernel {
         Ok(kernel)
     }
 
-    /// Request to attach a probe of type r#type to a target identifier.
+    /// Request to attach a probe of type r#type to a `Probe`.
     ///
     /// ```
-    /// kernel.add_probe(ProbeType::Kprobe, "kfree_skb_reason").unwrap();
-    /// kernel.add_probe(ProbeType::RawTracepoint, "kfree_skb").unwrap();
+    /// let symbol = kernel::Symbol::from_name("kfree_skb_reason").unwrap();
+    /// kernel.add_probe(symbol.to_kprobe().unwrap()).unwrap();
+    ///
+    /// let symbol = kernel::Symbol::from_name("skb:kfree_skb").unwrap();
+    /// kernel.add_probe(symbol.to_raw_tracepoint().unwrap()).unwrap();
     /// ```
-    pub(crate) fn add_probe(&mut self, r#type: ProbeType, target: &str) -> Result<()> {
-        let symbol = Symbol::from_name(target)?;
+    pub(crate) fn add_probe(&mut self, probe: Probe) -> Result<()> {
+        let symbol = match &probe {
+            Probe::Kprobe(symbol) => symbol,
+            Probe::RawTracepoint(symbol) => symbol,
+        };
         let key = symbol.name();
 
         // First check if it is already in the generic probe list.
-        let set = &mut self.probes[r#type as usize];
-        if set.targets.contains_key(&key) {
+        let probe_set = &mut self.probes[probe.as_key()];
+        if probe_set.targets.contains_key(&key) {
             return Ok(());
         }
 
         // Then if it is already in the targeted probe list.
-        for set in self.targeted_probes.iter_mut() {
-            if r#type == set.r#type && set.targets.get(&key).is_some() {
+        let tgt_set = &mut self.targeted_probes[probe.as_key()];
+        for set in tgt_set.iter_mut() {
+            if set.targets.get(&key).is_some() {
                 return Ok(());
             }
         }
 
-        set.targets.insert(key, symbol);
+        probe_set.targets.insert(key, symbol.clone());
         Ok(())
     }
 
@@ -182,9 +180,11 @@ impl Kernel {
     /// ```
     pub(crate) fn register_hook(&mut self, hook: Hook) -> Result<()> {
         let mut max: usize = 0;
-        for set in self.targeted_probes.iter_mut() {
-            if max < set.hooks.len() {
-                max = set.hooks.len();
+        for tgt_set in self.targeted_probes.iter_mut() {
+            for set in tgt_set.iter_mut() {
+                if max < set.hooks.len() {
+                    max = set.hooks.len();
+                }
             }
         }
         if self.hooks.len() + max == HOOK_MAX {
@@ -195,7 +195,7 @@ impl Kernel {
         Ok(())
     }
 
-    /// Request a hook to be attached to a specific target.
+    /// Request a hook to be attached to a specific `Probe`.
     ///
     /// ```
     /// mod hook {
@@ -204,26 +204,26 @@ impl Kernel {
     ///
     /// [...]
     ///
-    /// kernel.register_hook_to(hook::DATA, ProbeType::Kprobe, "kfree_skb_reason")?;
+    /// let symbol = kernel::Symbol::from_name("kfree_skb_reason").unwrap();
+    /// kernel.register_hook_to(hook::DATA, symbol.to_kprobe().unwrap()).unwrap();
     /// ```
-    pub(crate) fn register_hook_to(
-        &mut self,
-        hook: Hook,
-        r#type: ProbeType,
-        target: &str,
-    ) -> Result<()> {
-        let symbol = Symbol::from_name(target)?;
+    pub(crate) fn register_hook_to(&mut self, hook: Hook, probe: Probe) -> Result<()> {
+        let symbol = match &probe {
+            Probe::Kprobe(symbol) => symbol,
+            Probe::RawTracepoint(symbol) => symbol,
+        };
         let key = symbol.name();
 
         // First check if the target isn't already registered to the generic
         // probes list. If so, remove it from there.
-        let target_set = &mut self.probes[r#type as usize];
-        target_set.targets.remove(&key);
+        let probe_set = &mut self.probes[probe.as_key()];
+        probe_set.targets.remove(&key);
 
         // Now check if we already have a targeted probe for this. If so, append
         // the new hook to it.
-        for set in self.targeted_probes.iter_mut() {
-            if r#type == set.r#type && set.targets.get(&key).is_some() {
+        let tgt_set = &mut self.targeted_probes[probe.as_key()];
+        for set in tgt_set.iter_mut() {
+            if set.targets.get(&key).is_some() {
                 if self.hooks.len() + set.hooks.len() == HOOK_MAX {
                     bail!("Hook list is already full");
                 }
@@ -233,23 +233,19 @@ impl Kernel {
         }
 
         // New target, let's build a new probe set.
-        let mut set = ProbeSet::new(
-            r#type,
-            match r#type {
-                ProbeType::Kprobe => Box::new(kprobe::KprobeBuilder::new()),
-                ProbeType::RawTracepoint => Box::new(raw_tracepoint::RawTracepointBuilder::new()),
-                ProbeType::Max => bail!("Invalid probe type"),
-            },
-        );
+        let mut set = ProbeSet::new(match probe {
+            Probe::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
+            Probe::RawTracepoint(_) => Box::new(raw_tracepoint::RawTracepointBuilder::new()),
+        });
 
-        set.targets.insert(key, symbol);
+        set.targets.insert(key, symbol.clone());
 
         if self.hooks.len() == HOOK_MAX {
             bail!("Hook list is already full");
         }
         set.hooks.push(hook);
 
-        self.targeted_probes.push(set);
+        tgt_set.push(set);
         Ok(())
     }
 
@@ -267,15 +263,17 @@ impl Kernel {
         }
 
         // Then take care of targeted probes.
-        for set in self.targeted_probes.iter_mut() {
-            let hooks = [set.hooks.clone(), self.hooks.clone()].concat();
-            Self::attach_set(
-                set,
-                #[cfg(not(test))]
-                &mut self.config_map,
-                self.maps.clone(),
-                hooks,
-            )?;
+        for tgt_probe in self.targeted_probes.iter_mut() {
+            for set in tgt_probe.iter_mut() {
+                let hooks = [set.hooks.clone(), self.hooks.clone()].concat();
+                Self::attach_set(
+                    set,
+                    #[cfg(not(test))]
+                    &mut self.config_map,
+                    self.maps.clone(),
+                    hooks,
+                )?;
+            }
         }
 
         Ok(())
@@ -386,23 +384,32 @@ mod tests {
     // Dummy hook.
     const HOOK: &[u8] = &[0];
 
+    macro_rules! kprobe {
+        ($target:literal) => {
+            Symbol::from_name($target).unwrap().to_kprobe().unwrap()
+        };
+    }
+
+    macro_rules! raw_tp {
+        ($target:literal) => {
+            Symbol::from_name($target)
+                .unwrap()
+                .to_raw_tracepoint()
+                .unwrap()
+        };
+    }
+
     #[test]
     fn add_probe() {
         let events = BpfEvents::new().unwrap();
         let mut kernel = Kernel::new(&events).unwrap();
 
-        assert!(kernel
-            .add_probe(ProbeType::Kprobe, "kfree_skb_reason")
-            .is_ok());
-        assert!(kernel.add_probe(ProbeType::Kprobe, "consume_skb").is_ok());
-        assert!(kernel.add_probe(ProbeType::Kprobe, "consume_skb").is_ok());
+        assert!(kernel.add_probe(kprobe!("kfree_skb_reason")).is_ok());
+        assert!(kernel.add_probe(kprobe!("consume_skb")).is_ok());
+        assert!(kernel.add_probe(kprobe!("consume_skb")).is_ok());
 
-        assert!(kernel
-            .add_probe(ProbeType::RawTracepoint, "skb:kfree_skb")
-            .is_ok());
-        assert!(kernel
-            .add_probe(ProbeType::RawTracepoint, "skb:kfree_skb")
-            .is_ok());
+        assert!(kernel.add_probe(raw_tp!("skb:kfree_skb")).is_ok());
+        assert!(kernel.add_probe(raw_tp!("skb:kfree_skb")).is_ok());
     }
 
     #[test]
@@ -414,20 +421,16 @@ mod tests {
         assert!(kernel.register_hook(Hook::from(HOOK)).is_ok());
 
         assert!(kernel
-            .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
+            .register_hook_to(Hook::from(HOOK), kprobe!("kfree_skb_reason"))
             .is_ok());
-        assert!(kernel
-            .add_probe(ProbeType::Kprobe, "kfree_skb_reason")
-            .is_ok());
+        assert!(kernel.add_probe(kprobe!("kfree_skb_reason")).is_ok());
 
-        kernel
-            .add_probe(ProbeType::RawTracepoint, "skb:kfree_skb")
-            .unwrap();
+        assert!(kernel.add_probe(raw_tp!("skb:kfree_skb")).is_ok());
         assert!(kernel
-            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "skb:kfree_skb")
+            .register_hook_to(Hook::from(HOOK), raw_tp!("skb:kfree_skb"))
             .is_ok());
         assert!(kernel
-            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "skb:kfree_skb")
+            .register_hook_to(Hook::from(HOOK), raw_tp!("skb:kfree_skb"))
             .is_ok());
 
         for _ in 0..HOOK_MAX - 4 {
@@ -438,15 +441,15 @@ mod tests {
         assert!(kernel.register_hook(Hook::from(HOOK)).is_err());
 
         assert!(kernel
-            .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
+            .register_hook_to(Hook::from(HOOK), kprobe!("kfree_skb_reason"))
             .is_ok());
 
         // We should hit the hook limit here as well.
         assert!(kernel
-            .register_hook_to(Hook::from(HOOK), ProbeType::Kprobe, "kfree_skb_reason")
+            .register_hook_to(Hook::from(HOOK), kprobe!("kfree_skb_reason"))
             .is_err());
         assert!(kernel
-            .register_hook_to(Hook::from(HOOK), ProbeType::RawTracepoint, "skb:kfree_skb")
+            .register_hook_to(Hook::from(HOOK), raw_tp!("skb:kfree_skb"))
             .is_err());
     }
 
