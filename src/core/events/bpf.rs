@@ -1,6 +1,6 @@
 //! Handles the BPF to Rust event retrieval and the unmarshaling process.
 
-#![allow(dead_code)] // FIXME
+#![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 
 use std::{

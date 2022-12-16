@@ -1,5 +1,3 @@
-#![allow(dead_code)] // FIXME
-
 use anyhow::Result;
 
 use super::config::ProbeConfig;

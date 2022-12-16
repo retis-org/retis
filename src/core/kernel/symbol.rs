@@ -1,5 +1,3 @@
-#![allow(dead_code)] // FIXME
-
 use std::fmt;
 
 use anyhow::{bail, Result};
