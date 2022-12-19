@@ -151,6 +151,7 @@ fn main() {
 
     // module::skb_tracking
     build_hook("src/module/skb_tracking/bpf/tracking_hook.bpf.c");
+    build_hook("src/module/ovs/bpf/main_hook.bpf.c");
 
     build_extract_stub("src/core/filters/packets/bpf/stub.bpf.c");
 
