@@ -77,7 +77,7 @@ impl Collector for SkbTrackingCollector {
     ) -> Result<()> {
         events.register_unmarshaler(
             BpfEventOwner::CollectorSkbTracking,
-            Box::new(|raw_section, fields| {
+            Box::new(|raw_section, fields, _| {
                 if raw_section.header.data_type != 1 {
                     bail!("Unknown data type");
                 }

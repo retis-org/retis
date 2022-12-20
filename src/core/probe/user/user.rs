@@ -62,7 +62,7 @@ impl fmt::Display for UsdtProbe {
 pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
     events.register_unmarshaler(
         BpfEventOwner::Userspace,
-        Box::new(|raw_section, fields| {
+        Box::new(|raw_section, fields, _| {
             if raw_section.data.len() != 17 {
                 bail!(
                     "Section data is not the expected size {} != 17",
