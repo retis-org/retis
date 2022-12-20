@@ -62,7 +62,7 @@ impl fmt::Display for UsdtProbe {
 pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
     events.register_unmarshaler(
         BpfEventOwner::Userspace,
-        Box::new(|raw_section, fields, _| {
+        Box::new(|raw_section, fields, cache| {
             if raw_section.data.len() != 17 {
                 bail!(
                     "Section data is not the expected size {} != 17",
@@ -81,8 +81,22 @@ pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
             fields.push(event_field!("pid", pid));
             fields.push(event_field!("tid", tid));
 
-            // FIXME: Retrieving the process information every event is definitely very inefficient.
-            let proc = Process::from_pid(pid)?;
+            let pid_key = format!("user_proc_{}", pid);
+            // Try to obtain the Process object from the Context.
+            let proc = match cache.get(&pid_key) {
+                Some(val) => val.downcast_ref::<Process>(),
+                None => {
+                    // Not found, create it, insert it and retrieve it.
+                    let proc = Box::new(Process::from_pid(pid)?);
+                    cache.insert(pid_key.clone(), proc);
+                    cache
+                        .get(&pid_key)
+                        .ok_or_else(|| anyhow!("Failed to insert process"))?
+                        .downcast_ref::<Process>()
+                }
+            }
+            .ok_or_else(|| anyhow!("Failed to retrieve process information"))?;
+
             let sym_str = proc.get_symbol(symbol)?;
 
             fields.push(event_field!("symbol", sym_str));
