@@ -7,7 +7,7 @@
 use std::{
     ffi::CStr,
     fmt, fs,
-    io::{BufRead, Cursor},
+    io::{BufRead, BufReader, Cursor},
     path::{Path, PathBuf},
 };
 
@@ -42,9 +42,11 @@ type Address = u32;
 #[cfg(target_pointer_width = "64")]
 type Address = u64;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 /// UsdtInfo holds the USDT information of a binary.
 pub struct UsdtInfo {
+    /// Base address for USDT address calculation (from stapsdt).
+    base_addr: u64,
     /// List of USDT Notes containing information of each USDT probe.
     notes: Vec<UsdtNote>,
 }
@@ -56,6 +58,15 @@ impl UsdtInfo {
         let file_data = std::fs::read(path)?;
         let slice_data = file_data.as_slice();
         let file = ElfBytes::<AnyEndian>::minimal_parse(slice_data)?;
+
+        // Retrieve STAPSDT base section address.
+        let base_hdr = file.section_header_by_name(".stapsdt.base")?;
+        if base_hdr.is_none() {
+            // It's OK to not have a USDT header. Return an empty object to
+            // differenciate it from a parsing error which should be fatal.
+            return Ok(UsdtInfo::default());
+        }
+        let base_addr = base_hdr.unwrap().sh_addr;
 
         // Retrieve STAPSDT notes section.
         let notes_hdr = file.section_header_by_name(".note.stapsdt")?;
@@ -77,7 +88,8 @@ impl UsdtInfo {
                 notes.push(UsdtNote::from_elf(note.desc)?);
             }
         };
-        Ok(UsdtInfo { notes })
+
+        Ok(UsdtInfo { base_addr, notes })
     }
 
     /// Determines whether a target specified as "provider::name" is a valid USDT.
@@ -98,6 +110,16 @@ impl UsdtInfo {
             .notes
             .iter()
             .find(|note| note.provider == provider && note.name == name))
+    }
+
+    /// Retrieves the Usdt note information whose address matches the given offset.
+    pub(crate) fn get_note_from_offset(&self, addr: u64) -> Result<Option<&UsdtNote>> {
+        Ok(self.notes.iter().find(|note| {
+            // We need to compensate "prelink effect". For more information see:
+            // https://sourceware.org/systemtap/wiki/UserSpaceProbeImplementation
+            let link_addr = note.addr + self.base_addr - note.base_addr;
+            link_addr == addr
+        }))
     }
 }
 
@@ -183,6 +205,8 @@ pub(crate) struct Process {
     path: PathBuf,
     /// USDT information
     usdt_info: Option<UsdtInfo>,
+    /// Loaded address
+    loaded_addr: u64,
 }
 
 impl Process {
@@ -216,10 +240,17 @@ impl Process {
                 None
             }
         };
+
+        let loaded_addr = match pid {
+            PID_ALL => 0,
+            pid => get_loaded_addr(pid)?,
+        };
+
         Ok(Process {
             pid,
             path,
             usdt_info,
+            loaded_addr,
         })
     }
 
@@ -283,6 +314,46 @@ impl Process {
     pub(crate) fn path(&self) -> &PathBuf {
         &self.path
     }
+
+    /// Gets the runtime information of a symbol address
+    pub(crate) fn get_symbol(&self, symbol: u64) -> Result<String> {
+        let usdt = self
+            .usdt_info
+            .as_ref()
+            .ok_or_else(|| anyhow!("No USDT information available"))?;
+        // Calculate the offset of the symbol.
+        let offset = symbol - self.loaded_addr;
+
+        let note = usdt
+            .get_note_from_offset(offset)?
+            .ok_or_else(|| anyhow!("Symbol not found"))?;
+        Ok(format!("{}::{}", note.provider, note.name))
+    }
+}
+
+/// Returns the virtual address where the program is loaded.
+fn get_loaded_addr(pid: i32) -> Result<u64> {
+    // Open /proc/{pid}/maps.
+    let maps_file = PathBuf::from("/proc").join(pid.to_string()).join("maps");
+    if !maps_file.exists() {
+        bail!("Failed to find process maps");
+    }
+    let file = fs::File::open(maps_file)?;
+
+    // We only need to read and parse the first line. The format of the map is:
+    // 55f9dd85c000-55f9dd85e000 r--p 00000000 00:1f 793986                     /usr/bin/kitty
+    let first = BufReader::new(file)
+        .lines()
+        .next()
+        .ok_or_else(|| anyhow!("Failed to read maps files"))??;
+    u64::from_str_radix(
+        first
+            .split('-')
+            .next()
+            .ok_or_else(|| anyhow!("Failed to parse map entry: {}", first))?,
+        16,
+    )
+    .map_err(|e| anyhow!("Failed to parse map entry: {}", e))
 }
 
 #[cfg(test)]
