@@ -46,9 +46,9 @@ impl ProbeManager {
     pub(crate) fn new(events: &BpfEvents) -> Result<ProbeManager> {
         // Keep synced with the order of Probe::into::<usize>()!
         let dynamic_probes: [ProbeSet; probe::PROBE_VARIANTS] = [
-            ProbeSet::new(Box::new(kprobe::KprobeBuilder::new())),
-            ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new())),
-            ProbeSet::new(Box::new(usdt::UsdtBuilder::new())),
+            ProbeSet::new(Box::new(kprobe::KprobeBuilder::new()), true),
+            ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new()), true),
+            ProbeSet::new(Box::new(usdt::UsdtBuilder::new()), false),
         ];
         let targeted_probes: [Vec<ProbeSet>; probe::PROBE_VARIANTS] = Default::default();
 
@@ -189,11 +189,13 @@ impl ProbeManager {
         }
 
         // New target, let's build a new probe set.
-        let mut set = ProbeSet::new(match probe {
-            Probe::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
-            Probe::RawTracepoint(_) => Box::new(raw_tracepoint::RawTracepointBuilder::new()),
-            Probe::Usdt(_) => Box::new(usdt::UsdtBuilder::new()),
-        });
+        let mut set = match probe {
+            Probe::Kprobe(_) => ProbeSet::new(Box::new(kprobe::KprobeBuilder::new()), true),
+            Probe::RawTracepoint(_) => {
+                ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new()), true)
+            }
+            Probe::Usdt(_) => ProbeSet::new(Box::new(usdt::UsdtBuilder::new()), false),
+        };
 
         set.targets.insert(key, probe);
 
@@ -222,7 +224,9 @@ impl ProbeManager {
         for tgt_probe in self.targeted_probes.iter_mut() {
             for set in tgt_probe.iter_mut() {
                 // Extend targeted hooks with dynamic ones.
-                set.hooks.extend(self.dynamic_hooks.iter().cloned());
+                if set.supports_dynamic {
+                    set.hooks.extend(self.dynamic_hooks.iter().cloned());
+                }
                 set.attach(
                     #[cfg(not(test))]
                     &mut self.config_map,
@@ -239,15 +243,17 @@ struct ProbeSet {
     builder: Box<dyn ProbeBuilder>,
     targets: HashMap<String, Probe>,
     hooks: Vec<Hook>,
+    supports_dynamic: bool,
 }
 
 impl ProbeSet {
     /// Creates a new empty ProbeSet.
-    fn new(builder: Box<dyn ProbeBuilder>) -> ProbeSet {
+    fn new(builder: Box<dyn ProbeBuilder>, supports_dynamic: bool) -> ProbeSet {
         ProbeSet {
             builder,
             targets: HashMap::new(),
             hooks: Vec::new(),
+            supports_dynamic,
         }
     }
 
