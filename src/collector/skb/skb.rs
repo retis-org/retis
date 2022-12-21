@@ -1,8 +1,10 @@
 use anyhow::Result;
 
 use crate::cli::{dynamic::DynamicCommand, CliConfig};
-use crate::collector::Collector;
-use crate::core::probe::kernel;
+use crate::{
+    collector::Collector,
+    core::{events::bpf::BpfEvents, probe::kernel},
+};
 
 const SKB_COLLECTOR: &str = "skb";
 
@@ -21,7 +23,12 @@ impl Collector for SkbCollector {
         cmd.register_module_noargs(SKB_COLLECTOR)
     }
 
-    fn init(&mut self, _: &CliConfig, _kernel: &mut kernel::Kernel) -> Result<()> {
+    fn init(
+        &mut self,
+        _: &CliConfig,
+        _kernel: &mut kernel::Kernel,
+        _events: &mut BpfEvents,
+    ) -> Result<()> {
         Ok(())
     }
 

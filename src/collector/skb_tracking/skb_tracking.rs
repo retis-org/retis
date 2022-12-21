@@ -6,10 +6,15 @@ use nix::time;
 use plain::Plain;
 
 use super::tracking_hook;
+use crate::event_field;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collector::Collector,
     core::{
+        events::{
+            bpf::{BpfEventOwner, BpfEvents},
+            EventField,
+        },
         probe::kernel::{self, Hook, ProbeType},
         workaround::SendableMap,
     },
@@ -26,6 +31,17 @@ const SKB_TRACKING_GC_INTERVAL: u64 = 5;
 // data and not having the map full of old entries. However, this logic
 // shouldn't happen much — or it is a bug.
 const TRACKING_OLD_LIMIT: u64 = 60;
+
+// Tracking event. Please keep in sync with its BPF counterpart.
+#[derive(Default)]
+#[repr(C, packed)]
+struct SkbTrackingEvent {
+    orig_head: u64,
+    timestamp: u64,
+    skb: u64,
+    drop_reason: u32,
+}
+unsafe impl Plain for SkbTrackingEvent {}
 
 #[derive(Default)]
 pub(in crate::collector) struct SkbTrackingCollector {
@@ -45,7 +61,39 @@ impl Collector for SkbTrackingCollector {
         cmd.register_module_noargs(SKB_TRACKING_COLLECTOR)
     }
 
-    fn init(&mut self, _: &CliConfig, kernel: &mut kernel::Kernel) -> Result<()> {
+    fn init(
+        &mut self,
+        _: &CliConfig,
+        kernel: &mut kernel::Kernel,
+        events: &mut BpfEvents,
+    ) -> Result<()> {
+        events.register_unmarshaler(
+            BpfEventOwner::CollectorSkbTracking,
+            Box::new(|raw_section, fields| {
+                if raw_section.header.data_type != 1 {
+                    bail!("Unknown data type");
+                }
+
+                if raw_section.data.len() != mem::size_of::<SkbTrackingEvent>() {
+                    bail!(
+                        "Section data is not the expected size {} != {}",
+                        raw_section.data.len(),
+                        mem::size_of::<SkbTrackingEvent>(),
+                    );
+                }
+
+                let mut event = SkbTrackingEvent::default();
+                plain::copy_from_bytes(&mut event, &raw_section.data)
+                    .or_else(|_| bail!("Could not parse the raw section"))?;
+
+                fields.push(event_field!("orig_head", event.orig_head));
+                fields.push(event_field!("timestamp", event.timestamp));
+                fields.push(event_field!("skb", event.skb));
+                fields.push(event_field!("drop_reason", event.drop_reason));
+                Ok(())
+            }),
+        )?;
+
         self.init_tracking(kernel)?;
 
         // We'd like to track free reasons as well.

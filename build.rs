@@ -8,7 +8,10 @@ use std::{
 use libbpf_cargo::SkeletonBuilder;
 use memmap2::Mmap;
 
-static INCLUDE_PATH: &str = "src/core/probe/kernel/bpf/include";
+static INCLUDE_PATHS: &[&str] = &[
+    "src/core/probe/kernel/bpf/include",
+    "src/core/events/bpf/include",
+];
 
 // Not super fail safe (not using Path).
 fn get_paths(source: &str) -> (String, String) {
@@ -29,7 +32,12 @@ fn build_hook(source: &str) {
     if let Err(e) = SkeletonBuilder::new()
         .source(source)
         .obj(output.as_str())
-        .clang_args(format!("-I{}", INCLUDE_PATH))
+        .clang_args(
+            INCLUDE_PATHS
+                .iter()
+                .map(|x| format!("-I{} ", x))
+                .collect::<String>(),
+        )
         .build()
     {
         panic!("{}", e);
@@ -57,7 +65,12 @@ fn build_probe(source: &str) {
 
     if let Err(e) = SkeletonBuilder::new()
         .source(source)
-        .clang_args(format!("-I{}", INCLUDE_PATH))
+        .clang_args(
+            INCLUDE_PATHS
+                .iter()
+                .map(|x| format!("-I{} ", x))
+                .collect::<String>(),
+        )
         .build_and_generate(skel)
     {
         panic!("{}", e);
@@ -74,5 +87,7 @@ fn main() {
     // collector::skb_tracking
     build_hook("src/collector/skb_tracking/bpf/tracking_hook.bpf.c");
 
-    println!("cargo:rerun-if-changed={}", INCLUDE_PATH);
+    for inc in INCLUDE_PATHS.iter() {
+        println!("cargo:rerun-if-changed={}", inc);
+    }
 }

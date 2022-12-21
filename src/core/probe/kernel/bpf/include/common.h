@@ -4,6 +4,8 @@
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 
+#include "events.h"
+
 /* Per-probe parameter offsets; keep in sync with its Rust counterpart in
  * core::probe::kernel::config. A value of -1 means the argument isn't
  * available. Please try to reuse the targeted object names.
@@ -82,7 +84,7 @@ struct trace_context {
  */
 #define TRACE_GET(ctx, name, type)		\
 	(trace_arg_valid(ctx, name) ?		\
-	 trace_get_param(ctx, ctx->offsets.name, type) : NULL)
+	 trace_get_param(ctx, ctx->offsets.name, type) : 0)
 
 #define trace_get_sk_buff(ctx)		\
 	TRACE_GET(ctx, sk_buff, struct sk_buff *)
@@ -111,14 +113,14 @@ struct trace_context {
  *
  * Do not forget to add the hook to build.rs
  */
-#define DEFINE_HOOK(inst)			\
-	SEC("ext/hook")				\
-	int hook(struct trace_context *ctx)	\
-	{					\
-		/* Let the verifier be happy */	\
-		if (!ctx)			\
-			return 0;		\
-		inst				\
+#define DEFINE_HOOK(inst)							\
+	SEC("ext/hook")								\
+	int hook(struct trace_context *ctx, struct trace_raw_event *event)	\
+	{									\
+		/* Let the verifier be happy */					\
+		if (!ctx || !event)						\
+			return 0;						\
+		inst								\
 	}
 
 /* Number of hooks installed, used to micro-optimize the call chain */
@@ -128,13 +130,13 @@ const volatile u32 nhooks = 0;
  * temporary retval is volatile to not let the compiler think he can optimize
  * it. Credits to the XDP dispatcher.
  */
-#define HOOK(x)						\
-	__attribute__ ((noinline))			\
-	int hook##x(struct trace_context *ctx) {	\
-		volatile int ret = 0;			\
-		if (!ctx)				\
-			return 0;			\
-		return ret;				\
+#define HOOK(x)									\
+	__attribute__ ((noinline))						\
+	int hook##x(struct trace_context *ctx, struct trace_raw_event *event) {	\
+		volatile int ret = 0;						\
+		if (!ctx || !event)						\
+			return 0;						\
+		return ret;							\
 	}
 HOOK(0)
 HOOK(1)
@@ -156,6 +158,8 @@ HOOK(9)
 static __always_inline int chain(struct trace_context *ctx)
 {
 	struct trace_probe_config *cfg;
+	struct trace_raw_event *event;
+	struct common_event *e;
 
 	cfg = bpf_map_lookup_elem(&config_map, &ctx->ksym);
 	if (!cfg)
@@ -163,9 +167,22 @@ static __always_inline int chain(struct trace_context *ctx)
 
 	ctx->offsets = cfg->offsets;
 
+	event = get_event();
+	if (!event)
+		return 0;
+
+	e = get_event_section(event, COMMON, 1, sizeof(*e));
+	if (!e) {
+		discard_event(event);
+		return 0;
+	}
+
+	e->symbol = ctx->ksym;
+	e->timestamp = ctx->timestamp;
+
 #define CALL_HOOK(x)		\
 	if (x < nhooks)		\
-		hook##x(ctx);
+		hook##x(ctx, event);
 	CALL_HOOK(0)
 	CALL_HOOK(1)
 	CALL_HOOK(2)
@@ -177,6 +194,7 @@ static __always_inline int chain(struct trace_context *ctx)
 	CALL_HOOK(8)
 	CALL_HOOK(9)
 
+	send_event(event);
 	return 0;
 }
 
