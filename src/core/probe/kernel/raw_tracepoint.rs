@@ -5,10 +5,10 @@
 //! in two parts, the Rust code (here) and the eBPF one
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 
-use super::{inspect::TargetDesc, *};
-use crate::core::{kernel::Symbol, probe::get_ebpf_debug};
+use super::*;
+use crate::core::probe::*;
 
 mod raw_tracepoint_bpf {
     include!("bpf/.out/raw_tracepoint.skel.rs");
@@ -33,13 +33,18 @@ impl ProbeBuilder for RawTracepointBuilder {
         Ok(())
     }
 
-    fn attach(&mut self, symbol: &Symbol, desc: &TargetDesc) -> Result<()> {
+    fn attach(&mut self, probe: &Probe) -> Result<()> {
         let mut skel = RawTracepointSkelBuilder::default();
         skel.obj_builder.debug(get_ebpf_debug());
         let mut skel = skel.open()?;
 
-        skel.rodata().ksym = desc.ksym;
-        skel.rodata().nargs = desc.nargs;
+        let probe = match probe {
+            Probe::RawTracepoint(probe) => probe,
+            _ => bail!("Wrong probe type {}", probe),
+        };
+
+        skel.rodata().ksym = probe.ksym;
+        skel.rodata().nargs = probe.nargs;
         skel.rodata().nhooks = self.hooks.len() as u32;
 
         let open_obj = skel.obj;
@@ -54,7 +59,7 @@ impl ProbeBuilder for RawTracepointBuilder {
         self.links.append(&mut links);
 
         self.links
-            .push(prog.attach_raw_tracepoint(symbol.attach_name())?);
+            .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
         Ok(())
     }
 }
@@ -63,20 +68,20 @@ impl ProbeBuilder for RawTracepointBuilder {
 mod tests {
     use super::*;
 
+    use crate::core::kernel::Symbol;
+
     #[test]
     #[cfg_attr(not(feature = "test_cap_bpf"), ignore)]
     fn init_and_attach() {
         let mut builder = RawTracepointBuilder::new();
 
         // It's for now, the probes below won't do much.
-        let desc = TargetDesc::default();
-
         assert!(builder.init(Vec::new(), Vec::new()).is_ok());
         assert!(builder
-            .attach(&Symbol::from_name("skb:kfree_skb").unwrap(), &desc)
+            .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
             .is_ok());
         assert!(builder
-            .attach(&Symbol::from_name("skb:consume_skb").unwrap(), &desc)
+            .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:consume_skb").unwrap()).unwrap())
             .is_ok());
     }
 }

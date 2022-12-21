@@ -1,13 +1,34 @@
 use std::fmt;
 
+use anyhow::{bail, Result};
+
+use super::kernel::KernelProbe;
 use crate::core::kernel;
 
 /// Probe types supported by this program. This is the main object given to
 /// tracing APIs and it does contain everything needed to target a symbol in a
 /// given running program.
 pub(crate) enum Probe {
-    Kprobe(kernel::Symbol),
-    RawTracepoint(kernel::Symbol),
+    Kprobe(KernelProbe),
+    RawTracepoint(KernelProbe),
+}
+
+impl Probe {
+    /// Create a new kprobe.
+    pub(crate) fn kprobe(symbol: kernel::Symbol) -> Result<Probe> {
+        match symbol {
+            kernel::Symbol::Func(_) => Ok(Probe::Kprobe(KernelProbe::new(symbol)?)),
+            kernel::Symbol::Event(_) => bail!("Symbol cannot be probed with a kprobe"),
+        }
+    }
+
+    /// Create a new raw tracepoint.
+    pub(crate) fn raw_tracepoint(symbol: kernel::Symbol) -> Result<Probe> {
+        match symbol {
+            kernel::Symbol::Event(_) => Ok(Probe::RawTracepoint(KernelProbe::new(symbol)?)),
+            kernel::Symbol::Func(_) => bail!("Symbol cannot be probed with a raw tracepoint"),
+        }
+    }
 }
 
 // Use mem::variant_count::<Probe>() when available in stable.

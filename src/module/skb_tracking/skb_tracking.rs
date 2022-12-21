@@ -15,7 +15,10 @@ use crate::{
             EventField,
         },
         kernel::Symbol,
-        probe::kernel::{self, Hook},
+        probe::{
+            kernel::{self, Hook},
+            Probe,
+        },
         workaround::SendableMap,
     },
     event_field,
@@ -108,7 +111,8 @@ impl Collector for SkbTrackingCollector {
         match symbol.is_ok() {
             true => {
                 // Unwrap as we just checked the value is valid.
-                if let Err(e) = kernel.add_probe(symbol.unwrap().to_kprobe()?) {
+
+                if let Err(e) = kernel.add_probe(Probe::kprobe(symbol.unwrap())?) {
                     error!("Could not attach to kfree_skb_reason: {}", e);
                 }
             }
@@ -185,7 +189,7 @@ impl SkbTrackingCollector {
         };
         let cfg = unsafe { plain::as_bytes(&cfg) };
         tracking_config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
-        kernel.add_probe(symbol.to_kprobe()?)?;
+        kernel.add_probe(Probe::kprobe(symbol)?)?;
 
         // Then track invalidation head events.
         let symbol = Symbol::from_name("pskb_expand_head")?;
@@ -196,7 +200,7 @@ impl SkbTrackingCollector {
         };
         let cfg = unsafe { plain::as_bytes(&cfg) };
         tracking_config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
-        kernel.add_probe(symbol.to_kprobe()?)?;
+        kernel.add_probe(Probe::kprobe(symbol)?)?;
 
         // Take care of gargabe collection of tracking info. This should be done
         // in the BPF part for most if not all skbs but we might lose some

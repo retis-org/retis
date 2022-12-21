@@ -1,21 +1,48 @@
 #![allow(dead_code)] // FIXME
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use anyhow::{anyhow, bail, Result};
 use log::info;
 
 #[cfg(not(test))]
 use super::config::init_config_map;
-use super::{
-    inspect::{inspect_symbol, TargetDesc},
-    kprobe, raw_tracepoint,
-};
+use super::{config::ProbeConfig, inspect::inspect_symbol, kprobe, raw_tracepoint};
 use crate::core::{
     events::bpf::BpfEvents,
     kernel::Symbol,
     probe::{self, Probe},
 };
+
+/// Kernel encapsulates all the information about a kernel probe (kprobe or tracepoint) needed to attach to it.
+pub(crate) struct KernelProbe {
+    /// Symbol name
+    pub(crate) symbol: Symbol,
+    /// Symbol address
+    pub(crate) ksym: u64,
+    /// Number of arguments
+    pub(crate) nargs: u32,
+    /// Holds the different offsets to known parameters.
+    pub(super) config: ProbeConfig,
+}
+
+impl KernelProbe {
+    pub(crate) fn new(symbol: Symbol) -> Result<Self> {
+        let desc = inspect_symbol(&symbol)?;
+        Ok(KernelProbe {
+            symbol,
+            ksym: desc.ksym,
+            nargs: desc.nargs,
+            config: desc.probe_cfg,
+        })
+    }
+}
+
+impl fmt::Display for KernelProbe {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.symbol)
+    }
+}
 
 /// Hook provided by modules for registering them on kernel probes.
 #[derive(Clone)]
@@ -70,7 +97,7 @@ pub(super) const HOOK_MAX: usize = 10;
 
 struct ProbeSet {
     builder: Box<dyn ProbeBuilder>,
-    targets: HashMap<String, Symbol>,
+    targets: HashMap<String, Probe>,
     hooks: Vec<Hook>,
 }
 
@@ -120,17 +147,15 @@ impl Kernel {
     ///
     /// ```
     /// let symbol = kernel::Symbol::from_name("kfree_skb_reason").unwrap();
-    /// kernel.add_probe(symbol.to_kprobe().unwrap()).unwrap();
+    /// kernel.add_probe(Probe::kprobe(symbol).unwrap()).unwrap();
     ///
     /// let symbol = kernel::Symbol::from_name("skb:kfree_skb").unwrap();
-    /// kernel.add_probe(symbol.to_raw_tracepoint().unwrap()).unwrap();
+    /// kernel.add_probe(Probe::raw_tracepoint(symbol).unwrap()).unwrap();
     /// ```
     pub(crate) fn add_probe(&mut self, probe: Probe) -> Result<()> {
-        let symbol = match &probe {
-            Probe::Kprobe(symbol) => symbol,
-            Probe::RawTracepoint(symbol) => symbol,
+        let key = match &probe {
+            Probe::Kprobe(probe) | Probe::RawTracepoint(probe) => probe.symbol.name(),
         };
-        let key = symbol.name();
 
         // First check if it is already in the generic probe list.
         let probe_set = &mut self.probes[probe.as_key()];
@@ -146,7 +171,7 @@ impl Kernel {
             }
         }
 
-        probe_set.targets.insert(key, symbol.clone());
+        probe_set.targets.insert(key, probe);
         Ok(())
     }
 
@@ -208,11 +233,9 @@ impl Kernel {
     /// kernel.register_hook_to(hook::DATA, symbol.to_kprobe().unwrap()).unwrap();
     /// ```
     pub(crate) fn register_hook_to(&mut self, hook: Hook, probe: Probe) -> Result<()> {
-        let symbol = match &probe {
-            Probe::Kprobe(symbol) => symbol,
-            Probe::RawTracepoint(symbol) => symbol,
+        let key = match &probe {
+            Probe::Kprobe(probe) | Probe::RawTracepoint(probe) => probe.symbol.name(),
         };
-        let key = symbol.name();
 
         // First check if the target isn't already registered to the generic
         // probes list. If so, remove it from there.
@@ -238,7 +261,7 @@ impl Kernel {
             Probe::RawTracepoint(_) => Box::new(raw_tracepoint::RawTracepointBuilder::new()),
         });
 
-        set.targets.insert(key, symbol.clone());
+        set.targets.insert(key, probe);
 
         if self.hooks.len() == HOOK_MAX {
             bail!("Hook list is already full");
@@ -293,23 +316,24 @@ impl Kernel {
         let map_fds = maps.into_iter().collect();
         set.builder.init(map_fds, hooks)?;
 
-        // Then handle all targets in the set.
-        for (_, symbol) in set.targets.iter() {
-            let desc = inspect_symbol(symbol)?;
-
+        // Then handle all probes in the set.
+        for (_, probe) in set.targets.iter() {
             // First load the probe configuration.
             #[cfg(not(test))]
-            let config = unsafe { plain::as_bytes(&desc.probe_cfg) };
-            #[cfg(not(test))]
-            config_map.update(
-                &desc.ksym.to_ne_bytes(),
-                config,
-                libbpf_rs::MapFlags::NO_EXIST,
-            )?;
+            match probe {
+                Probe::Kprobe(probe) | Probe::RawTracepoint(probe) => {
+                    let config = unsafe { plain::as_bytes(&probe.config) };
+                    config_map.update(
+                        &probe.ksym.to_ne_bytes(),
+                        config,
+                        libbpf_rs::MapFlags::NO_EXIST,
+                    )?;
+                }
+            }
 
             // Finally attach a probe to the target.
-            info!("Attaching probe to {}", symbol);
-            set.builder.attach(symbol, &desc)?;
+            info!("Attaching probe to {}", probe);
+            set.builder.attach(probe)?;
         }
 
         Ok(())
@@ -329,7 +353,7 @@ pub(super) trait ProbeBuilder {
     /// accross builders.
     fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<Hook>) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
-    fn attach(&mut self, symbol: &Symbol, desc: &TargetDesc) -> Result<()>;
+    fn attach(&mut self, probe: &Probe) -> Result<()>;
 }
 
 pub(super) fn reuse_map_fds(
@@ -386,16 +410,13 @@ mod tests {
 
     macro_rules! kprobe {
         ($target:literal) => {
-            Symbol::from_name($target).unwrap().to_kprobe().unwrap()
+            Probe::Kprobe(KernelProbe::new(Symbol::from_name($target).unwrap()).unwrap())
         };
     }
 
     macro_rules! raw_tp {
         ($target:literal) => {
-            Symbol::from_name($target)
-                .unwrap()
-                .to_raw_tracepoint()
-                .unwrap()
+            Probe::RawTracepoint(KernelProbe::new(Symbol::from_name($target).unwrap()).unwrap())
         };
     }
 
