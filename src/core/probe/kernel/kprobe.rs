@@ -6,7 +6,7 @@
 
 use anyhow::{anyhow, bail, Result};
 
-use super::*;
+use crate::core::probe::builder::*;
 use crate::core::probe::*;
 
 mod kprobe_bpf {

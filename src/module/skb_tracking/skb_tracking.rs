@@ -15,10 +15,7 @@ use crate::{
             EventField,
         },
         kernel::Symbol,
-        probe::{
-            kernel::{self, Hook},
-            Probe,
-        },
+        probe::{kernel, Hook, Probe},
         workaround::SendableMap,
     },
     event_field,

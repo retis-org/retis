@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use anyhow::{bail, Result};
 
@@ -51,5 +51,37 @@ impl fmt::Display for Probe {
             Probe::Kprobe(symbol) => write!(f, "kprobe:{}", symbol),
             Probe::RawTracepoint(symbol) => write!(f, "raw_tracepoint:{}", symbol),
         }
+    }
+}
+
+/// Hook provided by modules for registering them on kernel probes.
+#[derive(Clone)]
+pub(crate) struct Hook {
+    /// Hook BPF binary data.
+    pub(super) bpf_prog: &'static [u8],
+    /// HashMap of maps names and their fd, for reuse by the hook.
+    pub(super) maps: HashMap<String, i32>,
+}
+
+impl Hook {
+    /// Create a new hook given a BPF binary data.
+    pub(crate) fn from(bpf_prog: &'static [u8]) -> Hook {
+        Hook {
+            bpf_prog,
+            maps: HashMap::new(),
+        }
+    }
+
+    /// Request to reuse a map specifically in the hook. For maps being globally
+    /// reused please use Kernel::reuse_map() instead.
+    pub(crate) fn reuse_map(&mut self, name: &str, fd: i32) -> Result<&mut Self> {
+        let name = name.to_string();
+
+        if self.maps.contains_key(&name) {
+            bail!("Map {} already reused, or name is conflicting", name);
+        }
+
+        self.maps.insert(name, fd);
+        Ok(self)
     }
 }
