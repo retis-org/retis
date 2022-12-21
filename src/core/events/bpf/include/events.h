@@ -10,7 +10,9 @@
 /* Please keep in sync with its Rust counterpart in crate::core::events::raw. */
 enum trace_event_owners {
 	COMMON = 1,
-	COLLECTOR_SKB_TRACKING = 2,
+	KERNEL = 2,
+	USERSPACE = 3,
+	COLLECTOR_SKB_TRACKING = 4,
 };
 
 struct trace_raw_event {
@@ -75,7 +77,6 @@ static __always_inline void *get_event_section(struct trace_raw_event *event,
 }
 
 struct common_event {
-	u64 symbol;
 	u64 timestamp;
 } __attribute__((packed));
 

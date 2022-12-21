@@ -43,7 +43,7 @@ pub(crate) struct ProbeManager {
 }
 
 impl ProbeManager {
-    pub(crate) fn new(events: &BpfEvents) -> Result<ProbeManager> {
+    pub(crate) fn new(events: &mut BpfEvents) -> Result<ProbeManager> {
         // Keep synced with the order of Probe::into::<usize>()!
         let dynamic_probes: [ProbeSet; probe::PROBE_VARIANTS] = [
             ProbeSet::new(Box::new(kprobe::KprobeBuilder::new()), true),
@@ -68,6 +68,8 @@ impl ProbeManager {
             .insert("config_map".to_string(), mgr.config_map.fd());
         mgr.maps.insert("events_map".to_string(), events.map_fd());
 
+        kernel::register_unmarshaler(events)?;
+        user::register_unmarshaler(events)?;
         Ok(mgr)
     }
 
@@ -319,8 +321,8 @@ mod tests {
 
     #[test]
     fn add_probe() {
-        let events = BpfEvents::new().unwrap();
-        let mut mgr = ProbeManager::new(&events).unwrap();
+        let mut events = BpfEvents::new().unwrap();
+        let mut mgr = ProbeManager::new(&mut events).unwrap();
 
         assert!(mgr.add_probe(kprobe!("kfree_skb_reason")).is_ok());
         assert!(mgr.add_probe(kprobe!("consume_skb")).is_ok());
@@ -332,8 +334,8 @@ mod tests {
 
     #[test]
     fn register_hooks() {
-        let events = BpfEvents::new().unwrap();
-        let mut mgr = ProbeManager::new(&events).unwrap();
+        let mut events = BpfEvents::new().unwrap();
+        let mut mgr = ProbeManager::new(&mut events).unwrap();
 
         assert!(mgr.register_kernel_hook(Hook::from(HOOK)).is_ok());
         assert!(mgr.register_kernel_hook(Hook::from(HOOK)).is_ok());
@@ -373,8 +375,8 @@ mod tests {
 
     #[test]
     fn reuse_map() {
-        let events = BpfEvents::new().unwrap();
-        let mut mgr = ProbeManager::new(&events).unwrap();
+        let mut events = BpfEvents::new().unwrap();
+        let mut mgr = ProbeManager::new(&mut events).unwrap();
 
         assert!(mgr.reuse_map("config", 0).is_ok());
         assert!(mgr.reuse_map("event", 0).is_ok());

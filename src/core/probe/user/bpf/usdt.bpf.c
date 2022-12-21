@@ -19,6 +19,7 @@ int probe_usdt(struct pt_regs *ctx)
 	struct pt_regs ctx_fp = *ctx;
 	struct common_event *e;
 	struct trace_raw_event *event;
+	struct user_event *u;
 
 	event = get_event();
 	if (!event)
@@ -29,8 +30,16 @@ int probe_usdt(struct pt_regs *ctx)
 		discard_event(event);
 		return 0;
 	}
-	e->symbol = PT_REGS_IP(ctx);
 	e->timestamp = bpf_ktime_get_ns();
+
+	u = get_event_section(event, USERSPACE, 1, sizeof(*u));
+	if (!u) {
+		discard_event(event);
+		return 0;
+	}
+	u->symbol = PT_REGS_IP(ctx);
+	u->pid = bpf_get_current_pid_tgid();
+	u->event_type = USDT;
 
 	/* UST only supports a single hook. */
 	hook0(&ctx_fp, event);

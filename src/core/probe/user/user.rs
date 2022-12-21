@@ -2,9 +2,16 @@
 
 use std::{fmt, path::PathBuf};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 
-use crate::core::probe::user::proc::Process;
+use crate::core::{
+    events::{
+        bpf::{BpfEventOwner, BpfEvents},
+        EventField,
+    },
+    probe::user::proc::Process,
+};
+use crate::event_field;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct UsdtProbe {
@@ -49,4 +56,33 @@ impl fmt::Display for UsdtProbe {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}:{}:{}", self.path.display(), self.provider, self.name)
     }
+}
+
+/// Registers the unmarshaler for the userpsace section of the event.
+pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
+    events.register_unmarshaler(
+        BpfEventOwner::Userspace,
+        Box::new(|raw_section, fields| {
+            if raw_section.data.len() != 17 {
+                bail!(
+                    "Section data is not the expected size {} != 17",
+                    raw_section.data.len()
+                );
+            }
+
+            let symbol = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
+            let pid = u64::from_ne_bytes(raw_section.data[8..16].try_into()?);
+            let r#type = u8::from_ne_bytes(raw_section.data[16..17].try_into()?);
+
+            fields.push(event_field!("symbol", symbol));
+            fields.push(event_field!("pid", pid));
+            let type_str = match r#type {
+                1 => "usdt",
+                _ => "unknown",
+            };
+            fields.push(event_field!("type", type_str.to_string()));
+            Ok(())
+        }),
+    )?;
+    Ok(())
 }

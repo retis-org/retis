@@ -63,8 +63,8 @@ pub(crate) struct Group {
 
 impl Group {
     fn new() -> Result<Group> {
-        let events = BpfEvents::new()?;
-        let probes = probe::ProbeManager::new(&events)?;
+        let mut events = BpfEvents::new()?;
+        let probes = probe::ProbeManager::new(&mut events)?;
         Ok(Group {
             list: HashMap::new(),
             probes,
@@ -312,7 +312,7 @@ mod tests {
         group.register(Box::new(DummyCollectorB::new()?))?;
 
         let mut events = BpfEvents::new()?;
-        let mut mgr = probe::ProbeManager::new(&events)?;
+        let mut mgr = probe::ProbeManager::new(&mut events)?;
 
         assert!(dummy_a.init(&config, &mut mgr, &mut events).is_ok());
         assert!(dummy_b.init(&config, &mut mgr, &mut events).is_err());

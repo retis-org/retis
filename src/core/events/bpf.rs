@@ -16,10 +16,7 @@ use log::error;
 use plain::Plain;
 
 use super::{Event, EventField};
-use crate::{
-    core::{kernel::Symbol, workaround::SendableRingBuffer},
-    event_field,
-};
+use crate::{core::workaround::SendableRingBuffer, event_field};
 
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
@@ -73,17 +70,14 @@ impl BpfEvents {
                     bail!("Unknown data type");
                 }
 
-                if raw_section.data.len() != 16 {
+                if raw_section.data.len() != 8 {
                     bail!(
-                        "Section data is not the expected size {} != 16",
+                        "Section data is not the expected size {} != 8",
                         raw_section.data.len()
                     );
                 }
 
-                let symbol = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
-                let timestamp = u64::from_ne_bytes(raw_section.data[8..16].try_into()?);
-
-                fields.push(event_field!("symbol", Symbol::from_addr(symbol)?.name()));
+                let timestamp = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
                 fields.push(event_field!("timestamp", timestamp));
                 Ok(())
             }),
@@ -345,7 +339,9 @@ unsafe impl Plain for BpfRawSectionHeader {}
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub(crate) enum BpfEventOwner {
     Common = 1,
-    CollectorSkbTracking = 2,
+    Kernel = 2,
+    Userspace = 3,
+    CollectorSkbTracking = 4,
 }
 
 impl BpfEventOwner {
@@ -353,7 +349,9 @@ impl BpfEventOwner {
         use BpfEventOwner::*;
         let owner = match val {
             1 => Common,
-            2 => CollectorSkbTracking,
+            2 => Kernel,
+            3 => Userspace,
+            4 => CollectorSkbTracking,
             x => bail!("Can't construct a BpfEventOwner from {}", x),
         };
         Ok(owner)
@@ -363,6 +361,8 @@ impl BpfEventOwner {
         use BpfEventOwner::*;
         let ret = match self {
             Common => "common",
+            Kernel => "kernel",
+            Userspace => "userspace",
             CollectorSkbTracking => "skb-tracking",
         };
         Ok(ret)

@@ -6,6 +6,17 @@
 
 #include "events.h"
 
+enum userspace_event_type {
+	USDT = 1,
+};
+
+/* Userspace section of the event data. */
+struct user_event {
+	u64 symbol;
+	u64 pid;
+	u8  event_type;
+} __attribute__((packed));
+
 /* Helper to define a USDT hook (mostly in collectors) while not having to
  * duplicate the common part everywhere.
  * This also ensure hooks are doing the right thing and should help with
