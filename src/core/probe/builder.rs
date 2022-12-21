@@ -27,10 +27,12 @@ pub(super) fn reuse_map_fds(
     map_fds: &[(String, i32)],
 ) -> Result<()> {
     for map in map_fds.iter() {
-        open_obj
-            .map(map.0.clone())
-            .ok_or_else(|| anyhow!("Couldn't get map {}", map.0.clone()))?
-            .reuse_fd(map.1)?;
+        if let Some(open_map) = open_obj.map(map.0.clone()) {
+            open_map.reuse_fd(map.1)?;
+        } else {
+            // This object does not have this particular map.
+            continue;
+        }
     }
     Ok(())
 }
