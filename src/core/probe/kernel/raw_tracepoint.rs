@@ -16,7 +16,7 @@ mod raw_tracepoint_bpf {
 use raw_tracepoint_bpf::RawTracepointSkelBuilder;
 
 #[derive(Default)]
-pub(super) struct RawTracepointBuilder {
+pub(crate) struct RawTracepointBuilder {
     links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, i32)>,
     hooks: Vec<Hook>,

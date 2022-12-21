@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::{events::bpf::BpfEvents, probe::kernel},
+    core::{events::bpf::BpfEvents, probe::ProbeManager},
 };
 
 const OVS_COLLECTOR: &str = "ovs";
@@ -30,7 +30,7 @@ impl Collector for OvsCollector {
     fn init(
         &mut self,
         _: &CliConfig,
-        _kernel: &mut kernel::Kernel,
+        _probes: &mut ProbeManager,
         _events: &mut BpfEvents,
     ) -> Result<()> {
         Ok(())

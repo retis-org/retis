@@ -15,7 +15,7 @@ mod kprobe_bpf {
 use kprobe_bpf::KprobeSkelBuilder;
 
 #[derive(Default)]
-pub(super) struct KprobeBuilder {
+pub(crate) struct KprobeBuilder {
     obj: Option<libbpf_rs::Object>,
     links: Vec<libbpf_rs::Link>,
 }

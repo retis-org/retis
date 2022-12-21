@@ -15,7 +15,10 @@ use crate::{
             EventField,
         },
         kernel::Symbol,
-        probe::{kernel, Hook, Probe},
+        probe::{
+            manager::{ProbeManager, PROBE_MAX},
+            Hook, Probe,
+        },
         workaround::SendableMap,
     },
     event_field,
@@ -69,7 +72,7 @@ impl Collector for SkbTrackingCollector {
     fn init(
         &mut self,
         _: &CliConfig,
-        kernel: &mut kernel::Kernel,
+        probes: &mut ProbeManager,
         events: &mut BpfEvents,
     ) -> Result<()> {
         events.register_unmarshaler(
@@ -99,7 +102,7 @@ impl Collector for SkbTrackingCollector {
             }),
         )?;
 
-        self.init_tracking(kernel)?;
+        self.init_tracking(probes)?;
 
         // We'd like to track free reasons as well.
         let symbol = Symbol::from_name("kfree_skb_reason");
@@ -109,7 +112,7 @@ impl Collector for SkbTrackingCollector {
             true => {
                 // Unwrap as we just checked the value is valid.
 
-                if let Err(e) = kernel.add_probe(Probe::kprobe(symbol.unwrap())?) {
+                if let Err(e) = probes.add_probe(Probe::kprobe(symbol.unwrap())?) {
                     error!("Could not attach to kfree_skb_reason: {}", e);
                 }
             }
@@ -138,7 +141,7 @@ impl SkbTrackingCollector {
             Some("tracking_config_map"),
             mem::size_of::<u64>() as u32,
             mem::size_of::<TrackingConfig>() as u32,
-            kernel::PROBE_MAX as u32,
+            PROBE_MAX as u32,
             &opts,
         )
         .or_else(|e| bail!("Could not create the tracking config map: {}", e))
@@ -163,13 +166,13 @@ impl SkbTrackingCollector {
         .or_else(|e| bail!("Could not create the tracking map: {}", e))
     }
 
-    fn init_tracking(&mut self, kernel: &mut kernel::Kernel) -> Result<()> {
+    fn init_tracking(&mut self, probes: &mut ProbeManager) -> Result<()> {
         let mut tracking_config_map = Self::tracking_config_map()?;
         let mut tracking_map = SendableMap::from(Self::tracking_map()?);
         let tracking_fd = tracking_map.get().fd();
 
         // Register the tracking hook to all probes.
-        kernel.register_hook(
+        probes.register_hook(
             Hook::from(tracking_hook::DATA)
                 .reuse_map("tracking_config_map", tracking_config_map.fd())?
                 .reuse_map("tracking_map", tracking_fd)?
@@ -186,7 +189,7 @@ impl SkbTrackingCollector {
         };
         let cfg = unsafe { plain::as_bytes(&cfg) };
         tracking_config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
-        kernel.add_probe(Probe::kprobe(symbol)?)?;
+        probes.add_probe(Probe::kprobe(symbol)?)?;
 
         // Then track invalidation head events.
         let symbol = Symbol::from_name("pskb_expand_head")?;
@@ -197,7 +200,7 @@ impl SkbTrackingCollector {
         };
         let cfg = unsafe { plain::as_bytes(&cfg) };
         tracking_config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
-        kernel.add_probe(Probe::kprobe(symbol)?)?;
+        probes.add_probe(Probe::kprobe(symbol)?)?;
 
         // Take care of gargabe collection of tracking info. This should be done
         // in the BPF part for most if not all skbs but we might lose some
