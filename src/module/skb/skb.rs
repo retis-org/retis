@@ -1,9 +1,10 @@
 use anyhow::Result;
 
+use super::skb_hook;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::{events::bpf::BpfEvents, probe::ProbeManager},
+    core::{events::bpf::BpfEvents, probe::{ProbeManager, Hook}},
 };
 
 const SKB_COLLECTOR: &str = "skb";
@@ -20,7 +21,7 @@ impl Collector for SkbCollector {
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
-        None
+        Some(vec!["struct sk_buff *"])
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
@@ -30,9 +31,10 @@ impl Collector for SkbCollector {
     fn init(
         &mut self,
         _: &CliConfig,
-        _probes: &mut ProbeManager,
+        probes: &mut ProbeManager,
         _events: &mut BpfEvents,
     ) -> Result<()> {
+        probes.register_kernel_hook(Hook::from(skb_hook::DATA))?;
         Ok(())
     }
 

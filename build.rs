@@ -151,7 +151,7 @@ fn main() {
     build_probe("src/core/probe/kernel/bpf/raw_tracepoint.bpf.c");
     build_probe("src/core/probe/user/bpf/usdt.bpf.c");
 
-    // module::skb_tracking
+    build_hook("src/module/skb/bpf/skb_hook.bpf.c");
     build_hook("src/module/skb_tracking/bpf/tracking_hook.bpf.c");
     build_hook("src/module/ovs/bpf/main_hook.bpf.c");
 

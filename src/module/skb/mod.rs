@@ -1,10 +1,12 @@
 //! # SkbCollector
 //!
-//! Provide a generic way to probe kernel functions and tracepoints (having a
-//! `struct sk_buff *` as a parameter), to filter skbs, and to track them;
-//! allowing to reconstruct their path in the Linux networking stack.
+//! Provide support for retrieving data from `struct sk_buff` kernel objects.
 
 // Re-export skb.rs
 #[allow(clippy::module_inception)]
 pub(crate) mod skb;
 pub(crate) use skb::*;
+
+mod skb_hook {
+    include!("bpf/.out/skb_hook.rs");
+}
