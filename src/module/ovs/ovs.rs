@@ -2,13 +2,13 @@ use anyhow::Result;
 
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
-    collector::Collector,
+    collect::Collector,
     core::{events::bpf::BpfEvents, probe::kernel},
 };
 
 const OVS_COLLECTOR: &str = "ovs";
 
-pub(in crate::collector) struct OvsCollector {}
+pub(crate) struct OvsCollector {}
 
 impl Collector for OvsCollector {
     fn new() -> Result<OvsCollector> {
@@ -17,6 +17,10 @@ impl Collector for OvsCollector {
 
     fn name(&self) -> &'static str {
         OVS_COLLECTOR
+    }
+
+    fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
+        None
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {

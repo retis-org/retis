@@ -4,6 +4,6 @@
 //! understand what openvswitch does with a packet.
 
 #[allow(clippy::module_inception)]
-pub(super) mod ovs;
+pub(crate) mod ovs;
 // Re-export ovs.rs
-pub(super) use ovs::*;
+pub(crate) use ovs::*;

@@ -9,8 +9,8 @@ use anyhow::{anyhow, bail, Result};
 use clap::error::Error as ClapError;
 use clap::{ArgMatches, Args, Command, FromArgMatches};
 
-use super::cmd::Collect;
 use super::dynamic::DynamicCommand;
+use crate::collect::cli::Collect;
 
 /// SubCommand defines the way to handle SubCommands.
 /// SubCommands arguments are parsed in two rounds, the "thin" and the "full" round.

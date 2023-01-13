@@ -7,7 +7,7 @@
 use anyhow::{anyhow, bail, Result};
 
 use super::{inspect::TargetDesc, *};
-use crate::core::probe::get_ebpf_debug;
+use crate::core::{kernel::Symbol, probe::get_ebpf_debug};
 
 mod kprobe_bpf {
     include!("bpf/.out/kprobe.skel.rs");
@@ -50,7 +50,7 @@ impl ProbeBuilder for KprobeBuilder {
         Ok(())
     }
 
-    fn attach(&mut self, target: &str, _: &TargetDesc) -> Result<()> {
+    fn attach(&mut self, symbol: &Symbol, _: &TargetDesc) -> Result<()> {
         let obj = match &mut self.obj {
             Some(obj) => obj,
             _ => bail!("Kprobe builder is uninitialized"),
@@ -59,7 +59,7 @@ impl ProbeBuilder for KprobeBuilder {
         self.links.push(
             obj.prog_mut("probe_kprobe")
                 .ok_or_else(|| anyhow!("Couldn't get program"))?
-                .attach_kprobe(false, target)?,
+                .attach_kprobe(false, symbol.attach_name())?,
         );
         Ok(())
     }
@@ -78,8 +78,11 @@ mod tests {
         let desc = TargetDesc::default();
 
         assert!(builder.init(Vec::new(), Vec::new()).is_ok());
-        assert!(builder.attach("kfree_skb_reason", &desc).is_ok());
-        assert!(builder.attach("consume_skb", &desc).is_ok());
-        assert!(builder.attach("foobar", &desc).is_err());
+        assert!(builder
+            .attach(&Symbol::from_name("kfree_skb_reason").unwrap(), &desc)
+            .is_ok());
+        assert!(builder
+            .attach(&Symbol::from_name("consume_skb").unwrap(), &desc)
+            .is_ok());
     }
 }

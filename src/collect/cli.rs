@@ -1,7 +1,6 @@
 //! # Collect
 //!
 //! Collect is a dynamic CLI subcommand that allows collectors to register their arguments.
-#![allow(dead_code)] // FIXME
 
 use anyhow::Result;
 use std::any::Any;
@@ -9,17 +8,32 @@ use std::any::Any;
 use clap::error::Error as ClapError;
 use clap::{builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command};
 
-use super::super::dynamic::DynamicCommand;
-use super::super::SubCommand;
+use crate::cli::{dynamic::DynamicCommand, SubCommand};
 
 #[derive(Args, Debug, Default)]
 pub(crate) struct CollectArgs {
     #[arg(long, default_value = "false")]
-    pub(crate) ebpf_debug: Option<bool>,
+    pub(super) ebpf_debug: Option<bool>,
     // Some of the options that we want for this arg are not available in clap's derive interface
     // so both the argument definition and the field population will be done manually.
     #[arg(skip)]
-    pub(crate) collectors: Vec<String>,
+    pub(super) collectors: Vec<String>,
+    // Use the plural in the struct but singular for the cli parameter as we're
+    // dealing with a list here.
+    #[arg(
+        id = "probe",
+        short,
+        long,
+        help = "Add a probe on the given target. Can be used multiple times. Probes should
+follow the TYPE:TARGET pattern.
+
+Valid TYPEs:
+- kprobe: kernel probes.
+- tp: kernel tracepoints.
+
+Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
+    )]
+    pub(super) probes: Vec<String>,
 }
 
 #[derive(Debug)]

@@ -34,7 +34,8 @@ pub(super) struct ProbeConfig {
 
 unsafe impl plain::Plain for ProbeConfig {}
 
-#[allow(dead_code)] // When testing this isn't used as the config map is hidden.
+// When testing this isn't used as the config map is hidden.
+#[cfg_attr(test, allow(dead_code))]
 pub(super) fn init_config_map() -> Result<libbpf_rs::Map> {
     let opts = libbpf_sys::bpf_map_create_opts {
         sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,

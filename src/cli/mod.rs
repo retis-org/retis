@@ -15,7 +15,6 @@
 
 #[allow(clippy::module_inception)]
 pub(crate) mod cli;
-pub(crate) mod cmd;
 pub(crate) mod dynamic;
 
 // Re-export cli.rs

@@ -1,6 +1,6 @@
 //! Handles the BPF to Rust event retrieval and the unmarshaling process.
 
-#![allow(dead_code)] // FIXME
+#![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 
 use std::{
@@ -17,7 +17,7 @@ use plain::Plain;
 
 use super::{Event, EventField};
 use crate::{
-    core::{kernel_symbols, workaround::SendableRingBuffer},
+    core::{kernel::Symbol, workaround::SendableRingBuffer},
     event_field,
 };
 
@@ -83,10 +83,7 @@ impl BpfEvents {
                 let symbol = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
                 let timestamp = u64::from_ne_bytes(raw_section.data[8..16].try_into()?);
 
-                fields.push(event_field!(
-                    "symbol",
-                    kernel_symbols::get_symbol_name(symbol)?
-                ));
+                fields.push(event_field!("symbol", Symbol::from_addr(symbol)?.name()));
                 fields.push(event_field!("timestamp", timestamp));
                 Ok(())
             }),

@@ -1,14 +1,14 @@
 use anyhow::Result;
 
-use crate::cli::{dynamic::DynamicCommand, CliConfig};
 use crate::{
-    collector::Collector,
+    cli::{dynamic::DynamicCommand, CliConfig},
+    collect::Collector,
     core::{events::bpf::BpfEvents, probe::kernel},
 };
 
 const SKB_COLLECTOR: &str = "skb";
 
-pub(in crate::collector) struct SkbCollector {}
+pub(crate) struct SkbCollector {}
 
 impl Collector for SkbCollector {
     fn new() -> Result<SkbCollector> {
@@ -17,6 +17,10 @@ impl Collector for SkbCollector {
 
     fn name(&self) -> &'static str {
         SKB_COLLECTOR
+    }
+
+    fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
+        None
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {

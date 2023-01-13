@@ -6,18 +6,19 @@ use nix::time;
 use plain::Plain;
 
 use super::tracking_hook;
-use crate::event_field;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
-    collector::Collector,
+    collect::Collector,
     core::{
         events::{
             bpf::{BpfEventOwner, BpfEvents},
             EventField,
         },
-        probe::kernel::{self, Hook, ProbeType},
+        kernel::Symbol,
+        probe::kernel::{self, Hook},
         workaround::SendableMap,
     },
+    event_field,
 };
 
 const SKB_TRACKING_COLLECTOR: &str = "skb-tracking";
@@ -44,7 +45,7 @@ struct SkbTrackingEvent {
 unsafe impl Plain for SkbTrackingEvent {}
 
 #[derive(Default)]
-pub(in crate::collector) struct SkbTrackingCollector {
+pub(crate) struct SkbTrackingCollector {
     garbage_collector: Option<thread::JoinHandle<()>>,
 }
 
@@ -55,6 +56,10 @@ impl Collector for SkbTrackingCollector {
 
     fn name(&self) -> &'static str {
         SKB_TRACKING_COLLECTOR
+    }
+
+    fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
+        Some(vec!["struct sk_buff *"])
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
@@ -97,23 +102,17 @@ impl Collector for SkbTrackingCollector {
         self.init_tracking(kernel)?;
 
         // We'd like to track free reasons as well.
-        let res = kernel
-            .inspect
-            .is_symbol_traceable(&ProbeType::Kprobe, "kfree_skb_reason");
-        if let Err(e) = kernel.add_probe(ProbeType::Kprobe, "kfree_skb_reason") {
-            // Did the probe failed because of an error or because it wasn't
-            // available? In case we can't know, do not issue an error.
-            let mut is_error = false;
-            if let Some(traceable) = res {
-                if traceable {
-                    is_error = true;
+        let symbol = Symbol::from_name("kfree_skb_reason");
+        // Did the probe failed because of an error or because it wasn't
+        // available? In case we can't know, do not issue an error.
+        match symbol.is_ok() {
+            true => {
+                // Unwrap as we just checked the value is valid.
+                if let Err(e) = kernel.add_probe(symbol.unwrap().to_kprobe()?) {
+                    error!("Could not attach to kfree_skb_reason: {}", e);
                 }
             }
-
-            match is_error {
-                true => error!("Could not attach to kfree_skb_reason: {}", e),
-                false => info!("Skb drop reasons are not retrievable on this kernel"),
-            }
+            false => info!("Skb drop reasons are not retrievable on this kernel"),
         }
 
         Ok(())
@@ -178,30 +177,26 @@ impl SkbTrackingCollector {
 
         // For tracking skbs we only need the following two functions. First
         // track free events.
-        let key = kernel
-            .inspect
-            .get_ksym(&ProbeType::Kprobe, "skb_free_head")?
-            .to_ne_bytes();
+        let symbol = Symbol::from_name("skb_free_head")?;
+        let key = symbol.addr()?.to_ne_bytes();
         let cfg = TrackingConfig {
             free: 1,
             inv_head: 0,
         };
         let cfg = unsafe { plain::as_bytes(&cfg) };
         tracking_config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
-        kernel.add_probe(ProbeType::Kprobe, "skb_free_head")?;
+        kernel.add_probe(symbol.to_kprobe()?)?;
 
         // Then track invalidation head events.
-        let key = kernel
-            .inspect
-            .get_ksym(&ProbeType::Kprobe, "pskb_expand_head")?
-            .to_ne_bytes();
+        let symbol = Symbol::from_name("pskb_expand_head")?;
+        let key = symbol.addr()?.to_ne_bytes();
         let cfg = TrackingConfig {
             free: 0,
             inv_head: 1,
         };
         let cfg = unsafe { plain::as_bytes(&cfg) };
         tracking_config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
-        kernel.add_probe(ProbeType::Kprobe, "pskb_expand_head")?;
+        kernel.add_probe(symbol.to_kprobe()?)?;
 
         // Take care of gargabe collection of tracking info. This should be done
         // in the BPF part for most if not all skbs but we might lose some
