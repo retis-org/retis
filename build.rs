@@ -6,7 +6,7 @@ use std::{
 use libbpf_cargo::SkeletonBuilder;
 use memmap2::Mmap;
 
-static INCLUDE_PATHS: &[&str] = &[
+const INCLUDE_PATHS: &[&str] = &[
     "src/core/probe/kernel/bpf/include",
     "src/core/events/bpf/include",
 ];
