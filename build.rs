@@ -7,6 +7,7 @@ use std::{
 use libbpf_cargo::SkeletonBuilder;
 use memmap2::Mmap;
 
+const FILTER_INCLUDE_PATH: &str = "src/core/filters/packets/bpf/include";
 const BINDGEN_HEADER: &str = "src/core/bpf_sys/include/bpf-sys.h";
 const INCLUDE_PATHS: &[&str] = &[
     "src/core/probe/kernel/bpf/include",
@@ -93,14 +94,33 @@ fn gen_bindings() {
         .expect("Failed writing bindings");
 }
 
+fn build_stub(source: &str) {
+    let (out, name) = get_paths(source);
+    let output = format!("{}/{}.o", out.as_str(), name);
+
+    if let Err(e) = SkeletonBuilder::new()
+        .source(source)
+        .obj(output.as_str())
+        .clang_args(format!("-I{} ", FILTER_INCLUDE_PATH))
+        .build()
+    {
+        panic!("{}", e);
+    }
+
+    println!("cargo:rerun-if-changed={}", source);
+}
+
 fn main() {
     gen_bindings();
+
     // core::probe::kernel
     build_probe("src/core/probe/kernel/bpf/kprobe.bpf.c");
     build_probe("src/core/probe/kernel/bpf/raw_tracepoint.bpf.c");
 
     // module::skb_tracking
     build_hook("src/module/skb_tracking/bpf/tracking_hook.bpf.c");
+
+    build_stub("src/core/filters/packets/bpf/stub.bpf.c");
 
     for inc in INCLUDE_PATHS.iter() {
         println!("cargo:rerun-if-changed={}", inc);
