@@ -1,4 +1,5 @@
 use std::{
+    env,
     fs::{create_dir_all, File},
     io::Write,
 };
@@ -6,6 +7,7 @@ use std::{
 use libbpf_cargo::SkeletonBuilder;
 use memmap2::Mmap;
 
+const BINDGEN_HEADER: &str = "src/core/bpf_sys/include/bpf-sys.h";
 const INCLUDE_PATHS: &[&str] = &[
     "src/core/probe/kernel/bpf/include",
     "src/core/events/bpf/include",
@@ -77,7 +79,22 @@ fn build_probe(source: &str) {
     println!("cargo:rerun-if-changed={}", source);
 }
 
+fn gen_bindings() {
+    bindgen::Builder::default()
+        .header(BINDGEN_HEADER)
+        .default_enum_style(bindgen::EnumVariation::Rust {
+            non_exhaustive: false,
+        })
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .layout_tests(cfg!(feature = "test_bindgen_layout"))
+        .generate()
+        .expect("Failed during bindings generation")
+        .write_to_file(format!("{}/bpf_gen.rs", env::var("OUT_DIR").unwrap()))
+        .expect("Failed writing bindings");
+}
+
 fn main() {
+    gen_bindings();
     // core::probe::kernel
     build_probe("src/core/probe/kernel/bpf/kprobe.bpf.c");
     build_probe("src/core/probe/kernel/bpf/raw_tracepoint.bpf.c");
@@ -88,4 +105,6 @@ fn main() {
     for inc in INCLUDE_PATHS.iter() {
         println!("cargo:rerun-if-changed={}", inc);
     }
+
+    println!("cargo:rerun-if-changed={}", BINDGEN_HEADER);
 }

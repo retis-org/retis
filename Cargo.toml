@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
+test_bindgen_layout = []
 test_cap_bpf = []
 
 [dependencies]
@@ -21,5 +22,7 @@ serde_json = "1.0"
 simplelog = "0.12"
 
 [build-dependencies]
+bindgen = "0.63"
 libbpf-cargo = "0.13"
+libbpf-sys = "1.0"
 memmap2 = "0.5"
