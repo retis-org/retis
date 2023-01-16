@@ -7,4 +7,5 @@ pub(crate) mod bpf_sys;
 pub(crate) mod events;
 pub(crate) mod kernel;
 pub(crate) mod probe;
+pub(crate) mod user;
 pub(crate) mod workaround;

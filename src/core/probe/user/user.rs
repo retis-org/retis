@@ -9,7 +9,7 @@ use crate::core::{
         bpf::{BpfEventOwner, BpfEvents},
         EventField,
     },
-    probe::user::proc::Process,
+    user::proc::Process,
 };
 use crate::event_field;
 

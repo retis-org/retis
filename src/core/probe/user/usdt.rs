@@ -59,7 +59,7 @@ impl ProbeBuilder for UsdtBuilder {
 mod tests {
     use super::*;
 
-    use crate::core::probe::user::{proc::Process, UsdtProbe};
+    use crate::core::{probe::user::UsdtProbe, user::proc::Process};
 
     use ::probe::probe as define_usdt;
 

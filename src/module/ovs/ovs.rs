@@ -6,10 +6,8 @@ use crate::{
     collect::Collector,
     core::{
         events::bpf::BpfEvents,
-        probe::{
-            user::{proc::Process, UsdtProbe},
-            Hook, Probe, ProbeManager,
-        },
+        probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
+        user::proc::Process,
     },
 };
 
