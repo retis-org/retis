@@ -196,17 +196,69 @@ impl fmt::Display for UsdtNote {
     }
 }
 
-/// Object that represets one running processes to which probes can be attached.
+/// Object that represents a binary (library or executable) that might have USDT probes.
 #[derive(Debug)]
-pub(crate) struct Process {
-    /// Process ID.
-    pid: i32,
+pub(crate) struct Binary {
     /// The path of the program.
     path: PathBuf,
     /// USDT information
     usdt_info: Option<UsdtInfo>,
-    /// Loaded address
-    loaded_addr: u64,
+    /// Address where the binary is loaded within a process address space.
+    addr: Option<u64>,
+}
+
+impl Binary {
+    /// Create a new (unloaded) Binary object.
+    pub(crate) fn new(path: PathBuf) -> Result<Binary> {
+        let usdt_info = match UsdtInfo::new(&path) {
+            Ok(usdt) => Some(usdt),
+            Err(e) => {
+                warn!("Failed to load symbols from path: {:?}: {:?}", path, e);
+                None
+            }
+        };
+        Ok(Binary {
+            path,
+            usdt_info,
+            addr: None,
+        })
+    }
+
+    /// Create a new loaded Binary object.
+    pub(crate) fn new_loaded(path: PathBuf, addr: u64) -> Result<Binary> {
+        let mut binary = Binary::new(path)?;
+        binary.addr = Some(addr);
+        Ok(binary)
+    }
+
+    /// Returns the USDT note associated with a target. Targets are specified as "provider::name".
+    pub(crate) fn get_note(&self, target: &str) -> Result<Option<&UsdtNote>> {
+        match &self.usdt_info {
+            Some(info) => info.get_note(target),
+            None => Ok(None),
+        }
+    }
+
+    /// Retrieves the Usdt note information whose address matches the given offset.
+    pub(crate) fn get_note_from_offset(&self, addr: u64) -> Result<Option<&UsdtNote>> {
+        match &self.usdt_info {
+            Some(info) => info.get_note_from_offset(addr),
+            None => Ok(None),
+        }
+    }
+}
+
+/// Object that represents one running process to which probes can be attached.
+/// It allows clients to query the existence of USDT probes regardless of whether they might
+/// be defined in the process' binary or in it's share libraries.
+#[derive(Debug)]
+pub(crate) struct Process {
+    /// Process ID.
+    pid: i32,
+    /// Executable information.
+    exec: Binary,
+    /// Shared libraries.
+    libs: Vec<Binary>,
 }
 
 impl Process {
@@ -230,28 +282,36 @@ impl Process {
     }
 
     fn new(pid: i32, path: PathBuf) -> Result<Process> {
-        let usdt_info = match UsdtInfo::new(&path) {
-            Ok(usdt) => Some(usdt),
-            Err(e) => {
-                warn!(
-                    "Failed to load symbols from binary path: {:?}: {:?}",
-                    path, e
-                );
-                None
+        if pid == PID_ALL {
+            return Ok(Process {
+                pid,
+                exec: Binary::new(path)?,
+                libs: Vec::new(),
+            });
+        }
+
+        let mut maps = get_process_maps(pid)?;
+        // Get the binary address from the first entry in the map.
+        let bin_addr = maps
+            .get(0)
+            .ok_or_else(|| anyhow!("Failed to get process maps"))?
+            .addr_start;
+
+        let mut libs = Vec::new();
+
+        // We're only interested on the map first entry of each shared library.
+        maps.dedup_by(|a, b| a.path.eq(&b.path));
+        for map in maps.iter().filter(|m| m.is_file()) {
+            let libpath = PathBuf::from(&map.path);
+            // Skip the executable
+            if path.eq(&libpath) {
+                continue;
             }
-        };
+            libs.push(Binary::new_loaded(libpath, map.addr_start)?);
+        }
 
-        let loaded_addr = match pid {
-            PID_ALL => 0,
-            pid => get_loaded_addr(pid)?,
-        };
-
-        Ok(Process {
-            pid,
-            path,
-            usdt_info,
-            loaded_addr,
-        })
+        let exec = Binary::new_loaded(path, bin_addr)?;
+        Ok(Process { pid, exec, libs })
     }
 
     /// Create a new Process object with a specific cmd.
@@ -302,58 +362,110 @@ impl Process {
         Process::new(PID_ALL, path)
     }
 
-    /// Checks if a symbol (for uprobes) or "provider::name" identifier (for USDT) is traceable.
-    pub(crate) fn usdt_info(&self) -> Option<&UsdtInfo> {
-        self.usdt_info.as_ref()
-    }
-
     pub(crate) fn pid(&self) -> i32 {
         self.pid
     }
 
     pub(crate) fn path(&self) -> &PathBuf {
-        &self.path
+        &self.exec.path
     }
 
-    /// Gets the runtime information of a symbol address
-    pub(crate) fn get_symbol(&self, symbol: u64) -> Result<String> {
-        let usdt = self
-            .usdt_info
-            .as_ref()
-            .ok_or_else(|| anyhow!("No USDT information available"))?;
-        // Calculate the offset of the symbol.
-        let offset = symbol - self.loaded_addr;
+    /// Gets the runtime USDT information of a symbol.
+    pub(crate) fn get_note_from_symbol(&self, symbol: u64) -> Result<Option<&UsdtNote>> {
+        // Find in the executable.
+        if let Some(addr) = self.exec.addr {
+            if let Some(note) = self.exec.get_note_from_offset(symbol - addr)? {
+                return Ok(Some(note));
+            }
+        }
 
-        let note = usdt
-            .get_note_from_offset(offset)?
-            .ok_or_else(|| anyhow!("Symbol not found"))?;
-        Ok(format!("{}::{}", note.provider, note.name))
+        for lib in self.libs.iter() {
+            if let Some(addr) = lib.addr {
+                if let Some(note) = lib.get_note_from_offset(symbol - addr)? {
+                    return Ok(Some(note));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Returns the USDT note and path associated with a target. Targets are specified as "provider::name".
+    pub(crate) fn get_note(&self, target: &str) -> Result<Option<(&PathBuf, &UsdtNote)>> {
+        // Find in the executable.
+        if let Some(note) = self.exec.get_note(target)? {
+            return Ok(Some((&self.exec.path, note)));
+        }
+
+        // Find in libraries.
+        for lib in self.libs.iter() {
+            if let Some(note) = lib.get_note(target)? {
+                return Ok(Some((&lib.path, note)));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Determines whether a target specified as "provider::name" is a valid USDT.
+    pub(crate) fn is_usdt(&self, target: &str) -> Result<bool> {
+        Ok(self.get_note(target)?.is_some())
     }
 }
 
-/// Returns the virtual address where the program is loaded.
-fn get_loaded_addr(pid: i32) -> Result<u64> {
+#[derive(Debug)]
+struct ProcessMap {
+    addr_start: u64,
+    addr_end: u64,
+    perm: String,
+    offset: u64,
+    inode: u64,
+    path: String,
+}
+
+impl ProcessMap {
+    /// Returns a ProcessMap object from a string that has the following cannonical format:
+    /// 5594f8dce000-5594f8dd7000 r--p 00000000 00:1f 3526003                    /usr/bin/kitty
+    fn from_string(mapstr: String) -> Result<ProcessMap> {
+        let parts: Vec<&str> = mapstr.split_whitespace().collect();
+        if parts.len() < 5 {
+            bail!("Invalid map string format {}", mapstr);
+        }
+        let addr_parts: Vec<&str> = parts[0].split('-').collect();
+        if addr_parts.len() != 2 {
+            bail!("Invalid map string format {}", mapstr);
+        }
+
+        Ok(ProcessMap {
+            addr_start: u64::from_str_radix(addr_parts[0], 16)?,
+            addr_end: u64::from_str_radix(addr_parts[1], 16)?,
+            perm: parts[1].to_owned(),
+            offset: u64::from_str_radix(parts[2], 16)?,
+            inode: parts[4].parse::<u64>()?,
+            path: match parts.get(5) {
+                Some(val) => val.to_string(),
+                None => String::default(),
+            },
+        })
+    }
+
+    /// Returns if the map is backed by a file.
+    fn is_file(&self) -> bool {
+        !((self.path.starts_with('[') && self.path.ends_with(']')) || self.path.is_empty())
+    }
+}
+
+/// Returns the list of ProcessMaps of a given pid.
+fn get_process_maps(pid: i32) -> Result<Vec<ProcessMap>> {
+    let mut maps = Vec::new();
     // Open /proc/{pid}/maps.
     let maps_file = PathBuf::from("/proc").join(pid.to_string()).join("maps");
     if !maps_file.exists() {
         bail!("Failed to find process maps");
     }
     let file = fs::File::open(maps_file)?;
-
-    // We only need to read and parse the first line. The format of the map is:
-    // 55f9dd85c000-55f9dd85e000 r--p 00000000 00:1f 793986                     /usr/bin/kitty
-    let first = BufReader::new(file)
-        .lines()
-        .next()
-        .ok_or_else(|| anyhow!("Failed to read maps files"))??;
-    u64::from_str_radix(
-        first
-            .split('-')
-            .next()
-            .ok_or_else(|| anyhow!("Failed to parse map entry: {}", first))?,
-        16,
-    )
-    .map_err(|e| anyhow!("Failed to parse map entry: {}", e))
+    for line in BufReader::new(file).lines() {
+        maps.push(ProcessMap::from_string(line?)?);
+    }
+    Ok(maps)
 }
 
 #[cfg(test)]
@@ -411,23 +523,37 @@ mod tests {
         probe!(test_provider, test_function, 1);
 
         let p = Process::from_pid(std::process::id() as i32)?;
-        let usdt = p.usdt_info();
-        assert!(usdt.is_some());
-        let usdt = usdt.unwrap();
-        let traceable = usdt.is_usdt("test_provider::test_function");
+        let traceable = p.is_usdt("test_provider::test_function");
         assert!(traceable.is_ok() && traceable.unwrap());
-        let traceable = usdt.is_usdt("foo::bar");
+        let traceable = p.is_usdt("foo::bar");
         assert!(traceable.is_ok() && !traceable.unwrap());
 
-        assert!(!Process::all("/bin/true")?
-            .usdt_info()
-            .expect("usdt must exist")
-            .is_usdt("func::bar")?);
+        assert!(!Process::all("/bin/true")?.is_usdt("func::bar")?);
         assert!(Process::from_pid(std::process::id() as i32)?
-            .usdt_info()
-            .expect("usdt must exist")
             .is_usdt("wrong_format")
             .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn shared_libs() -> Result<()> {
+        let p = Process::from_pid(std::process::id() as i32)?;
+        assert!(!p.libs.is_empty()); // At least ld should be listed.
+        for lib in p.libs.iter().as_ref() {
+            for note in lib
+                .usdt_info
+                .as_ref()
+                .expect("should have valid USDT info")
+                .notes
+                .iter()
+                .as_ref()
+            {
+                // All available notes should be available at from the Program.
+                let name = format!("{}::{}", note.provider, note.name);
+                let traceable = p.is_usdt(name.as_str());
+                assert!(traceable.is_ok() && traceable.unwrap());
+            }
+        }
         Ok(())
     }
 }

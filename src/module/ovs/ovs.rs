@@ -40,16 +40,14 @@ impl Collector for OvsCollector {
     ) -> Result<()> {
         let ovs = Process::from_cmd("ovs-vswitchd")?;
 
-        match ovs.usdt_info() {
-            None => bail!("USDTs not enabled on OVS"),
-            Some(info) => {
-                if !info.is_usdt("main::run_start")? {
-                    bail!("main loop USDT not found");
-                }
-            }
+        if !ovs.is_usdt("main::run_start")? {
+            bail!("main loop USDT not found");
         }
 
-        let main_probe = Probe::Usdt(UsdtProbe::new(&ovs, "main::run_start")?);
+        let main_probe = Probe::Usdt(UsdtProbe::new(
+            &ovs,
+            "dpif_netlink_operate__::op_flow_execute",
+        )?);
         probes.register_hook_to(Hook::from(main_hook::DATA), main_probe)?;
 
         Ok(())

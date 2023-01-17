@@ -31,9 +31,7 @@ pub(crate) struct UsdtProbe {
 impl UsdtProbe {
     /// Return a new UsdtProbe.
     pub(crate) fn new(proc: &Process, target: &str) -> Result<Self> {
-        let note = proc
-            .usdt_info()
-            .ok_or_else(|| anyhow!("No USDT information available"))?
+        let (path, note) = proc
             .get_note(target)?
             .ok_or_else(|| anyhow!("Target not found"))?;
 
@@ -41,7 +39,7 @@ impl UsdtProbe {
             provider: note.provider.to_owned(),
             name: note.name.to_owned(),
             ksym: note.addr,
-            path: proc.path().to_owned(),
+            path: path.to_owned(),
             pid: proc.pid(),
         })
     }
@@ -97,9 +95,11 @@ pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
             }
             .ok_or_else(|| anyhow!("Failed to retrieve process information"))?;
 
-            let sym_str = proc.get_symbol(symbol)?;
+            let note = proc
+                .get_note_from_symbol(symbol)?
+                .ok_or_else(|| anyhow!("Failed to get symbol information"))?;
 
-            fields.push(event_field!("symbol", sym_str));
+            fields.push(event_field!("symbol", format!("{}", note)));
             fields.push(event_field!("ip", symbol));
             fields.push(event_field!(
                 "path",
