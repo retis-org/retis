@@ -15,7 +15,7 @@ struct tracking_config {
 	u8 free;
 	/* Function is invalidating the head of skbs */
 	u8 inv_head;
-};
+} __attribute__((packed));
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, PROBE_MAX);

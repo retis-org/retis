@@ -241,7 +241,7 @@ impl SkbTrackingCollector {
 }
 
 // Please keep in sync with its BPF counterpart in bpf/tracking_hook.ebpf.c
-#[repr(C)]
+#[repr(C, packed)]
 struct TrackingConfig {
     free: u8,
     inv_head: u8,
@@ -251,7 +251,7 @@ unsafe impl Plain for TrackingConfig {}
 
 // Please keep in sync with its BPF counterpart in bpf/tracking_hook.ebpf.c
 #[derive(Default)]
-#[repr(C)]
+#[repr(C, packed)]
 struct TrackingInfo {
     timestamp: u64,
     last_seen: u64,

@@ -6,7 +6,7 @@ use crate::core::probe::PROBE_MAX;
 
 /// Per-probe parameter offsets; keep in sync with its BPF counterpart in
 /// bpf/include/common.h
-#[repr(C)]
+#[repr(C, packed)]
 pub(super) struct ProbeOffsets {
     pub(super) sk_buff: i8,
     pub(super) skb_drop_reason: i8,
@@ -29,7 +29,7 @@ impl Default for ProbeOffsets {
 /// Per-probe configuration; keep in sync with its BPF counterpart in
 /// bpf/include/common.h
 #[derive(Default)]
-#[repr(C)]
+#[repr(C, packed)]
 pub(crate) struct ProbeConfig {
     pub(super) offsets: ProbeOffsets,
 }
