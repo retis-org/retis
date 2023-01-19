@@ -24,6 +24,7 @@ pub(super) const SECTION_IPV4: u64 = 1;
 pub(super) const SECTION_IPV6: u64 = 2;
 pub(super) const SECTION_TCP: u64 = 3;
 pub(super) const SECTION_UDP: u64 = 4;
+pub(super) const SECTION_ICMP: u64 = 5;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -196,6 +197,29 @@ pub(super) fn unmarshal_udp(
     fields.push(event_field!("sport", u16::from_be(event.sport)));
     fields.push(event_field!("dport", u16::from_be(event.dport)));
     fields.push(event_field!("udp_len", u16::from_be(event.len)));
+
+    Ok(())
+}
+
+/// ICMP data retrieved from skbs.
+#[derive(Default)]
+#[repr(C, packed)]
+struct SkbIcmpEvent {
+    /// ICMP type.
+    r#type: u8,
+    /// ICMP sub-type.
+    code: u8,
+}
+unsafe impl Plain for SkbIcmpEvent {}
+
+pub(super) fn unmarshal_icmp(
+    raw_section: &BpfRawSection,
+    fields: &mut Vec<EventField>,
+) -> Result<()> {
+    let event = parse_raw_section::<SkbIcmpEvent>(raw_section)?;
+
+    fields.push(event_field!("icmp_type", event.r#type));
+    fields.push(event_field!("icmp_code", event.code));
 
     Ok(())
 }
