@@ -19,7 +19,7 @@ const SKB_COLLECTOR: &str = "skb";
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
-        value_parser=PossibleValuesParser::new(["all", "l2", "l3", "tcp", "udp", "icmp", "dev"]),
+        value_parser=PossibleValuesParser::new(["all", "l2", "l3", "tcp", "udp", "icmp", "dev", "ns"]),
         value_delimiter=',',
         default_value="l3,tcp,udp,icmp",
         help = "Comma separated list of data to collect from skbs"
@@ -65,6 +65,7 @@ impl Collector for SkbCollector {
                 "udp" => sections |= 1 << SECTION_UDP,
                 "icmp" => sections |= 1 << SECTION_ICMP,
                 "dev" => sections |= 1 << SECTION_DEV,
+                "ns" => sections |= 1 << SECTION_NS,
                 x => bail!("Unknown skb_collect value ({})", x),
             }
         }
@@ -81,6 +82,7 @@ impl Collector for SkbCollector {
                     SECTION_UDP => unmarshal_udp(raw_section, fields),
                     SECTION_ICMP => unmarshal_icmp(raw_section, fields),
                     SECTION_DEV => unmarshal_dev(raw_section, fields),
+                    SECTION_NS => unmarshal_ns(raw_section, fields),
                     _ => bail!("Unknown data type"),
                 },
             ),

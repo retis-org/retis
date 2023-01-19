@@ -29,6 +29,7 @@ pub(super) const SECTION_TCP: u64 = 3;
 pub(super) const SECTION_UDP: u64 = 4;
 pub(super) const SECTION_ICMP: u64 = 5;
 pub(super) const SECTION_DEV: u64 = 6;
+pub(super) const SECTION_NS: u64 = 7;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -259,5 +260,23 @@ pub(super) fn unmarshal_dev(
         fields.push(event_field!("rx_ifindex", event.iif));
     }
 
+    Ok(())
+}
+
+/// Net namespace information retrieved from skbs.
+#[derive(Default)]
+#[repr(C, packed)]
+struct SkbNsEvent {
+    /// Net namespace id.
+    netns: u32,
+}
+unsafe impl Plain for SkbNsEvent {}
+
+pub(super) fn unmarshal_ns(
+    raw_section: &BpfRawSection,
+    fields: &mut Vec<EventField>,
+) -> Result<()> {
+    let event = parse_raw_section::<SkbNsEvent>(raw_section)?;
+    fields.push(event_field!("netns", event.netns));
     Ok(())
 }

@@ -17,6 +17,7 @@
 #define COLLECT_UDP		4
 #define COLLECT_ICMP		5
 #define COLLECT_DEV		6
+#define COLLECT_NS		7
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -76,6 +77,9 @@ struct skb_netdev_event {
 	u8 dev_name[IFNAMSIZ];
 	u32 ifindex;
 	u32 iif;
+} __attribute__((packed));
+struct skb_netns_event {
+	u32 netns;
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
@@ -251,6 +255,33 @@ static __always_inline int process_skb(struct trace_context *ctx,
 		e->iif = BPF_CORE_READ(skb, skb_iif);
 	}
 
+	if (cfg->sections & BIT(COLLECT_NS)) {
+		struct skb_netns_event *e;
+		u32 netns;
+
+		/* If the network device is initialized in the skb, use it to
+		 * get the network namespace; otherwise try getting the network
+		 * namespace from the skb associated socket.
+		 */
+		if (dev) {
+			netns = BPF_CORE_READ(dev, nd_net.net, ns.inum);
+		} else {
+			struct sock *sk = BPF_CORE_READ(skb, sk);
+
+			if (!sk)
+				goto skip_netns;
+
+			netns = BPF_CORE_READ(sk, __sk_common.skc_net.net, ns.inum);
+		}
+
+		e = get_event_section(event, COLLECTOR_SKB, COLLECT_NS, sizeof(*e));
+		if (!e)
+			return 0;
+
+		e->netns = netns;
+	}
+
+skip_netns:
 	return process_skb_l2_l4(ctx, event, cfg, skb);
 }
 
