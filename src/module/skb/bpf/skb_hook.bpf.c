@@ -18,6 +18,7 @@
 #define COLLECT_ICMP		5
 #define COLLECT_DEV		6
 #define COLLECT_NS		7
+#define COLLECT_DATA_REF	8
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -80,6 +81,12 @@ struct skb_netdev_event {
 } __attribute__((packed));
 struct skb_netns_event {
 	u32 netns;
+} __attribute__((packed));
+struct skb_data_ref_event {
+	u8 cloned;
+	u8 fclone;
+	u8 users;
+	u8 dataref;
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
@@ -282,6 +289,23 @@ static __always_inline int process_skb(struct trace_context *ctx,
 	}
 
 skip_netns:
+	if (cfg->sections & BIT(COLLECT_DATA_REF)) {
+		unsigned char *head;
+		struct skb_data_ref_event *e =
+			get_event_section(event, COLLECTOR_SKB,
+					  COLLECT_DATA_REF, sizeof(*e));
+		if (!e)
+			return 0;
+
+		e->cloned = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, cloned);
+		e->fclone = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, fclone);
+		e->users = (u8)BPF_CORE_READ(skb, users.refs.counter);
+
+		head = BPF_CORE_READ(skb, head);
+		si = (struct skb_shared_info *)(BPF_CORE_READ(skb, end) + head);
+		e->dataref = (u8)BPF_CORE_READ(si, dataref.counter);
+	}
+
 	return process_skb_l2_l4(ctx, event, cfg, skb);
 }
 

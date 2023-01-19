@@ -30,6 +30,7 @@ pub(super) const SECTION_UDP: u64 = 4;
 pub(super) const SECTION_ICMP: u64 = 5;
 pub(super) const SECTION_DEV: u64 = 6;
 pub(super) const SECTION_NS: u64 = 7;
+pub(super) const SECTION_DATA_REF: u64 = 8;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -278,5 +279,34 @@ pub(super) fn unmarshal_ns(
 ) -> Result<()> {
     let event = parse_raw_section::<SkbNsEvent>(raw_section)?;
     fields.push(event_field!("netns", event.netns));
+    Ok(())
+}
+
+/// Data & refcount information retrieved from skbs.
+#[derive(Default)]
+#[repr(C, packed)]
+struct SkbDataRefEvent {
+    /// Is the skb a clone?
+    cloned: u8,
+    /// Is the skb a fast clone?
+    fclone: u8,
+    /// Users count.
+    users: u8,
+    /// Data refcount.
+    dataref: u8,
+}
+unsafe impl Plain for SkbDataRefEvent {}
+
+pub(super) fn unmarshal_data_ref(
+    raw_section: &BpfRawSection,
+    fields: &mut Vec<EventField>,
+) -> Result<()> {
+    let event = parse_raw_section::<SkbDataRefEvent>(raw_section)?;
+
+    fields.push(event_field!("cloned", event.cloned));
+    fields.push(event_field!("fclone", event.fclone));
+    fields.push(event_field!("users", event.users));
+    fields.push(event_field!("dataref", event.dataref));
+
     Ok(())
 }
