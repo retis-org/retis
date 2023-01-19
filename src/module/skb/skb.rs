@@ -19,9 +19,9 @@ const SKB_COLLECTOR: &str = "skb";
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
-        value_parser=PossibleValuesParser::new(["all", "l2"]),
+        value_parser=PossibleValuesParser::new(["all", "l2", "l3"]),
         value_delimiter=',',
-        default_value="",
+        default_value="l3",
         help = "Comma separated list of data to collect from skbs"
     )]
     skb_sections: Vec<String>,
@@ -60,6 +60,7 @@ impl Collector for SkbCollector {
             match category.as_str() {
                 "all" => sections |= !0_u64,
                 "l2" => sections |= 1 << SECTION_L2,
+                "l3" => sections |= 1 << SECTION_IPV4 | 1 << SECTION_IPV6,
                 x => bail!("Unknown skb_collect value ({})", x),
             }
         }
@@ -70,6 +71,8 @@ impl Collector for SkbCollector {
             Box::new(
                 |raw_section, fields, _| match raw_section.header.data_type as u64 {
                     SECTION_L2 => unmarshal_l2(raw_section, fields),
+                    SECTION_IPV4 => unmarshal_ipv4(raw_section, fields),
+                    SECTION_IPV6 => unmarshal_ipv6(raw_section, fields),
                     _ => bail!("Unknown data type"),
                 },
             ),

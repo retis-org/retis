@@ -11,6 +11,8 @@
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
 #define COLLECT_L2		0
+#define COLLECT_IPV4		1
+#define COLLECT_IPV6		2
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -33,6 +35,18 @@ struct skb_l2_event {
 	u8 dst[6];
 	u8 src[6];
 	u16 etype;
+} __attribute__((packed));
+struct skb_ipv4_event {
+	u32 src;
+	u32 dst;
+	u16 len;
+	u8 protocol;
+} __attribute__((packed));
+struct skb_ipv6_event {
+	u128 src;
+	u128 dst;
+	u16 len;
+	u8 protocol;
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
@@ -71,6 +85,57 @@ static __always_inline int process_skb_l2_l4(struct trace_context *ctx,
 		}
 
 		e->etype = etype;
+	}
+
+	/* L3 */
+
+	/* We only support IPv4/IPv6. */
+	if (etype != bpf_ntohs(0x800) && etype != bpf_ntohs(0x86dd))
+		return 0;
+
+	network = BPF_CORE_READ(skb, network_header);
+	if (!network || network == mac || network == (u16)~0U)
+		return 0;
+
+	bpf_probe_read_kernel(&ip_version, sizeof(ip_version), head + network);
+	ip_version >>= 4;
+
+	if (ip_version == 4) {
+		struct iphdr *ip4 = (struct iphdr *)(head + network);
+
+		bpf_probe_read_kernel(&protocol, sizeof(protocol), &ip4->protocol);
+
+		if (cfg->sections & BIT(COLLECT_IPV4)) {
+			struct skb_ipv4_event *e =
+				get_event_section(event, COLLECTOR_SKB,
+						  COLLECT_IPV4, sizeof(*e));
+			if (!e)
+				return 0;
+
+			e->protocol = protocol;
+			bpf_probe_read_kernel(&e->src, sizeof(e->src), &ip4->saddr);
+			bpf_probe_read_kernel(&e->dst, sizeof(e->dst), &ip4->daddr);
+			bpf_probe_read_kernel(&e->len, sizeof(e->len), &ip4->tot_len);
+		}
+	} else if (ip_version == 6) {
+		struct ipv6hdr *ip6 = (struct ipv6hdr *)(head + network);
+
+		bpf_probe_read_kernel(&protocol, sizeof(protocol), &ip6->nexthdr);
+
+		if (cfg->sections & BIT(COLLECT_IPV6)) {
+			struct skb_ipv6_event *e =
+				get_event_section(event, COLLECTOR_SKB,
+						  COLLECT_IPV6, sizeof(*e));
+			if (!e)
+				return 0;
+
+			e->protocol = protocol;
+			bpf_probe_read_kernel(&e->src, sizeof(e->src), &ip6->saddr);
+			bpf_probe_read_kernel(&e->dst, sizeof(e->dst), &ip6->daddr);
+			bpf_probe_read_kernel(&e->len, sizeof(e->len), &ip6->payload_len);
+		}
+	} else {
+		return 0;
 	}
 
 	return 0;
