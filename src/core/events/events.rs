@@ -174,8 +174,12 @@ macro_rules! event_field_type {
 }
 
 // Common types definition.
+event_field_type!(u8);
+event_field_type!(u16);
 event_field_type!(u32);
 event_field_type!(u64);
+event_field_type!(i8);
+event_field_type!(i16);
 event_field_type!(i32);
 event_field_type!(i64);
 event_field_type!(String);
