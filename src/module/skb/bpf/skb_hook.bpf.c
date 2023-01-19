@@ -13,6 +13,8 @@
 #define COLLECT_L2		0
 #define COLLECT_IPV4		1
 #define COLLECT_IPV6		2
+#define COLLECT_TCP		3
+#define COLLECT_UDP		4
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -47,6 +49,21 @@ struct skb_ipv6_event {
 	u128 dst;
 	u16 len;
 	u8 protocol;
+} __attribute__((packed));
+struct skb_tcp_event {
+	u16 sport;
+	u16 dport;
+	u32 seq;
+	u32 ack_seq;
+	u16 window;
+	/* TCP flags: fin, syn, rst, psh, ack, urg, ece, cwr. */
+	u8 flags;
+	u8 doff;
+} __attribute__((packed));
+struct skb_udp_event {
+	u16 sport;
+	u16 dport;
+	u16 len;
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
@@ -136,6 +153,50 @@ static __always_inline int process_skb_l2_l4(struct trace_context *ctx,
 		}
 	} else {
 		return 0;
+	}
+
+	/* L4 */
+
+	transport = BPF_CORE_READ(skb, transport_header);
+	if (!transport || transport == mac || transport == network ||
+	    transport == (u16)~0U)
+		return 0;
+
+	if (protocol == IPPROTO_TCP && cfg->sections & BIT(COLLECT_TCP)) {
+		struct tcphdr *tcp = (struct tcphdr *)(head + transport);
+		struct skb_tcp_event *e =
+			get_event_section(event, COLLECTOR_SKB, COLLECT_TCP,
+					  sizeof(*e));
+		if (!e)
+			return 0;
+
+		bpf_probe_read_kernel(&e->sport, sizeof(e->sport), &tcp->source);
+		bpf_probe_read_kernel(&e->dport, sizeof(e->dport), &tcp->dest);
+		bpf_probe_read_kernel(&e->seq, sizeof(e->seq), &tcp->seq);
+		bpf_probe_read_kernel(&e->ack_seq, sizeof(e->ack_seq), &tcp->ack_seq);
+		bpf_probe_read_kernel(&e->window, sizeof(e->window), &tcp->window);
+
+		e->flags = (u8)BPF_CORE_READ_BITFIELD_PROBED(tcp, fin);
+		e->flags |= (u8)BPF_CORE_READ_BITFIELD_PROBED(tcp, syn) << 1;
+		e->flags |= (u8)BPF_CORE_READ_BITFIELD_PROBED(tcp, rst) << 2;
+		e->flags |= (u8)BPF_CORE_READ_BITFIELD_PROBED(tcp, psh) << 3;
+		e->flags |= (u8)BPF_CORE_READ_BITFIELD_PROBED(tcp, ack) << 4;
+		e->flags |= (u8)BPF_CORE_READ_BITFIELD_PROBED(tcp, urg) << 5;
+		e->flags |= (u8)BPF_CORE_READ_BITFIELD_PROBED(tcp, ece) << 6;
+		e->flags |= (u8)BPF_CORE_READ_BITFIELD_PROBED(tcp, cwr) << 7;
+
+		e->doff = (u8)BPF_CORE_READ_BITFIELD_PROBED(tcp, doff);
+	} else if (protocol == IPPROTO_UDP && cfg->sections & BIT(COLLECT_UDP)) {
+		struct udphdr *udp = (struct udphdr *)(head + transport);
+		struct skb_udp_event *e =
+			get_event_section(event, COLLECTOR_SKB, COLLECT_UDP,
+					  sizeof(*e));
+		if (!e)
+			return 0;
+
+		bpf_probe_read_kernel(&e->sport, sizeof(e->sport), &udp->source);
+		bpf_probe_read_kernel(&e->dport, sizeof(e->dport), &udp->dest);
+		bpf_probe_read_kernel(&e->len, sizeof(e->len), &udp->len);
 	}
 
 	return 0;

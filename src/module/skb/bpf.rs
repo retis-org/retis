@@ -22,6 +22,8 @@ use crate::{
 pub(super) const SECTION_L2: u64 = 0;
 pub(super) const SECTION_IPV4: u64 = 1;
 pub(super) const SECTION_IPV6: u64 = 2;
+pub(super) const SECTION_TCP: u64 = 3;
+pub(super) const SECTION_UDP: u64 = 4;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -131,6 +133,69 @@ pub(super) fn unmarshal_ipv6(
     fields.push(event_field!("ip_version", 6));
     fields.push(event_field!("l3_len", u16::from_be(event.len)));
     fields.push(event_field!("protocol", event.protocol));
+
+    Ok(())
+}
+
+/// TCP data retrieved from skbs.
+#[derive(Default)]
+#[repr(C, packed)]
+struct SkbTcpEvent {
+    /// Source port. Stored in network order.
+    sport: u16,
+    /// Destination port. Stored in network order.
+    dport: u16,
+    /// Sequence number. Stored in network order.
+    seq: u32,
+    /// Ack sequence number. Stored in network order.
+    ack_seq: u32,
+    /// TCP window. Stored in network order.
+    window: u16,
+    /// TCP flags (from low to high): fin, syn, rst, psh, ack, urg, ece, cwr.
+    flags: u8,
+    /// TCP data offset: size of the TCP header in 32-bit words.
+    doff: u8,
+}
+unsafe impl Plain for SkbTcpEvent {}
+
+pub(super) fn unmarshal_tcp(
+    raw_section: &BpfRawSection,
+    fields: &mut Vec<EventField>,
+) -> Result<()> {
+    let event = parse_raw_section::<SkbTcpEvent>(raw_section)?;
+
+    fields.push(event_field!("sport", u16::from_be(event.sport)));
+    fields.push(event_field!("dport", u16::from_be(event.dport)));
+    fields.push(event_field!("tcp_seq", u32::from_be(event.seq)));
+    fields.push(event_field!("tcp_ack_seq", u32::from_be(event.ack_seq)));
+    fields.push(event_field!("tcp_window", u16::from_be(event.window)));
+    fields.push(event_field!("tcp_flags", event.flags));
+
+    Ok(())
+}
+
+/// UDP data retrieved from skbs.
+#[derive(Default)]
+#[repr(C, packed)]
+struct SkbUdpEvent {
+    /// Source port. Stored in network order.
+    sport: u16,
+    /// Destination port. Stored in network order.
+    dport: u16,
+    /// Lenght: length in bytes of the UDP header and UDP data. Stored in network order.
+    len: u16,
+}
+unsafe impl Plain for SkbUdpEvent {}
+
+pub(super) fn unmarshal_udp(
+    raw_section: &BpfRawSection,
+    fields: &mut Vec<EventField>,
+) -> Result<()> {
+    let event = parse_raw_section::<SkbUdpEvent>(raw_section)?;
+
+    fields.push(event_field!("sport", u16::from_be(event.sport)));
+    fields.push(event_field!("dport", u16::from_be(event.dport)));
+    fields.push(event_field!("udp_len", u16::from_be(event.len)));
 
     Ok(())
 }
