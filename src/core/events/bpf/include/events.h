@@ -76,6 +76,19 @@ static __always_inline void *get_event_section(struct trace_raw_event *event,
 	return section;
 }
 
+/* Similar to get_event_section but initialize the section data to 0s. */
+static __always_inline void *get_event_zsection(struct trace_raw_event *event,
+						u8 owner, u8 data_type, const u16 size)
+{
+	void *section = get_event_section(event, owner, data_type, size);
+
+	if (!section)
+		return NULL;
+
+	__builtin_memset(section, 0, size);
+	return section;
+}
+
 struct common_event {
 	u64 timestamp;
 } __attribute__((packed));
