@@ -8,7 +8,7 @@
  *
  * Indexed in the tracking_config_map by the function ksym address.
  *
- * Please keep in sync with its Rust counterpart in collector::skb_tracking.
+ * Please keep in sync with its Rust counterpart in module::skb_tracking.
  */
 struct tracking_config {
 	/* Function is freeing skbs */
@@ -30,7 +30,7 @@ struct {
  * In order to uniquely identify skbs, the tuple (addr, timestamp) is used and
  * must be reported as part of all events (TODO).
  *
- * Please keep in sync with its Rust counterpart in collector::skb_tracking.
+ * Please keep in sync with its Rust counterpart in module::skb_tracking.
  */
 struct tracking_info {
 	/* When the skb was first seen */
