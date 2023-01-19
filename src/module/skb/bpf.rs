@@ -4,7 +4,10 @@
 //!
 //! Please keep this file in sync with its BPF counterpart in bpf/skb_hook.bpf.c
 
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr},
+    str,
+};
 
 use anyhow::Result;
 use plain::Plain;
@@ -25,6 +28,7 @@ pub(super) const SECTION_IPV6: u64 = 2;
 pub(super) const SECTION_TCP: u64 = 3;
 pub(super) const SECTION_UDP: u64 = 4;
 pub(super) const SECTION_ICMP: u64 = 5;
+pub(super) const SECTION_DEV: u64 = 6;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -220,6 +224,40 @@ pub(super) fn unmarshal_icmp(
 
     fields.push(event_field!("icmp_type", event.r#type));
     fields.push(event_field!("icmp_code", event.code));
+
+    Ok(())
+}
+
+/// Net device information retrieved from skbs.
+#[derive(Default)]
+#[repr(C, packed)]
+struct SkbDevEvent {
+    /// Net device name.
+    dev_name: [u8; 16],
+    /// Net device index.
+    ifindex: u32,
+    /// Original ifindex the packet arrived on.
+    iif: u32,
+}
+unsafe impl Plain for SkbDevEvent {}
+
+pub(super) fn unmarshal_dev(
+    raw_section: &BpfRawSection,
+    fields: &mut Vec<EventField>,
+) -> Result<()> {
+    let event = parse_raw_section::<SkbDevEvent>(raw_section)?;
+
+    let dev_name = str::from_utf8(&event.dev_name)?.trim_end_matches(char::from(0));
+    if !dev_name.is_empty() {
+        fields.push(event_field!("dev_name", dev_name.to_string()));
+    }
+
+    if event.ifindex > 0 {
+        fields.push(event_field!("ifindex", event.ifindex));
+    }
+    if event.iif > 0 {
+        fields.push(event_field!("rx_ifindex", event.iif));
+    }
 
     Ok(())
 }

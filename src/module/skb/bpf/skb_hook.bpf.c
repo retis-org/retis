@@ -16,6 +16,7 @@
 #define COLLECT_TCP		3
 #define COLLECT_UDP		4
 #define COLLECT_ICMP		5
+#define COLLECT_DEV		6
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -69,6 +70,12 @@ struct skb_udp_event {
 struct skb_icmp_event {
 	u8 type;
 	u8 code;
+} __attribute__((packed));
+struct skb_netdev_event {
+#define IFNAMSIZ	16
+	u8 dev_name[IFNAMSIZ];
+	u32 ifindex;
+	u32 iif;
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
@@ -229,6 +236,20 @@ static __always_inline int process_skb(struct trace_context *ctx,
 	cfg = bpf_map_lookup_elem(&skb_config_map, &key);
 	if (!cfg)
 		return 0;
+
+	dev = BPF_CORE_READ(skb, dev);
+
+	if (cfg->sections & BIT(COLLECT_DEV) && dev) {
+		struct skb_netdev_event *e =
+			get_event_section(event, COLLECTOR_SKB, COLLECT_DEV,
+					  sizeof(*e));
+		if (!e)
+			return 0;
+
+		bpf_probe_read(e->dev_name, IFNAMSIZ, dev->name);
+		e->ifindex = BPF_CORE_READ(dev, ifindex);
+		e->iif = BPF_CORE_READ(skb, skb_iif);
+	}
 
 	return process_skb_l2_l4(ctx, event, cfg, skb);
 }
