@@ -109,7 +109,7 @@ impl Group {
             .downcast_ref::<Collect>()
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
-        probe::common::set_ebpf_debug(collect.args()?.ebpf_debug.unwrap_or(false))?;
+        probe::common::set_ebpf_debug(collect.args()?.ebpf_debug)?;
         if collect.args()?.stack {
             self.probes.add_probe_opt(probe::ProbeOption::StackTrace);
         }

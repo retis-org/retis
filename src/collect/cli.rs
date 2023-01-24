@@ -2,18 +2,20 @@
 //!
 //! Collect is a dynamic CLI subcommand that allows collectors to register their arguments.
 
-use anyhow::Result;
 use std::any::Any;
 
-use clap::error::Error as ClapError;
-use clap::{builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command};
+use anyhow::Result;
+use clap::{
+    error::Error as ClapError,
+    {builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command},
+};
 
 use crate::cli::{dynamic::DynamicCommand, SubCommand};
 
 #[derive(Args, Debug, Default)]
 pub(crate) struct CollectArgs {
     #[arg(long, default_value = "false")]
-    pub(super) ebpf_debug: Option<bool>,
+    pub(super) ebpf_debug: bool,
     #[arg(
         long,
         default_value = "false",
