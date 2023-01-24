@@ -3,7 +3,6 @@ use std::fmt;
 use anyhow::{bail, Result};
 
 use super::inspect;
-use crate::core::probe::Probe;
 
 /// Kernel symbol representation. Only supports traceable symbols: events and
 /// functions.
@@ -173,24 +172,6 @@ impl Symbol {
     /// `function_parameter_offset()?.is_some()`.
     pub(crate) fn parameter_offset(&self, parameter_type: &str) -> Result<Option<u32>> {
         inspect::parameter_offset(self, parameter_type)
-    }
-
-    /// Convert the current symbol to a `Probe::Kprobe` for probing.
-    #[allow(clippy::wrong_self_convention)]
-    pub(crate) fn to_kprobe(self) -> Result<Probe> {
-        match self {
-            Symbol::Func(_) => Ok(Probe::Kprobe(self)),
-            Symbol::Event(_) => bail!("Symbol cannot be probed with a kprobe"),
-        }
-    }
-
-    /// Convert the current symbol to a `Probe::RawTracepoint` for probing.
-    #[allow(clippy::wrong_self_convention)]
-    pub(crate) fn to_raw_tracepoint(self) -> Result<Probe> {
-        match self {
-            Symbol::Event(_) => Ok(Probe::RawTracepoint(self)),
-            Symbol::Func(_) => bail!("Symbol cannot be probed with a raw tracepoint"),
-        }
     }
 }
 

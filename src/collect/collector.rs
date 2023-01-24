@@ -45,7 +45,7 @@ pub(crate) trait Collector {
     fn init(
         &mut self,
         cli: &CliConfig,
-        kernel: &mut probe::Kernel,
+        probes: &mut probe::ProbeManager,
         events: &mut BpfEvents,
     ) -> Result<()>;
     /// Start the group of events (non-probes).
@@ -56,19 +56,18 @@ pub(crate) trait Collector {
 /// group actions.
 pub(crate) struct Group {
     list: HashMap<String, Box<dyn Collector>>,
-    kernel: probe::Kernel,
+    probes: probe::ProbeManager,
     events: BpfEvents,
     known_kernel_types: HashSet<String>,
 }
 
 impl Group {
     fn new() -> Result<Group> {
-        let events = BpfEvents::new()?;
-        let kernel = probe::Kernel::new(&events)?;
-
+        let mut events = BpfEvents::new()?;
+        let probes = probe::ProbeManager::new(&mut events)?;
         Ok(Group {
             list: HashMap::new(),
-            kernel,
+            probes,
             events,
             known_kernel_types: HashSet::new(),
         })
@@ -115,7 +114,7 @@ impl Group {
                 .get_mut(name)
                 .ok_or_else(|| anyhow!("unknown collector: {}", &name))?;
 
-            if let Err(e) = c.init(cli, &mut self.kernel, &mut self.events) {
+            if let Err(e) = c.init(cli, &mut self.probes, &mut self.events) {
                 bail!("Could not initialize the {} collector: {}", c.name(), e);
             }
 
@@ -130,7 +129,7 @@ impl Group {
 
         // Setup user defined probes.
         for probe in collect.args()?.probes.iter() {
-            self.kernel.add_probe(self.parse_probe(probe)?)?;
+            self.probes.add_probe(self.parse_probe(probe)?)?;
         }
         Ok(())
     }
@@ -154,7 +153,7 @@ impl Group {
     /// retrieval will be kept in the group.
     pub(crate) fn start(&mut self, _: &CliConfig) -> Result<()> {
         self.events.start_polling()?;
-        self.kernel.attach()?;
+        self.probes.attach()?;
 
         for (_, c) in self.list.iter_mut() {
             if c.start().is_err() {
@@ -196,8 +195,8 @@ impl Group {
         }
 
         match type_str {
-            "kprobe" => symbol.to_kprobe(),
-            "tp" => symbol.to_raw_tracepoint(),
+            "kprobe" => Ok(Probe::kprobe(symbol)?),
+            "tp" => Ok(Probe::raw_tracepoint(symbol)?),
             x => bail!("Invalid TYPE {}. See the help.", x),
         }
     }
@@ -239,7 +238,12 @@ mod tests {
         fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
             Ok(())
         }
-        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel, _: &mut BpfEvents) -> Result<()> {
+        fn init(
+            &mut self,
+            _: &CliConfig,
+            _: &mut probe::ProbeManager,
+            _: &mut BpfEvents,
+        ) -> Result<()> {
             Ok(())
         }
         fn start(&mut self) -> Result<()> {
@@ -260,7 +264,12 @@ mod tests {
         fn register_cli(&self, _: &mut DynamicCommand) -> Result<()> {
             Ok(())
         }
-        fn init(&mut self, _: &CliConfig, _: &mut probe::Kernel, _: &mut BpfEvents) -> Result<()> {
+        fn init(
+            &mut self,
+            _: &CliConfig,
+            _: &mut probe::ProbeManager,
+            _: &mut BpfEvents,
+        ) -> Result<()> {
             bail!("Could not initialize")
         }
         fn start(&mut self) -> Result<()> {
@@ -303,10 +312,10 @@ mod tests {
         group.register(Box::new(DummyCollectorB::new()?))?;
 
         let mut events = BpfEvents::new()?;
-        let mut kernel = probe::Kernel::new(&events)?;
+        let mut mgr = probe::ProbeManager::new(&mut events)?;
 
-        assert!(dummy_a.init(&config, &mut kernel, &mut events).is_ok());
-        assert!(dummy_b.init(&config, &mut kernel, &mut events).is_err());
+        assert!(dummy_a.init(&config, &mut mgr, &mut events).is_ok());
+        assert!(dummy_b.init(&config, &mut mgr, &mut events).is_err());
         assert!(group.init(&config).is_ok());
         Ok(())
     }

@@ -2,6 +2,8 @@ use std::mem;
 
 use anyhow::Result;
 
+use crate::core::probe::PROBE_MAX;
+
 /// Per-probe parameter offsets; keep in sync with its BPF counterpart in
 /// bpf/include/common.h
 #[repr(C)]
@@ -28,7 +30,7 @@ impl Default for ProbeOffsets {
 /// bpf/include/common.h
 #[derive(Default)]
 #[repr(C)]
-pub(super) struct ProbeConfig {
+pub(crate) struct ProbeConfig {
     pub(super) offsets: ProbeOffsets,
 }
 
@@ -36,7 +38,7 @@ unsafe impl plain::Plain for ProbeConfig {}
 
 // When testing this isn't used as the config map is hidden.
 #[cfg_attr(test, allow(dead_code))]
-pub(super) fn init_config_map() -> Result<libbpf_rs::Map> {
+pub(crate) fn init_config_map() -> Result<libbpf_rs::Map> {
     let opts = libbpf_sys::bpf_map_create_opts {
         sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
         ..Default::default()
@@ -47,7 +49,7 @@ pub(super) fn init_config_map() -> Result<libbpf_rs::Map> {
         Some("config_map"),
         mem::size_of::<u64>() as u32,
         mem::size_of::<ProbeConfig>() as u32,
-        super::PROBE_MAX as u32,
+        PROBE_MAX as u32,
         &opts,
     )?)
 }

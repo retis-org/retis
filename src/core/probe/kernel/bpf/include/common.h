@@ -6,6 +6,11 @@
 
 #include "events.h"
 
+/* Kernel section of the event data. */
+struct kernel_event {
+	u64 symbol;
+} __attribute__((packed));
+
 /* Per-probe parameter offsets; keep in sync with its Rust counterpart in
  * core::probe::kernel::config. A value of -1 means the argument isn't
  * available. Please try to reuse the targeted object names.
@@ -160,6 +165,7 @@ static __always_inline int chain(struct trace_context *ctx)
 	struct trace_probe_config *cfg;
 	struct trace_raw_event *event;
 	struct common_event *e;
+	struct kernel_event *k;
 
 	cfg = bpf_map_lookup_elem(&config_map, &ctx->ksym);
 	if (!cfg)
@@ -177,8 +183,15 @@ static __always_inline int chain(struct trace_context *ctx)
 		return 0;
 	}
 
-	e->symbol = ctx->ksym;
 	e->timestamp = ctx->timestamp;
+
+	k = get_event_section(event, KERNEL, 1, sizeof(*k));
+	if (!k) {
+		discard_event(event);
+		return 0;
+	}
+
+	k->symbol = ctx->ksym;
 
 #define CALL_HOOK(x)		\
 	if (x < nhooks)		\
