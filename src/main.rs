@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use log::error;
 use simplelog::{Config, LevelFilter, SimpleLogger};
 
@@ -10,8 +10,16 @@ use cli::get_cli;
 use collect::get_collectors;
 
 fn main() -> Result<()> {
-    let _ = SimpleLogger::init(LevelFilter::Debug, Config::default());
     let mut cli = get_cli()?.build()?;
+
+    let log_level = match cli.main_config.log_level.as_str() {
+        "error" => LevelFilter::Error,
+        "warn" => LevelFilter::Warn,
+        "info" => LevelFilter::Info,
+        "debug" => LevelFilter::Debug,
+        x => bail!("Invalid log_level: {}", x),
+    };
+    let _ = SimpleLogger::init(log_level, Config::default());
 
     let command = cli.get_subcommand_mut()?;
     match command.name() {

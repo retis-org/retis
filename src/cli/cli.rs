@@ -7,6 +7,7 @@ use std::{any::Any, collections::HashMap, env, ffi::OsString, fmt::Debug};
 
 use anyhow::{anyhow, bail, Result};
 use clap::{
+    builder::PossibleValuesParser,
     error::Error as ClapError,
     {ArgMatches, Args, Command, FromArgMatches},
 };
@@ -74,8 +75,16 @@ impl Debug for dyn SubCommand {
 /// Trace packets on the Linux kernel
 ///
 /// retis is a tool for capturing networking-related events from the system using ebpf and analyzing them.
-#[derive(Args, Default, Debug)]
-pub(crate) struct MainConfig {}
+#[derive(Args, Debug, Default)]
+pub(crate) struct MainConfig {
+    #[arg(
+        long,
+        value_parser=PossibleValuesParser::new(["error", "warn", "info", "debug"]),
+        default_value = "info",
+        help = "Log level",
+    )]
+    pub(crate) log_level: String,
+}
 
 /// ThinCli handles the first (a.k.a "thin") round of Command Line Interface parsing.
 ///
