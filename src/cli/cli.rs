@@ -151,9 +151,14 @@ impl ThinCli {
             };
         }
 
+        // Get main config.
+        let mut main_config = MainConfig::default();
+        main_config.update_from_arg_matches(&matches)?;
+
         // A command was run, build the FullCli so we can parse it.
         Ok(FullCli {
             args,
+            main_config,
             command,
             subcommand: self
                 .subcommands
@@ -170,6 +175,7 @@ impl ThinCli {
 /// validation.
 #[derive(Debug)]
 pub(crate) struct FullCli {
+    pub(crate) main_config: MainConfig,
     args: Vec<OsString>,
     command: Command,
     subcommand: Box<dyn SubCommand>,
@@ -192,10 +198,6 @@ impl FullCli {
                 .unwrap_or_else(|e| e.exit()),
         };
 
-        // Get main config.
-        let mut main_config = MainConfig::default();
-        main_config.update_from_arg_matches(&matches)?;
-
         let (subcommand, matches) = matches
             .subcommand()
             .expect("full parsing did not find subcommand");
@@ -214,7 +216,7 @@ impl FullCli {
                 .unwrap_or_else(|e| e.exit()),
         }
         Ok(CliConfig {
-            main_config,
+            main_config: self.main_config,
             subcommand: self.subcommand,
         })
     }
