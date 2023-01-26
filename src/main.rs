@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use log::error;
-use simplelog::{Config, LevelFilter, SimpleLogger};
+use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
 mod cli;
 mod collect;
@@ -19,7 +19,12 @@ fn main() -> Result<()> {
         "debug" => LevelFilter::Debug,
         x => bail!("Invalid log_level: {}", x),
     };
-    let _ = SimpleLogger::init(log_level, Config::default());
+    TermLogger::init(
+        log_level,
+        Config::default(),
+        TerminalMode::Stderr, // Use stderr so logs do not conflict w/ other output.
+        ColorChoice::Auto,
+    )?;
 
     let command = cli.get_subcommand_mut()?;
     match command.name() {
