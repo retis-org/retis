@@ -25,14 +25,15 @@ fn main() -> Result<()> {
     match command.name() {
         "collect" => {
             let mut collectors = get_collectors()?;
+
             collectors.register_cli(command.dynamic_mut().unwrap())?;
             let config = cli.run()?;
+
             collectors.init(&config)?;
             collectors.start(&config)?;
-            loop {
-                let event = collectors.poll_event()?;
-                println!("{}", event.to_json());
-            }
+
+            // Starts a loop.
+            collectors.process(&config)?;
         }
         _ => {
             error!("not implemented");

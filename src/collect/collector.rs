@@ -1,13 +1,22 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
-use log::{info, warn};
+use log::{error, info, warn};
+use signal_hook::{consts::SIGINT, iterator::Signals};
 
-use super::cli::Collect;
+use super::{
+    cli::Collect,
+    output::{get_processors, JsonFormat},
+};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     core::{
-        events::{bpf::BpfEvents, Event},
+        events::bpf::BpfEvents,
         kernel::Symbol,
         probe::{self, Probe},
     },
@@ -150,11 +159,6 @@ impl Group {
         Ok(())
     }
 
-    /// Poll an event from the events channel. This is a blocking call.
-    pub(crate) fn poll_event(&self) -> Result<Event> {
-        self.events.poll()
-    }
-
     /// Start the event retrieval for all collectors in the group by calling
     /// their `start()` function. Collectors failing to start the event
     /// retrieval will be kept in the group.
@@ -167,7 +171,56 @@ impl Group {
                 warn!("Could not start '{}'", c.name());
             }
         }
+
         Ok(())
+    }
+
+    /// Starts the processing loop and block until we get a single SIGINT
+    /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
+    /// collector cmd loop.
+    pub(crate) fn process(&self, cli: &CliConfig) -> Result<()> {
+        let collect = cli
+            .subcommand
+            .as_any()
+            .downcast_ref::<Collect>()
+            .ok_or_else(|| anyhow!("wrong subcommand"))?;
+
+        // We use JSON format output for all events for now.
+        let mut json = JsonFormat::default();
+        let mut processors = get_processors(&mut json, collect.args()?)?;
+
+        let mut sigint = Signals::new([SIGINT])?;
+        let (txc, rxc) = mpsc::channel();
+
+        thread::spawn(move || {
+            // Only wait for a single SIGINT to let the user really interrupt us
+            // in case it's needed.
+            sigint.wait();
+            info!("Received SIGINT, terminating...");
+
+            if let Err(e) = txc.send(()) {
+                error!(
+                    "Failed to send message after receiving ctrl+c signal: {}",
+                    e
+                );
+            }
+        });
+
+        loop {
+            match self.events.poll(Some(Duration::from_secs(1)))? {
+                Some(event) => processors
+                    .iter_mut()
+                    .try_for_each(|p| p.process_one(&event))?,
+                None => continue,
+            }
+
+            // If we're interrupted, break the loop to allow nicely exiting.
+            if rxc.try_recv().is_ok() {
+                break;
+            }
+        }
+
+        processors.iter_mut().try_for_each(|p| p.flush())
     }
 
     /// Parse a user defined probe (through cli parameters) and extract its type and

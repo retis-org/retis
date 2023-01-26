@@ -2,7 +2,7 @@
 //!
 //! Collect is a dynamic CLI subcommand that allows collectors to register their arguments.
 
-use std::any::Any;
+use std::{any::Any, path::PathBuf};
 
 use anyhow::Result;
 use clap::{
@@ -44,6 +44,14 @@ Valid TYPEs:
 Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
     )]
     pub(super) probes: Vec<String>,
+    #[arg(short, long, help = "Write the events to a file rather than to sdout.")]
+    pub(super) out: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "Write the events to stdout even if --out is used.",
+        default_value = "false"
+    )]
+    pub(super) print: bool,
 }
 
 #[derive(Debug)]
