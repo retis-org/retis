@@ -3,6 +3,8 @@
 
 /* Defines the context passed to the packet filtering
  * facility. Includes both input and output.
+ * Keep in sync with its Rust counterpart in
+ * core::filters::packets::ebpf.
  */
 struct retis_filter_context {
 	/* Input */
@@ -10,6 +12,6 @@ struct retis_filter_context {
 	unsigned int len;	/* linear length. */
 	/* Output */
 	unsigned int ret;	/* outcome of the match (zero if miss). */
-};
+} __attribute__((packed));
 
 #endif
