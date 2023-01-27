@@ -79,7 +79,7 @@ pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
             fields.push(event_field!("pid", pid));
             fields.push(event_field!("tid", tid));
 
-            let pid_key = format!("user_proc_{}", pid);
+            let pid_key = format!("user_proc_{pid}");
             // Try to obtain the Process object from the Context.
             let proc = match cache.get(&pid_key) {
                 Some(val) => val.downcast_ref::<Process>(),
@@ -99,7 +99,7 @@ pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
                 .get_note_from_symbol(symbol)?
                 .ok_or_else(|| anyhow!("Failed to get symbol information"))?;
 
-            fields.push(event_field!("symbol", format!("{}", note)));
+            fields.push(event_field!("symbol", format!("{note}")));
             fields.push(event_field!("ip", symbol));
             fields.push(event_field!(
                 "path",

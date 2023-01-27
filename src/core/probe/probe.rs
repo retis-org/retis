@@ -52,9 +52,9 @@ impl Probe {
 impl fmt::Display for Probe {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Probe::Kprobe(symbol) => write!(f, "kprobe:{}", symbol),
-            Probe::RawTracepoint(symbol) => write!(f, "raw_tracepoint:{}", symbol),
-            Probe::Usdt(symbol) => write!(f, "usdt {}", symbol),
+            Probe::Kprobe(symbol) => write!(f, "kprobe:{symbol}"),
+            Probe::RawTracepoint(symbol) => write!(f, "raw_tracepoint:{symbol}"),
+            Probe::Usdt(symbol) => write!(f, "usdt {symbol}"),
         }
     }
 }
