@@ -17,7 +17,7 @@ use byteorder::BigEndian as Endian;
 #[cfg(target_endian = "little")]
 use byteorder::LittleEndian as Endian;
 use byteorder::ReadBytesExt;
-use elf::{endian::AnyEndian, note::Note, ElfBytes, ElfStream};
+use elf::{endian::AnyEndian, note::Note, ElfStream};
 use log::warn;
 
 /// Integer to represent all pids.
@@ -54,13 +54,11 @@ pub struct UsdtInfo {
 impl UsdtInfo {
     fn new(path: &PathBuf) -> Result<Self> {
         let mut notes = Vec::new();
-        // Load ELF header.
-        let file_data = std::fs::read(path)?;
-        let slice_data = file_data.as_slice();
-        let file = ElfBytes::<AnyEndian>::minimal_parse(slice_data)?;
+        let file = fs::File::open(path)?;
+        let mut elf = ElfStream::<AnyEndian, _>::open_stream(file)?;
 
         // Retrieve STAPSDT base section address.
-        let base_hdr = file.section_header_by_name(".stapsdt.base")?;
+        let base_hdr = elf.section_header_by_name(".stapsdt.base")?;
         if base_hdr.is_none() {
             // It's OK to not have a USDT header. Return an empty object to
             // differenciate it from a parsing error which should be fatal.
@@ -69,9 +67,10 @@ impl UsdtInfo {
         let base_addr = base_hdr.unwrap().sh_addr;
 
         // Retrieve STAPSDT notes section.
-        let notes_hdr = file.section_header_by_name(".note.stapsdt")?;
+        let notes_hdr = elf.section_header_by_name(".note.stapsdt")?;
         if let Some(notes_hdr) = notes_hdr {
-            let data: Vec<Note> = file.section_data_as_notes(&notes_hdr)?.collect();
+            let notes_hdr = *notes_hdr;
+            let data: Vec<Note> = elf.section_data_as_notes(&notes_hdr)?.collect();
 
             for note in data.iter() {
                 let note = match note {
