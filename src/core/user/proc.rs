@@ -17,7 +17,7 @@ use byteorder::BigEndian as Endian;
 #[cfg(target_endian = "little")]
 use byteorder::LittleEndian as Endian;
 use byteorder::ReadBytesExt;
-use elf::{endian::AnyEndian, note::Note, ElfBytes};
+use elf::{endian::AnyEndian, note::Note, ElfBytes, ElfStream};
 use log::warn;
 
 /// Integer to represent all pids.
@@ -302,12 +302,13 @@ impl Process {
         // We're only interested on the map first entry of each shared library.
         maps.dedup_by(|a, b| a.path.eq(&b.path));
         for map in maps.iter().filter(|m| m.is_file()) {
-            let libpath = PathBuf::from(&map.path);
-            // Skip the executable
-            if path.eq(&libpath) {
-                continue;
+            let path = PathBuf::from(&map.path);
+
+            // Check the path is one of a library as /proc/<pid>/maps contains
+            // all mapped files, e.g. /dev/zero.
+            if is_shared_library(path.as_path()) {
+                libs.push(Binary::new_loaded(path, map.addr_start)?);
             }
-            libs.push(Binary::new_loaded(libpath, map.addr_start)?);
         }
 
         let exec = Binary::new_loaded(path, bin_addr)?;
@@ -409,6 +410,35 @@ impl Process {
     pub(crate) fn is_usdt(&self, target: &str) -> Result<bool> {
         Ok(self.get_note(target)?.is_some())
     }
+}
+
+/// Check if a path is a shared library.
+///
+/// There are some difficulties in checking the above:
+/// - Shared libary can be in various paths (default paths, /etc/ld.so.conf.d/,
+///   LD_LIBRARY_PATH).
+/// - They do not necessarily end in .so (can be lib.so.1, lib.so.1.2.3, etc).
+/// - Some projects mix shared libs and binaries in the same paths (see
+///   /usr/lib/systemd/).
+///
+/// So we look for the ELF header and check if the given file (if any) is an ELF
+/// shared lib.
+fn is_shared_library(path: &Path) -> bool {
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        _ => return false,
+    };
+
+    let elf = match ElfStream::<AnyEndian, _>::open_stream(file) {
+        Ok(elf) => elf,
+        _ => return false,
+    };
+
+    if elf.ehdr.e_type == elf::abi::ET_DYN {
+        return true;
+    }
+
+    false
 }
 
 #[derive(Debug)]
