@@ -6,6 +6,7 @@
 //! program using libpcap, the resulting output gets then converted to
 //! ebpf and returned for being consumed.
 
+#![allow(dead_code)]
 use std::mem;
 
 use anyhow::Result;
@@ -13,6 +14,7 @@ use pcap::{Capture, Linktype};
 
 use crate::core::filters::{packets::cbpf::BpfProg, packets::ebpf::eBpfProg};
 
+#[derive(Clone)]
 pub(crate) struct FilterPacket(eBpfProg);
 
 impl FilterPacket {
