@@ -20,6 +20,7 @@ const INCLUDE_PATHS: &[&str] = &[
     "/usr/include/x86_64-linux-gnu",
     "vendor/linux/include",
     "vendor/linux/asm/x86/include",
+    FILTER_INCLUDE_PATH,
 ];
 const OVS_INCLUDES: &[&str] = &["src/module/ovs/bpf/include"];
 const CLANG_ARGS: &[&str] = &["-Werror"];
