@@ -52,6 +52,15 @@ Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
         default_value = "false"
     )]
     pub(super) print: bool,
+    #[arg(
+        id = "filter-packet",
+        short,
+        long,
+        help = r#"Add a packet filter to all targets. The syntax follows the structure of pcap-filer(7).
+
+Example: --filter-packet "ip dst host 10.0.0.1""#
+    )]
+    pub(super) packet_filter: Option<String>,
 }
 
 #[derive(Debug)]
