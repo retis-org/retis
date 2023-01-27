@@ -2,9 +2,11 @@
 #define __CORE_PROBE_KERNEL_BPF_COMMON__
 
 #include <vmlinux.h>
+#include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 
 #include "events.h"
+#include "packet-filter.h"
 
 enum kernel_probe_type {
 	KERNEL_PROBE_KPROBE = 0,
@@ -179,6 +181,53 @@ HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
 
+/* Always return true. Use 0x40000 as it's typically used by
+ * generated filters while 0 means no match, instead.
+ */
+__attribute__ ((noinline))
+unsigned int packet_filter(struct retis_filter_context *ctx)
+{
+	if (!ctx)
+		return 0;
+
+	ctx->ret = 0x40000;
+
+	return ctx->ret;
+}
+
+static __always_inline char *skb_mac_header(struct sk_buff *skb)
+{
+	char *head = (char *)BPF_CORE_READ(skb, head);
+	u16 mh = BPF_CORE_READ(skb, mac_header);
+
+	if (mh == (u16)~0)
+		return NULL;
+
+	return head + mh;
+}
+
+static __always_inline unsigned int filter(struct retis_context *ctx)
+{
+	struct retis_filter_context fctx = {};
+	struct sk_buff *skb;
+
+	skb = retis_get_sk_buff(ctx);
+	if (!skb)
+		return 0;
+
+	fctx.data = skb_mac_header(skb);
+	if (fctx.data == NULL)
+		return 0;
+
+	fctx.len = BPF_CORE_READ(skb, len);
+	/* Due to a bug we can't use the return value of packet_filter(), but
+	 * we have to rely on the value returned into the context.
+	 */
+	packet_filter(&fctx);
+
+	return fctx.ret;
+}
+
 /* The chaining function, which contains all our core probe logic. This is
  * called from each probe specific part after filling the common context and
  * just before returning.
@@ -195,6 +244,9 @@ static __always_inline int chain(struct retis_context *ctx)
 		return 0;
 
 	ctx->offsets = cfg->offsets;
+
+	if (!filter(ctx))
+		return 0;
 
 	event = get_event();
 	if (!event)
