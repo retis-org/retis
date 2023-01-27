@@ -17,6 +17,10 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     core::{
         events::bpf::BpfEvents,
+        filters::{
+            filters::{BpfFilter, Filter},
+            packets::filter::FilterPacket,
+        },
         kernel::Symbol,
         probe::{self, Probe},
     },
@@ -110,6 +114,17 @@ impl Group {
         Ok(self)
     }
 
+    /// Setup user defined input filter.
+    fn setup_filters(&mut self, collect: &Collect) -> Result<()> {
+        if let Some(f) = &collect.args()?.packet_filter {
+            let fb = FilterPacket::from_string(f.to_string())?;
+            self.probes
+                .register_filter(Filter::Packet(BpfFilter(fb.to_bytes()?)))?;
+        }
+
+        Ok(())
+    }
+
     /// Initialize all collectors by calling their `init()` function.
     pub(crate) fn init(&mut self, cli: &CliConfig) -> Result<()> {
         let collect = cli
@@ -147,6 +162,8 @@ impl Group {
         for probe in collect.args()?.probes.iter() {
             self.probes.add_probe(self.parse_probe(probe)?)?;
         }
+
+        self.setup_filters(collect)?;
         Ok(())
     }
 

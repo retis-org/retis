@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 /// eBPF filter wrapper containing the sequence of bytes composing the eBPF program
 #[derive(Clone)]
 pub(crate) struct BpfFilter(pub(crate) Vec<u8>);

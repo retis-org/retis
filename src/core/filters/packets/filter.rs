@@ -6,7 +6,6 @@
 //! program using libpcap, the resulting output gets then converted to
 //! ebpf and returned for being consumed.
 
-#![allow(dead_code)]
 use std::mem;
 
 use anyhow::Result;

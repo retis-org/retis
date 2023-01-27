@@ -7,6 +7,7 @@
 
 use anyhow::{anyhow, bail, Result};
 
+use crate::core::filters::Filter;
 use crate::core::probe::builder::*;
 use crate::core::probe::*;
 
@@ -20,6 +21,7 @@ pub(crate) struct RawTracepointBuilder {
     links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, i32)>,
     hooks: Vec<Hook>,
+    filters: Vec<Filter>,
 }
 
 impl ProbeBuilder for RawTracepointBuilder {
@@ -27,9 +29,15 @@ impl ProbeBuilder for RawTracepointBuilder {
         RawTracepointBuilder::default()
     }
 
-    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<Hook>) -> Result<()> {
+    fn init(
+        &mut self,
+        map_fds: Vec<(String, i32)>,
+        hooks: Vec<Hook>,
+        filters: Vec<Filter>,
+    ) -> Result<()> {
         self.map_fds = map_fds;
         self.hooks = hooks;
+        self.filters = filters;
         Ok(())
     }
 
@@ -55,6 +63,7 @@ impl ProbeBuilder for RawTracepointBuilder {
             .prog_mut("probe_raw_tracepoint")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
 
+        replace_filters(prog.fd(), &self.filters)?;
         let mut links = replace_hooks(prog.fd(), &self.hooks)?;
         self.links.append(&mut links);
 
@@ -76,7 +85,7 @@ mod tests {
         let mut builder = RawTracepointBuilder::new();
 
         // It's for now, the probes below won't do much.
-        assert!(builder.init(Vec::new(), Vec::new()).is_ok());
+        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
         assert!(builder
             .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
             .is_ok());
