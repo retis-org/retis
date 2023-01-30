@@ -383,7 +383,7 @@ impl BpfEventOwner {
 // Allow using BpfEventOwner in log messages.
 impl fmt::Display for BpfEventOwner {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

@@ -41,7 +41,7 @@ pub(super) fn replace_hooks(fd: i32, hooks: &[Hook]) -> Result<Vec<libbpf_rs::Li
     let mut links = Vec::new();
 
     for (i, hook) in hooks.iter().enumerate() {
-        let target = format!("hook{}", i);
+        let target = format!("hook{i}");
 
         let mut open_obj =
             libbpf_rs::ObjectBuilder::default().open_memory("hook", hook.bpf_prog)?;

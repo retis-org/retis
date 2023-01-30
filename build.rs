@@ -24,7 +24,7 @@ fn get_paths(source: &str) -> (String, String) {
     let (dir, file) = source.rsplit_once('/').unwrap();
     let (name, _) = file.split_once('.').unwrap();
 
-    let out = format!("{}/.out", dir);
+    let out = format!("{dir}/.out");
     create_dir_all(out.as_str()).unwrap();
 
     (out, name.to_string())
@@ -41,7 +41,7 @@ fn build_hook(source: &str) {
         .clang_args(
             INCLUDE_PATHS
                 .iter()
-                .map(|x| format!("-I{} ", x))
+                .map(|x| format!("-I{x} "))
                 .collect::<String>(),
         )
         .build()
@@ -56,25 +56,24 @@ fn build_hook(source: &str) {
     write!(
         rs,
         r#"
-           pub(crate) const DATA: &[u8] = &{:?};
-           "#,
-        obj
+           pub(crate) const DATA: &[u8] = &{obj:?};
+           "#
     )
     .unwrap();
 
-    println!("cargo:rerun-if-changed={}", source);
+    println!("cargo:rerun-if-changed={source}");
 }
 
 fn build_probe(source: &str) {
     let (out, name) = get_paths(source);
-    let skel = format!("{}/{}.skel.rs", out, name);
+    let skel = format!("{out}/{name}.skel.rs");
 
     if let Err(e) = SkeletonBuilder::new()
         .source(source)
         .clang_args(
             INCLUDE_PATHS
                 .iter()
-                .map(|x| format!("-I{} ", x))
+                .map(|x| format!("-I{x} "))
                 .collect::<String>(),
         )
         .build_and_generate(skel)
@@ -82,7 +81,7 @@ fn build_probe(source: &str) {
         panic!("{}", e);
     }
 
-    println!("cargo:rerun-if-changed={}", source);
+    println!("cargo:rerun-if-changed={source}");
 }
 
 fn gen_bindings() {
@@ -102,13 +101,13 @@ fn gen_bindings() {
 fn build_extract_stub(source: &str) {
     let (out, name) = get_paths(source);
     let output = format!("{}/{}.o", out.as_str(), name);
-    let btf = format!("{}/{}.BTF", out, name);
+    let btf = format!("{out}/{name}.BTF");
     let stub_ext = format!("{}/{}.rs", out.as_str(), name);
 
     if let Err(e) = SkeletonBuilder::new()
         .source(source)
         .obj(output.as_str())
-        .clang_args(format!("-I{} ", FILTER_INCLUDE_PATH))
+        .clang_args(format!("-I{FILTER_INCLUDE_PATH} "))
         .build()
     {
         panic!("{}", e);
@@ -136,9 +135,9 @@ fn build_extract_stub(source: &str) {
     let obj: &[u8] = &unsafe { Mmap::map(&obj).unwrap() };
 
     let mut rs = File::create(stub_ext).unwrap();
-    write!(rs, r#"pub(crate) const BTF: &[u8] = &{:?};"#, obj).unwrap();
+    write!(rs, r#"pub(crate) const BTF: &[u8] = &{obj:?};"#).unwrap();
 
-    println!("cargo:rerun-if-changed={}", source);
+    println!("cargo:rerun-if-changed={source}");
 }
 
 fn main() {
@@ -156,8 +155,8 @@ fn main() {
     build_extract_stub("src/core/filters/packets/bpf/stub.bpf.c");
 
     for inc in INCLUDE_PATHS.iter() {
-        println!("cargo:rerun-if-changed={}", inc);
+        println!("cargo:rerun-if-changed={inc}");
     }
 
-    println!("cargo:rerun-if-changed={}", BINDGEN_HEADER);
+    println!("cargo:rerun-if-changed={BINDGEN_HEADER}");
 }

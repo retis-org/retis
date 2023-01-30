@@ -48,7 +48,7 @@ impl Symbol {
         if let Some((_, tp_name)) = name.split_once(':') {
             // We might have an event, let's see if we can find a tracepoint
             // symbol.
-            let tp_name = format!("__tracepoint_{}", tp_name);
+            let tp_name = format!("__tracepoint_{tp_name}");
             if inspect::get_symbol_addr(&tp_name).is_ok() {
                 return Ok(Symbol::Event(name.to_string()));
             }
@@ -80,7 +80,7 @@ impl Symbol {
                     None => {
                         // Not much we can do, we know it's a valid one. Let's
                         // still return an object.
-                        return Ok(Symbol::Event(format!("unknow:{}", strip)));
+                        return Ok(Symbol::Event(format!("unknow:{strip}")));
                     }
                 }
             }
@@ -200,7 +200,10 @@ mod tests {
         assert!(symbol.nargs().unwrap() == 3);
         assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
         assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(2));
-        assert!(symbol.parameter_offset("struct net_device *").unwrap() == None);
+        assert!(symbol
+            .parameter_offset("struct net_device *")
+            .unwrap()
+            .is_none());
 
         // Then a function.
         let symbol = Symbol::from_name("kfree_skb_reason").unwrap();
@@ -210,7 +213,10 @@ mod tests {
         assert!(symbol.nargs().unwrap() == 2);
         assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
         assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(1));
-        assert!(symbol.parameter_offset("struct net_device *").unwrap() == None);
+        assert!(symbol
+            .parameter_offset("struct net_device *")
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -223,7 +229,10 @@ mod tests {
         assert!(symbol.nargs().unwrap() == 3);
         assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
         assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(2));
-        assert!(symbol.parameter_offset("struct net_device *").unwrap() == None);
+        assert!(symbol
+            .parameter_offset("struct net_device *")
+            .unwrap()
+            .is_none());
 
         // From an address (is a function).
         let symbol = Symbol::from_addr(0xffffffff95612980).unwrap();
@@ -233,7 +242,10 @@ mod tests {
         assert!(symbol.nargs().unwrap() == 2);
         assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
         assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(1));
-        assert!(symbol.parameter_offset("struct net_device *").unwrap() == None);
+        assert!(symbol
+            .parameter_offset("struct net_device *")
+            .unwrap()
+            .is_none());
 
         // Try two invalid address.
         assert!(Symbol::from_addr(0xffffffff983c29a0 + 1).is_err());
@@ -250,7 +262,10 @@ mod tests {
         assert!(symbol.nargs().unwrap() == 3);
         assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
         assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(2));
-        assert!(symbol.parameter_offset("struct net_device *").unwrap() == None);
+        assert!(symbol
+            .parameter_offset("struct net_device *")
+            .unwrap()
+            .is_none());
 
         // From an address (is a function).
         let symbol = Symbol::from_addr_near(0xffffffff95612980 + 1).unwrap();
@@ -260,6 +275,9 @@ mod tests {
         assert!(symbol.nargs().unwrap() == 2);
         assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
         assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(1));
-        assert!(symbol.parameter_offset("struct net_device *").unwrap() == None);
+        assert!(symbol
+            .parameter_offset("struct net_device *")
+            .unwrap()
+            .is_none());
     }
 }

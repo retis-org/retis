@@ -184,7 +184,7 @@ pub(super) fn find_matching_event(name: &str) -> Result<Option<String>> {
         return Ok(None);
     }
 
-    let suffix = format!(":{}", name);
+    let suffix = format!(":{name}");
 
     // Unwrap as we checked above we have a set of valid events.
     for event in set.as_ref().unwrap().iter() {
@@ -365,14 +365,12 @@ mod tests {
                 == Some(0)
         );
 
-        assert!(
-            super::parameter_offset(
-                &Symbol::Func("kfree_skb_reason".to_string()),
-                "struct sk_buff"
-            )
-            .unwrap()
-                == None
-        );
+        assert!(super::parameter_offset(
+            &Symbol::Func("kfree_skb_reason".to_string()),
+            "struct sk_buff"
+        )
+        .unwrap()
+        .is_none());
 
         assert!(
             super::parameter_offset(
