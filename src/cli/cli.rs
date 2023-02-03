@@ -73,6 +73,7 @@ impl Debug for dyn SubCommand {
 ///
 /// packet-tracer is a tool for capturing networking-related events from the system using ebpf and analyzing them.
 #[derive(Args, Default, Debug)]
+#[command(version)]
 pub(crate) struct MainConfig {}
 
 /// ThinCli handles the first (a.k.a "thin") round of Command Line Interface parsing.
