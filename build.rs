@@ -85,8 +85,11 @@ fn build_probe(source: &str) {
 }
 
 fn gen_bindings() {
+    let (inc_path, _) = BINDGEN_HEADER.rsplit_once('/').unwrap();
+
     bindgen::Builder::default()
         .header(BINDGEN_HEADER)
+        .clang_arg(format!("-I{inc_path}"))
         .default_enum_style(bindgen::EnumVariation::Rust {
             non_exhaustive: false,
         })
