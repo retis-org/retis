@@ -30,7 +30,7 @@ impl BtfInfo {
                 .filter(|f| f.is_ok() && f.as_ref().unwrap().file_name().ne("vmlinux"))
                 .map(|f| Btf::from_split_file(f.as_ref().unwrap().path(), &vmlinux))
                 .collect::<Result<Vec<Btf>>>()?,
-            true => Vec::new(),
+            true => vec![Btf::from_split_file("test_data/openvswitch", &vmlinux)?],
         };
 
         Ok(BtfInfo { vmlinux, modules })
@@ -211,6 +211,12 @@ mod tests {
                 .unwrap()
                 == 1
         );
+
+        assert!(
+            btf.function_nargs(&Symbol::Func("ovs_dp_upcall".to_string()))
+                .unwrap()
+                == 5
+        );
     }
 
     #[test]
@@ -250,5 +256,36 @@ mod tests {
             .unwrap()
                 == Some(2)
         );
+
+        assert!(
+            btf.parameter_offset(
+                &Symbol::Event("openvswitch:ovs_do_execute_action".to_string()),
+                "struct sw_flow_key *"
+            )
+            .unwrap()
+                == Some(2)
+        );
+
+        assert!(btf
+            .parameter_offset(
+                &Symbol::Event("openvswitch:ovs_do_execute_action".to_string()),
+                "struct sw_flow_key"
+            )
+            .unwrap()
+            .is_none());
+
+        assert!(
+            btf.parameter_offset(
+                &Symbol::Func("ovs_dp_upcall".to_string()),
+                "struct sk_buff *"
+            )
+            .unwrap()
+                == Some(1)
+        );
+
+        assert!(btf
+            .parameter_offset(&Symbol::Func("ovs_dp_upcall".to_string()), "struct sk_buff")
+            .unwrap()
+            .is_none());
     }
 }
