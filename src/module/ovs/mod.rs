@@ -8,6 +8,7 @@ pub(crate) mod ovs;
 // Re-export ovs.rs
 pub(crate) use ovs::*;
 
-mod main_hook {
-    include!("bpf/.out/main_hook.rs");
+mod bpf;
+mod kernel_upcall_tp {
+    include!("bpf/.out/kernel_upcall_tp.rs");
 }
