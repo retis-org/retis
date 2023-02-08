@@ -65,7 +65,8 @@ static __always_inline void *get_event_section(struct trace_raw_event *event,
 	if (sizeof(*header) + size > left || event->size > sizeof(event->data))
 		return NULL;
 
-	header = event->data + event->size;
+	header = (struct trace_raw_event_section_header *)
+			(event->data + event->size);
 	header->owner = owner;
 	header->data_type = data_type;
 	header->size = size;
