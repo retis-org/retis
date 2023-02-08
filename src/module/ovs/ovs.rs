@@ -1,12 +1,17 @@
 use anyhow::{bail, Result};
 
-use super::main_hook;
+use super::{bpf::*, kernel_upcall_tp};
+
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        events::bpf::BpfEvents,
-        probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
+        events::{
+            bpf::{BpfEventOwner, BpfEvents, BpfRawSection},
+            EventField,
+        },
+        kernel::Symbol,
+        probe::{Hook, Probe, ProbeManager},
         user::proc::Process,
     },
 };
@@ -32,20 +37,49 @@ impl Collector for OvsCollector {
         &mut self,
         _: &CliConfig,
         probes: &mut ProbeManager,
-        _events: &mut BpfEvents,
+        events: &mut BpfEvents,
     ) -> Result<()> {
+        // Register unmarshaler.
+        events.register_unmarshaler(
+            BpfEventOwner::CollectorOvs,
+            Box::new(
+                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
+                    match OvsEventType::from_u8(raw_section.header.data_type)? {
+                        OvsEventType::Upcall => unmarshall_upcall(raw_section, fields)?,
+                    }
+                    Ok(())
+                },
+            ),
+        )?;
+
+        // Add targetted hooks.
+        self.add_kernel_hooks(probes)?;
+
+        // Add USDT hooks.
+        self.add_usdt_hooks(probes)?;
+        Ok(())
+    }
+}
+
+impl OvsCollector {
+    /// Add kernel hooks.
+    fn add_kernel_hooks(&self, probes: &mut ProbeManager) -> Result<()> {
+        // Upcall probe.
+        probes.register_hook_to(
+            Hook::from(kernel_upcall_tp::DATA),
+            Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_dp_upcall")?)?,
+        )?;
+        Ok(())
+    }
+
+    /// Add USDT hooks.
+    fn add_usdt_hooks(&self, _probes: &mut ProbeManager) -> Result<()> {
         let ovs = Process::from_cmd("ovs-vswitchd")?;
-
         if !ovs.is_usdt("main::run_start")? {
-            bail!("main loop USDT not found");
+            bail!(
+                "Cannot find USDT probes in ovs-vswitchd. Was it built with --enable-usdt-probes?"
+            );
         }
-
-        let main_probe = Probe::Usdt(UsdtProbe::new(
-            &ovs,
-            "dpif_netlink_operate__::op_flow_execute",
-        )?);
-        probes.register_hook_to(Hook::from(main_hook::DATA), main_probe)?;
-
         Ok(())
     }
 }
