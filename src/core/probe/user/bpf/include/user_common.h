@@ -3,6 +3,7 @@
 
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
+#include <bpf/usdt.bpf.h>
 
 #include "events.h"
 
@@ -17,6 +18,12 @@ struct user_event {
 	u8  event_type;
 } __attribute__((packed));
 
+/* Userspace context */
+struct user_ctx {
+	long args[BPF_USDT_MAX_ARG_CNT];
+	u32 num;
+};
+
 /* Helper to define a USDT hook (mostly in collectors) while not having to
  * duplicate the common part everywhere.
  * This also ensure hooks are doing the right thing and should help with
@@ -27,7 +34,8 @@ struct user_event {
  * #include <user_common.h>
  *
  * DEFINE_USDT_HOOK(
- *	do_something(ctx, event);
+ *	long myarg = ctx->args[0];
+ *	do_something(myarg, event);
  *	return 0;
  * )
  *
@@ -38,7 +46,7 @@ struct user_event {
  */
 #define DEFINE_USDT_HOOK(inst)							\
 	SEC("ext/hook")								\
-	int hook(struct pt_regs *ctx, struct trace_raw_event *event)		\
+	int hook(struct user_ctx *ctx, struct trace_raw_event *event)		\
 	{									\
 		/* Let the verifier be happy */					\
 		if (!ctx || !event)						\
