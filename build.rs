@@ -111,6 +111,7 @@ fn gen_bindings() {
         })
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .layout_tests(cfg!(feature = "test_bindgen_layout"))
+        .fit_macro_constants(true)
         .generate()
         .expect("Failed during bindings generation")
         .write_to_file(format!("{}/bpf_gen.rs", env::var("OUT_DIR").unwrap()))
