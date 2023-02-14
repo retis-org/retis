@@ -11,6 +11,8 @@ use crate::core::kernel;
 /// given running program.
 pub(crate) enum Probe {
     Kprobe(KernelProbe),
+    #[allow(dead_code)]
+    Kretprobe(KernelProbe),
     RawTracepoint(KernelProbe),
     #[allow(dead_code)]
     Usdt(UsdtProbe),
@@ -25,6 +27,15 @@ impl Probe {
         }
     }
 
+    /// Create a new kretprobe
+    #[allow(dead_code)]
+    pub(crate) fn kretprobe(symbol: kernel::Symbol) -> Result<Probe> {
+        match symbol {
+            kernel::Symbol::Func(_) => Ok(Probe::Kretprobe(KernelProbe::new(symbol)?)),
+            kernel::Symbol::Event(_) => bail!("Symbol cannot be probed with a kretprobe"),
+        }
+    }
+
     /// Create a new raw tracepoint.
     pub(crate) fn raw_tracepoint(symbol: kernel::Symbol) -> Result<Probe> {
         match symbol {
@@ -35,15 +46,16 @@ impl Probe {
 }
 
 // Use mem::variant_count::<Probe>() when available in stable.
-pub(crate) const PROBE_VARIANTS: usize = 3;
+pub(crate) const PROBE_VARIANTS: usize = 4;
 
 impl Probe {
     /// We do use probe types as indexes, the following makes it easy.
     pub(crate) fn as_key(&self) -> usize {
         match self {
             Probe::Kprobe(_) => 0,
-            Probe::RawTracepoint(_) => 1,
-            Probe::Usdt(_) => 2,
+            Probe::Kretprobe(_) => 1,
+            Probe::RawTracepoint(_) => 2,
+            Probe::Usdt(_) => 3,
         }
     }
 }
@@ -53,6 +65,7 @@ impl fmt::Display for Probe {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Probe::Kprobe(symbol) => write!(f, "kprobe:{symbol}"),
+            Probe::Kretprobe(symbol) => write!(f, "kretprobe:{symbol}"),
             Probe::RawTracepoint(symbol) => write!(f, "raw_tracepoint:{symbol}"),
             Probe::Usdt(symbol) => write!(f, "usdt {symbol}"),
         }

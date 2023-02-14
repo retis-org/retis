@@ -49,6 +49,7 @@ struct {
 struct trace_regs {
 #define REG_MAX 12	/* Fexit max, let's use this */
 	u64 reg[REG_MAX];
+	u64 ret;
 	u32 num;
 };
 
