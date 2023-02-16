@@ -278,6 +278,22 @@ fn parse_raw_event(data: &[u8], unmarshalers: &Unmarshalers, cache: &mut Cache) 
     Ok(event)
 }
 
+/// Helper to check a raw section validity and parse it into a structured type.
+pub(crate) fn parse_raw_section<T>(raw_section: &BpfRawSection) -> Result<T>
+where
+    T: Default + Plain,
+{
+    if raw_section.data.len() != mem::size_of::<T>() {
+        bail!("Section data is not the expected size");
+    }
+
+    let mut event = T::default();
+    plain::copy_from_bytes(&mut event, &raw_section.data)
+        .or_else(|_| bail!("Could not parse the raw section"))?;
+
+    Ok(event)
+}
+
 // We use a dummy implementation of BpfEvents to allow unit tests to pass.
 // This is fine as no function in the above can really be tested.
 #[cfg(test)]

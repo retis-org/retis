@@ -11,7 +11,7 @@ use crate::{
     collect::Collector,
     core::{
         events::{
-            bpf::{BpfEventOwner, BpfEvents},
+            bpf::{parse_raw_section, BpfEventOwner, BpfEvents},
             EventField,
         },
         kernel::Symbol,
@@ -82,17 +82,7 @@ impl Collector for SkbTrackingCollector {
                     bail!("Unknown data type");
                 }
 
-                if raw_section.data.len() != mem::size_of::<SkbTrackingEvent>() {
-                    bail!(
-                        "Section data is not the expected size {} != {}",
-                        raw_section.data.len(),
-                        mem::size_of::<SkbTrackingEvent>(),
-                    );
-                }
-
-                let mut event = SkbTrackingEvent::default();
-                plain::copy_from_bytes(&mut event, &raw_section.data)
-                    .or_else(|_| bail!("Could not parse the raw section"))?;
+                let event = parse_raw_section::<SkbTrackingEvent>(raw_section)?;
 
                 fields.push(event_field!("orig_head", event.orig_head));
                 fields.push(event_field!("timestamp", event.timestamp));
