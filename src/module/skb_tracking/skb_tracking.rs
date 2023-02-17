@@ -125,7 +125,7 @@ impl SkbTrackingCollector {
         };
 
         // Please keep in sync with its BPF counterpart in
-        // bpf/tracking_hook.ebpf.c
+        // bpf/tracking_hook.bpf.c
         libbpf_rs::Map::create(
             libbpf_rs::MapType::Hash,
             Some("tracking_config_map"),
@@ -144,7 +144,7 @@ impl SkbTrackingCollector {
         };
 
         // Please keep in sync with its BPF counterpart in
-        // bpf/tracking_hook.ebpf.c
+        // bpf/tracking_hook.bpf.c
         libbpf_rs::Map::create(
             libbpf_rs::MapType::Hash,
             Some("tracking_map"),
@@ -240,7 +240,7 @@ impl SkbTrackingCollector {
     }
 }
 
-// Please keep in sync with its BPF counterpart in bpf/tracking_hook.ebpf.c
+// Please keep in sync with its BPF counterpart in bpf/tracking_hook.bpf.c
 #[repr(C, packed)]
 struct TrackingConfig {
     free: u8,
@@ -249,7 +249,7 @@ struct TrackingConfig {
 
 unsafe impl Plain for TrackingConfig {}
 
-// Please keep in sync with its BPF counterpart in bpf/tracking_hook.ebpf.c
+// Please keep in sync with its BPF counterpart in bpf/tracking_hook.bpf.c
 #[derive(Default)]
 #[repr(C, packed)]
 struct TrackingInfo {
