@@ -8,14 +8,14 @@
  *
  * Indexed in the tracking_config_map by the function ksym address.
  *
- * Please keep in sync with its Rust counterpart in collector::skb_tracking.
+ * Please keep in sync with its Rust counterpart in module::skb_tracking.
  */
 struct tracking_config {
 	/* Function is freeing skbs */
 	u8 free;
 	/* Function is invalidating the head of skbs */
 	u8 inv_head;
-};
+} __attribute__((packed));
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, PROBE_MAX);
@@ -30,7 +30,7 @@ struct {
  * In order to uniquely identify skbs, the tuple (addr, timestamp) is used and
  * must be reported as part of all events (TODO).
  *
- * Please keep in sync with its Rust counterpart in collector::skb_tracking.
+ * Please keep in sync with its Rust counterpart in module::skb_tracking.
  */
 struct tracking_info {
 	/* When the skb was first seen */

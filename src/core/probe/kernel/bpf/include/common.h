@@ -20,14 +20,14 @@ struct trace_probe_offsets {
 	s8 skb_drop_reason;
 	s8 net_device;
 	s8 net;		/* netns */
-};
+} __attribute__((packed));
 
 /* Per-probe configuration; keep in sync with its Rust counterpart in
  * core::probe::kernel::config.
  */
 struct trace_probe_config {
 	struct trace_probe_offsets offsets;
-};
+} __attribute__((packed));
 
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define PROBE_MAX	128

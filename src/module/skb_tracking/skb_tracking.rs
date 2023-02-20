@@ -11,7 +11,7 @@ use crate::{
     collect::Collector,
     core::{
         events::{
-            bpf::{BpfEventOwner, BpfEvents},
+            bpf::{parse_raw_section, BpfEventOwner, BpfEvents},
             EventField,
         },
         kernel::Symbol,
@@ -82,17 +82,7 @@ impl Collector for SkbTrackingCollector {
                     bail!("Unknown data type");
                 }
 
-                if raw_section.data.len() != mem::size_of::<SkbTrackingEvent>() {
-                    bail!(
-                        "Section data is not the expected size {} != {}",
-                        raw_section.data.len(),
-                        mem::size_of::<SkbTrackingEvent>(),
-                    );
-                }
-
-                let mut event = SkbTrackingEvent::default();
-                plain::copy_from_bytes(&mut event, &raw_section.data)
-                    .or_else(|_| bail!("Could not parse the raw section"))?;
+                let event = parse_raw_section::<SkbTrackingEvent>(raw_section)?;
 
                 fields.push(event_field!("orig_head", event.orig_head));
                 fields.push(event_field!("timestamp", event.timestamp));
@@ -135,7 +125,7 @@ impl SkbTrackingCollector {
         };
 
         // Please keep in sync with its BPF counterpart in
-        // bpf/tracking_hook.ebpf.c
+        // bpf/tracking_hook.bpf.c
         libbpf_rs::Map::create(
             libbpf_rs::MapType::Hash,
             Some("tracking_config_map"),
@@ -154,7 +144,7 @@ impl SkbTrackingCollector {
         };
 
         // Please keep in sync with its BPF counterpart in
-        // bpf/tracking_hook.ebpf.c
+        // bpf/tracking_hook.bpf.c
         libbpf_rs::Map::create(
             libbpf_rs::MapType::Hash,
             Some("tracking_map"),
@@ -250,8 +240,8 @@ impl SkbTrackingCollector {
     }
 }
 
-// Please keep in sync with its BPF counterpart in bpf/tracking_hook.ebpf.c
-#[repr(C)]
+// Please keep in sync with its BPF counterpart in bpf/tracking_hook.bpf.c
+#[repr(C, packed)]
 struct TrackingConfig {
     free: u8,
     inv_head: u8,
@@ -259,9 +249,9 @@ struct TrackingConfig {
 
 unsafe impl Plain for TrackingConfig {}
 
-// Please keep in sync with its BPF counterpart in bpf/tracking_hook.ebpf.c
+// Please keep in sync with its BPF counterpart in bpf/tracking_hook.bpf.c
 #[derive(Default)]
-#[repr(C)]
+#[repr(C, packed)]
 struct TrackingInfo {
     timestamp: u64,
     last_seen: u64,
