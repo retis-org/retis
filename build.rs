@@ -18,6 +18,18 @@ const INCLUDE_PATHS: &[&str] = &[
     // TODO: Remove when we fix proper header dependencies.
     "/usr/include/x86_64-linux-gnu",
 ];
+const CLANG_ARGS: &[&str] = &["-Werror"];
+
+fn get_probe_clang_args() -> String {
+    let mut args: Vec<String> = CLANG_ARGS.iter().map(|x| x.to_string()).collect();
+    args.push(
+        INCLUDE_PATHS
+            .iter()
+            .map(|x| format!("-I{x} "))
+            .collect::<String>(),
+    );
+    args.join(" ")
+}
 
 // Not super fail safe (not using Path).
 fn get_paths(source: &str) -> (String, String) {
@@ -38,12 +50,7 @@ fn build_hook(source: &str) {
     if let Err(e) = SkeletonBuilder::new()
         .source(source)
         .obj(output.as_str())
-        .clang_args(
-            INCLUDE_PATHS
-                .iter()
-                .map(|x| format!("-I{x} "))
-                .collect::<String>(),
-        )
+        .clang_args(get_probe_clang_args())
         .build()
     {
         panic!("{}", e);
@@ -70,12 +77,7 @@ fn build_probe(source: &str) {
 
     if let Err(e) = SkeletonBuilder::new()
         .source(source)
-        .clang_args(
-            INCLUDE_PATHS
-                .iter()
-                .map(|x| format!("-I{x} "))
-                .collect::<String>(),
-        )
+        .clang_args(get_probe_clang_args())
         .build_and_generate(skel)
     {
         panic!("{}", e);

@@ -57,7 +57,8 @@ struct skb_tracking_event {
 
 /* Must be called with a valid skb pointer */
 static __always_inline int track_skb(struct trace_context *ctx,
-				     struct event *event, struct sk_buff *skb)
+				     struct trace_raw_event *event,
+				     struct sk_buff *skb)
 {
 	enum skb_drop_reason drop_reason = 0;
 	struct tracking_info *ti = NULL, new;
