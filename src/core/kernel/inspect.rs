@@ -2,11 +2,10 @@ use std::{collections::HashSet, fs};
 
 use anyhow::{anyhow, bail, Result};
 use bimap::BiHashMap;
-use btf_rs::{Btf, Type};
 use log::warn;
 use once_cell::sync::OnceCell;
 
-use super::Symbol;
+use super::{btf::BtfInfo, Symbol};
 
 static INSPECTOR: OnceCell<Inspector> = OnceCell::new();
 
@@ -19,7 +18,8 @@ macro_rules! get_inspector {
 /// Provides helpers to inspect probe related information in the kernel. Used as
 /// a singleton.
 pub(crate) struct Inspector {
-    btf: Btf,
+    /// Btf information.
+    btf: BtfInfo,
     /// Symbols bi-directional map (addr<>name).
     symbols: BiHashMap<u64, String>,
     /// Set of traceable events (e.g. tracepoints).
@@ -30,20 +30,19 @@ pub(crate) struct Inspector {
 
 impl Inspector {
     fn new() -> Result<Inspector> {
-        let (btf_file, symbols_file, events_file, funcs_file) = match cfg!(test) {
+        let (symbols_file, events_file, funcs_file) = match cfg!(test) {
             false => (
-                "/sys/kernel/btf/vmlinux",
                 "/proc/kallsyms",
                 "/sys/kernel/debug/tracing/available_events",
                 "/sys/kernel/debug/tracing/available_filter_functions",
             ),
             true => (
-                "test_data/vmlinux",
                 "test_data/kallsyms",
                 "test_data/available_events",
                 "test_data/available_filter_functions",
             ),
         };
+        let btf = BtfInfo::new()?;
 
         // First parse the symbol file.
         let mut symbols = BiHashMap::new();
@@ -62,7 +61,7 @@ impl Inspector {
         }
 
         let inspector = Inspector {
-            btf: Btf::from_file(btf_file)?,
+            btf,
             symbols,
             // Not all events we'll get from BTF/kallsyms are traceable. Use the
             // following, when available, to narrow down our checks.
@@ -200,126 +199,14 @@ pub(super) fn find_matching_event(name: &str) -> Result<Option<String>> {
 /// check a function has a given parameter by using:
 /// `parameter_offset()?.is_some()`
 pub(super) fn parameter_offset(symbol: &Symbol, parameter_type: &str) -> Result<Option<u32>> {
-    // Events have a void* pointing to the data as their first argument, which
-    // does not end up in their context. We have to skip it. See
-    // include/trace/bpf_probe.h in the __DEFINE_EVENT definition.
-    let fix = match symbol {
-        Symbol::Event(_) => 1,
-        _ => 0,
-    };
-
-    let proto = get_function_prototype(symbol)?;
-    for (offset, param) in proto.parameters.iter().enumerate() {
-        if is_param_type(param, parameter_type)? {
-            if offset < fix {
-                continue;
-            }
-            return Ok(Some((offset - fix) as u32));
-        }
-    }
-    Ok(None)
+    get_inspector!()?
+        .btf
+        .parameter_offset(symbol, parameter_type)
 }
 
-/// Get a function number of arguments.
+/// Get a function's number of arguments.
 pub(super) fn function_nargs(symbol: &Symbol) -> Result<u32> {
-    // Events have a void* pointing to the data as their first argument, which
-    // does not end up in their context. We have to skip it. See
-    // include/trace/bpf_probe.h in the __DEFINE_EVENT definition.
-    let fix = match symbol {
-        Symbol::Event(_) => 1,
-        _ => 0,
-    };
-
-    let proto = get_function_prototype(symbol)?;
-    Ok((proto.parameters.len() - fix) as u32)
-}
-
-fn get_function_prototype(symbol: &Symbol) -> Result<btf_rs::FuncProto> {
-    let btf = &get_inspector!()?.btf;
-    let target = symbol.typedef_name();
-    // Some probe types might need to change the target format.
-    Ok(match symbol {
-        Symbol::Func(_) => {
-            // Functions are using directly the target function definition, no
-            // change to make to the target format and the prototype resolution
-            // is straightforward: Func -> FuncProto.
-            let func = match btf.resolve_type_by_name(&target)? {
-                Type::Func(func) => func,
-                _ => bail!("{} is not a function", target),
-            };
-
-            match btf.resolve_chained_type(&func)? {
-                Type::FuncProto(proto) => proto,
-                _ => bail!("Function {} does not have a prototype", target),
-            }
-        }
-        Symbol::Event(_) => {
-            // The prototype resolution for events is:
-            // Typedef -> Ptr -> FuncProto.
-            let func = match btf.resolve_type_by_name(&target)? {
-                Type::Typedef(func) => func,
-                _ => bail!("{} is not a typedef", target),
-            };
-
-            let ptr = match btf.resolve_chained_type(&func)? {
-                Type::Ptr(ptr) => ptr,
-                _ => bail!("{} typedef does not point to a ptr", target),
-            };
-
-            match btf.resolve_chained_type(&ptr)? {
-                Type::FuncProto(proto) => proto,
-                _ => bail!("Function {} does not have a prototype", target),
-            }
-        }
-    })
-}
-
-fn is_param_type(param: &btf_rs::Parameter, r#type: &str) -> Result<bool> {
-    let btf = &get_inspector!()?.btf;
-
-    let mut resolved = btf.resolve_chained_type(param)?;
-    let mut full_name = String::new();
-
-    // First, traverse the type definition until we find the actual type.
-    // Only support valid resolve_chained_type calls and exclude function
-    // pointers, static/global variables and especially typedef as we don't
-    // want to traverse its full definition!
-    let mut is_pointer = false;
-    loop {
-        resolved = match resolved {
-            Type::Ptr(t) => {
-                is_pointer = true;
-                btf.resolve_chained_type(&t)?
-            }
-            Type::Volatile(t) => btf.resolve_chained_type(&t)?,
-            Type::Const(t) => btf.resolve_chained_type(&t)?,
-            Type::Array(_) => bail!("Arrays are not supported at the moment"),
-            _ => break,
-        }
-    }
-
-    // Then resolve the type name.
-    let type_name = match resolved {
-        Type::Int(t) => btf.resolve_name(&t)?,
-        Type::Struct(t) => format!("struct {}", btf.resolve_name(&t)?),
-        Type::Union(t) => format!("union {}", btf.resolve_name(&t)?),
-        Type::Enum(t) => format!("enum {}", btf.resolve_name(&t)?),
-        Type::Typedef(t) => btf.resolve_name(&t)?,
-        Type::Float(t) => btf.resolve_name(&t)?,
-        Type::Enum64(t) => format!("enum {}", btf.resolve_name(&t)?),
-        _ => return Ok(false),
-    };
-    full_name.push_str(type_name.as_str());
-
-    // Set the pointer information C style.
-    if is_pointer {
-        full_name.push_str(" *");
-    }
-
-    // We do not get the symbol name; useless and not always there (e.g.
-    // raw tracepoints).
-
-    Ok(r#type == full_name)
+    get_inspector!()?.btf.function_nargs(symbol)
 }
 
 #[cfg(test)]
@@ -352,42 +239,5 @@ mod tests {
         assert!(find_nearest_symbol(addr + 1).unwrap() == addr);
         assert!(find_nearest_symbol(addr).unwrap() == addr);
         assert!(find_nearest_symbol(addr - 1).unwrap() != addr);
-    }
-
-    #[test]
-    fn parameter_offset() {
-        assert!(
-            super::parameter_offset(
-                &Symbol::Func("kfree_skb_reason".to_string()),
-                "struct sk_buff *"
-            )
-            .unwrap()
-                == Some(0)
-        );
-
-        assert!(super::parameter_offset(
-            &Symbol::Func("kfree_skb_reason".to_string()),
-            "struct sk_buff"
-        )
-        .unwrap()
-        .is_none());
-
-        assert!(
-            super::parameter_offset(
-                &Symbol::Event("skb:kfree_skb".to_string()),
-                "struct sk_buff *"
-            )
-            .unwrap()
-                == Some(0)
-        );
-
-        assert!(
-            super::parameter_offset(
-                &Symbol::Event("skb:kfree_skb".to_string()),
-                "enum skb_drop_reason"
-            )
-            .unwrap()
-                == Some(2)
-        );
     }
 }
