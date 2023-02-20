@@ -91,7 +91,7 @@ struct skb_data_ref_event {
 
 /* Must be called with a valid skb pointer */
 static __always_inline int process_skb_l2_l4(struct trace_context *ctx,
-					     struct event *event,
+					     struct trace_raw_event *event,
 					     struct skb_config *cfg,
 					     struct sk_buff *skb)
 {
@@ -237,7 +237,8 @@ static __always_inline int process_skb_l2_l4(struct trace_context *ctx,
 
 /* Must be called with a valid skb pointer */
 static __always_inline int process_skb(struct trace_context *ctx,
-				       struct event *event, struct sk_buff *skb)
+				       struct trace_raw_event *event,
+				       struct sk_buff *skb)
 {
 	struct skb_shared_info *si;
 	struct skb_config *cfg;
