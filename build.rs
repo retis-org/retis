@@ -2,6 +2,7 @@ use std::{
     env,
     fs::{create_dir_all, File},
     io::Write,
+    path::Path,
     process::Command,
 };
 
@@ -160,7 +161,12 @@ fn main() {
     build_extract_stub("src/core/filters/packets/bpf/stub.bpf.c");
 
     for inc in INCLUDE_PATHS.iter() {
-        println!("cargo:rerun-if-changed={inc}");
+        // Useful to avoid to always rebuild on systems that don't use
+        // triplet multi-arch paths. This is harmless, but can be
+        // removed once the header dependency gets rearranged.
+        if Path::new(inc).exists() {
+            println!("cargo:rerun-if-changed={inc}");
+        }
     }
 
     println!("cargo:rerun-if-changed={BINDGEN_HEADER}");
