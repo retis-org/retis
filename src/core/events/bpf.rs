@@ -7,7 +7,7 @@ use std::{
     any::Any,
     collections::HashMap,
     fmt, mem,
-    sync::{mpsc, Arc},
+    sync::{mpsc, Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -26,23 +26,44 @@ const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
 /// arbitrary data that can speed up event processing.
 /// Unmarshalers can't expect any value to be there as unmarshaler presence or calls ordering
 /// is not guaranteed.
-type Cache = HashMap<String, Box<dyn Any>>;
+pub(crate) type Cache = HashMap<String, Box<dyn Any>>;
 
-/// Type of the unmarshaler closures. Takes a raw section as an input and
-/// returns an unmarshaled event section. The closure is chosen based on the
-/// unique owner id of the raw event.
-pub(crate) type EventUnmarshaler =
-    dyn Fn(&BpfRawSection, &mut Vec<EventField>, &mut Cache) -> Result<()>;
+/// Unmarshaler trait. The unmarshaler is chosen based on the unique owner id of
+/// the raw event.
+pub(crate) trait EventUnmarshaler {
+    /// Takes a raw section as an input and adds unmarshaled event sections to
+    /// the fields parameter.
+    fn unmarshal(
+        &mut self,
+        raw_section: &BpfRawSection,
+        fields: &mut Vec<EventField>,
+        cache: &mut Cache,
+    ) -> Result<()>;
+}
+
+impl<F> EventUnmarshaler for F
+where
+    F: Fn(&BpfRawSection, &mut Vec<EventField>, &mut Cache) -> Result<()>,
+{
+    fn unmarshal(
+        &mut self,
+        raw_section: &BpfRawSection,
+        fields: &mut Vec<EventField>,
+        cache: &mut Cache,
+    ) -> Result<()> {
+        self(raw_section, fields, cache)
+    }
+}
 
 // Define a private type for unmarshalers as we'll use it more than once.
-type Unmarshalers = HashMap<BpfEventOwner, Box<EventUnmarshaler>>;
+type Unmarshalers = HashMap<BpfEventOwner, Box<dyn EventUnmarshaler>>;
 
 /// API to retrieve and unmarshal events coming from the BPF parts.
 #[cfg(not(test))]
 pub(crate) struct BpfEvents {
     map: libbpf_rs::Map,
     /// HashMap of unmarshalers.
-    unmarshalers: Arc<Unmarshalers>,
+    unmarshalers: Arc<Mutex<Unmarshalers>>,
     /// Receiver channel to retrieve events from the processing loop.
     rxc: Option<mpsc::Receiver<Event>>,
 }
@@ -67,28 +88,30 @@ impl BpfEvents {
 
         let mut events = BpfEvents {
             map,
-            unmarshalers: Arc::new(HashMap::new()),
+            unmarshalers: Arc::new(Mutex::new(HashMap::new())),
             rxc: None,
         };
 
         events.register_unmarshaler(
             BpfEventOwner::Common,
-            Box::new(|raw_section, fields, _| {
-                if raw_section.header.data_type != 1 {
-                    bail!("Unknown data type");
-                }
+            Box::new(
+                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>, _: &mut Cache| {
+                    if raw_section.header.data_type != 1 {
+                        bail!("Unknown data type");
+                    }
 
-                if raw_section.data.len() != 8 {
-                    bail!(
-                        "Section data is not the expected size {} != 8",
-                        raw_section.data.len()
-                    );
-                }
+                    if raw_section.data.len() != 8 {
+                        bail!(
+                            "Section data is not the expected size {} != 8",
+                            raw_section.data.len()
+                        );
+                    }
 
-                let timestamp = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
-                fields.push(event_field!("timestamp", timestamp));
-                Ok(())
-            }),
+                    let timestamp = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
+                    fields.push(event_field!("timestamp", timestamp));
+                    Ok(())
+                },
+            ),
         )?;
 
         Ok(events)
@@ -99,13 +122,14 @@ impl BpfEvents {
     pub(crate) fn register_unmarshaler(
         &mut self,
         owner: BpfEventOwner,
-        unmarshaler: Box<EventUnmarshaler>,
+        unmarshaler: Box<dyn EventUnmarshaler>,
     ) -> Result<()> {
-        if self.unmarshalers.contains_key(&owner) {
+        let mut unmarshalers = self.unmarshalers.lock().unwrap();
+        if unmarshalers.contains_key(&owner) {
             bail!("Unmarshaler already registered for owner {}", owner);
         }
 
-        (*Arc::get_mut(&mut self.unmarshalers).unwrap()).insert(owner, unmarshaler);
+        unmarshalers.insert(owner, unmarshaler);
         Ok(())
     }
 
@@ -128,8 +152,9 @@ impl BpfEvents {
         // moving our Arc clone pointing to unmarshalers there and the tx
         // channel.
         let process_event = move |data: &[u8]| -> i32 {
+            let mut unmarshalers = unmarshalers.lock().unwrap();
             // Parse the raw event.
-            let event = match parse_raw_event(data, &unmarshalers, &mut cache) {
+            let event = match parse_raw_event(data, &mut unmarshalers, &mut cache) {
                 Ok(event) => event,
                 Err(e) => {
                     error!("Could not parse raw event: {}", e);
@@ -177,7 +202,11 @@ impl BpfEvents {
     }
 }
 
-fn parse_raw_event(data: &[u8], unmarshalers: &Unmarshalers, cache: &mut Cache) -> Result<Event> {
+fn parse_raw_event(
+    data: &[u8],
+    unmarshalers: &mut Unmarshalers,
+    cache: &mut Cache,
+) -> Result<Event> {
     // First retrieve the buffer length.
     let data_size = data.len();
     if data_size < 2 {
@@ -249,7 +278,7 @@ fn parse_raw_event(data: &[u8], unmarshalers: &Unmarshalers, cache: &mut Cache) 
         cursor += raw_section.header.size as usize;
 
         // Try getting the right unmarshaler.
-        let unmarshaler = match unmarshalers.get(&owner) {
+        let unmarshaler = match unmarshalers.get_mut(&owner) {
             Some(unmarshaler) => unmarshaler,
             None => {
                 error!("Could not get unmarshaler for owner {}", owner);
@@ -259,7 +288,7 @@ fn parse_raw_event(data: &[u8], unmarshalers: &Unmarshalers, cache: &mut Cache) 
 
         // Unmarshall the section.
         let mut fields = Vec::new();
-        if let Err(e) = unmarshaler(&raw_section, &mut fields, cache) {
+        if let Err(e) = unmarshaler.unmarshal(&raw_section, &mut fields, cache) {
             let size = raw_section.header.size; // unaligned
             error!(
                 "Could not unmarshal section (owner: {} data_type: {} size: {}): {}",
@@ -307,7 +336,7 @@ impl BpfEvents {
     pub(crate) fn register_unmarshaler(
         &mut self,
         _: BpfEventOwner,
-        _: Box<EventUnmarshaler>,
+        _: Box<dyn EventUnmarshaler>,
     ) -> Result<()> {
         Ok(())
     }
@@ -421,61 +450,63 @@ mod tests {
         // Let's use the Common probe type for our tests.
         unmarshalers.insert(
             BpfEventOwner::Common,
-            Box::new(|raw_section, fields, _| {
-                let len = raw_section.data.len();
+            Box::new(
+                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>, _: &mut Cache| {
+                    let len = raw_section.data.len();
 
-                match raw_section.header.data_type {
-                    DATA_TYPE_U64 => {
-                        if len != 8 {
-                            bail!("Invalid section for data type 1");
+                    match raw_section.header.data_type {
+                        DATA_TYPE_U64 => {
+                            if len != 8 {
+                                bail!("Invalid section for data type 1");
+                            }
+
+                            fields.push(event_field!(
+                                "field0",
+                                u64::from_ne_bytes(raw_section.data[0..8].try_into()?)
+                            ));
                         }
+                        DATA_TYPE_U128 => {
+                            if len != 16 {
+                                bail!("Invalid section for data type 2");
+                            }
 
-                        fields.push(event_field!(
-                            "field0",
-                            u64::from_ne_bytes(raw_section.data[0..8].try_into()?)
-                        ));
-                    }
-                    DATA_TYPE_U128 => {
-                        if len != 16 {
-                            bail!("Invalid section for data type 2");
+                            fields.push(event_field!(
+                                "field1",
+                                u64::from_ne_bytes(raw_section.data[0..8].try_into()?)
+                            ));
+                            fields.push(event_field!(
+                                "field2",
+                                u64::from_ne_bytes(raw_section.data[8..16].try_into()?)
+                            ));
                         }
-
-                        fields.push(event_field!(
-                            "field1",
-                            u64::from_ne_bytes(raw_section.data[0..8].try_into()?)
-                        ));
-                        fields.push(event_field!(
-                            "field2",
-                            u64::from_ne_bytes(raw_section.data[8..16].try_into()?)
-                        ));
+                        _ => bail!("Invalid data type"),
                     }
-                    _ => bail!("Invalid data type"),
-                }
-                Ok(())
-            }),
+                    Ok(())
+                },
+            ),
         );
 
         // Empty event.
         let data = [];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_err());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_err());
 
         // Uncomplete event size.
         let data = [0];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_err());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_err());
 
         // Valid event size but empty event.
         let data = [0, 0];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_err());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_err());
 
         // Valid event size but incomplete event.
         let data = [42, 0];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_err());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_err());
         let data = [2, 0, 42];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_err());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_err());
 
         // Valid event with a single empty section. Section is ignored.
         let data = [4, 0, BpfEventOwner::Common as u8, DATA_TYPE_U64, 0, 0];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_ok());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_ok());
 
         // Valid event with a section too large. Section is ignored.
         let data = [
@@ -488,7 +519,7 @@ mod tests {
             42,
             42,
         ];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_ok());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_ok());
         let data = [
             6,
             0,
@@ -499,23 +530,23 @@ mod tests {
             42,
             42,
         ];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_ok());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_ok());
 
         // Valid event with a section having an invalid owner.
         let data = [4, 0, 0, DATA_TYPE_U64, 0, 0];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_ok());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_ok());
         let data = [4, 0, 255, DATA_TYPE_U64, 0, 0];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_ok());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_ok());
 
         // Valid event with an invalid data type.
         let data = [4, 0, BpfEventOwner::Common as u8, 0, 1, 0, 42];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_ok());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_ok());
         let data = [4, 0, BpfEventOwner::Common as u8, 255, 1, 0, 42];
-        assert!(super::parse_raw_event(&data, &unmarshalers, &mut cache).is_ok());
+        assert!(super::parse_raw_event(&data, &mut unmarshalers, &mut cache).is_ok());
 
         // Valid event but invalid section (too small).
         let data = [5, 0, BpfEventOwner::Common as u8, DATA_TYPE_U64, 1, 0, 42];
-        let res = super::parse_raw_event(&data, &unmarshalers, &mut cache);
+        let res = super::parse_raw_event(&data, &mut unmarshalers, &mut cache);
         assert!(res.unwrap().len() == 0);
 
         // Valid event, single section.
@@ -535,7 +566,7 @@ mod tests {
             0,
             0,
         ];
-        let event = super::parse_raw_event(&data, &unmarshalers, &mut cache).unwrap();
+        let event = super::parse_raw_event(&data, &mut unmarshalers, &mut cache).unwrap();
         let field = event.get::<u64>("common", "field0").unwrap();
         assert!(field == Some(&42));
 
@@ -591,7 +622,7 @@ mod tests {
             0,
             0,
         ];
-        let event = super::parse_raw_event(&data, &unmarshalers, &mut cache).unwrap();
+        let event = super::parse_raw_event(&data, &mut unmarshalers, &mut cache).unwrap();
         let field = event.get::<u64>("common", "field1").unwrap();
         assert!(field == Some(&42));
         let field = event.get::<u64>("common", "field2").unwrap();
