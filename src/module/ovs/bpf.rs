@@ -17,10 +17,12 @@ use crate::{
 pub(crate) enum OvsEventType {
     /// Upcall tracepoint.
     Upcall = 0,
+    /// Upcall received in userspace.
+    RecvUpcall = 1,
     /// Execute action tracepoint.
-    ActionExec = 1,
+    ActionExec = 2,
     /// OUTPUT action specific data.
-    OutputAction = 2,
+    OutputAction = 3,
 }
 
 impl OvsEventType {
@@ -28,8 +30,9 @@ impl OvsEventType {
         use OvsEventType::*;
         Ok(match val {
             0 => Upcall,
-            1 => ActionExec,
-            2 => OutputAction,
+            1 => RecvUpcall,
+            2 => ActionExec,
+            3 => OutputAction,
             x => bail!("Can't construct a OvsEventType from {}", x),
         })
     }
@@ -122,5 +125,25 @@ pub(super) fn unmarshall_output(raw: &BpfRawSection, fields: &mut Vec<EventField
     let event = parse_raw_section::<OutputAction>(raw)?;
 
     fields.push(event_field!("port", event.port));
+    Ok(())
+}
+
+/// OVS Recv Upcall data.
+#[derive(Default)]
+#[repr(C, packed)]
+struct RecvUpcall {
+    r#type: u32,
+    pkt_size: u32,
+    key_size: u64,
+}
+unsafe impl Plain for RecvUpcall {}
+
+pub(super) fn unmarshall_recv(raw: &BpfRawSection, fields: &mut Vec<EventField>) -> Result<()> {
+    let event = parse_raw_section::<RecvUpcall>(raw)?;
+
+    fields.push(event_field!("upcall_type", event.r#type));
+    fields.push(event_field!("pkt_size", event.pkt_size));
+    fields.push(event_field!("key_size", event.key_size));
+    fields.push(event_field!("event_type", "recv_upcall".to_string()));
     Ok(())
 }
