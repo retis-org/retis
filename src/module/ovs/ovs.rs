@@ -1,7 +1,8 @@
 use anyhow::{bail, Result};
 
 use super::{
-    bpf::*, kernel_exec_tp, kernel_upcall_tp, user_op_exec, user_op_put, user_recv_upcall,
+    bpf::*, kernel_enqueue, kernel_exec_tp, kernel_upcall_tp, user_op_exec, user_op_put,
+    user_recv_upcall,
 };
 
 use crate::{
@@ -48,6 +49,9 @@ impl Collector for OvsCollector {
                 |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
                     match OvsEventType::from_u8(raw_section.header.data_type)? {
                         OvsEventType::Upcall => unmarshall_upcall(raw_section, fields)?,
+                        OvsEventType::UpcallEnqueue => {
+                            unmarshall_upcall_enqueue(raw_section, fields)?
+                        }
                         OvsEventType::RecvUpcall => unmarshall_recv(raw_section, fields)?,
                         OvsEventType::Operation => unmarshall_operation(raw_section, fields)?,
                         OvsEventType::ActionExec => unmarshall_exec(raw_section, fields)?,
@@ -80,6 +84,12 @@ impl OvsCollector {
         probes.register_hook_to(
             Hook::from(kernel_exec_tp::DATA),
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?,
+        )?;
+
+        // Upcall enqueue probe.
+        probes.register_hook_to(
+            Hook::from(kernel_enqueue::DATA),
+            Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?,
         )?;
         Ok(())
     }
