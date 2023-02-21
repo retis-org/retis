@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 
-use super::{bpf::*, kernel_exec_tp, kernel_upcall_tp};
+use super::{bpf::*, kernel_exec_tp, kernel_upcall_tp, user_recv_upcall};
 
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
@@ -8,7 +8,7 @@ use crate::{
     core::{
         events::bpf::{BpfEventOwner, BpfEvents},
         kernel::Symbol,
-        probe::{Hook, Probe, ProbeManager},
+        probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
         user::proc::Process,
     },
 };
@@ -47,6 +47,7 @@ impl Collector for OvsCollector {
                 let event_type = OvsEventType::from_u8(raw_section.header.data_type)?;
                 match event_type {
                     OvsEventType::Upcall => unmarshall_upcall(raw_section, fields)?,
+                    OvsEventType::RecvUpcall => unmarshall_recv(raw_section, fields)?,
                     OvsEventType::ActionExec => unmarshall_exec(raw_section, fields)?,
                     OvsEventType::OutputAction => unmarshall_output(raw_section, fields)?,
                 }
@@ -96,13 +97,17 @@ impl OvsCollector {
     }
 
     /// Add USDT hooks.
-    fn add_usdt_hooks(&self, _probes: &mut ProbeManager) -> Result<()> {
+    fn add_usdt_hooks(&self, probes: &mut ProbeManager) -> Result<()> {
         let ovs = Process::from_cmd("ovs-vswitchd")?;
         if !ovs.is_usdt("main::run_start")? {
             bail!(
                 "Cannot find USDT probes in ovs-vswitchd. Was it built with --enable-usdt-probes?"
             );
         }
+
+        let recv_upcall = Probe::Usdt(UsdtProbe::new(&ovs, "dpif_recv::recv_upcall")?);
+        probes.register_hook_to(Hook::from(user_recv_upcall::DATA), recv_upcall)?;
+
         Ok(())
     }
 }
