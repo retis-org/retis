@@ -9,6 +9,9 @@ pub(crate) mod ovs;
 pub(crate) use ovs::*;
 
 mod bpf;
+mod kernel_enqueue {
+    include!("bpf/.out/kernel_enqueue.rs");
+}
 mod kernel_exec_tp {
     include!("bpf/.out/kernel_exec_tp.rs");
 }

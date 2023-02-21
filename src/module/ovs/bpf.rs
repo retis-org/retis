@@ -17,14 +17,16 @@ use crate::{
 pub(crate) enum OvsEventType {
     /// Upcall tracepoint.
     Upcall = 0,
+    /// Upcall enqueue kretprobe.
+    UpcallEnqueue = 1,
     /// Upcall received in userspace.
-    RecvUpcall = 1,
+    RecvUpcall = 2,
     /// Flow operation
-    Operation = 2,
+    Operation = 3,
     /// Execute action tracepoint.
-    ActionExec = 3,
+    ActionExec = 4,
     /// OUTPUT action specific data.
-    OutputAction = 4,
+    OutputAction = 5,
 }
 
 impl OvsEventType {
@@ -32,10 +34,11 @@ impl OvsEventType {
         use OvsEventType::*;
         let owner = match val {
             0 => Upcall,
-            1 => RecvUpcall,
-            2 => Operation,
-            3 => ActionExec,
-            4 => OutputAction,
+            1 => UpcallEnqueue,
+            2 => RecvUpcall,
+            3 => Operation,
+            4 => ActionExec,
+            5 => OutputAction,
             x => bail!("Can't construct a OvsEventType from {}", x),
         };
         Ok(owner)
@@ -173,5 +176,28 @@ pub(super) fn unmarshall_operation(
     };
     fields.push(event_field!("event_type", "flow_operation".to_string()));
 
+    Ok(())
+}
+
+/// OVS Operation data.
+#[derive(Default)]
+#[repr(C, packed)]
+struct UpcallEnqueue {
+    ret: i32,
+    cmd: u8,
+    port: u32,
+}
+unsafe impl Plain for UpcallEnqueue {}
+
+pub(super) fn unmarshall_upcall_enqueue(
+    raw: &BpfRawSection,
+    fields: &mut Vec<EventField>,
+) -> Result<()> {
+    let event = parse_raw_section::<UpcallEnqueue>(raw)?;
+
+    fields.push(event_field!("return", event.ret));
+    fields.push(event_field!("upcall_port", event.port));
+    fields.push(event_field!("cmd", event.cmd));
+    fields.push(event_field!("event_type", "upcall_enqueue".to_string()));
     Ok(())
 }
