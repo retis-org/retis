@@ -31,7 +31,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(max_entries, 1);
 	__type(key, u32);
-	__type(value, sizeof(struct skb_config));
+	__type(value, struct skb_config);
 } skb_config_map SEC(".maps");
 
 /* Please keep the following structs in sync with its Rust counterpart in
