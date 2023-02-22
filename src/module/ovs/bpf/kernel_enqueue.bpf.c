@@ -9,11 +9,15 @@ struct upcall_enqueue_event {
 	int ret;
 	u8 cmd;
 	u32 port;
+	u64 upcall_ts;
+	u32 upcall_cpu;
 } __attribute__((packed));
 
 /* Hook for kretprobe:queue_userspace_packet. */
 DEFINE_HOOK(
 	struct dp_upcall_info *upcall;
+	struct upcall_context *uctx;
+	u64 tid = bpf_get_current_pid_tgid();
 
 	upcall = (struct dp_upcall_info *) ctx->regs.reg[3];
 	if (!upcall)
@@ -27,8 +31,15 @@ DEFINE_HOOK(
 
 	enqueue->port = BPF_CORE_READ(upcall, portid);
 	enqueue->cmd= BPF_CORE_READ(upcall, cmd);
-    enqueue->ret = (int) ctx->regs.ret;
+	enqueue->ret = (int) ctx->regs.ret;
 
+	/* Retrieve upcall context and store add it to the event so we can
+	* group enqueue events to their upcall event. */
+	uctx = bpf_map_lookup_elem(&inflight_upcalls, &tid);
+	if (uctx) {
+		enqueue->upcall_ts = uctx->ts;
+		enqueue->upcall_cpu = uctx->cpu;
+	}
 	return 0;
 )
 
