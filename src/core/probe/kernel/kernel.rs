@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 use super::{config::ProbeConfig, inspect::inspect_symbol};
 use crate::core::{
     events::{
-        bpf::{BpfEventOwner, BpfEvents, BpfRawSection, Cache},
+        bpf::{BpfEventOwner, BpfEvents, BpfRawSection},
         EventField,
     },
     kernel::Symbol,
@@ -49,7 +49,7 @@ pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
     events.register_unmarshaler(
         BpfEventOwner::Kernel,
         Box::new(
-            |raw_section: &BpfRawSection, fields: &mut Vec<EventField>, _: &mut Cache| {
+            |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
                 if raw_section.data.len() != 9 {
                     bail!(
                         "Section data is not the expected size {} != 9",

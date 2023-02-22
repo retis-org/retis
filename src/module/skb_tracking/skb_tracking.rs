@@ -11,7 +11,7 @@ use crate::{
     collect::Collector,
     core::{
         events::{
-            bpf::{parse_raw_section, BpfEventOwner, BpfEvents, BpfRawSection, Cache},
+            bpf::{parse_raw_section, BpfEventOwner, BpfEvents, BpfRawSection},
             EventField,
         },
         kernel::Symbol,
@@ -78,7 +78,7 @@ impl Collector for SkbTrackingCollector {
         events.register_unmarshaler(
             BpfEventOwner::CollectorSkbTracking,
             Box::new(
-                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>, _: &mut Cache| {
+                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
                     if raw_section.header.data_type != 1 {
                         bail!("Unknown data type");
                     }

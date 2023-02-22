@@ -9,7 +9,7 @@ use crate::{
     collect::Collector,
     core::{
         events::{
-            bpf::{BpfEventOwner, BpfEvents, BpfRawSection, Cache},
+            bpf::{BpfEventOwner, BpfEvents, BpfRawSection},
             EventField,
         },
         probe::{Hook, ProbeManager},
@@ -78,19 +78,21 @@ impl Collector for SkbCollector {
         events.register_unmarshaler(
             BpfEventOwner::CollectorSkb,
             Box::new(
-                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>, _: &mut Cache| {
-                    match raw_section.header.data_type as u64 {
-                        SECTION_L2 => unmarshal_l2(raw_section, fields),
-                        SECTION_IPV4 => unmarshal_ipv4(raw_section, fields),
-                        SECTION_IPV6 => unmarshal_ipv6(raw_section, fields),
-                        SECTION_TCP => unmarshal_tcp(raw_section, fields),
-                        SECTION_UDP => unmarshal_udp(raw_section, fields),
-                        SECTION_ICMP => unmarshal_icmp(raw_section, fields),
-                        SECTION_DEV => unmarshal_dev(raw_section, fields),
-                        SECTION_NS => unmarshal_ns(raw_section, fields),
-                        SECTION_DATA_REF => unmarshal_data_ref(raw_section, fields),
-                        _ => bail!("Unknown data type"),
-                    }
+                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| match raw_section
+                    .header
+                    .data_type
+                    as u64
+                {
+                    SECTION_L2 => unmarshal_l2(raw_section, fields),
+                    SECTION_IPV4 => unmarshal_ipv4(raw_section, fields),
+                    SECTION_IPV6 => unmarshal_ipv6(raw_section, fields),
+                    SECTION_TCP => unmarshal_tcp(raw_section, fields),
+                    SECTION_UDP => unmarshal_udp(raw_section, fields),
+                    SECTION_ICMP => unmarshal_icmp(raw_section, fields),
+                    SECTION_DEV => unmarshal_dev(raw_section, fields),
+                    SECTION_NS => unmarshal_ns(raw_section, fields),
+                    SECTION_DATA_REF => unmarshal_data_ref(raw_section, fields),
+                    _ => bail!("Unknown data type"),
                 },
             ),
         )?;
