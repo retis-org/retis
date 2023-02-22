@@ -1,8 +1,10 @@
-use anyhow::{bail, Result};
+use std::mem;
+
+use anyhow::{anyhow, bail, Result};
 
 use super::{
-    bpf::*, kernel_enqueue, kernel_exec_tp, kernel_upcall_tp, user_op_exec, user_op_put,
-    user_recv_upcall,
+    bpf::*, kernel_enqueue, kernel_exec_tp, kernel_upcall_ret, kernel_upcall_tp, user_op_exec,
+    user_op_put, user_recv_upcall,
 };
 
 use crate::{
@@ -21,11 +23,14 @@ use crate::{
 
 const OVS_COLLECTOR: &str = "ovs";
 
-pub(crate) struct OvsCollector {}
+#[derive(Default)]
+pub(crate) struct OvsCollector {
+    inflight_upcalls_map: Option<libbpf_rs::Map>,
+}
 
 impl Collector for OvsCollector {
     fn new() -> Result<OvsCollector> {
-        Ok(OvsCollector {})
+        Ok(OvsCollector::default())
     }
 
     fn name(&self) -> &'static str {
@@ -52,6 +57,9 @@ impl Collector for OvsCollector {
                         OvsEventType::UpcallEnqueue => {
                             unmarshall_upcall_enqueue(raw_section, fields)?
                         }
+                        OvsEventType::UpcallReturn => {
+                            unmarshall_upcall_return(raw_section, fields)?
+                        }
                         OvsEventType::RecvUpcall => unmarshall_recv(raw_section, fields)?,
                         OvsEventType::Operation => unmarshall_operation(raw_section, fields)?,
                         OvsEventType::ActionExec => unmarshall_exec(raw_section, fields)?,
@@ -61,6 +69,8 @@ impl Collector for OvsCollector {
                 },
             ),
         )?;
+
+        self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
         // Add targetted hooks.
         self.add_kernel_hooks(probes)?;
@@ -72,24 +82,65 @@ impl Collector for OvsCollector {
 }
 
 impl OvsCollector {
+    fn create_inflight_upcalls_map() -> Result<libbpf_rs::Map> {
+        // Please keep in sync with its C counterpart in bpf/ovs_common.h
+        #[repr(C, packed)]
+        struct UpcallContext {
+            ts: u64,
+            cpu: u32,
+        }
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+
+        libbpf_rs::Map::create(
+            libbpf_rs::MapType::Hash,
+            Some("inflight_upcalls"),
+            mem::size_of::<u64>() as u32,
+            mem::size_of::<UpcallContext>() as u32,
+            50,
+            &opts,
+        )
+        .or_else(|e| bail!("Could not create the inflight_upcalls config map: {}", e))
+    }
+
     /// Add kernel hooks.
     fn add_kernel_hooks(&self, probes: &mut ProbeManager) -> Result<()> {
+        let inflight_upcalls_map = self
+            .inflight_upcalls_map
+            .as_ref()
+            .ok_or_else(|| anyhow!("Inflight upcalls map not created"))?
+            .fd();
+
         // Upcall probe.
+        let mut kernel_upcall_tp_hook = Hook::from(kernel_upcall_tp::DATA);
+        kernel_upcall_tp_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
         probes.register_hook_to(
-            Hook::from(kernel_upcall_tp::DATA),
+            kernel_upcall_tp_hook,
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_dp_upcall")?)?,
+        )?;
+
+        // Upcall return probe.
+        let mut kernel_upcall_ret_hook = Hook::from(kernel_upcall_ret::DATA);
+        kernel_upcall_ret_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
+        probes.register_hook_to(
+            kernel_upcall_ret_hook,
+            Probe::kretprobe(Symbol::from_name("ovs_dp_upcall")?)?,
+        )?;
+
+        // Upcall enqueue.
+        let mut kernel_enqueue_hook = Hook::from(kernel_enqueue::DATA);
+        kernel_enqueue_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
+        probes.register_hook_to(
+            kernel_enqueue_hook,
+            Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?,
         )?;
 
         // Action execute probe.
         probes.register_hook_to(
             Hook::from(kernel_exec_tp::DATA),
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?,
-        )?;
-
-        // Upcall enqueue probe.
-        probes.register_hook_to(
-            Hook::from(kernel_enqueue::DATA),
-            Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?,
         )?;
         Ok(())
     }

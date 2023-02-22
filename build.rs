@@ -160,6 +160,7 @@ fn main() {
     build_hook("src/module/ovs/bpf/kernel_enqueue.bpf.c");
     build_hook("src/module/ovs/bpf/kernel_exec_tp.bpf.c");
     build_hook("src/module/ovs/bpf/kernel_upcall_tp.bpf.c");
+    build_hook("src/module/ovs/bpf/kernel_upcall_ret.bpf.c");
     build_hook("src/module/ovs/bpf/user_recv_upcall.bpf.c");
     build_hook("src/module/ovs/bpf/user_op_exec.bpf.c");
     build_hook("src/module/ovs/bpf/user_op_put.bpf.c");

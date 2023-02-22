@@ -19,14 +19,16 @@ pub(crate) enum OvsEventType {
     Upcall = 0,
     /// Upcall enqueue kretprobe.
     UpcallEnqueue = 1,
+    /// Upcall return.
+    UpcallReturn = 2,
     /// Upcall received in userspace.
-    RecvUpcall = 2,
+    RecvUpcall = 3,
     /// Flow operation
-    Operation = 3,
+    Operation = 4,
     /// Execute action tracepoint.
-    ActionExec = 4,
+    ActionExec = 5,
     /// OUTPUT action specific data.
-    OutputAction = 5,
+    OutputAction = 6,
 }
 
 impl OvsEventType {
@@ -35,10 +37,11 @@ impl OvsEventType {
         Ok(match val {
             0 => Upcall,
             1 => UpcallEnqueue,
-            2 => RecvUpcall,
-            3 => Operation,
-            4 => ActionExec,
-            5 => OutputAction,
+            2 => UpcallReturn,
+            3 => RecvUpcall,
+            4 => Operation,
+            5 => ActionExec,
+            6 => OutputAction,
             x => bail!("Can't construct a OvsEventType from {}", x),
         })
     }
@@ -56,6 +59,8 @@ struct UpcallEvent {
     cmd: u8,
     /// Upcall port.
     port: u32,
+    /// Cpu ID
+    cpu: u32,
 }
 unsafe impl Plain for UpcallEvent {}
 
@@ -64,6 +69,7 @@ pub(super) fn unmarshall_upcall(raw: &BpfRawSection, fields: &mut Vec<EventField
 
     fields.push(event_field!("upcall_port", event.port));
     fields.push(event_field!("cmd", event.cmd));
+    fields.push(event_field!("cpu", event.cpu));
     fields.push(event_field!("event_type", "upcall".to_string()));
     Ok(())
 }
@@ -185,6 +191,8 @@ struct UpcallEnqueue {
     ret: i32,
     cmd: u8,
     port: u32,
+    upcall_ts: u64,
+    upcall_cpu: u32,
 }
 unsafe impl Plain for UpcallEnqueue {}
 
@@ -197,6 +205,31 @@ pub(super) fn unmarshall_upcall_enqueue(
     fields.push(event_field!("return", event.ret));
     fields.push(event_field!("upcall_port", event.port));
     fields.push(event_field!("cmd", event.cmd));
+    fields.push(event_field!("upcall_ts", event.upcall_ts));
+    fields.push(event_field!("upcall_cpu", event.upcall_cpu));
     fields.push(event_field!("event_type", "upcall_enqueue".to_string()));
+    Ok(())
+}
+
+/// OVS Upcall return
+#[derive(Default)]
+#[repr(C, packed)]
+struct UpcallReturn {
+    upcall_ts: u64,
+    upcall_cpu: u32,
+    ret_code: i32,
+}
+unsafe impl Plain for UpcallReturn {}
+
+pub(super) fn unmarshall_upcall_return(
+    raw: &BpfRawSection,
+    fields: &mut Vec<EventField>,
+) -> Result<()> {
+    let event = parse_raw_section::<UpcallReturn>(raw)?;
+
+    fields.push(event_field!("upcall_ts", event.upcall_ts));
+    fields.push(event_field!("upcall_cpu", event.upcall_cpu));
+    fields.push(event_field!("return_code", event.ret_code));
+    fields.push(event_field!("event_type", "upcall_return".to_string()));
     Ok(())
 }

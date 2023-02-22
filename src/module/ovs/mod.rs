@@ -18,6 +18,9 @@ mod kernel_exec_tp {
 mod kernel_upcall_tp {
     include!("bpf/.out/kernel_upcall_tp.rs");
 }
+mod kernel_upcall_ret {
+    include!("bpf/.out/kernel_upcall_ret.rs");
+}
 mod user_op_exec {
     include!("bpf/.out/user_op_exec.rs");
 }
