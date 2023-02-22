@@ -55,6 +55,7 @@ pub(crate) fn init_config_map() -> Result<libbpf_rs::Map> {
     )?)
 }
 
+#[cfg(not(test))]
 pub(crate) fn init_stack_map() -> Result<libbpf_rs::Map> {
     const MAX_STACKTRACE_ENTRIES: u32 = 256;
     const PERF_MAX_STACK_DEPTH: usize = 127;

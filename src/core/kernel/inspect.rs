@@ -216,7 +216,6 @@ pub(super) fn function_nargs(symbol: &Symbol) -> Result<u32> {
     get_inspector!()?.btf.function_nargs(symbol)
 }
 
-#[allow(dead_code)]
 /// Given an address, gets the name and the offset of the nearest symbol, if any.
 pub(crate) fn get_name_offt_from_addr_near(addr: u64) -> Result<(String, u64)> {
     let sym_addr = find_nearest_symbol(addr)?;

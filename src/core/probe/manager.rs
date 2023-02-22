@@ -73,10 +73,16 @@ impl ProbeManager {
             .insert("config_map".to_string(), mgr.config_map.fd());
         mgr.maps.insert("events_map".to_string(), events.map_fd());
 
+        #[cfg(not(test))]
         let sm = init_stack_map()?;
+        #[cfg(not(test))]
         mgr.maps.insert("stack_map".to_string(), sm.fd());
 
-        kernel::register_unmarshaler(events)?;
+        kernel::register_unmarshaler(
+            events,
+            #[cfg(not(test))]
+            sm,
+        )?;
         user::register_unmarshaler(events)?;
         Ok(mgr)
     }
@@ -239,6 +245,7 @@ impl ProbeManager {
                 #[cfg(not(test))]
                 &mut self.config_map,
                 self.maps.clone(),
+                #[cfg(not(test))]
                 &self.options,
             )?;
         }
@@ -254,6 +261,7 @@ impl ProbeManager {
                     #[cfg(not(test))]
                     &mut self.config_map,
                     self.maps.clone(),
+                    #[cfg(not(test))]
                     &self.options,
                 )?;
             }
@@ -286,7 +294,7 @@ impl ProbeSet {
         &mut self,
         #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
         maps: HashMap<String, i32>,
-        options: &[ProbeOption],
+        #[cfg(not(test))] options: &[ProbeOption],
     ) -> Result<()> {
         if self.targets.is_empty() {
             return Ok(());
