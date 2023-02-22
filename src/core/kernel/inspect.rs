@@ -121,7 +121,6 @@ pub(super) fn get_symbol_addr(name: &str) -> Result<u64> {
 }
 
 /// Given an address, try to find the nearest symbol, if any.
-#[allow(dead_code)] // FIXME
 pub(super) fn find_nearest_symbol(target: u64) -> Result<u64> {
     let (mut nearest, mut best_score) = (0, std::u64::MAX);
 
@@ -217,6 +216,16 @@ pub(super) fn function_nargs(symbol: &Symbol) -> Result<u32> {
     get_inspector!()?.btf.function_nargs(symbol)
 }
 
+#[allow(dead_code)]
+/// Given an address, gets the name and the offset of the nearest symbol, if any.
+pub(crate) fn get_name_offt_from_addr_near(addr: u64) -> Result<(String, u64)> {
+    let sym_addr = find_nearest_symbol(addr)?;
+    Ok((
+        get_symbol_name(sym_addr)?,
+        u64::checked_sub(addr, sym_addr).ok_or_else(|| anyhow!("failed to get symbol offset"))?,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,5 +256,20 @@ mod tests {
         assert!(find_nearest_symbol(addr + 1).unwrap() == addr);
         assert!(find_nearest_symbol(addr).unwrap() == addr);
         assert!(find_nearest_symbol(addr - 1).unwrap() != addr);
+    }
+
+    #[test]
+    fn name_from_addr_near() {
+        let mut sym_info = get_name_offt_from_addr_near(0xffffffff95617530 + 1).unwrap();
+
+        assert_eq!(sym_info.0, "consume_skb");
+        assert_eq!(sym_info.1, 0x1_u64);
+
+        sym_info = get_name_offt_from_addr_near(0xffffffff95617530 - 1).unwrap();
+        assert_ne!(sym_info.0, "consume_skb");
+
+        sym_info = get_name_offt_from_addr_near(0xffffffff95617530).unwrap();
+        assert_eq!(sym_info.0, "consume_skb");
+        assert_eq!(sym_info.1, 0x0_u64);
     }
 }

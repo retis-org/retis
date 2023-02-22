@@ -90,14 +90,6 @@ impl Symbol {
         Self::from_name(&name)
     }
 
-    /// Create a new symbol given an address near a symbol one. This is useful
-    /// when dealing with call traces.
-    #[allow(dead_code)] // FIXME
-    pub(crate) fn from_addr_near(addr: u64) -> Result<Symbol> {
-        let addr = inspect::find_nearest_symbol(addr)?;
-        Self::from_addr(addr)
-    }
-
     /// Get the symbol name.
     ///
     /// E.g. for `kfree_skb`. If the Probe represents the:
@@ -250,34 +242,5 @@ mod tests {
         // Try two invalid address.
         assert!(Symbol::from_addr(0xffffffff983c29a0 + 1).is_err());
         assert!(Symbol::from_addr(0xffffffff95612980 + 1).is_err());
-    }
-
-    #[test]
-    fn from_addr_near() {
-        // From an address (is an event).
-        let symbol = Symbol::from_addr_near(0xffffffff983c29a0 + 1).unwrap();
-        assert!(symbol.attach_name() == "kfree_skb");
-        assert!(symbol.addr_name() == "__tracepoint_kfree_skb");
-        assert!(symbol.typedef_name() == "btf_trace_kfree_skb");
-        assert!(symbol.nargs().unwrap() == 3);
-        assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
-        assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(2));
-        assert!(symbol
-            .parameter_offset("struct net_device *")
-            .unwrap()
-            .is_none());
-
-        // From an address (is a function).
-        let symbol = Symbol::from_addr_near(0xffffffff95612980 + 1).unwrap();
-        assert!(symbol.attach_name() == "kfree_skb_reason");
-        assert!(symbol.addr_name() == "kfree_skb_reason");
-        assert!(symbol.typedef_name() == "kfree_skb_reason");
-        assert!(symbol.nargs().unwrap() == 2);
-        assert!(symbol.parameter_offset("struct sk_buff *").unwrap() == Some(0));
-        assert!(symbol.parameter_offset("enum skb_drop_reason").unwrap() == Some(1));
-        assert!(symbol
-            .parameter_offset("struct net_device *")
-            .unwrap()
-            .is_none());
     }
 }
