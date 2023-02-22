@@ -11,13 +11,29 @@ struct upcall_enqueue_event {
 	u32 port;
 	u64 upcall_ts;
 	u32 upcall_cpu;
+	u32 queue_id;
 } __attribute__((packed));
+
+static __always_inline u32 queue_id_gen(struct sk_buff *skb)
+{
+    int zero = 0;
+    struct packet_buffer *buff = bpf_map_lookup_elem(&packet_buffers, &zero);
+    if (!buff)
+	    return 0;
+
+    return hash_skb(buff, skb, 0);
+}
 
 /* Hook for kretprobe:queue_userspace_packet. */
 DEFINE_HOOK(
 	struct dp_upcall_info *upcall;
+	struct sk_buff *skb;
 	struct upcall_context *uctx;
 	u64 tid = bpf_get_current_pid_tgid();
+
+	skb = (struct sk_buff *) ctx->regs.reg[1];
+	if (!skb)
+		return 0;
 
 	upcall = (struct dp_upcall_info *) ctx->regs.reg[3];
 	if (!upcall)
@@ -40,6 +56,10 @@ DEFINE_HOOK(
 		enqueue->upcall_ts = uctx->ts;
 		enqueue->upcall_cpu = uctx->cpu;
 	}
+
+	/* Generate upcall queue id based on the packet data. */
+	enqueue->queue_id = queue_id_gen(skb);
+
 	return 0;
 )
 

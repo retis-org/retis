@@ -148,6 +148,7 @@ struct RecvUpcall {
     r#type: u32,
     pkt_size: u32,
     key_size: u64,
+    queue_id: u32,
 }
 unsafe impl Plain for RecvUpcall {}
 
@@ -158,6 +159,7 @@ pub(super) fn unmarshall_recv(raw: &BpfRawSection, fields: &mut Vec<EventField>)
     fields.push(event_field!("pkt_size", event.pkt_size));
     fields.push(event_field!("key_size", event.key_size));
     fields.push(event_field!("event_type", "recv_upcall".to_string()));
+    fields.push(event_field!("queue_id", event.queue_id));
     Ok(())
 }
 
@@ -194,6 +196,7 @@ struct UpcallEnqueue {
     port: u32,
     upcall_ts: u64,
     upcall_cpu: u32,
+    queue_id: u32,
 }
 unsafe impl Plain for UpcallEnqueue {}
 
@@ -208,6 +211,7 @@ pub(super) fn unmarshall_upcall_enqueue(
     fields.push(event_field!("cmd", event.cmd));
     fields.push(event_field!("upcall_ts", event.upcall_ts));
     fields.push(event_field!("upcall_cpu", event.upcall_cpu));
+    fields.push(event_field!("queue_id", event.queue_id));
     fields.push(event_field!("event_type", "upcall_enqueue".to_string()));
     Ok(())
 }
