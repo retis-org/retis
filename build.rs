@@ -18,6 +18,8 @@ const INCLUDE_PATHS: &[&str] = &[
     // Taking errno.h from libc instead of linux headers.
     // TODO: Remove when we fix proper header dependencies.
     "/usr/include/x86_64-linux-gnu",
+    "vendor/linux/include",
+    "vendor/linux/asm/x86/include",
 ];
 const CLANG_ARGS: &[&str] = &["-Werror"];
 
