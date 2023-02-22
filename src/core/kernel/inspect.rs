@@ -1,7 +1,11 @@
-use std::{collections::HashSet, fs};
+use std::{
+    collections::HashSet,
+    fs,
+    ops::Bound::{Included, Unbounded},
+};
 
 use anyhow::{anyhow, bail, Result};
-use bimap::BiHashMap;
+use bimap::BiBTreeMap;
 use log::warn;
 use once_cell::sync::OnceCell;
 
@@ -21,7 +25,7 @@ pub(crate) struct Inspector {
     /// Btf information.
     btf: BtfInfo,
     /// Symbols bi-directional map (addr<>name).
-    symbols: BiHashMap<u64, String>,
+    symbols: BiBTreeMap<u64, String>,
     /// Set of traceable events (e.g. tracepoints).
     traceable_events: Option<HashSet<String>>,
     /// Set of traceable functions (e.g. kprobes).
@@ -45,7 +49,7 @@ impl Inspector {
         let btf = BtfInfo::new()?;
 
         // First parse the symbol file.
-        let mut symbols = BiHashMap::new();
+        let mut symbols = BiBTreeMap::new();
         for line in fs::read_to_string(symbols_file)?.lines() {
             let data: Vec<&str> = line.split(' ').collect();
             if data.len() < 3 {
@@ -122,32 +126,15 @@ pub(super) fn get_symbol_addr(name: &str) -> Result<u64> {
 
 /// Given an address, try to find the nearest symbol, if any.
 pub(super) fn find_nearest_symbol(target: u64) -> Result<u64> {
-    let (mut nearest, mut best_score) = (0, std::u64::MAX);
+    let nearest = get_inspector!()?
+        .symbols
+        .left_range((Unbounded, Included(&target)))
+        .next_back();
 
-    for addr in get_inspector!()?.symbols.left_values() {
-        // The target address has to be greater or equal to a symbol address to
-        // be considered near it (and part of it).
-        if target < *addr {
-            continue;
-        }
-
-        let score = target.abs_diff(*addr);
-        if score < best_score {
-            nearest = *addr;
-            best_score = score;
-
-            // Exact match; can't do better than that.
-            if score == 0 {
-                break;
-            }
-        }
+    match nearest {
+        Some(symbol) => Ok(*symbol.0),
+        None => bail!("Can't get a symbol near {}", target),
     }
-
-    if best_score == std::u64::MAX {
-        bail!("Can't get a symbol near {}", target);
-    }
-
-    Ok(nearest)
 }
 
 /// Check if an event is traceable. Return Ok(None) if we can't know.
