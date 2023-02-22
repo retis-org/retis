@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 use log::info;
 
 #[cfg(not(test))]
-use super::kernel::config::init_config_map;
+use super::kernel::config::{init_config_map, init_stack_map};
 use super::*;
 use super::{
     builder::ProbeBuilder,
@@ -68,6 +68,9 @@ impl ProbeManager {
         mgr.maps
             .insert("config_map".to_string(), mgr.config_map.fd());
         mgr.maps.insert("events_map".to_string(), events.map_fd());
+
+        let sm = init_stack_map()?;
+        mgr.maps.insert("stack_map".to_string(), sm.fd());
 
         kernel::register_unmarshaler(events)?;
         user::register_unmarshaler(events)?;
