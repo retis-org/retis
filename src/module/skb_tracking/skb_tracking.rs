@@ -113,10 +113,6 @@ impl Collector for SkbTrackingCollector {
 
         Ok(())
     }
-
-    fn start(&mut self) -> Result<()> {
-        Ok(())
-    }
 }
 
 impl SkbTrackingCollector {

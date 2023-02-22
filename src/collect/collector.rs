@@ -28,7 +28,9 @@ pub(crate) trait Collector {
     /// List of kernel data types the collector can retrieve data from, if any.
     /// This is useful for registering dynamic collectors, and is used later for
     /// checking requested probes are not a no-op.
-    fn known_kernel_types(&self) -> Option<Vec<&'static str>>;
+    fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
+        None
+    }
     ///Register command line arguments on the provided DynamicCommand object
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()>;
     /// Initialize the collector, likely to be used to pass configuration data
@@ -49,7 +51,9 @@ pub(crate) trait Collector {
         events: &mut BpfEvents,
     ) -> Result<()>;
     /// Start the group of events (non-probes).
-    fn start(&mut self) -> Result<()>;
+    fn start(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Group of collectors. Used to handle a set of collectors and to perform
