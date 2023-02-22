@@ -14,6 +14,13 @@ use crate::cli::{dynamic::DynamicCommand, SubCommand};
 pub(crate) struct CollectArgs {
     #[arg(long, default_value = "false")]
     pub(super) ebpf_debug: Option<bool>,
+    #[arg(
+        long,
+        default_value = "false",
+        help = "Include stack traces in the kernel events. The stack entries are limited and
+not released. If exhausted, no stack trace will be included."
+    )]
+    pub(super) stack: bool,
     // Some of the options that we want for this arg are not available in clap's derive interface
     // so both the argument definition and the field population will be done manually.
     #[arg(skip)]
