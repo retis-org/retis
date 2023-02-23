@@ -22,6 +22,7 @@ struct user_event {
 struct user_ctx {
 	long args[BPF_USDT_MAX_ARG_CNT];
 	u32 num;
+	u64 timestamp;
 };
 
 /* Helper to define a USDT hook (mostly in collectors) while not having to

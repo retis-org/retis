@@ -14,7 +14,7 @@ use crate::{
         events::bpf::{BpfEventOwner, BpfEvents},
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
-        user::proc::Process,
+        user::proc::{Process, ThreadInfo},
     },
 };
 
@@ -23,6 +23,9 @@ const OVS_COLLECTOR: &str = "ovs";
 #[derive(Default)]
 pub(crate) struct OvsCollector {
     inflight_upcalls_map: Option<libbpf_rs::Map>,
+    /* Batch tracking maps. */
+    upcall_batches: Option<libbpf_rs::Map>,
+    pid_to_batch: Option<libbpf_rs::Map>,
 }
 
 impl Collector for OvsCollector {
@@ -108,6 +111,75 @@ impl OvsCollector {
         .or_else(|e| bail!("Could not create the inflight_upcalls config map: {}", e))
     }
 
+    // Returns the upcall_batches array and the pid_to_batch hash.
+    fn create_batch_maps(&mut self, ovs: &Process) -> Result<()> {
+        let ovs_threads = ovs.thread_info()?;
+        let handlers: Vec<&ThreadInfo> = ovs_threads
+            .iter()
+            .filter(|t| t.comm.contains("handler"))
+            .collect();
+        let nhandlers = handlers.len();
+
+        // Please keep in sync with its C counterpart in bpf/ovs_operation.h
+        #[repr(C, packed)]
+        struct UserUpcallInfo {
+            queue_id: u32,
+            process_ops: u8,
+        }
+        #[repr(C, packed)]
+        struct UpcallBatch {
+            leater_ts: u64,
+            processing: bool,
+            current_upcall: u8,
+            total: u8,
+            upcalls: [UserUpcallInfo; 64],
+        }
+
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+
+        self.upcall_batches = Some(
+            libbpf_rs::Map::create(
+                libbpf_rs::MapType::Array,
+                Some("upcall_batches"),
+                mem::size_of::<u32>() as u32,
+                mem::size_of::<UpcallBatch>() as u32,
+                nhandlers as u32,
+                &opts,
+            )
+            .or_else(|e| bail!("Could not create the upcall_batches map: {}", e))?,
+        );
+
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+
+        self.pid_to_batch = Some(
+            libbpf_rs::Map::create(
+                libbpf_rs::MapType::Hash,
+                Some("pid_to_batch"),
+                mem::size_of::<u32>() as u32,
+                mem::size_of::<u32>() as u32,
+                nhandlers as u32,
+                &opts,
+            )
+            .or_else(|e| bail!("Could not create the upcall_batches map: {}", e))?,
+        );
+
+        /* Populate pid_to_batch map. */
+        for (batch_idx, handler) in (0_u32..).zip(handlers.iter().as_ref().iter()) {
+            self.pid_to_batch.as_mut().unwrap().update(
+                &handler.pid.to_ne_bytes(),
+                &batch_idx.to_ne_bytes(),
+                libbpf_rs::MapFlags::NO_EXIST,
+            )?;
+        }
+        Ok(())
+    }
+
     /// Add generic kernel probes.
     fn add_generic_probes(&self, probes: &mut ProbeManager) -> Result<()> {
         probes.add_probe(Probe::raw_tracepoint(Symbol::from_name(
@@ -157,25 +229,48 @@ impl OvsCollector {
     }
 
     /// Add USDT hooks.
-    fn add_usdt_hooks(&self, probes: &mut ProbeManager) -> Result<()> {
+    fn add_usdt_hooks(&mut self, probes: &mut ProbeManager) -> Result<()> {
         let ovs = Process::from_cmd("ovs-vswitchd")?;
         if !ovs.is_usdt("main::run_start")? {
             bail!(
                 "Cannot find USDT probes in ovs-vswitchd. Was it built with --enable-usdt-probes?"
             );
         }
+        self.create_batch_maps(&ovs)?;
+        let upcall_batches_fd = self
+            .upcall_batches
+            .as_ref()
+            .ok_or_else(|| anyhow!("upcall batches map not created"))?
+            .fd();
+        let pid_to_batch_fd = self
+            .pid_to_batch
+            .as_ref()
+            .ok_or_else(|| anyhow!("pid_to_batch map not created"))?
+            .fd();
 
-        let recv_upcall = Probe::Usdt(UsdtProbe::new(&ovs, "dpif_recv::recv_upcall")?);
-        probes.register_hook_to(Hook::from(user_recv_upcall::DATA), recv_upcall)?;
+        let mut batch_probes = vec![
+            (
+                Probe::Usdt(UsdtProbe::new(&ovs, "dpif_recv::recv_upcall")?),
+                Hook::from(user_recv_upcall::DATA),
+            ),
+            (
+                Probe::Usdt(UsdtProbe::new(
+                    &ovs,
+                    "dpif_netlink_operate__::op_flow_execute",
+                )?),
+                Hook::from(user_op_exec::DATA),
+            ),
+            (
+                Probe::Usdt(UsdtProbe::new(&ovs, "dpif_netlink_operate__::op_flow_put")?),
+                Hook::from(user_op_put::DATA),
+            ),
+        ];
 
-        let op_exec = Probe::Usdt(UsdtProbe::new(
-            &ovs,
-            "dpif_netlink_operate__::op_flow_execute",
-        )?);
-        probes.register_hook_to(Hook::from(user_op_exec::DATA), op_exec)?;
-
-        let op_put = Probe::Usdt(UsdtProbe::new(&ovs, "dpif_netlink_operate__::op_flow_put")?);
-        probes.register_hook_to(Hook::from(user_op_put::DATA), op_put)?;
+        while let Some((probe, mut hook)) = batch_probes.pop() {
+            hook.reuse_map("upcall_batches", upcall_batches_fd)?
+                .reuse_map("pid_to_batch", pid_to_batch_fd)?;
+            probes.register_hook_to(hook, probe)?;
+        }
 
         Ok(())
     }
