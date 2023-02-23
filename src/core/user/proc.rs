@@ -409,6 +409,11 @@ impl Process {
     pub(crate) fn is_usdt(&self, target: &str) -> Result<bool> {
         Ok(self.get_note(target)?.is_some())
     }
+
+    /// Returns the Process's thread information
+    pub(crate) fn thread_info(&self) -> Result<Vec<ThreadInfo>> {
+        get_thread_info(self.pid)
+    }
 }
 
 /// Check if a path is a shared library.
@@ -497,8 +502,43 @@ fn get_process_maps(pid: i32) -> Result<Vec<ProcessMap>> {
     Ok(maps)
 }
 
+/// Information of a single thread.
+#[derive(Debug)]
+pub(crate) struct ThreadInfo {
+    /// Process id of the thread
+    pub(crate) pid: i32,
+    /// Name of the thread
+    pub(crate) comm: String,
+}
+
+/// Returns the list of ProcessMaps of a given pid.
+fn get_thread_info(pid: i32) -> Result<Vec<ThreadInfo>> {
+    let mut threads = Vec::new();
+
+    for entry in Path::new("/proc/")
+        .join(pid.to_string())
+        .join("task")
+        .read_dir()?
+    {
+        let entry = entry?;
+        let comm = fs::read_to_string(entry.path().join("comm"))?;
+        threads.push(ThreadInfo {
+            pid: entry
+                .file_name()
+                .into_string()
+                .map_err(|_| anyhow!("Failed to parse thread pid"))?
+                .parse::<i32>()?,
+            comm: comm.trim().to_string(),
+        });
+    }
+
+    Ok(threads)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::{sync::mpsc, thread, time::Duration};
+
     use super::*;
     use probe::probe;
 
@@ -583,6 +623,31 @@ mod tests {
                 assert!(traceable.is_ok() && traceable.unwrap());
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn get_threads() -> Result<()> {
+        let (tx, rx) = mpsc::channel();
+        thread::Builder::new()
+            .name("test_thread".to_string())
+            .spawn(move || loop {
+                if let Ok(_) = rx.try_recv() {
+                    break;
+                }
+                thread::sleep(Duration::from_secs(1));
+            })?;
+
+        let threads = Process::from_pid(std::process::id() as i32)?.thread_info()?;
+        assert!(threads.len() > 1);
+
+        // Main thread should have the same pid as process.
+        assert!(threads.first().unwrap().pid == std::process::id() as i32);
+
+        // Find test thread
+        assert!(threads.iter().find(|t| t.comm.eq("test_thread")).is_some());
+        tx.send(())?;
+
         Ok(())
     }
 }
