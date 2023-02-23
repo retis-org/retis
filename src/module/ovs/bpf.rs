@@ -148,6 +148,8 @@ struct RecvUpcall {
     pkt_size: u32,
     key_size: u64,
     queue_id: u32,
+    batch_ts: u64,
+    batch_idx: u8,
 }
 unsafe impl Plain for RecvUpcall {}
 
@@ -159,6 +161,8 @@ pub(super) fn unmarshall_recv(raw: &BpfRawSection, fields: &mut Vec<EventField>)
     fields.push(event_field!("key_size", event.key_size));
     fields.push(event_field!("event_type", "recv_upcall".to_string()));
     fields.push(event_field!("queue_id", event.queue_id));
+    fields.push(event_field!("batch_ts", event.batch_ts));
+    fields.push(event_field!("batch_idx", event.batch_idx));
     Ok(())
 }
 
@@ -167,6 +171,9 @@ pub(super) fn unmarshall_recv(raw: &BpfRawSection, fields: &mut Vec<EventField>)
 #[repr(C, packed)]
 struct OvsOperation {
     op_type: u8,
+    queue_id: u32,
+    batch_ts: u64,
+    batch_idx: u8,
 }
 unsafe impl Plain for OvsOperation {}
 
@@ -181,6 +188,9 @@ pub(super) fn unmarshall_operation(
         1 => fields.push(event_field!("op_type", "put".to_string())),
         _ => bail!("Unknown operation type {0}", event.op_type),
     };
+    fields.push(event_field!("queue_id", event.queue_id));
+    fields.push(event_field!("batch_ts", event.batch_ts));
+    fields.push(event_field!("batch_idx", event.batch_idx));
     fields.push(event_field!("event_type", "flow_operation".to_string()));
 
     Ok(())

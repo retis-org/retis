@@ -14,7 +14,7 @@ DEFINE_USDT_HOOK (
 
 	put_event->type = OVS_OP_PUT;
 
-    return 0;
+	return batch_process_op(OVS_OP_PUT, put_event);
 )
 
 char __license[] SEC("license") = "GPL";

@@ -67,7 +67,9 @@ int probe_usdt(struct pt_regs *ctx)
 		discard_event(event);
 		return 0;
 	}
-	e->timestamp = bpf_ktime_get_ns();
+
+	uctx.timestamp = bpf_ktime_get_ns();
+	e->timestamp = uctx.timestamp;
 
 	u = get_event_section(event, USERSPACE, 1, sizeof(*u));
 	if (!u) {
