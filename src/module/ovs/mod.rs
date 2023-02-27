@@ -12,3 +12,6 @@ mod bpf;
 mod kernel_upcall_tp {
     include!("bpf/.out/kernel_upcall_tp.rs");
 }
+mod kernel_exec_tp {
+    include!("bpf/.out/kernel_exec_tp.rs");
+}

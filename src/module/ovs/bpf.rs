@@ -17,6 +17,8 @@ use crate::{
 pub(crate) enum OvsEventType {
     /// Upcall tracepoint.
     Upcall = 0,
+    /// Execute action tracepoint.
+    ActionExec = 1,
 }
 
 impl OvsEventType {
@@ -24,6 +26,7 @@ impl OvsEventType {
         use OvsEventType::*;
         Ok(match val {
             0 => Upcall,
+            1 => ActionExec,
             x => bail!("Can't construct a OvsEventType from {}", x),
         })
     }
@@ -50,5 +53,55 @@ pub(super) fn unmarshall_upcall(raw: &BpfRawSection, fields: &mut Vec<EventField
     fields.push(event_field!("upcall_port", event.port));
     fields.push(event_field!("cmd", event.cmd));
     fields.push(event_field!("event_type", "upcall".to_string()));
+    Ok(())
+}
+
+/// OVS action event data.
+#[derive(Default)]
+#[repr(C, packed)]
+struct ActionEvent {
+    /// Action to be executed.
+    action: u8,
+    /// Recirculation id.
+    recirc_id: u32,
+}
+
+unsafe impl Plain for ActionEvent {}
+
+pub(super) fn unmarshall_exec(raw: &BpfRawSection, fields: &mut Vec<EventField>) -> Result<()> {
+    let event = parse_raw_section::<ActionEvent>(raw)?;
+
+    // Values from enum ovs_action_attr (uapi/linux/openvswitch.h).
+    let action_str = match event.action {
+        0 => "unspecified",
+        1 => "output",
+        2 => "userspace",
+        3 => "set",
+        4 => "push_vlan",
+        5 => "pop_vlan",
+        6 => "sample",
+        7 => "recirc",
+        8 => "hash",
+        9 => "push_mpls",
+        10 => "pop_mpls",
+        11 => "set_masked",
+        12 => "ct",
+        13 => "trunc",
+        14 => "push_eth",
+        15 => "pop_eth",
+        16 => "ct_clear",
+        17 => "push_nsh",
+        18 => "pop_nsh",
+        19 => "meter",
+        20 => "clone",
+        21 => "check_pkt_len",
+        22 => "add_mpls",
+        23 => "dec_ttl",
+        val => bail!("Unsupported action id {val}"),
+    };
+
+    fields.push(event_field!("action", action_str.to_string()));
+    fields.push(event_field!("recirc_id", event.recirc_id));
+    fields.push(event_field!("event_type", "action_execute".to_string()));
     Ok(())
 }

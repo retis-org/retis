@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 
-use super::{bpf::*, kernel_upcall_tp};
+use super::{bpf::*, kernel_exec_tp, kernel_upcall_tp};
 
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
@@ -46,6 +46,7 @@ impl Collector for OvsCollector {
                 |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
                     match OvsEventType::from_u8(raw_section.header.data_type)? {
                         OvsEventType::Upcall => unmarshall_upcall(raw_section, fields)?,
+                        OvsEventType::ActionExec => unmarshall_exec(raw_section, fields)?,
                     }
                     Ok(())
                 },
@@ -68,6 +69,12 @@ impl OvsCollector {
         probes.register_hook_to(
             Hook::from(kernel_upcall_tp::DATA),
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_dp_upcall")?)?,
+        )?;
+
+        // Action execute probe.
+        probes.register_hook_to(
+            Hook::from(kernel_exec_tp::DATA),
+            Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?,
         )?;
         Ok(())
     }
