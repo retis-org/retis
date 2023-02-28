@@ -1,6 +1,7 @@
 use std::mem;
 
 use anyhow::{anyhow, bail, Result};
+use clap::{arg, Parser};
 
 use super::{
     bpf::*, kernel_enqueue, kernel_exec_tp, kernel_upcall_ret, kernel_upcall_tp, user_op_exec,
@@ -20,8 +21,21 @@ use crate::{
 
 const OVS_COLLECTOR: &str = "ovs";
 
+#[derive(Parser, Default)]
+pub(crate) struct OvsCollectorArgs {
+    #[arg(
+        long,
+        value_delimiter = ',',
+        default_value = "false",
+        help = "Enable OpenvSwitch upcall tracking. Requires USDT probes being enabled.
+See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions."
+    )]
+    ovs_track: bool,
+}
+
 #[derive(Default)]
 pub(crate) struct OvsCollector {
+    track: bool,
     inflight_upcalls_map: Option<libbpf_rs::Map>,
     /* Batch tracking maps. */
     upcall_batches: Option<libbpf_rs::Map>,
@@ -42,12 +56,12 @@ impl Collector for OvsCollector {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(OVS_COLLECTOR)
+        cmd.register_module::<OvsCollectorArgs>(OVS_COLLECTOR)
     }
 
     fn init(
         &mut self,
-        _: &CliConfig,
+        cli: &CliConfig,
         probes: &mut ProbeManager,
         events: &mut BpfEvents,
     ) -> Result<()> {
@@ -69,6 +83,10 @@ impl Collector for OvsCollector {
             }),
         )?;
 
+        self.track = cli
+            .get_section::<OvsCollectorArgs>(OVS_COLLECTOR)?
+            .ovs_track;
+
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
         // Add generic probes that can be probbed by other collectors such as skb.
@@ -78,7 +96,9 @@ impl Collector for OvsCollector {
         self.add_kernel_hooks(probes)?;
 
         // Add USDT hooks.
-        self.add_usdt_hooks(probes)?;
+        if self.track {
+            self.add_usdt_hooks(probes)?;
+        }
         Ok(())
     }
 
@@ -212,13 +232,15 @@ impl OvsCollector {
             Probe::kretprobe(Symbol::from_name("ovs_dp_upcall")?)?,
         )?;
 
-        // Upcall enqueue.
-        let mut kernel_enqueue_hook = Hook::from(kernel_enqueue::DATA);
-        kernel_enqueue_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
-        probes.register_hook_to(
-            kernel_enqueue_hook,
-            Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?,
-        )?;
+        if self.track {
+            // Upcall enqueue.
+            let mut kernel_enqueue_hook = Hook::from(kernel_enqueue::DATA);
+            kernel_enqueue_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
+            probes.register_hook_to(
+                kernel_enqueue_hook,
+                Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?,
+            )?;
+        }
 
         // Action execute probe.
         probes.register_hook_to(
