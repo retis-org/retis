@@ -54,6 +54,8 @@ int probe_kretprobe(struct pt_regs *ctx)
 
 	context.timestamp = bpf_ktime_get_ns();
 	context.ksym = kprobe_ctx->ksym;
+	context.probe_type = KERNEL_PROBE_KRETPROBE;
+
 	kretprobe_get_regs(&context.regs, &kprobe_ctx->regs, ctx);
 
 	return chain(&context);

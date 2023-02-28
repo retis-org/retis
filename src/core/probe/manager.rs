@@ -291,7 +291,7 @@ impl ProbeSet {
                     config_map.update(
                         &probe.ksym.to_ne_bytes(),
                         config,
-                        libbpf_rs::MapFlags::NO_EXIST,
+                        libbpf_rs::MapFlags::ANY,
                     )?;
                 }
                 _ => (),
