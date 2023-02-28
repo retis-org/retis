@@ -11,6 +11,11 @@ struct exec_event {
 	u32 recirc_id;
 } __attribute__((packed));
 
+/* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
+struct exec_output {
+	u32 port;
+} __attribute__((packed));
+
 /* Hook for ovs_do_execute_action tracepoint. */
 DEFINE_HOOK(
 	struct nlattr *attr;
@@ -25,7 +30,7 @@ DEFINE_HOOK(
 	if (!attr)
 		return 0;
 
-	exec = get_event_section(event, COLLECTOR_OVS, OVS_DP_EXEC,
+	exec = get_event_section(event, COLLECTOR_OVS, OVS_DP_ACTION,
 				 sizeof(*exec));
 	if (!exec)
 		return 0;
@@ -33,6 +38,22 @@ DEFINE_HOOK(
 	exec->action = nla_type(attr);
 	exec->recirc_id = BPF_CORE_READ(key, recirc_id);
 
+	// Add action-specific data for some actions.
+	switch (exec->action) {
+	case OVS_ACTION_ATTR_OUTPUT:
+		{
+		struct exec_output *output =
+			get_event_section(event, COLLECTOR_OVS,
+					  OVS_DP_ACTION_OUTPUT,
+					  sizeof(*output));
+		if (!output)
+			return 0;
+
+		bpf_probe_read_kernel(&output->port, sizeof(output->port),
+				      nla_data(attr));
+		break;
+		}
+	}
 	return 0;
 )
 

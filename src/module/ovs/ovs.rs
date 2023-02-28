@@ -47,6 +47,7 @@ impl Collector for OvsCollector {
                     match OvsEventType::from_u8(raw_section.header.data_type)? {
                         OvsEventType::Upcall => unmarshall_upcall(raw_section, fields)?,
                         OvsEventType::ActionExec => unmarshall_exec(raw_section, fields)?,
+                        OvsEventType::OutputAction => unmarshall_output(raw_section, fields)?,
                     }
                     Ok(())
                 },

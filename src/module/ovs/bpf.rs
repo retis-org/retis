@@ -19,6 +19,8 @@ pub(crate) enum OvsEventType {
     Upcall = 0,
     /// Execute action tracepoint.
     ActionExec = 1,
+    /// OUTPUT action specific data.
+    OutputAction = 2,
 }
 
 impl OvsEventType {
@@ -27,6 +29,7 @@ impl OvsEventType {
         Ok(match val {
             0 => Upcall,
             1 => ActionExec,
+            2 => OutputAction,
             x => bail!("Can't construct a OvsEventType from {}", x),
         })
     }
@@ -103,5 +106,21 @@ pub(super) fn unmarshall_exec(raw: &BpfRawSection, fields: &mut Vec<EventField>)
     fields.push(event_field!("action", action_str.to_string()));
     fields.push(event_field!("recirc_id", event.recirc_id));
     fields.push(event_field!("event_type", "action_execute".to_string()));
+    Ok(())
+}
+
+/// OVS output action data.
+#[derive(Default)]
+#[repr(C, packed)]
+struct OutputAction {
+    /// Output port.
+    port: u32,
+}
+unsafe impl Plain for OutputAction {}
+
+pub(super) fn unmarshall_output(raw: &BpfRawSection, fields: &mut Vec<EventField>) -> Result<()> {
+    let event = parse_raw_section::<OutputAction>(raw)?;
+
+    fields.push(event_field!("port", event.port));
     Ok(())
 }
