@@ -86,7 +86,15 @@ impl Inspector {
         if let Ok(file) = fs::read_to_string(target) {
             let mut set = HashSet::new();
             for line in file.lines() {
-                set.insert(line.to_string());
+                // functions might be formatted as "func_name [module]".
+                match line.to_string().split(' ').next() {
+                    Some(symbol) => {
+                        set.insert(symbol.to_string());
+                    }
+                    None => {
+                        warn!("Symbol list element has an unexpected format in {target}: {line}");
+                    }
+                }
             }
 
             return Some(set);
