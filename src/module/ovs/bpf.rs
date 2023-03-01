@@ -27,8 +27,10 @@ pub(crate) enum OvsEventType {
     Operation = 4,
     /// Execute action tracepoint.
     ActionExec = 5,
+    /// Execute action tracking.
+    ActionExecTrack = 6,
     /// OUTPUT action specific data.
-    OutputAction = 6,
+    OutputAction = 7,
 }
 
 impl OvsEventType {
@@ -41,7 +43,8 @@ impl OvsEventType {
             3 => RecvUpcall,
             4 => Operation,
             5 => ActionExec,
-            6 => OutputAction,
+            6 => ActionExecTrack,
+            7 => OutputAction,
             x => bail!("Can't construct a OvsEventType from {}", x),
         })
     }
@@ -121,6 +124,25 @@ pub(super) fn unmarshall_exec(raw: &BpfRawSection, fields: &mut Vec<EventField>)
     fields.push(event_field!("action", action_str.to_string()));
     fields.push(event_field!("recirc_id", event.recirc_id));
     fields.push(event_field!("event_type", "action_execute".to_string()));
+    Ok(())
+}
+
+/// OVS action tracking event data.
+#[derive(Default)]
+#[repr(C, packed)]
+struct ActionTrackEvent {
+    /// Queue id.
+    queue_id: u32,
+}
+
+unsafe impl Plain for ActionTrackEvent {}
+
+pub(super) fn unmarshall_exec_track(
+    raw: &BpfRawSection,
+    fields: &mut Vec<EventField>,
+) -> Result<()> {
+    let event = parse_raw_section::<ActionTrackEvent>(raw)?;
+    fields.push(event_field!("queue_id", event.queue_id));
     Ok(())
 }
 

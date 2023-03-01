@@ -15,7 +15,8 @@ enum trace_ovs_data_type {
 	OVS_RECV_UPCALL = 3,
 	OVS_OPERATION = 4,
 	OVS_DP_ACTION = 5,
-	OVS_DP_ACTION_OUTPUT = 6,
+	OVS_DP_ACTION_TRACK = 6,
+	OVS_DP_ACTION_OUTPUT = 7,
 };
 
 /* Used to keep the context of an upcall operation for its upcall enqueue
@@ -33,6 +34,13 @@ struct {
 	__type(key, u64);
 	__type(value, struct upcall_context);
 } inflight_upcalls SEC(".maps");
+
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_INFLIGHT_UPCALLS);
+	__type(key, u64);
+	__type(value, u32);
+} inflight_exec_cmd SEC(".maps");
 
 #define PACKET_HASH_SIZE 64
 /* Packet data to be used to for hashing.

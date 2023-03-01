@@ -160,6 +160,8 @@ fn main() {
     build_hook("src/module/skb/bpf/skb_hook.bpf.c");
     build_hook("src/module/skb_tracking/bpf/tracking_hook.bpf.c");
     build_hook("src/module/ovs/bpf/kernel_enqueue.bpf.c");
+    build_hook("src/module/ovs/bpf/kernel_exec_cmd.bpf.c");
+    build_hook("src/module/ovs/bpf/kernel_exec_cmd_ret.bpf.c");
     build_hook("src/module/ovs/bpf/kernel_exec_tp.bpf.c");
     build_hook("src/module/ovs/bpf/kernel_upcall_tp.bpf.c");
     build_hook("src/module/ovs/bpf/kernel_upcall_ret.bpf.c");

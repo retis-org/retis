@@ -4,8 +4,8 @@ use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
 
 use super::{
-    bpf::*, kernel_enqueue, kernel_exec_tp, kernel_upcall_ret, kernel_upcall_tp, user_op_exec,
-    user_op_put, user_recv_upcall,
+    bpf::*, kernel_enqueue, kernel_exec_cmd, kernel_exec_cmd_ret, kernel_exec_tp,
+    kernel_upcall_ret, kernel_upcall_tp, user_op_exec, user_op_put, user_recv_upcall,
 };
 
 use crate::{
@@ -39,6 +39,7 @@ See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions.
 pub(crate) struct OvsCollector {
     track: bool,
     inflight_upcalls_map: Option<libbpf_rs::Map>,
+    inflight_exec_cmd_map: Option<libbpf_rs::Map>,
     /* Batch tracking maps. */
     upcall_batches: Option<libbpf_rs::Map>,
     pid_to_batch: Option<libbpf_rs::Map>,
@@ -79,6 +80,9 @@ impl Collector for OvsCollector {
                         OvsEventType::RecvUpcall => unmarshall_recv(raw_section, fields)?,
                         OvsEventType::Operation => unmarshall_operation(raw_section, fields)?,
                         OvsEventType::ActionExec => unmarshall_exec(raw_section, fields)?,
+                        OvsEventType::ActionExecTrack => {
+                            unmarshall_exec_track(raw_section, fields)?
+                        }
                         OvsEventType::OutputAction => unmarshall_output(raw_section, fields)?,
                     }
                     Ok(())
@@ -93,7 +97,10 @@ impl Collector for OvsCollector {
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
         // Add targetted hooks.
-        self.add_kernel_hooks(probes)?;
+        // Upcall related hooks:
+        self.add_upcall_hooks(probes)?;
+        // Exec related hooks
+        self.add_exec_hooks(probes)?;
 
         // Add USDT hooks.
         if self.track {
@@ -104,6 +111,24 @@ impl Collector for OvsCollector {
 }
 
 impl OvsCollector {
+    fn create_inflight_exec_cmd_map() -> Result<libbpf_rs::Map> {
+        // Please keep in sync with its C counterpart in bpf/ovs_common.h
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+
+        libbpf_rs::Map::create(
+            libbpf_rs::MapType::Hash,
+            Some("inflight_exec_cmd"),
+            mem::size_of::<u64>() as u32,
+            mem::size_of::<u32>() as u32,
+            50,
+            &opts,
+        )
+        .or_else(|e| bail!("Could not create the inflight_cmd_exec map: {}", e))
+    }
+
     fn create_inflight_upcalls_map() -> Result<libbpf_rs::Map> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         #[repr(C, packed)]
@@ -196,8 +221,8 @@ impl OvsCollector {
         Ok(())
     }
 
-    /// Add kernel hooks.
-    fn add_kernel_hooks(&self, probes: &mut ProbeManager) -> Result<()> {
+    /// Add upcall hooks.
+    fn add_upcall_hooks(&self, probes: &mut ProbeManager) -> Result<()> {
         let inflight_upcalls_map = self
             .inflight_upcalls_map
             .as_ref()
@@ -230,11 +255,36 @@ impl OvsCollector {
             )?;
         }
 
+        Ok(())
+    }
+
+    /// Add exec hooks.
+    fn add_exec_hooks(&mut self, probes: &mut ProbeManager) -> Result<()> {
+        let mut exec_action_hook = Hook::from(kernel_exec_tp::DATA);
+
+        if self.track {
+            let inflight_map = Self::create_inflight_exec_cmd_map()?;
+
+            exec_action_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
+
+            let mut exec_cmd_hook = Hook::from(kernel_exec_cmd::DATA);
+            let cmd_execute_sym = Symbol::from_name("ovs_packet_cmd_execute")?;
+            exec_cmd_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
+            probes.register_hook_to(exec_cmd_hook, Probe::kprobe(cmd_execute_sym.clone())?)?;
+
+            let mut exec_cmd_ret_hook = Hook::from(kernel_exec_cmd_ret::DATA);
+            exec_cmd_ret_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
+            probes.register_hook_to(exec_cmd_ret_hook, Probe::kretprobe(cmd_execute_sym)?)?;
+
+            self.inflight_exec_cmd_map = Some(inflight_map);
+        }
+
         // Action execute probe.
         probes.register_hook_to(
-            Hook::from(kernel_exec_tp::DATA),
+            exec_action_hook,
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?,
         )?;
+
         Ok(())
     }
 
