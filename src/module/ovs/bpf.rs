@@ -83,6 +83,8 @@ struct ActionEvent {
     action: u8,
     /// Recirculation id.
     recirc_id: u32,
+    /// Queue id (only when tracking)
+    queue_id: u32,
 }
 
 unsafe impl Plain for ActionEvent {}
@@ -121,6 +123,7 @@ pub(super) fn unmarshall_exec(raw: &BpfRawSection, fields: &mut Vec<EventField>)
 
     fields.push(event_field!("action", action_str.to_string()));
     fields.push(event_field!("recirc_id", event.recirc_id));
+    fields.push(event_field!("queue_id", event.queue_id));
     fields.push(event_field!("event_type", "action_execute".to_string()));
     Ok(())
 }

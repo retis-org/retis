@@ -12,6 +12,12 @@ mod bpf;
 mod kernel_enqueue {
     include!("bpf/.out/kernel_enqueue.rs");
 }
+mod kernel_exec_cmd {
+    include!("bpf/.out/kernel_exec_cmd.rs");
+}
+mod kernel_exec_cmd_ret {
+    include!("bpf/.out/kernel_exec_cmd_ret.rs");
+}
 mod kernel_exec_tp {
     include!("bpf/.out/kernel_exec_tp.rs");
 }

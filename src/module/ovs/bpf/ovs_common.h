@@ -34,6 +34,13 @@ struct {
 	__type(value, struct upcall_context);
 } inflight_upcalls SEC(".maps");
 
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, MAX_INFLIGHT_UPCALLS);
+	__type(key, u64);
+	__type(value, u32);
+} inflight_exec_cmd SEC(".maps");
+
 #define PACKET_HASH_SIZE 64
 /* Packet data to be used to for hashing.
  * Stack size is limted in ebpf programs, so we use a per-cpu array to store

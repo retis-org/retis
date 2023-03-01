@@ -9,12 +9,37 @@
 struct exec_event {
 	u8 action;
 	u32 recirc_id;
+	u32 queue_id;
 } __attribute__((packed));
 
 /* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 struct exec_output {
 	u32 port;
 } __attribute__((packed));
+
+
+static __always_inline u32 queue_id_gen(struct retis_context *ctx)
+{
+	struct sk_buff *skb;
+	int zero = 0;
+	u64 tid = bpf_get_current_pid_tgid();
+	if (!bpf_map_lookup_elem(&inflight_exec_cmd, &tid)) {
+		/* This call to ovs_do_execute_action does not come from a
+		* userspace command. */
+		return 0;
+	}
+
+	skb = (struct sk_buff *) ctx->regs.reg[1];
+	if (!skb)
+		return 0;
+
+	struct packet_buffer *buff = bpf_map_lookup_elem(&packet_buffers,
+							 &zero);
+    if (!buff)
+        return 0;
+
+	return hash_skb(buff, skb, 0);
+}
 
 /* Hook for ovs_do_execute_action tracepoint. */
 DEFINE_HOOK(
@@ -37,6 +62,7 @@ DEFINE_HOOK(
 
 	exec->action = nla_type(attr);
 	exec->recirc_id = BPF_CORE_READ(key, recirc_id);
+	exec->queue_id = queue_id_gen(ctx);
 
 	// Add action-specific data for some actions.
 	switch (exec->action) {
@@ -54,6 +80,7 @@ DEFINE_HOOK(
 		break;
 		}
 	}
+
 	return 0;
 )
 
