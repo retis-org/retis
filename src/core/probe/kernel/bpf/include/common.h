@@ -6,9 +6,17 @@
 
 #include "events.h"
 
+enum kernel_probe_type {
+	KERNEL_PROBE_KPROBE = 0,
+	KERNEL_PROBE_KRETPROBE = 1,
+	KERNEL_PROBE_TRACEPOINT = 2,
+};
+
 /* Kernel section of the event data. */
 struct kernel_event {
 	u64 symbol;
+	/* values from enum kernel_probe_type */
+	u8 type;
 } __attribute__((packed));
 
 /* Per-probe parameter offsets; keep in sync with its Rust counterpart in
@@ -49,6 +57,7 @@ struct {
 struct trace_regs {
 #define REG_MAX 12	/* Fexit max, let's use this */
 	u64 reg[REG_MAX];
+	u64 ret;
 	u32 num;
 };
 
@@ -69,6 +78,7 @@ struct trace_regs {
  *            helper.
  */
 struct trace_context {
+	enum kernel_probe_type probe_type;
 	u64 timestamp;
 	u64 ksym;
 	struct trace_probe_offsets offsets;
@@ -192,6 +202,7 @@ static __always_inline int chain(struct trace_context *ctx)
 	}
 
 	k->symbol = ctx->ksym;
+	k->type = ctx->probe_type;
 
 #define CALL_HOOK(x)		\
 	if (x < nhooks)		\

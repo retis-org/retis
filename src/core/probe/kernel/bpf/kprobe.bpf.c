@@ -21,6 +21,7 @@ int probe_kprobe(struct pt_regs *ctx)
 
 	context.timestamp = bpf_ktime_get_ns();
 	context.ksym = PT_REGS_IP(ctx) - 1;
+	context.probe_type = KERNEL_PROBE_KPROBE;
 	get_regs(&context.regs, ctx);
 
 	return chain(&context);

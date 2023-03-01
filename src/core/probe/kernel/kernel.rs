@@ -49,16 +49,24 @@ pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
     events.register_unmarshaler(
         BpfEventOwner::Kernel,
         Box::new(|raw_section, fields, _| {
-            if raw_section.data.len() != 8 {
+            if raw_section.data.len() != 9 {
                 bail!(
-                    "Section data is not the expected size {} != 8",
+                    "Section data is not the expected size {} != 9",
                     raw_section.data.len()
                 );
             }
 
             let symbol = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
-
             fields.push(event_field!("symbol", Symbol::from_addr(symbol)?.name()));
+
+            let probe_type = raw_section.data[8];
+            let probe_type_str = match probe_type {
+                0 => "kprobe",
+                1 => "kretprobe",
+                2 => "raw_tracepoint",
+                _ => bail!("Unknown probe type {probe_type}"),
+            };
+            fields.push(event_field!("probe_type", probe_type_str.to_string()));
             Ok(())
         }),
     )?;
