@@ -71,7 +71,7 @@ impl Debug for dyn SubCommand {
 
 /// Trace packets on the Linux kernel
 ///
-/// packet-tracer is a tool for capturing networking-related events from the system using ebpf and analyzing them.
+/// retis is a tool for capturing networking-related events from the system using ebpf and analyzing them.
 #[derive(Args, Default, Debug)]
 pub(crate) struct MainConfig {}
 
@@ -116,8 +116,7 @@ impl ThinCli {
         T: Into<OsString> + Clone,
     {
         let args: Vec<OsString> = args.into_iter().map(|x| x.into()).collect();
-        let mut command =
-            MainConfig::augment_args(Command::new("packet-tracer")).subcommand_required(true);
+        let mut command = MainConfig::augment_args(Command::new("retis")).subcommand_required(true);
         // Add thin subcommands so that the main help shows them.
         for (_, sub) in self.subcommands.iter() {
             command = command.subcommand(sub.thin().expect("thin command failed"));
@@ -343,7 +342,7 @@ mod tests {
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
 
-        let err = cli.build_from(vec!["packet-tracer", "--help"], true);
+        let err = cli.build_from(vec!["retis", "--help"], true);
         assert!(err.is_err() && err.unwrap_err().kind() == ErrorKind::DisplayHelp);
 
         Ok(())
@@ -355,7 +354,7 @@ mod tests {
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
 
-        let cli = cli.build_from(vec!["packet-tracer", "sub1", "--help"], true);
+        let cli = cli.build_from(vec!["retis", "sub1", "--help"], true);
         assert!(cli.is_ok());
 
         let err = cli?.run();
@@ -370,7 +369,7 @@ mod tests {
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
 
-        let cli = cli.build_from(vec!["packet-tracer", "sub1", "--sub1-arg", "foo"], true);
+        let cli = cli.build_from(vec!["retis", "sub1", "--sub1-arg", "foo"], true);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         assert!(cli.get_subcommand().is_ok() && cli.get_subcommand().unwrap().name().eq("sub1"));
@@ -392,7 +391,7 @@ mod tests {
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
 
-        let cli = cli.build_from(vec!["packet-tracer", "sub1", "--noexists", "foo"], true);
+        let cli = cli.build_from(vec!["retis", "sub1", "--noexists", "foo"], true);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         assert!(cli.get_subcommand().is_ok() && cli.get_subcommand().unwrap().name().eq("sub1"));

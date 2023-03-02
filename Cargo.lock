@@ -60,7 +60,7 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 [[package]]
 name = "btf-rs"
 version = "0.1.0"
-source = "git+https://github.com/net-trace/btf-rs#450c0d493d75da9ae234553441af81d84d823a0c"
+source = "git+https://github.com/retis-org/btf-rs#450c0d493d75da9ae234553441af81d84d823a0c"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -532,32 +532,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b7820b9daea5457c9f21c69448905d723fbd21136ccf521748f23fd49e723ee"
 
 [[package]]
-name = "packet-tracer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bimap",
- "bindgen",
- "btf-rs",
- "byteorder",
- "clap 4.0.27",
- "elf",
- "libbpf-cargo",
- "libbpf-rs",
- "libbpf-sys",
- "libc",
- "log",
- "memmap2",
- "nix 0.25.0",
- "once_cell",
- "plain",
- "probe",
- "serde_json",
- "simplelog",
- "thiserror",
-]
-
-[[package]]
 name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -673,6 +647,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "retis"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bimap",
+ "bindgen",
+ "btf-rs",
+ "byteorder",
+ "clap 4.0.27",
+ "elf",
+ "libbpf-cargo",
+ "libbpf-rs",
+ "libbpf-sys",
+ "libc",
+ "log",
+ "memmap2",
+ "nix 0.25.0",
+ "once_cell",
+ "plain",
+ "probe",
+ "serde_json",
+ "simplelog",
+ "thiserror",
 ]
 
 [[package]]
