@@ -6,7 +6,7 @@
 
 /* Hook placeholder */
 __attribute__ ((noinline))
-int hook0(struct pt_regs *ctx, struct trace_raw_event *event) {
+int hook0(struct pt_regs *ctx, struct retis_raw_event *event) {
 	volatile int ret = 0;
 	if (!ctx || !event)
 		return 0;
@@ -18,7 +18,7 @@ int probe_usdt(struct pt_regs *ctx)
 {
 	struct pt_regs ctx_fp = *ctx;
 	struct common_event *e;
-	struct trace_raw_event *event;
+	struct retis_raw_event *event;
 	struct user_event *u;
 
 	event = get_event();
