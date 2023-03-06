@@ -25,7 +25,7 @@ static __always_inline u32 queue_id_gen(struct sk_buff *skb)
 }
 
 /* Hook for kretprobe:queue_userspace_packet. */
-DEFINE_HOOK(
+DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	struct dp_upcall_info *upcall;
 	struct sk_buff *skb;
 	struct upcall_context *uctx;

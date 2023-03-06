@@ -92,6 +92,11 @@ static __always_inline void *get_event_zsection(struct retis_raw_event *event,
 	return section;
 }
 
+static __always_inline u16 get_event_size(struct retis_raw_event *event)
+{
+	return event->size;
+}
+
 struct common_event {
 	u64 timestamp;
 } __attribute__((packed));

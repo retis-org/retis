@@ -145,7 +145,7 @@ static __always_inline int track_skb(struct retis_context *ctx,
 	return 0;
 }
 
-DEFINE_HOOK(
+DEFINE_HOOK_RAW(
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);

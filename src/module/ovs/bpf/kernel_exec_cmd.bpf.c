@@ -2,7 +2,7 @@
 #include <ovs_common.h>
 
 /* Hook for kprobe:ovs_packet_cmd_execute. */
-DEFINE_HOOK(
+DEFINE_HOOK_RAW(
 	u64 tid = bpf_get_current_pid_tgid();
 	u32 zero = 0;
 
