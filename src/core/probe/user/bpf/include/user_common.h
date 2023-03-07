@@ -46,7 +46,7 @@ struct user_ctx {
  */
 #define DEFINE_USDT_HOOK(inst)							\
 	SEC("ext/hook")								\
-	int hook(struct user_ctx *ctx, struct trace_raw_event *event)		\
+	int hook(struct user_ctx *ctx, struct retis_raw_event *event)		\
 	{									\
 		/* Let the verifier be happy */					\
 		if (!ctx || !event)						\

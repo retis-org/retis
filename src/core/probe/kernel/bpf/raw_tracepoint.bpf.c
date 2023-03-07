@@ -13,7 +13,7 @@ const volatile u32 nargs = 0;
  * context pointer. The loop unrolling pragma doesn't work here, do it manually,
  * keeping the "dynamic" fashion.
  */
-static __always_inline void get_regs(struct trace_regs *regs,
+static __always_inline void get_regs(struct retis_regs *regs,
 				     struct bpf_raw_tracepoint_args *ctx)
 {
 #define arg_case(x)	\
@@ -44,10 +44,11 @@ static __always_inline void get_regs(struct trace_regs *regs,
 SEC("raw_tracepoint/probe")
 int probe_raw_tracepoint(struct bpf_raw_tracepoint_args *ctx)
 {
-	struct trace_context context = {};
+	struct retis_context context = {};
 
 	context.timestamp = bpf_ktime_get_ns();
 	context.ksym = ksym;
+	context.probe_type = KERNEL_PROBE_TRACEPOINT;
 	get_regs(&context.regs, ctx);
 
 	return chain(&context);

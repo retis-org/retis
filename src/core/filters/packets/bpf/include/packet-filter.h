@@ -4,7 +4,7 @@
 /* Defines the context passed to the packet filtering
  * facility. Includes both input and output.
  */
-struct trace_filter_context {
+struct retis_filter_context {
 	/* Input */
 	char *data;		/* points to the beginning of the mac header. */
 	unsigned int len;	/* linear length. */

@@ -9,7 +9,7 @@ use super::kernel::config::init_config_map;
 use super::*;
 use super::{
     builder::ProbeBuilder,
-    kernel::{kprobe, raw_tracepoint},
+    kernel::{kprobe, kretprobe, raw_tracepoint},
     user::usdt,
 };
 use crate::core::events::bpf::BpfEvents;
@@ -47,6 +47,7 @@ impl ProbeManager {
         // Keep synced with the order of Probe::into::<usize>()!
         let dynamic_probes: [ProbeSet; probe::PROBE_VARIANTS] = [
             ProbeSet::new(Box::new(kprobe::KprobeBuilder::new()), true),
+            ProbeSet::new(Box::new(kretprobe::KretprobeBuilder::new()), true),
             ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new()), true),
             ProbeSet::new(Box::new(usdt::UsdtBuilder::new()), false),
         ];
@@ -84,7 +85,9 @@ impl ProbeManager {
     /// ```
     pub(crate) fn add_probe(&mut self, probe: Probe) -> Result<()> {
         let key = match &probe {
-            Probe::Kprobe(probe) | Probe::RawTracepoint(probe) => probe.symbol.name(),
+            Probe::Kprobe(probe) | Probe::Kretprobe(probe) | Probe::RawTracepoint(probe) => {
+                probe.symbol.name()
+            }
             Probe::Usdt(probe) => probe.name(),
         };
 
@@ -165,7 +168,9 @@ impl ProbeManager {
     /// ```
     pub(crate) fn register_hook_to(&mut self, hook: Hook, probe: Probe) -> Result<()> {
         let key = match &probe {
-            Probe::Kprobe(probe) | Probe::RawTracepoint(probe) => probe.symbol.name(),
+            Probe::Kprobe(probe) | Probe::Kretprobe(probe) | Probe::RawTracepoint(probe) => {
+                probe.symbol.name()
+            }
             Probe::Usdt(probe) => probe.name(),
         };
 
@@ -193,6 +198,9 @@ impl ProbeManager {
         // New target, let's build a new probe set.
         let mut set = match probe {
             Probe::Kprobe(_) => ProbeSet::new(Box::new(kprobe::KprobeBuilder::new()), true),
+            Probe::Kretprobe(_) => {
+                ProbeSet::new(Box::new(kretprobe::KretprobeBuilder::new()), true)
+            }
             Probe::RawTracepoint(_) => {
                 ProbeSet::new(Box::new(raw_tracepoint::RawTracepointBuilder::new()), true)
             }
@@ -278,12 +286,12 @@ impl ProbeSet {
             // First load the probe configuration.
             #[cfg(not(test))]
             match probe {
-                Probe::Kprobe(probe) | Probe::RawTracepoint(probe) => {
+                Probe::Kprobe(probe) | Probe::Kretprobe(probe) | Probe::RawTracepoint(probe) => {
                     let config = unsafe { plain::as_bytes(&probe.config) };
                     config_map.update(
                         &probe.ksym.to_ne_bytes(),
                         config,
-                        libbpf_rs::MapFlags::NO_EXIST,
+                        libbpf_rs::MapFlags::ANY,
                     )?;
                 }
                 _ => (),

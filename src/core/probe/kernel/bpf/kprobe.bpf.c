@@ -4,7 +4,7 @@
 
 #include <common.h>
 
-static __always_inline void get_regs(struct trace_regs *regs, struct pt_regs *ctx)
+static __always_inline void get_regs(struct retis_regs *regs, struct pt_regs *ctx)
 {
 	regs->reg[0] = PT_REGS_PARM1(ctx);
 	regs->reg[1] = PT_REGS_PARM2(ctx);
@@ -17,10 +17,11 @@ static __always_inline void get_regs(struct trace_regs *regs, struct pt_regs *ct
 SEC("kprobe/probe")
 int probe_kprobe(struct pt_regs *ctx)
 {
-	struct trace_context context = {};
+	struct retis_context context = {};
 
 	context.timestamp = bpf_ktime_get_ns();
 	context.ksym = PT_REGS_IP(ctx) - 1;
+	context.probe_type = KERNEL_PROBE_KPROBE;
 	get_regs(&context.regs, ctx);
 
 	return chain(&context);

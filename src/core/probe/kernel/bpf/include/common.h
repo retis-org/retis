@@ -6,16 +6,24 @@
 
 #include "events.h"
 
+enum kernel_probe_type {
+	KERNEL_PROBE_KPROBE = 0,
+	KERNEL_PROBE_KRETPROBE = 1,
+	KERNEL_PROBE_TRACEPOINT = 2,
+};
+
 /* Kernel section of the event data. */
 struct kernel_event {
 	u64 symbol;
+	/* values from enum kernel_probe_type */
+	u8 type;
 } __attribute__((packed));
 
 /* Per-probe parameter offsets; keep in sync with its Rust counterpart in
  * core::probe::kernel::config. A value of -1 means the argument isn't
  * available. Please try to reuse the targeted object names.
  */
-struct trace_probe_offsets {
+struct retis_probe_offsets {
 	s8 sk_buff;
 	s8 skb_drop_reason;
 	s8 net_device;
@@ -25,8 +33,8 @@ struct trace_probe_offsets {
 /* Per-probe configuration; keep in sync with its Rust counterpart in
  * core::probe::kernel::config.
  */
-struct trace_probe_config {
-	struct trace_probe_offsets offsets;
+struct retis_probe_config {
+	struct retis_probe_offsets offsets;
 } __attribute__((packed));
 
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
@@ -37,7 +45,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, PROBE_MAX);
 	__type(key, u64);
-	__type(value, struct trace_probe_config);
+	__type(value, struct retis_probe_config);
 } config_map SEC(".maps");
 
 /* Common representation of the register values provided to the probes, as this
@@ -46,9 +54,10 @@ struct {
  * reg: registers values.
  * num: number of valid registers.
  */
-struct trace_regs {
+struct retis_regs {
 #define REG_MAX 12	/* Fexit max, let's use this */
 	u64 reg[REG_MAX];
+	u64 ret;
 	u32 num;
 };
 
@@ -68,37 +77,38 @@ struct trace_regs {
  *            the returned value. Should be accessed using the get_param()
  *            helper.
  */
-struct trace_context {
+struct retis_context {
+	enum kernel_probe_type probe_type;
 	u64 timestamp;
 	u64 ksym;
-	struct trace_probe_offsets offsets;
-	struct trace_regs regs;
+	struct retis_probe_offsets offsets;
+	struct retis_regs regs;
 };
 
 /* Helper to retrieve a function parameter argument using the common context */
-#define trace_get_param(ctx, offset, type)	\
+#define retis_get_param(ctx, offset, type)	\
 	(type)(((offset) >= 0 && (offset) < REG_MAX && (offset) < ctx->regs.num) ?	\
        ctx->regs.reg[offset] : 0)
 
 /* Check if a given argument is valid */
-#define trace_arg_valid(ctx, name)	\
+#define retis_arg_valid(ctx, name)	\
 	(ctx->offsets.name >= 0)
 
 /* Argument specific helpers for use in generic hooks (and easier use in
  * targeted ones.
  */
-#define TRACE_GET(ctx, name, type)		\
-	(trace_arg_valid(ctx, name) ?		\
-	 trace_get_param(ctx, ctx->offsets.name, type) : 0)
+#define RETIS_GET(ctx, name, type)		\
+	(retis_arg_valid(ctx, name) ?		\
+	 retis_get_param(ctx, ctx->offsets.name, type) : 0)
 
-#define trace_get_sk_buff(ctx)		\
-	TRACE_GET(ctx, sk_buff, struct sk_buff *)
-#define trace_get_skb_drop_reason(ctx)	\
-	TRACE_GET(ctx, skb_drop_reason, enum skb_drop_reason)
-#define trace_get_net_device(ctx)	\
-	TRACE_GET(ctx, net_device, struct net_device *)
-#define trace_get_net(ctx)		\
-	TRACE_GET(ctx, net, struct net *)
+#define retis_get_sk_buff(ctx)		\
+	RETIS_GET(ctx, sk_buff, struct sk_buff *)
+#define retis_get_skb_drop_reason(ctx)	\
+	RETIS_GET(ctx, skb_drop_reason, enum skb_drop_reason)
+#define retis_get_net_device(ctx)	\
+	RETIS_GET(ctx, net_device, struct net_device *)
+#define retis_get_net(ctx)		\
+	RETIS_GET(ctx, net, struct net *)
 
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
@@ -120,7 +130,7 @@ struct trace_context {
  */
 #define DEFINE_HOOK(inst)							\
 	SEC("ext/hook")								\
-	int hook(struct trace_context *ctx, struct trace_raw_event *event)	\
+	int hook(struct retis_context *ctx, struct retis_raw_event *event)	\
 	{									\
 		/* Let the verifier be happy */					\
 		if (!ctx || !event)						\
@@ -137,7 +147,7 @@ const volatile u32 nhooks = 0;
  */
 #define HOOK(x)									\
 	__attribute__ ((noinline))						\
-	int hook##x(struct trace_context *ctx, struct trace_raw_event *event) {	\
+	int hook##x(struct retis_context *ctx, struct retis_raw_event *event) {	\
 		volatile int ret = 0;						\
 		if (!ctx || !event)						\
 			return 0;						\
@@ -160,10 +170,10 @@ HOOK(9)
  * called from each probe specific part after filling the common context and
  * just before returning.
  */
-static __always_inline int chain(struct trace_context *ctx)
+static __always_inline int chain(struct retis_context *ctx)
 {
-	struct trace_probe_config *cfg;
-	struct trace_raw_event *event;
+	struct retis_probe_config *cfg;
+	struct retis_raw_event *event;
 	struct common_event *e;
 	struct kernel_event *k;
 
@@ -192,6 +202,7 @@ static __always_inline int chain(struct trace_context *ctx)
 	}
 
 	k->symbol = ctx->ksym;
+	k->type = ctx->probe_type;
 
 #define CALL_HOOK(x)		\
 	if (x < nhooks)		\

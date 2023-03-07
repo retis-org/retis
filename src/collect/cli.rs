@@ -29,6 +29,7 @@ follow the TYPE:TARGET pattern.
 
 Valid TYPEs:
 - kprobe: kernel probes.
+- kretprobe: kernel return probes.
 - tp: kernel tracepoints.
 
 Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"

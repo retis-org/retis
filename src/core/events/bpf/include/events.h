@@ -8,7 +8,7 @@
 #define RAW_EVENT_DATA_SIZE	1024 - 2 /* Remove the size field */
 
 /* Please keep in sync with its Rust counterpart in crate::core::events::raw. */
-enum trace_event_owners {
+enum retis_event_owners {
 	COMMON = 1,
 	KERNEL = 2,
 	USERSPACE = 3,
@@ -16,13 +16,13 @@ enum trace_event_owners {
 	COLLECTOR_SKB = 5,
 };
 
-struct trace_raw_event {
+struct retis_raw_event {
 	u16 size;
 	u8 data[RAW_EVENT_DATA_SIZE];
 } __attribute__((packed));
 
 /* Please keep synced with its Rust counterpart. */
-struct trace_raw_event_section_header {
+struct retis_raw_event_section_header {
 	u8 owner;
 	u8 data_type;
 	u16 size;
@@ -31,12 +31,12 @@ struct trace_raw_event_section_header {
 /* Please keep synced with its Rust counterpart. */
 struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
-	__uint(max_entries, sizeof(struct trace_raw_event) * EVENTS_MAX);
+	__uint(max_entries, sizeof(struct retis_raw_event) * EVENTS_MAX);
 } events_map SEC(".maps");
 
-static __always_inline struct trace_raw_event *get_event()
+static __always_inline struct retis_raw_event *get_event()
 {
-	struct trace_raw_event *event;
+	struct retis_raw_event *event;
 
 	event = bpf_ringbuf_reserve(&events_map, sizeof(*event), 0);
 	if (!event)
@@ -46,27 +46,27 @@ static __always_inline struct trace_raw_event *get_event()
 	return event;
 }
 
-static __always_inline void discard_event(struct trace_raw_event *event)
+static __always_inline void discard_event(struct retis_raw_event *event)
 {
 	bpf_ringbuf_discard(event, BPF_RB_NO_WAKEUP);
 }
 
-static __always_inline void send_event(struct trace_raw_event *event)
+static __always_inline void send_event(struct retis_raw_event *event)
 {
 	bpf_ringbuf_submit(event, 0);
 }
 
-static __always_inline void *get_event_section(struct trace_raw_event *event,
+static __always_inline void *get_event_section(struct retis_raw_event *event,
 					       u8 owner, u8 data_type, u16 size)
 {
-	struct trace_raw_event_section_header *header;
+	struct retis_raw_event_section_header *header;
 	u16 left = RAW_EVENT_DATA_SIZE - event->size;
 	void *section;
 
 	if (sizeof(*header) + size > left || event->size > sizeof(event->data))
 		return NULL;
 
-	header = (struct trace_raw_event_section_header *)
+	header = (struct retis_raw_event_section_header *)
 			(event->data + event->size);
 	header->owner = owner;
 	header->data_type = data_type;
@@ -79,7 +79,7 @@ static __always_inline void *get_event_section(struct trace_raw_event *event,
 }
 
 /* Similar to get_event_section but initialize the section data to 0s. */
-static __always_inline void *get_event_zsection(struct trace_raw_event *event,
+static __always_inline void *get_event_zsection(struct retis_raw_event *event,
 						u8 owner, u8 data_type, const u16 size)
 {
 	void *section = get_event_section(event, owner, data_type, size);
