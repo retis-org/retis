@@ -9,12 +9,12 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_INFLIGHT_PROBES);
 	__type(key, u64);
-	__type(value, struct trace_context);
+	__type(value, struct retis_context);
 } kretprobe_context SEC(".maps");
 
 /* Merge the registers with the ones coming from the matching kprobe */
-static __always_inline void kretprobe_get_regs(struct trace_regs *regs,
-					       struct trace_regs *kprobe_regs,
+static __always_inline void kretprobe_get_regs(struct retis_regs *regs,
+					       struct retis_regs *kprobe_regs,
 					       struct pt_regs *ctx)
 {
 	regs->reg[0] = kprobe_regs->reg[0];
@@ -27,7 +27,7 @@ static __always_inline void kretprobe_get_regs(struct trace_regs *regs,
 	regs->ret = PT_REGS_RC(ctx);
 }
 
-static __always_inline void kprobe_get_regs(struct trace_regs *regs,
+static __always_inline void kprobe_get_regs(struct retis_regs *regs,
 					    struct pt_regs *ctx)
 {
 	regs->reg[0] = PT_REGS_PARM1(ctx);
@@ -41,8 +41,8 @@ static __always_inline void kprobe_get_regs(struct trace_regs *regs,
 SEC("kretprobe/probe")
 int probe_kretprobe(struct pt_regs *ctx)
 {
-	struct trace_context context = {};
-	struct trace_context *kprobe_ctx;
+	struct retis_context context = {};
+	struct retis_context *kprobe_ctx;
 	u64 tid = bpf_get_current_pid_tgid();
 
 	/* Look if the matching kprobe has left a context for us to pick up. */
@@ -64,7 +64,7 @@ int probe_kretprobe(struct pt_regs *ctx)
 SEC("kprobe/probe")
 int probe_kprobe(struct pt_regs *ctx)
 {
-	struct trace_context context = {};
+	struct retis_context context = {};
 	u64 tid = bpf_get_current_pid_tgid();
 
 	context.timestamp = bpf_ktime_get_ns();

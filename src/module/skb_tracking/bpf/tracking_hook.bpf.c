@@ -56,8 +56,8 @@ struct skb_tracking_event {
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
-static __always_inline int track_skb(struct trace_context *ctx,
-				     struct trace_raw_event *event,
+static __always_inline int track_skb(struct retis_context *ctx,
+				     struct retis_raw_event *event,
 				     struct sk_buff *skb)
 {
 	enum skb_drop_reason drop_reason = 0;
@@ -130,8 +130,8 @@ static __always_inline int track_skb(struct trace_context *ctx,
 	else if (free)
 		bpf_map_delete_elem(&tracking_map, &head);
 
-	if (trace_arg_valid(ctx, skb_drop_reason))
-		drop_reason = trace_get_skb_drop_reason(ctx);
+	if (retis_arg_valid(ctx, skb_drop_reason))
+		drop_reason = retis_get_skb_drop_reason(ctx);
 
 	e = get_event_section(event, COLLECTOR_SKB_TRACKING, 1, sizeof(*e));
 	if (!e)
@@ -148,7 +148,7 @@ static __always_inline int track_skb(struct trace_context *ctx,
 DEFINE_HOOK(
 	struct sk_buff *skb;
 
-	skb = trace_get_sk_buff(ctx);
+	skb = retis_get_sk_buff(ctx);
 	if (!skb)
 		return 0;
 
