@@ -8,7 +8,10 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        events::bpf::{BpfEventOwner, BpfEvents},
+        events::{
+            bpf::{BpfEventOwner, BpfEvents, BpfRawSection},
+            EventField,
+        },
         probe::{Hook, ProbeManager},
     },
 };
@@ -75,7 +78,11 @@ impl Collector for SkbCollector {
         events.register_unmarshaler(
             BpfEventOwner::CollectorSkb,
             Box::new(
-                |raw_section, fields, _| match raw_section.header.data_type as u64 {
+                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| match raw_section
+                    .header
+                    .data_type
+                    as u64
+                {
                     SECTION_L2 => unmarshal_l2(raw_section, fields),
                     SECTION_IPV4 => unmarshal_ipv4(raw_section, fields),
                     SECTION_IPV6 => unmarshal_ipv6(raw_section, fields),

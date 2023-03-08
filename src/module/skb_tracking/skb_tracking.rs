@@ -11,7 +11,7 @@ use crate::{
     collect::Collector,
     core::{
         events::{
-            bpf::{parse_raw_section, BpfEventOwner, BpfEvents},
+            bpf::{parse_raw_section, BpfEventOwner, BpfEvents, BpfRawSection},
             EventField,
         },
         kernel::Symbol,
@@ -77,19 +77,21 @@ impl Collector for SkbTrackingCollector {
     ) -> Result<()> {
         events.register_unmarshaler(
             BpfEventOwner::CollectorSkbTracking,
-            Box::new(|raw_section, fields, _| {
-                if raw_section.header.data_type != 1 {
-                    bail!("Unknown data type");
-                }
+            Box::new(
+                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
+                    if raw_section.header.data_type != 1 {
+                        bail!("Unknown data type");
+                    }
 
-                let event = parse_raw_section::<SkbTrackingEvent>(raw_section)?;
+                    let event = parse_raw_section::<SkbTrackingEvent>(raw_section)?;
 
-                fields.push(event_field!("orig_head", event.orig_head));
-                fields.push(event_field!("timestamp", event.timestamp));
-                fields.push(event_field!("skb", event.skb));
-                fields.push(event_field!("drop_reason", event.drop_reason));
-                Ok(())
-            }),
+                    fields.push(event_field!("orig_head", event.orig_head));
+                    fields.push(event_field!("timestamp", event.timestamp));
+                    fields.push(event_field!("skb", event.skb));
+                    fields.push(event_field!("drop_reason", event.drop_reason));
+                    Ok(())
+                },
+            ),
         )?;
 
         self.init_tracking(probes)?;
