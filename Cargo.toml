@@ -10,7 +10,7 @@ test_cap_bpf = []
 [dependencies]
 anyhow = "1.0"
 bimap = "0.6"
-btf-rs = {git = "https://github.com/retis-org/btf-rs"}
+btf-rs = "0.1"
 byteorder = "1.4"
 clap = { version = "4.0", features = ["derive", "string"] }
 elf = "0.7"
