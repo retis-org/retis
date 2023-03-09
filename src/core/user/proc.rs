@@ -49,13 +49,13 @@ type Address = u64;
 pub struct UsdtInfo {
     /// Base address for USDT address calculation (from stapsdt).
     base_addr: u64,
-    /// List of USDT Notes containing information of each USDT probe.
-    notes: Vec<UsdtNote>,
+    /// Map of USDT Notes containing information of each USDT probe indexed by address.
+    notes: HashMap<u64, UsdtNote>,
 }
 
 impl UsdtInfo {
     fn new(path: &PathBuf) -> Result<Self> {
-        let mut notes = Vec::new();
+        let mut notes = HashMap::new();
         let file = fs::File::open(path)?;
         let mut elf = ElfStream::<AnyEndian, _>::open_stream(file)?;
 
@@ -86,10 +86,16 @@ impl UsdtInfo {
                         note.name
                     );
                 }
-                notes.push(UsdtNote::from_elf(note.desc)?);
-            }
-        };
 
+                let note = UsdtNote::from_elf(note.desc)?;
+                // Insert the notes in the map indexed by their effective address after
+                // compensating the "prelink effect" for faster lookups.
+                // For more information see:
+                // https://sourceware.org/systemtap/wiki/UserSpaceProbeImplementation
+                let link_addr = note.addr + base_addr - note.base_addr;
+                notes.insert(link_addr, note);
+            }
+        }
         Ok(UsdtInfo { base_addr, notes })
     }
 
@@ -110,17 +116,14 @@ impl UsdtInfo {
         Ok(self
             .notes
             .iter()
-            .find(|note| note.provider == provider && note.name == name))
+            .find(|(_, note)| note.provider == provider && note.name == name)
+            .map(|(_, note)| note))
     }
 
     /// Retrieves the Usdt note information whose address matches the given offset.
     pub(crate) fn get_note_from_offset(&self, addr: u64) -> Result<Option<&UsdtNote>> {
-        Ok(self.notes.iter().find(|note| {
-            // We need to compensate "prelink effect". For more information see:
-            // https://sourceware.org/systemtap/wiki/UserSpaceProbeImplementation
-            let link_addr = note.addr + self.base_addr - note.base_addr;
-            link_addr == addr
-        }))
+        // "prelink effect" has been compensated when the notes are inserted into the map.
+        Ok(self.notes.get(&addr))
     }
 }
 
@@ -653,8 +656,7 @@ mod tests {
                 .as_ref()
                 .expect("should have valid USDT info")
                 .notes
-                .iter()
-                .as_ref()
+                .values()
             {
                 // All available notes should be available at from the Program.
                 let name = format!("{}::{}", note.provider, note.name);
