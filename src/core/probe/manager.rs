@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 
 use anyhow::{bail, Result};
-use log::info;
+use log::{debug, info};
 
 #[cfg(not(test))]
 use super::kernel::config::{init_config_map, init_stack_map};
@@ -320,9 +320,12 @@ impl ProbeSet {
             }
 
             // Finally attach a probe to the target.
-            info!("Attaching probe to {}", probe);
+            debug!("Attaching probe to {}", probe);
             self.builder.attach(probe)?;
         }
+
+        // All probes loaded, issue an info log.
+        info!("{} probe(s) loaded", self.targets.len());
 
         Ok(())
     }
