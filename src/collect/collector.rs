@@ -110,6 +110,9 @@ impl Group {
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
         probe::common::set_ebpf_debug(collect.args()?.ebpf_debug.unwrap_or(false))?;
+        if collect.args()?.stack {
+            self.probes.add_probe_opt(probe::ProbeOption::StackTrace);
+        }
 
         // Try initializing all collectors in the group.
         for name in &collect.args()?.collectors {

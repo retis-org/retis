@@ -11,6 +11,7 @@ use crate::core::{
         EventField,
     },
     kernel::Symbol,
+    probe::ProbeOption,
 };
 use crate::event_field;
 
@@ -35,6 +36,15 @@ impl KernelProbe {
             nargs: desc.nargs,
             config: desc.probe_cfg,
         })
+    }
+
+    /// Set, for probes only, a single config option used to change the default probe behavior.
+    pub(crate) fn set_option(&mut self, opt: &ProbeOption) {
+        match opt {
+            ProbeOption::StackTrace => {
+                self.config.stack_trace = 1;
+            }
+        }
     }
 }
 
