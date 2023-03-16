@@ -115,10 +115,6 @@ impl Collector for SkbCollector {
         )?;
         Ok(())
     }
-
-    fn start(&mut self) -> Result<()> {
-        Ok(())
-    }
 }
 
 impl SkbCollector {

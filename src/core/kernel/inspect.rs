@@ -1,7 +1,11 @@
-use std::{collections::HashSet, fs};
+use std::{
+    collections::HashSet,
+    fs,
+    ops::Bound::{Included, Unbounded},
+};
 
 use anyhow::{anyhow, bail, Result};
-use bimap::BiHashMap;
+use bimap::BiBTreeMap;
 use log::warn;
 use once_cell::sync::OnceCell;
 
@@ -21,7 +25,7 @@ pub(crate) struct Inspector {
     /// Btf information.
     btf: BtfInfo,
     /// Symbols bi-directional map (addr<>name).
-    symbols: BiHashMap<u64, String>,
+    symbols: BiBTreeMap<u64, String>,
     /// Set of traceable events (e.g. tracepoints).
     traceable_events: Option<HashSet<String>>,
     /// Set of traceable functions (e.g. kprobes).
@@ -45,7 +49,7 @@ impl Inspector {
         let btf = BtfInfo::new()?;
 
         // First parse the symbol file.
-        let mut symbols = BiHashMap::new();
+        let mut symbols = BiBTreeMap::new();
         for line in fs::read_to_string(symbols_file)?.lines() {
             let data: Vec<&str> = line.split(' ').collect();
             if data.len() < 3 {
@@ -121,34 +125,16 @@ pub(super) fn get_symbol_addr(name: &str) -> Result<u64> {
 }
 
 /// Given an address, try to find the nearest symbol, if any.
-#[allow(dead_code)] // FIXME
 pub(super) fn find_nearest_symbol(target: u64) -> Result<u64> {
-    let (mut nearest, mut best_score) = (0, std::u64::MAX);
+    let nearest = get_inspector!()?
+        .symbols
+        .left_range((Unbounded, Included(&target)))
+        .next_back();
 
-    for addr in get_inspector!()?.symbols.left_values() {
-        // The target address has to be greater or equal to a symbol address to
-        // be considered near it (and part of it).
-        if target < *addr {
-            continue;
-        }
-
-        let score = target.abs_diff(*addr);
-        if score < best_score {
-            nearest = *addr;
-            best_score = score;
-
-            // Exact match; can't do better than that.
-            if score == 0 {
-                break;
-            }
-        }
+    match nearest {
+        Some(symbol) => Ok(*symbol.0),
+        None => bail!("Can't get a symbol near {}", target),
     }
-
-    if best_score == std::u64::MAX {
-        bail!("Can't get a symbol near {}", target);
-    }
-
-    Ok(nearest)
 }
 
 /// Check if an event is traceable. Return Ok(None) if we can't know.
@@ -217,6 +203,15 @@ pub(super) fn function_nargs(symbol: &Symbol) -> Result<u32> {
     get_inspector!()?.btf.function_nargs(symbol)
 }
 
+/// Given an address, gets the name and the offset of the nearest symbol, if any.
+pub(crate) fn get_name_offt_from_addr_near(addr: u64) -> Result<(String, u64)> {
+    let sym_addr = find_nearest_symbol(addr)?;
+    Ok((
+        get_symbol_name(sym_addr)?,
+        u64::checked_sub(addr, sym_addr).ok_or_else(|| anyhow!("failed to get symbol offset"))?,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,5 +242,20 @@ mod tests {
         assert!(find_nearest_symbol(addr + 1).unwrap() == addr);
         assert!(find_nearest_symbol(addr).unwrap() == addr);
         assert!(find_nearest_symbol(addr - 1).unwrap() != addr);
+    }
+
+    #[test]
+    fn name_from_addr_near() {
+        let mut sym_info = get_name_offt_from_addr_near(0xffffffff95617530 + 1).unwrap();
+
+        assert_eq!(sym_info.0, "consume_skb");
+        assert_eq!(sym_info.1, 0x1_u64);
+
+        sym_info = get_name_offt_from_addr_near(0xffffffff95617530 - 1).unwrap();
+        assert_ne!(sym_info.0, "consume_skb");
+
+        sym_info = get_name_offt_from_addr_near(0xffffffff95617530).unwrap();
+        assert_eq!(sym_info.0, "consume_skb");
+        assert_eq!(sym_info.1, 0x0_u64);
     }
 }

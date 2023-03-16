@@ -24,10 +24,6 @@ impl Collector for OvsCollector {
         OVS_COLLECTOR
     }
 
-    fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
-        None
-    }
-
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
         cmd.register_module_noargs(OVS_COLLECTOR)
     }
@@ -50,10 +46,6 @@ impl Collector for OvsCollector {
         )?);
         probes.register_hook_to(Hook::from(main_hook::DATA), main_probe)?;
 
-        Ok(())
-    }
-
-    fn start(&mut self) -> Result<()> {
         Ok(())
     }
 }

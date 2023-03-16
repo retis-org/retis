@@ -17,6 +17,7 @@ struct kernel_event {
 	u64 symbol;
 	/* values from enum kernel_probe_type */
 	u8 type;
+	long stack_id;
 } __attribute__((packed));
 
 /* Per-probe parameter offsets; keep in sync with its Rust counterpart in
@@ -35,6 +36,7 @@ struct retis_probe_offsets {
  */
 struct retis_probe_config {
 	struct retis_probe_offsets offsets;
+	u8 stack_trace;
 } __attribute__((packed));
 
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
@@ -47,6 +49,15 @@ struct {
 	__type(key, u64);
 	__type(value, struct retis_probe_config);
 } config_map SEC(".maps");
+
+/* Probe stack trace map. */
+struct {
+	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
+	__uint(max_entries, 256);
+	__uint(key_size, sizeof(u32));
+	/* PERF_MAX_STACK_DEPTH times u64 for value size. */
+	__uint(value_size, 127 * sizeof(u64));
+} stack_map SEC(".maps");
 
 /* Common representation of the register values provided to the probes, as this
  * is done in a per-probe type fashion.
@@ -83,6 +94,8 @@ struct retis_context {
 	u64 ksym;
 	struct retis_probe_offsets offsets;
 	struct retis_regs regs;
+	/* Pointer to the original ctx. Needed for helper calls. */
+	void *orig_ctx;
 };
 
 /* Helper to retrieve a function parameter argument using the common context */
@@ -203,6 +216,10 @@ static __always_inline int chain(struct retis_context *ctx)
 
 	k->symbol = ctx->ksym;
 	k->type = ctx->probe_type;
+	if (cfg->stack_trace)
+		k->stack_id = bpf_get_stackid(ctx->orig_ctx, &stack_map, BPF_F_FAST_STACK_CMP);
+	else
+		k->stack_id = -1;
 
 #define CALL_HOOK(x)		\
 	if (x < nhooks)		\

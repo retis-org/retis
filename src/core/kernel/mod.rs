@@ -4,5 +4,5 @@
 pub(crate) use symbol::Symbol;
 
 mod btf;
-mod inspect;
+pub(crate) mod inspect;
 mod symbol;

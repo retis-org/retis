@@ -183,3 +183,4 @@ event_field_type!(i16);
 event_field_type!(i32);
 event_field_type!(i64);
 event_field_type!(String);
+event_field_type!(Vec<String>);

@@ -5,7 +5,7 @@ use anyhow::{bail, Result};
 use log::info;
 
 #[cfg(not(test))]
-use super::kernel::config::init_config_map;
+use super::kernel::config::{init_config_map, init_stack_map};
 use super::*;
 use super::{
     builder::ProbeBuilder,
@@ -31,6 +31,9 @@ pub(crate) struct ProbeManager {
     /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
     #[cfg(not(test))]
     config_map: libbpf_rs::Map,
+
+    /// List of options to enable/disable additional probes behavior.
+    options: Vec<ProbeOption>,
 
     // Targeted probes.
     /// List of targeted probes, aka. probes running a specific set of hooks.
@@ -60,6 +63,7 @@ impl ProbeManager {
             dynamic_hooks: Vec::new(),
             #[cfg(not(test))]
             config_map: init_config_map()?,
+            options: Vec::new(),
             targeted_probes,
             maps: HashMap::new(),
         };
@@ -69,9 +73,23 @@ impl ProbeManager {
             .insert("config_map".to_string(), mgr.config_map.fd());
         mgr.maps.insert("events_map".to_string(), events.map_fd());
 
-        kernel::register_unmarshaler(events)?;
+        #[cfg(not(test))]
+        let sm = init_stack_map()?;
+        #[cfg(not(test))]
+        mgr.maps.insert("stack_map".to_string(), sm.fd());
+
+        kernel::register_unmarshaler(
+            events,
+            #[cfg(not(test))]
+            sm,
+        )?;
         user::register_unmarshaler(events)?;
         Ok(mgr)
+    }
+
+    /// Add a probe option for later fixup during the attach phase
+    pub(crate) fn add_probe_opt(&mut self, opt: ProbeOption) {
+        self.options.push(opt);
     }
 
     /// Request to attach a dynamic probe to `Probe`.
@@ -227,6 +245,8 @@ impl ProbeManager {
                 #[cfg(not(test))]
                 &mut self.config_map,
                 self.maps.clone(),
+                #[cfg(not(test))]
+                &self.options,
             )?;
         }
 
@@ -241,6 +261,8 @@ impl ProbeManager {
                     #[cfg(not(test))]
                     &mut self.config_map,
                     self.maps.clone(),
+                    #[cfg(not(test))]
+                    &self.options,
                 )?;
             }
         }
@@ -272,6 +294,7 @@ impl ProbeSet {
         &mut self,
         #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
         maps: HashMap<String, i32>,
+        #[cfg(not(test))] options: &[ProbeOption],
     ) -> Result<()> {
         if self.targets.is_empty() {
             return Ok(());
@@ -282,17 +305,16 @@ impl ProbeSet {
         self.builder.init(map_fds, self.hooks.clone())?;
 
         // Then handle all probes in the set.
-        for (_, probe) in self.targets.iter() {
+        for (_, probe) in self.targets.iter_mut() {
             // First load the probe configuration.
             #[cfg(not(test))]
             match probe {
-                Probe::Kprobe(probe) | Probe::Kretprobe(probe) | Probe::RawTracepoint(probe) => {
-                    let config = unsafe { plain::as_bytes(&probe.config) };
-                    config_map.update(
-                        &probe.ksym.to_ne_bytes(),
-                        config,
-                        libbpf_rs::MapFlags::ANY,
-                    )?;
+                Probe::Kprobe(ref mut p)
+                | Probe::Kretprobe(ref mut p)
+                | Probe::RawTracepoint(ref mut p) => {
+                    options.iter().for_each(|c| p.set_option(c));
+                    let config = unsafe { plain::as_bytes(&p.config) };
+                    config_map.update(&p.ksym.to_ne_bytes(), config, libbpf_rs::MapFlags::ANY)?;
                 }
                 _ => (),
             }
