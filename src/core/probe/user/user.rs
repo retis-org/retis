@@ -4,14 +4,17 @@ use std::{any::Any, collections::HashMap, fmt, path::PathBuf};
 
 use anyhow::{anyhow, bail, Result};
 
-use crate::core::{
-    events::{
-        bpf::{BpfEventOwner, BpfEvents, BpfRawSection, EventUnmarshaler},
-        EventField,
-    },
-    user::proc::Process,
-};
 use crate::event_field;
+use crate::{
+    core::{
+        events::{
+            bpf::{BpfEvents, BpfRawSection, EventUnmarshaler},
+            EventField,
+        },
+        user::proc::Process,
+    },
+    module::ModuleId,
+};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct UsdtProbe {
@@ -128,5 +131,5 @@ pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
     let unmarshaler = UserUnmarshaler {
         cache: HashMap::new(),
     };
-    events.register_unmarshaler(BpfEventOwner::Userspace, Box::new(unmarshaler))
+    events.register_unmarshaler(ModuleId::Userspace, Box::new(unmarshaler))
 }

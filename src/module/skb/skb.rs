@@ -9,14 +9,13 @@ use crate::{
     collect::Collector,
     core::{
         events::{
-            bpf::{BpfEventOwner, BpfEvents, BpfRawSection},
+            bpf::{BpfEvents, BpfRawSection},
             EventField,
         },
         probe::{Hook, ProbeManager},
     },
+    module::ModuleId,
 };
-
-const SKB_COLLECTOR: &str = "skb";
 
 #[derive(Parser, Default)]
 pub(crate) struct SkbCollectorArgs {
@@ -37,16 +36,12 @@ impl Collector for SkbCollector {
         Ok(SkbCollector {})
     }
 
-    fn name(&self) -> &'static str {
-        SKB_COLLECTOR
-    }
-
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
         Some(vec!["struct sk_buff *"])
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<SkbCollectorArgs>(SKB_COLLECTOR)
+        cmd.register_module::<SkbCollectorArgs>(ModuleId::Skb.to_str())
     }
 
     fn init(
@@ -56,7 +51,7 @@ impl Collector for SkbCollector {
         events: &mut BpfEvents,
     ) -> Result<()> {
         // First, get the cli parameters.
-        let args = cli.get_section::<SkbCollectorArgs>(SKB_COLLECTOR)?;
+        let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb.to_str())?;
 
         let mut sections: u64 = 0;
         for category in args.skb_sections.iter() {
@@ -76,7 +71,7 @@ impl Collector for SkbCollector {
 
         // Register our event unmarshaler.
         events.register_unmarshaler(
-            BpfEventOwner::CollectorSkb,
+            ModuleId::Skb,
             Box::new(
                 |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| match raw_section
                     .header

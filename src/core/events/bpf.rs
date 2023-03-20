@@ -5,7 +5,7 @@
 
 use std::{
     collections::HashMap,
-    fmt, mem,
+    mem,
     sync::{mpsc, Arc, Mutex},
     thread,
     time::Duration,
@@ -16,7 +16,7 @@ use log::error;
 use plain::Plain;
 
 use super::{Event, EventField};
-use crate::event_field;
+use crate::{event_field, module::ModuleId};
 
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
@@ -47,7 +47,7 @@ where
 }
 
 // Define a private type for unmarshalers as we'll use it more than once.
-type Unmarshalers = HashMap<BpfEventOwner, Box<dyn EventUnmarshaler>>;
+type Unmarshalers = HashMap<ModuleId, Box<dyn EventUnmarshaler>>;
 
 /// API to retrieve and unmarshal events coming from the BPF parts.
 #[cfg(not(test))]
@@ -84,7 +84,7 @@ impl BpfEvents {
         };
 
         events.register_unmarshaler(
-            BpfEventOwner::Common,
+            ModuleId::Common,
             Box::new(
                 |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
                     if raw_section.header.data_type != 1 {
@@ -112,7 +112,7 @@ impl BpfEvents {
     /// sections.
     pub(crate) fn register_unmarshaler(
         &mut self,
-        owner: BpfEventOwner,
+        owner: ModuleId,
         unmarshaler: Box<dyn EventUnmarshaler>,
     ) -> Result<()> {
         let mut unmarshalers = self.unmarshalers.lock().unwrap();
@@ -254,7 +254,7 @@ fn parse_raw_event(data: &[u8], unmarshalers: &mut Unmarshalers) -> Result<Event
         }
 
         // Try converting the raw owner id into something we can use.
-        let owner = match BpfEventOwner::from_u8(raw_section.header.owner) {
+        let owner = match ModuleId::from_u8(raw_section.header.owner) {
             Ok(owner) => owner,
             Err(e) => {
                 // Skip the section.
@@ -291,7 +291,7 @@ fn parse_raw_event(data: &[u8], unmarshalers: &mut Unmarshalers) -> Result<Event
         // Fill the event with unmarshaled sections. Unwrap as we know
         // it's a valid owner.
         for field in fields {
-            event.insert(owner.to_str_ref().unwrap(), field);
+            event.insert(owner, field);
         }
     }
 
@@ -326,7 +326,7 @@ impl BpfEvents {
     }
     pub(crate) fn register_unmarshaler(
         &mut self,
-        _: BpfEventOwner,
+        _: ModuleId,
         _: Box<dyn EventUnmarshaler>,
     ) -> Result<()> {
         Ok(())
@@ -380,55 +380,6 @@ pub(crate) struct BpfRawSectionHeader {
 
 unsafe impl Plain for BpfRawSectionHeader {}
 
-/// List of unique owner ids. Please keep in sync with its BPF counterpart. An
-/// owner is a module responsible of given sections types. The section "unique
-/// id" is (owner id, data type id).
-#[derive(Debug, Eq, Hash, PartialEq)]
-pub(crate) enum BpfEventOwner {
-    Common = 1,
-    Kernel = 2,
-    Userspace = 3,
-    CollectorSkbTracking = 4,
-    CollectorSkb = 5,
-    CollectorOvs = 6,
-}
-
-impl BpfEventOwner {
-    pub(super) fn from_u8(val: u8) -> Result<BpfEventOwner> {
-        use BpfEventOwner::*;
-        let owner = match val {
-            1 => Common,
-            2 => Kernel,
-            3 => Userspace,
-            4 => CollectorSkbTracking,
-            5 => CollectorSkb,
-            6 => CollectorOvs,
-            x => bail!("Can't construct a BpfEventOwner from {}", x),
-        };
-        Ok(owner)
-    }
-
-    pub(super) fn to_str_ref(&self) -> Result<&str> {
-        use BpfEventOwner::*;
-        let ret = match self {
-            Common => "common",
-            Kernel => "kernel",
-            Userspace => "userspace",
-            CollectorSkbTracking => "skb-tracking",
-            CollectorSkb => "skb",
-            CollectorOvs => "ovs",
-        };
-        Ok(ret)
-    }
-}
-
-// Allow using BpfEventOwner in log messages.
-impl fmt::Display for BpfEventOwner {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -442,7 +393,7 @@ mod tests {
 
         // Let's use the Common probe type for our tests.
         unmarshalers.insert(
-            BpfEventOwner::Common,
+            ModuleId::Common,
             Box::new(
                 |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
                     let len = raw_section.data.len();
@@ -498,31 +449,13 @@ mod tests {
         assert!(super::parse_raw_event(&data, &mut unmarshalers).is_err());
 
         // Valid event with a single empty section. Section is ignored.
-        let data = [4, 0, BpfEventOwner::Common as u8, DATA_TYPE_U64, 0, 0];
+        let data = [4, 0, ModuleId::Common as u8, DATA_TYPE_U64, 0, 0];
         assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
 
         // Valid event with a section too large. Section is ignored.
-        let data = [
-            4,
-            0,
-            BpfEventOwner::Common as u8,
-            DATA_TYPE_U64,
-            4,
-            0,
-            42,
-            42,
-        ];
+        let data = [4, 0, ModuleId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
         assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
-        let data = [
-            6,
-            0,
-            BpfEventOwner::Common as u8,
-            DATA_TYPE_U64,
-            4,
-            0,
-            42,
-            42,
-        ];
+        let data = [6, 0, ModuleId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
         assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
 
         // Valid event with a section having an invalid owner.
@@ -532,13 +465,13 @@ mod tests {
         assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
 
         // Valid event with an invalid data type.
-        let data = [4, 0, BpfEventOwner::Common as u8, 0, 1, 0, 42];
+        let data = [4, 0, ModuleId::Common as u8, 0, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
-        let data = [4, 0, BpfEventOwner::Common as u8, 255, 1, 0, 42];
+        let data = [4, 0, ModuleId::Common as u8, 255, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
 
         // Valid event but invalid section (too small).
-        let data = [5, 0, BpfEventOwner::Common as u8, DATA_TYPE_U64, 1, 0, 42];
+        let data = [5, 0, ModuleId::Common as u8, DATA_TYPE_U64, 1, 0, 42];
         let res = super::parse_raw_event(&data, &mut unmarshalers);
         assert!(res.unwrap().len() == 0);
 
@@ -546,7 +479,7 @@ mod tests {
         let data = [
             12,
             0,
-            BpfEventOwner::Common as u8,
+            ModuleId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -560,7 +493,7 @@ mod tests {
             0,
         ];
         let event = super::parse_raw_event(&data, &mut unmarshalers).unwrap();
-        let field = event.get::<u64>("common", "field0").unwrap();
+        let field = event.get::<u64>(ModuleId::Common, "field0").unwrap();
         assert!(field == Some(&42));
 
         // Valid event, multiple sections.
@@ -568,7 +501,7 @@ mod tests {
             44,
             0,
             // Section 1
-            BpfEventOwner::Common as u8,
+            ModuleId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -581,7 +514,7 @@ mod tests {
             0,
             0,
             // Section 2
-            BpfEventOwner::Common as u8,
+            ModuleId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -594,7 +527,7 @@ mod tests {
             0,
             0,
             // Section 3
-            BpfEventOwner::Common as u8,
+            ModuleId::Common as u8,
             DATA_TYPE_U128,
             16,
             0,
@@ -616,14 +549,14 @@ mod tests {
             0,
         ];
         let event = super::parse_raw_event(&data, &mut unmarshalers).unwrap();
-        let field = event.get::<u64>("common", "field1").unwrap();
+        let field = event.get::<u64>(ModuleId::Common, "field1").unwrap();
         assert!(field == Some(&42));
-        let field = event.get::<u64>("common", "field2").unwrap();
+        let field = event.get::<u64>(ModuleId::Common, "field2").unwrap();
         assert!(field == Some(&1337));
 
         // Test an unknown field and type mismatch on the above event.
-        let field = event.get::<u64>("common", "invalid").unwrap();
+        let field = event.get::<u64>(ModuleId::Common, "invalid").unwrap();
         assert!(field.is_none());
-        assert!(event.get::<i64>("common", "field1").is_err());
+        assert!(event.get::<i64>(ModuleId::Common, "field1").is_err());
     }
 }
