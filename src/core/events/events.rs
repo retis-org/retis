@@ -38,10 +38,12 @@ use std::{any::Any, collections::HashMap};
 use anyhow::{bail, Result};
 use serde_json::json;
 
+use crate::module::ModuleId;
+
 /// Full event. Internal representation. The first key is the collector from
 /// which the event sections originate. The second one is the field name of a
 /// given (collector) event field.
-pub(crate) struct Event(HashMap<String, HashMap<String, EventField>>);
+pub(crate) struct Event(HashMap<ModuleId, HashMap<String, EventField>>);
 
 impl Event {
     pub(crate) fn new() -> Event {
@@ -58,8 +60,8 @@ impl Event {
     }
 
     /// Get a reference to an event field by its owner and key.
-    pub(crate) fn get<T: 'static>(&self, owner: &str, key: &str) -> Result<Option<&T>> {
-        if let Some(section) = self.0.get(&owner.to_string()) {
+    pub(crate) fn get<T: 'static>(&self, owner: ModuleId, key: &str) -> Result<Option<&T>> {
+        if let Some(section) = self.0.get(&owner) {
             if let Some(field) = section.get(&key.to_string()) {
                 return match field.val.as_any().downcast_ref::<T>() {
                     Some(val) => Ok(Some(val)),
@@ -76,15 +78,11 @@ impl Event {
     }
 
     /// Insert a new event field into an event.
-    pub(crate) fn insert(&mut self, key: &str, val: EventField) {
-        let key = key.to_string();
-
-        if !self.0.contains_key(&key) {
-            self.0.insert(key.clone(), HashMap::new());
-        }
+    pub(crate) fn insert(&mut self, owner: ModuleId, val: EventField) {
+        self.0.entry(owner).or_insert_with(HashMap::new);
 
         // Unwrap can't fail as we checked the key exists in the above block.
-        let map = self.0.get_mut(&key).unwrap();
+        let map = self.0.get_mut(&owner).unwrap();
         map.insert(val.key.clone(), val);
     }
 
@@ -99,14 +97,17 @@ impl From<&Event> for serde_json::Value {
     fn from(f: &Event) -> Self {
         let mut event = serde_json::Map::new();
 
-        for (key, owner) in f.0.iter() {
+        for (owner, data) in f.0.iter() {
             let mut section = serde_json::Map::new();
 
-            for (key, field) in owner.iter() {
+            for (key, field) in data.iter() {
                 section.insert(key.clone(), field.val.to_json());
             }
 
-            event.insert(key.clone(), serde_json::Value::Object(section));
+            event.insert(
+                owner.to_str().to_string(),
+                serde_json::Value::Object(section),
+            );
         }
 
         serde_json::Value::Object(event)

@@ -5,13 +5,16 @@ use std::fmt;
 use anyhow::{bail, Result};
 
 use super::{config::ProbeConfig, inspect::inspect_symbol};
-use crate::core::{
-    events::{
-        bpf::{BpfEventOwner, BpfEvents, BpfRawSection, EventUnmarshaler},
-        EventField,
+use crate::{
+    core::{
+        events::{
+            bpf::{BpfEvents, BpfRawSection, EventUnmarshaler},
+            EventField,
+        },
+        kernel::Symbol,
+        probe::ProbeOption,
     },
-    kernel::Symbol,
-    probe::ProbeOption,
+    module::ModuleId,
 };
 
 // Split to exclude from tests.
@@ -143,6 +146,6 @@ pub(crate) fn register_unmarshaler(
         stack_map: stackmap,
     };
 
-    events.register_unmarshaler(BpfEventOwner::Kernel, Box::new(unmarshaler))?;
+    events.register_unmarshaler(ModuleId::Kernel, Box::new(unmarshaler))?;
     Ok(())
 }

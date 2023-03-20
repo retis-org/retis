@@ -10,16 +10,15 @@ use crate::{
     collect::Collector,
     core::{
         events::{
-            bpf::{BpfEventOwner, BpfEvents, BpfRawSection},
+            bpf::{BpfEvents, BpfRawSection},
             EventField,
         },
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
         user::proc::{Process, ThreadInfo},
     },
+    module::ModuleId,
 };
-
-const OVS_COLLECTOR: &str = "ovs";
 
 #[derive(Parser, Default)]
 pub(crate) struct OvsCollectorArgs {
@@ -47,12 +46,8 @@ impl Collector for OvsCollector {
         Ok(OvsCollector::default())
     }
 
-    fn name(&self) -> &'static str {
-        OVS_COLLECTOR
-    }
-
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<OvsCollectorArgs>(OVS_COLLECTOR)
+        cmd.register_module::<OvsCollectorArgs>(ModuleId::Ovs.to_str())
     }
 
     fn init(
@@ -63,7 +58,7 @@ impl Collector for OvsCollector {
     ) -> Result<()> {
         // Register unmarshaler.
         events.register_unmarshaler(
-            BpfEventOwner::CollectorOvs,
+            ModuleId::Ovs,
             Box::new(
                 |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
                     match OvsEventType::from_u8(raw_section.header.data_type)? {
@@ -88,7 +83,7 @@ impl Collector for OvsCollector {
         )?;
 
         self.track = cli
-            .get_section::<OvsCollectorArgs>(OVS_COLLECTOR)?
+            .get_section::<OvsCollectorArgs>(ModuleId::Ovs.to_str())?
             .ovs_track;
 
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);

@@ -11,7 +11,7 @@ use crate::{
     collect::Collector,
     core::{
         events::{
-            bpf::{parse_raw_section, BpfEventOwner, BpfEvents, BpfRawSection},
+            bpf::{parse_raw_section, BpfEvents, BpfRawSection},
             EventField,
         },
         kernel::Symbol,
@@ -22,9 +22,8 @@ use crate::{
         workaround::SendableMap,
     },
     event_field,
+    module::ModuleId,
 };
-
-const SKB_TRACKING_COLLECTOR: &str = "skb-tracking";
 
 // GC runs in a thread every SKB_TRACKING_GC_INTERVAL seconds to collect and
 // remove old entries.
@@ -57,16 +56,12 @@ impl Collector for SkbTrackingCollector {
         Ok(SkbTrackingCollector::default())
     }
 
-    fn name(&self) -> &'static str {
-        SKB_TRACKING_COLLECTOR
-    }
-
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
         Some(vec!["struct sk_buff *"])
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(SKB_TRACKING_COLLECTOR)
+        cmd.register_module_noargs(ModuleId::SkbTracking.to_str())
     }
 
     fn init(
@@ -76,7 +71,7 @@ impl Collector for SkbTrackingCollector {
         events: &mut BpfEvents,
     ) -> Result<()> {
         events.register_unmarshaler(
-            BpfEventOwner::CollectorSkbTracking,
+            ModuleId::SkbTracking,
             Box::new(
                 |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
                     if raw_section.header.data_type != 1 {

@@ -24,7 +24,7 @@ use crate::{
         kernel::Symbol,
         probe::{self, Probe},
     },
-    module::{ovs::OvsCollector, skb::SkbCollector, skb_tracking::SkbTrackingCollector},
+    module::{ovs::OvsCollector, skb::SkbCollector, skb_tracking::SkbTrackingCollector, ModuleId},
 };
 
 /// Generic trait representing a collector. All collectors are required to
@@ -35,9 +35,6 @@ pub(crate) trait Collector {
     fn new() -> Result<Self>
     where
         Self: Sized;
-    /// Return the name of the collector. It *has* to be unique among all the
-    /// collectors.
-    fn name(&self) -> &'static str;
     /// List of kernel data types the collector can retrieve data from, if any.
     /// This is useful for registering dynamic collectors, and is used later for
     /// checking requested probes are not a no-op.
@@ -72,7 +69,7 @@ pub(crate) trait Collector {
 /// Group of collectors. Used to handle a set of collectors and to perform
 /// group actions.
 pub(crate) struct Group {
-    list: HashMap<String, Box<dyn Collector>>,
+    list: HashMap<ModuleId, Box<dyn Collector>>,
     probes: probe::ProbeManager,
     events: BpfEvents,
     known_kernel_types: HashSet<String>,
@@ -98,19 +95,17 @@ impl Group {
     ///     .register(Box::new(SecondCollector::new()?))?
     ///     .register(Box::new(ThirdCollector::new()?))?;
     /// ```
-    fn register(&mut self, collector: Box<dyn Collector>) -> Result<&mut Self> {
-        let name = String::from(collector.name());
-
+    fn register(&mut self, id: ModuleId, collector: Box<dyn Collector>) -> Result<&mut Self> {
         // Ensure uniqueness of the collector name. This is important as their
         // name is used as a key.
-        if self.list.get(&name).is_some() {
+        if self.list.get(&id).is_some() {
             bail!(
                 "Could not insert collector '{}'; name already registered",
-                name
+                id,
             );
         }
 
-        self.list.insert(name, collector);
+        self.list.insert(id, collector);
         Ok(self)
     }
 
@@ -140,13 +135,14 @@ impl Group {
 
         // Try initializing all collectors in the group.
         for name in &collect.args()?.collectors {
+            let id = ModuleId::from_str(name)?;
             let c = self
                 .list
-                .get_mut(name)
-                .ok_or_else(|| anyhow!("unknown collector: {}", &name))?;
+                .get_mut(&id)
+                .ok_or_else(|| anyhow!("unknown collector {}", name))?;
 
             if let Err(e) = c.init(cli, &mut self.probes, &mut self.events) {
-                bail!("Could not initialize the {} collector: {}", c.name(), e);
+                bail!("Could not initialize the {} collector: {}", id, e);
             }
 
             // If the collector provides known kernel types, meaning we have a
@@ -183,9 +179,9 @@ impl Group {
         self.events.start_polling()?;
         self.probes.attach()?;
 
-        for (_, c) in self.list.iter_mut() {
+        for (id, c) in self.list.iter_mut() {
             if c.start().is_err() {
-                warn!("Could not start '{}'", c.name());
+                warn!("Could not start '{}'", id);
             }
         }
 
@@ -288,9 +284,12 @@ pub(crate) fn get_collectors() -> Result<Group> {
 
     // Register all collectors here.
     group
-        .register(Box::new(SkbTrackingCollector::new()?))?
-        .register(Box::new(SkbCollector::new()?))?
-        .register(Box::new(OvsCollector::new()?))?;
+        .register(
+            ModuleId::SkbTracking,
+            Box::new(SkbTrackingCollector::new()?),
+        )?
+        .register(ModuleId::Skb, Box::new(SkbCollector::new()?))?
+        .register(ModuleId::Ovs, Box::new(OvsCollector::new()?))?;
 
     Ok(group)
 }
@@ -306,9 +305,6 @@ mod tests {
     impl Collector for DummyCollectorA {
         fn new() -> Result<DummyCollectorA> {
             Ok(DummyCollectorA)
-        }
-        fn name(&self) -> &'static str {
-            "dummy-a"
         }
         fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
             Some(vec!["struct sk_buff *", "struct net_device *"])
@@ -333,9 +329,6 @@ mod tests {
         fn new() -> Result<DummyCollectorB> {
             Ok(DummyCollectorB)
         }
-        fn name(&self) -> &'static str {
-            "dummy-b"
-        }
         fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
             None
         }
@@ -358,16 +351,24 @@ mod tests {
     #[test]
     fn register_collectors() -> Result<()> {
         let mut group = Group::new()?;
-        assert!(group.register(Box::new(DummyCollectorA::new()?)).is_ok());
-        assert!(group.register(Box::new(DummyCollectorB::new()?)).is_ok());
+        assert!(group
+            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))
+            .is_ok());
+        assert!(group
+            .register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))
+            .is_ok());
         Ok(())
     }
 
     #[test]
     fn register_uniqueness() -> Result<()> {
         let mut group = Group::new()?;
-        assert!(group.register(Box::new(DummyCollectorA::new()?)).is_ok());
-        assert!(group.register(Box::new(DummyCollectorA::new()?)).is_err());
+        assert!(group
+            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))
+            .is_ok());
+        assert!(group
+            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))
+            .is_err());
         Ok(())
     }
 
@@ -386,8 +387,8 @@ mod tests {
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
-        group.register(Box::new(DummyCollectorA::new()?))?;
-        group.register(Box::new(DummyCollectorB::new()?))?;
+        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         let mut events = BpfEvents::new()?;
         let mut mgr = probe::ProbeManager::new(&mut events)?;
@@ -408,8 +409,8 @@ mod tests {
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
-        group.register(Box::new(DummyCollectorA::new()?))?;
-        group.register(Box::new(DummyCollectorB::new()?))?;
+        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         assert!(dummy_a.start().is_ok());
         assert!(dummy_b.start().is_err());
@@ -420,8 +421,8 @@ mod tests {
     #[test]
     fn parse_probe() -> Result<()> {
         let mut group = Group::new()?;
-        group.register(Box::new(DummyCollectorA::new()?))?;
-        group.register(Box::new(DummyCollectorB::new()?))?;
+        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         // Valid probes.
         assert!(group.parse_probe("consume_skb").is_ok());
