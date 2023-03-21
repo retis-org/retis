@@ -10,10 +10,6 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        events::{
-            bpf::{parse_raw_section, BpfEvents, BpfRawSection},
-            EventField,
-        },
         kernel::Symbol,
         probe::{
             manager::{ProbeManager, PROBE_MAX},
@@ -21,7 +17,6 @@ use crate::{
         },
         workaround::SendableMap,
     },
-    event_field,
     module::ModuleId,
 };
 
@@ -34,17 +29,6 @@ const SKB_TRACKING_GC_INTERVAL: u64 = 5;
 // data and not having the map full of old entries. However, this logic
 // shouldn't happen much — or it is a bug.
 const TRACKING_OLD_LIMIT: u64 = 60;
-
-// Tracking event. Please keep in sync with its BPF counterpart.
-#[derive(Default)]
-#[repr(C, packed)]
-struct SkbTrackingEvent {
-    orig_head: u64,
-    timestamp: u64,
-    skb: u64,
-    drop_reason: i32,
-}
-unsafe impl Plain for SkbTrackingEvent {}
 
 #[derive(Default)]
 pub(crate) struct SkbTrackingCollector {
@@ -64,33 +48,7 @@ impl Collector for SkbTrackingCollector {
         cmd.register_module_noargs(ModuleId::SkbTracking.to_str())
     }
 
-    fn init(
-        &mut self,
-        _: &CliConfig,
-        probes: &mut ProbeManager,
-        events: &mut BpfEvents,
-    ) -> Result<()> {
-        events.register_unmarshaler(
-            ModuleId::SkbTracking,
-            Box::new(
-                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
-                    if raw_section.header.data_type != 1 {
-                        bail!("Unknown data type");
-                    }
-
-                    let event = parse_raw_section::<SkbTrackingEvent>(raw_section)?;
-
-                    fields.push(event_field!("orig_head", event.orig_head));
-                    fields.push(event_field!("timestamp", event.timestamp));
-                    fields.push(event_field!("skb", event.skb));
-                    if event.drop_reason >= 0 {
-                        fields.push(event_field!("drop_reason", event.drop_reason));
-                    }
-                    Ok(())
-                },
-            ),
-        )?;
-
+    fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         self.init_tracking(probes)?;
 
         // We'd like to track free reasons as well.
