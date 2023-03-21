@@ -52,7 +52,7 @@ struct skb_tracking_event {
 	u64 orig_head;
 	u64 timestamp;
 	u64 skb;
-	u32 drop_reason;
+	s32 drop_reason;
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
@@ -60,7 +60,6 @@ static __always_inline int track_skb(struct retis_context *ctx,
 				     struct retis_raw_event *event,
 				     struct sk_buff *skb)
 {
-	enum skb_drop_reason drop_reason = 0;
 	struct tracking_info *ti = NULL, new;
 	bool free = false, inv_head = false;
 	struct skb_tracking_event *e;
@@ -130,9 +129,6 @@ static __always_inline int track_skb(struct retis_context *ctx,
 	else if (free)
 		bpf_map_delete_elem(&tracking_map, &head);
 
-	if (retis_arg_valid(ctx, skb_drop_reason))
-		drop_reason = retis_get_skb_drop_reason(ctx);
-
 	e = get_event_section(event, COLLECTOR_SKB_TRACKING, 1, sizeof(*e));
 	if (!e)
 		return 0;
@@ -140,7 +136,10 @@ static __always_inline int track_skb(struct retis_context *ctx,
 	e->orig_head = ti->orig_head;
 	e->timestamp = ti->timestamp;
 	e->skb = (u64)skb;
-	e->drop_reason = drop_reason;
+	if (retis_arg_valid(ctx, skb_drop_reason))
+		e->drop_reason = retis_get_skb_drop_reason(ctx);
+	else
+		e->drop_reason = -1;
 
 	return 0;
 }
