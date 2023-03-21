@@ -42,7 +42,7 @@ struct SkbTrackingEvent {
     orig_head: u64,
     timestamp: u64,
     skb: u64,
-    drop_reason: u32,
+    drop_reason: i32,
 }
 unsafe impl Plain for SkbTrackingEvent {}
 
@@ -83,7 +83,9 @@ impl Collector for SkbTrackingCollector {
                     fields.push(event_field!("orig_head", event.orig_head));
                     fields.push(event_field!("timestamp", event.timestamp));
                     fields.push(event_field!("skb", event.skb));
-                    fields.push(event_field!("drop_reason", event.drop_reason));
+                    if event.drop_reason >= 0 {
+                        fields.push(event_field!("drop_reason", event.drop_reason));
+                    }
                     Ok(())
                 },
             ),
