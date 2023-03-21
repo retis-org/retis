@@ -9,6 +9,9 @@ mod module;
 use cli::get_cli;
 use collect::get_collectors;
 
+// Re-export derive macros.
+use retis_derive::*;
+
 fn main() -> Result<()> {
     let mut cli = get_cli()?.build()?;
 

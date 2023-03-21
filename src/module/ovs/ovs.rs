@@ -3,16 +3,11 @@ use std::mem;
 use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
 
-use super::{bpf::*, hooks};
-
+use super::hooks;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        events::{
-            bpf::{BpfEvents, BpfRawSection},
-            EventField,
-        },
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
         user::proc::{Process, ThreadInfo},
@@ -50,38 +45,7 @@ impl Collector for OvsCollector {
         cmd.register_module::<OvsCollectorArgs>(ModuleId::Ovs.to_str())
     }
 
-    fn init(
-        &mut self,
-        cli: &CliConfig,
-        probes: &mut ProbeManager,
-        events: &mut BpfEvents,
-    ) -> Result<()> {
-        // Register unmarshaler.
-        events.register_unmarshaler(
-            ModuleId::Ovs,
-            Box::new(
-                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
-                    match OvsEventType::from_u8(raw_section.header.data_type)? {
-                        OvsEventType::Upcall => unmarshall_upcall(raw_section, fields)?,
-                        OvsEventType::UpcallEnqueue => {
-                            unmarshall_upcall_enqueue(raw_section, fields)?
-                        }
-                        OvsEventType::UpcallReturn => {
-                            unmarshall_upcall_return(raw_section, fields)?
-                        }
-                        OvsEventType::RecvUpcall => unmarshall_recv(raw_section, fields)?,
-                        OvsEventType::Operation => unmarshall_operation(raw_section, fields)?,
-                        OvsEventType::ActionExec => unmarshall_exec(raw_section, fields)?,
-                        OvsEventType::ActionExecTrack => {
-                            unmarshall_exec_track(raw_section, fields)?
-                        }
-                        OvsEventType::OutputAction => unmarshall_output(raw_section, fields)?,
-                    }
-                    Ok(())
-                },
-            ),
-        )?;
-
+    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         self.track = cli
             .get_section::<OvsCollectorArgs>(ModuleId::Ovs.to_str())?
             .ovs_track;

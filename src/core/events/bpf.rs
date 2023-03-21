@@ -3,65 +3,31 @@
 #![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 
-use std::{
-    collections::HashMap,
-    mem,
-    sync::{mpsc, Arc, Mutex},
-    thread,
-    time::Duration,
-};
+use std::{collections::HashMap, mem, sync::mpsc, thread, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
 use log::error;
 use plain::Plain;
+use serde::{Deserialize, Serialize};
 
-use super::{Event, EventField};
-use crate::{event_field, module::ModuleId};
+use super::{Event, EventFactory, EventSectionFactory};
+use crate::{core::events::*, module::ModuleId, EventSection, EventSectionFactory};
 
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
 
-/// Unmarshaler trait. The unmarshaler is chosen based on the unique owner id of
-/// the raw event.
-pub(crate) trait EventUnmarshaler {
-    /// Takes a raw section as an input and adds unmarshaled event sections to
-    /// the fields parameter.
-    fn unmarshal(
-        &mut self,
-        raw_section: &BpfRawSection,
-        fields: &mut Vec<EventField>,
-    ) -> Result<()>;
-}
-
-impl<F> EventUnmarshaler for F
-where
-    F: Fn(&BpfRawSection, &mut Vec<EventField>) -> Result<()>,
-{
-    fn unmarshal(
-        &mut self,
-        raw_section: &BpfRawSection,
-        fields: &mut Vec<EventField>,
-    ) -> Result<()> {
-        self(raw_section, fields)
-    }
-}
-
-// Define a private type for unmarshalers as we'll use it more than once.
-type Unmarshalers = HashMap<ModuleId, Box<dyn EventUnmarshaler>>;
-
-/// API to retrieve and unmarshal events coming from the BPF parts.
+/// BPF events factory retrieving and unmarshaling events coming from the BPF
+/// parts.
 #[cfg(not(test))]
-pub(crate) struct BpfEvents {
+pub(crate) struct BpfEventsFactory {
     map: libbpf_rs::Map,
-    /// HashMap of unmarshalers.
-    unmarshalers: Arc<Mutex<Unmarshalers>>,
     /// Receiver channel to retrieve events from the processing loop.
     rxc: Option<mpsc::Receiver<Event>>,
 }
 
 #[cfg(not(test))]
-impl BpfEvents {
-    pub(crate) fn new() -> Result<BpfEvents> {
+impl BpfEventsFactory {
+    pub(crate) fn new() -> Result<BpfEventsFactory> {
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
@@ -77,72 +43,35 @@ impl BpfEvents {
         )
         .or_else(|e| bail!("Failed to create events map: {}", e))?;
 
-        let mut events = BpfEvents {
-            map,
-            unmarshalers: Arc::new(Mutex::new(HashMap::new())),
-            rxc: None,
-        };
-
-        events.register_unmarshaler(
-            ModuleId::Common,
-            Box::new(
-                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
-                    if raw_section.header.data_type != 1 {
-                        bail!("Unknown data type");
-                    }
-
-                    if raw_section.data.len() != 8 {
-                        bail!(
-                            "Section data is not the expected size {} != 8",
-                            raw_section.data.len()
-                        );
-                    }
-
-                    let timestamp = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
-                    fields.push(event_field!("timestamp", timestamp));
-                    Ok(())
-                },
-            ),
-        )?;
-
-        Ok(events)
+        Ok(BpfEventsFactory { map, rxc: None })
     }
 
-    /// Register a new unmarshaler closure to convert raw sections into event
-    /// sections.
-    pub(crate) fn register_unmarshaler(
-        &mut self,
-        owner: ModuleId,
-        unmarshaler: Box<dyn EventUnmarshaler>,
-    ) -> Result<()> {
-        let mut unmarshalers = self.unmarshalers.lock().unwrap();
-        if unmarshalers.contains_key(&owner) {
-            bail!("Unmarshaler already registered for owner {}", owner);
-        }
-
-        unmarshalers.insert(owner, unmarshaler);
-        Ok(())
+    /// Get the events map fd for reuse.
+    pub(crate) fn map_fd(&self) -> i32 {
+        self.map.fd()
     }
+}
 
+#[cfg(not(test))]
+impl EventFactory for BpfEventsFactory {
     /// This starts the event polling mechanism. A dedicated thread is started
-    /// and events are retrieved and processed there. This is a non-blocking
-    /// call.
-    pub(crate) fn start_polling(&mut self) -> Result<()> {
-        // self.unmarshalers is an Arc<> so we're still pointing to the common
-        // unmarshalers map.
-        let unmarshalers = self.unmarshalers.clone();
+    /// for events to be retrieved and processed.
+    fn start(
+        &mut self,
+        mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>>,
+    ) -> Result<()> {
+        if section_factories.is_empty() {
+            bail!("No section factory, can't parse events, aborting");
+        }
 
         // Create the sending and receiving channels.
         let (txc, rxc) = mpsc::channel();
         self.rxc = Some(rxc);
 
-        // Closure to handle the raw events coming from the BPF part. We're
-        // moving our Arc clone pointing to unmarshalers there and the tx
-        // channel.
+        // Closure to handle the raw events coming from the BPF part.
         let process_event = move |data: &[u8]| -> i32 {
-            let mut unmarshalers = unmarshalers.lock().unwrap();
             // Parse the raw event.
-            let event = match parse_raw_event(data, &mut unmarshalers) {
+            let event = match parse_raw_event(data, &mut section_factories) {
                 Ok(event) => event,
                 Err(e) => {
                     error!("Could not parse raw event: {}", e);
@@ -173,9 +102,8 @@ impl BpfEvents {
         Ok(())
     }
 
-    /// Retrieve the next event. This is a blocking call and can return early if
-    /// a timeout is provided.
-    pub(crate) fn poll(&self, timeout: Option<Duration>) -> Result<Option<Event>> {
+    /// Retrieve the next event. This is a blocking call and never returns EOF.
+    fn next_event(&mut self, timeout: Option<Duration>) -> Result<Option<Event>> {
         let rxc = match &self.rxc {
             Some(rxc) => rxc,
             None => bail!("Can't get event, no rx channel found."),
@@ -190,14 +118,12 @@ impl BpfEvents {
             None => Some(rxc.recv()?),
         })
     }
-
-    /// Get the events map fd for reuse.
-    pub(crate) fn map_fd(&self) -> i32 {
-        self.map.fd()
-    }
 }
 
-fn parse_raw_event(data: &[u8], unmarshalers: &mut Unmarshalers) -> Result<Event> {
+fn parse_raw_event<'a>(
+    data: &'a [u8],
+    factories: &'a mut HashMap<ModuleId, Box<dyn EventSectionFactory>>,
+) -> Result<Event> {
     // First retrieve the buffer length.
     let data_size = data.len();
     if data_size < 2 {
@@ -224,10 +150,11 @@ fn parse_raw_event(data: &[u8], unmarshalers: &mut Unmarshalers) -> Result<Event
         );
     }
 
-    // Let's loop through the raw event sections. Cursor is initialized
-    // to sizeof(u16) as we already read the raw event size above.
+    // Let's loop through the raw event sections and collect them for later
+    // processing. Cursor is initialized to sizeof(u16) as we already read the
+    // raw event size above.
     let mut cursor = 2;
-    let mut event = Event::new();
+    let mut raw_sections = HashMap::new();
     while cursor < raw_event_size {
         // Get the current raw section header.
         let mut raw_section = BpfRawSection::default();
@@ -268,31 +195,21 @@ fn parse_raw_event(data: &[u8], unmarshalers: &mut Unmarshalers) -> Result<Event
         raw_section.data = data[cursor..raw_section_end].to_vec();
         cursor += raw_section.header.size as usize;
 
-        // Try getting the right unmarshaler.
-        let unmarshaler = match unmarshalers.get_mut(&owner) {
-            Some(unmarshaler) => unmarshaler,
-            None => {
-                error!("Could not get unmarshaler for owner {}", owner);
-                continue;
-            }
+        // Save the raw section for later processing.
+        raw_sections
+            .entry(owner)
+            .or_insert(Vec::new())
+            .push(raw_section);
+    }
+
+    let mut event = Event::new();
+    for (owner, sections) in raw_sections.iter() {
+        let factory = match factories.get_mut(owner) {
+            Some(factory) => factory,
+            None => bail!("Unknown factory for event section owner {}", owner),
         };
 
-        // Unmarshall the section.
-        let mut fields = Vec::new();
-        if let Err(e) = unmarshaler.unmarshal(&raw_section, &mut fields) {
-            let size = raw_section.header.size; // unaligned
-            error!(
-                "Could not unmarshal section (owner: {} data_type: {} size: {}): {}",
-                owner, raw_section.header.data_type, size, e
-            );
-            continue;
-        }
-
-        // Fill the event with unmarshaled sections. Unwrap as we know
-        // it's a valid owner.
-        for field in fields {
-            event.insert(owner, field);
-        }
+        event.insert_section(*owner, factory.from_raw(sections.clone())?)?;
     }
 
     Ok(event)
@@ -314,31 +231,47 @@ where
     Ok(event)
 }
 
-// We use a dummy implementation of BpfEvents to allow unit tests to pass.
+#[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
+pub(crate) struct CommonEvent {
+    /// Timestamp of when the event was generated.
+    pub(crate) timestamp: u64,
+}
+
+unsafe impl Plain for CommonEvent {}
+
+impl RawEventSectionFactory for CommonEvent {
+    fn from_raw(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        if raw_sections.len() != 1 {
+            bail!("Common event from BPF must be a single section");
+        }
+
+        // Unwrap as we just checked the vector contains 1 element.
+        Ok(Box::new(parse_raw_section::<CommonEvent>(
+            &raw_sections.pop().unwrap(),
+        )?))
+    }
+}
+
+// We use a dummy implementation of BpfEventsFactory to allow unit tests to pass.
 // This is fine as no function in the above can really be tested.
 #[cfg(test)]
-pub(crate) struct BpfEvents;
-
+pub(crate) struct BpfEventsFactory;
 #[cfg(test)]
-impl BpfEvents {
-    pub(crate) fn new() -> Result<BpfEvents> {
-        Ok(BpfEvents {})
-    }
-    pub(crate) fn register_unmarshaler(
-        &mut self,
-        _: ModuleId,
-        _: Box<dyn EventUnmarshaler>,
-    ) -> Result<()> {
-        Ok(())
-    }
-    pub(crate) fn start_polling(&self) -> Result<()> {
-        Ok(())
-    }
-    pub(crate) fn poll(&self, _: Option<Duration>) -> Result<Option<Event>> {
-        Ok(Some(Event::new()))
+impl BpfEventsFactory {
+    pub(crate) fn new() -> Result<BpfEventsFactory> {
+        Ok(BpfEventsFactory {})
     }
     pub(crate) fn map_fd(&self) -> i32 {
         0
+    }
+}
+#[cfg(test)]
+impl EventFactory for BpfEventsFactory {
+    fn start(&mut self, _: HashMap<ModuleId, Box<dyn EventSectionFactory>>) -> Result<()> {
+        Ok(())
+    }
+    fn next_event(&mut self, _: Option<Duration>) -> Result<Option<Event>> {
+        Ok(Some(Event::new()))
     }
 }
 
@@ -362,7 +295,7 @@ unsafe impl Plain for RawEvent {}
 
 /// Raw event section format shared between the Rust and BPF part. Please keep
 /// in sync with its BPF counterpart.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct BpfRawSection {
     pub(crate) header: BpfRawSectionHeader,
     pub(crate) data: Vec<u8>,
@@ -371,7 +304,7 @@ pub(crate) struct BpfRawSection {
 /// Raw event section header shared between the Rust and BPF part. Please keep
 /// in sync with its BPF counterpart.
 #[repr(C, packed)]
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub(crate) struct BpfRawSectionHeader {
     pub(super) owner: u8,
     pub(crate) data_type: u8,
@@ -382,98 +315,100 @@ unsafe impl Plain for BpfRawSectionHeader {}
 
 #[cfg(test)]
 mod tests {
+    use serde::{Deserialize, Serialize};
+
     use super::*;
+    use crate::{EventSection, EventSectionFactory};
 
     const DATA_TYPE_U64: u8 = 1;
     const DATA_TYPE_U128: u8 = 2;
 
+    #[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
+    struct TestEvent {
+        field0: Option<u64>,
+        field1: Option<u64>,
+        field2: Option<u64>,
+    }
+
+    impl RawEventSectionFactory for TestEvent {
+        fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+            let mut event = TestEvent::default();
+
+            for raw in raw_sections.iter() {
+                let len = raw.data.len();
+
+                match raw.header.data_type {
+                    DATA_TYPE_U64 => {
+                        if len != 8 {
+                            bail!("Invalid section for data type 1");
+                        }
+
+                        event.field0 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
+                    }
+                    DATA_TYPE_U128 => {
+                        if len != 16 {
+                            bail!("Invalid section for data type 2");
+                        }
+
+                        event.field1 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
+                        event.field2 = Some(u64::from_ne_bytes(raw.data[8..16].try_into()?));
+                    }
+                    _ => bail!("Invalid data type"),
+                }
+            }
+
+            Ok(Box::new(event))
+        }
+    }
+
     #[test]
     fn parse_raw_event() {
-        let mut unmarshalers = Unmarshalers::new();
-
-        // Let's use the Common probe type for our tests.
-        unmarshalers.insert(
-            ModuleId::Common,
-            Box::new(
-                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
-                    let len = raw_section.data.len();
-
-                    match raw_section.header.data_type {
-                        DATA_TYPE_U64 => {
-                            if len != 8 {
-                                bail!("Invalid section for data type 1");
-                            }
-
-                            fields.push(event_field!(
-                                "field0",
-                                u64::from_ne_bytes(raw_section.data[0..8].try_into()?)
-                            ));
-                        }
-                        DATA_TYPE_U128 => {
-                            if len != 16 {
-                                bail!("Invalid section for data type 2");
-                            }
-
-                            fields.push(event_field!(
-                                "field1",
-                                u64::from_ne_bytes(raw_section.data[0..8].try_into()?)
-                            ));
-                            fields.push(event_field!(
-                                "field2",
-                                u64::from_ne_bytes(raw_section.data[8..16].try_into()?)
-                            ));
-                        }
-                        _ => bail!("Invalid data type"),
-                    }
-                    Ok(())
-                },
-            ),
-        );
+        let mut factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
+        factories.insert(ModuleId::Common, Box::<TestEvent>::default());
 
         // Empty event.
         let data = [];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_err());
+        assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Uncomplete event size.
         let data = [0];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_err());
+        assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event size but empty event.
         let data = [0, 0];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_err());
+        assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event size but incomplete event.
         let data = [42, 0];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_err());
+        assert!(super::parse_raw_event(&data, &mut factories).is_err());
         let data = [2, 0, 42];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_err());
+        assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event with a single empty section. Section is ignored.
         let data = [4, 0, ModuleId::Common as u8, DATA_TYPE_U64, 0, 0];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
+        assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with a section too large. Section is ignored.
         let data = [4, 0, ModuleId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
+        assert!(super::parse_raw_event(&data, &mut factories).is_ok());
         let data = [6, 0, ModuleId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
+        assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with a section having an invalid owner.
         let data = [4, 0, 0, DATA_TYPE_U64, 0, 0];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
+        assert!(super::parse_raw_event(&data, &mut factories).is_ok());
         let data = [4, 0, 255, DATA_TYPE_U64, 0, 0];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
+        assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with an invalid data type.
         let data = [4, 0, ModuleId::Common as u8, 0, 1, 0, 42];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
+        assert!(super::parse_raw_event(&data, &mut factories).is_ok());
         let data = [4, 0, ModuleId::Common as u8, 255, 1, 0, 42];
-        assert!(super::parse_raw_event(&data, &mut unmarshalers).is_ok());
+        assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event but invalid section (too small).
         let data = [5, 0, ModuleId::Common as u8, DATA_TYPE_U64, 1, 0, 42];
-        let res = super::parse_raw_event(&data, &mut unmarshalers);
-        assert!(res.unwrap().len() == 0);
+        assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event, single section.
         let data = [
@@ -492,9 +427,9 @@ mod tests {
             0,
             0,
         ];
-        let event = super::parse_raw_event(&data, &mut unmarshalers).unwrap();
-        let field = event.get::<u64>(ModuleId::Common, "field0").unwrap();
-        assert!(field == Some(&42));
+        let event = super::parse_raw_event(&data, &mut factories).unwrap();
+        let section = event.get_section::<TestEvent>(ModuleId::Common).unwrap();
+        assert!(section.field0 == Some(42));
 
         // Valid event, multiple sections.
         let data = [
@@ -548,15 +483,9 @@ mod tests {
             0,
             0,
         ];
-        let event = super::parse_raw_event(&data, &mut unmarshalers).unwrap();
-        let field = event.get::<u64>(ModuleId::Common, "field1").unwrap();
-        assert!(field == Some(&42));
-        let field = event.get::<u64>(ModuleId::Common, "field2").unwrap();
-        assert!(field == Some(&1337));
-
-        // Test an unknown field and type mismatch on the above event.
-        let field = event.get::<u64>(ModuleId::Common, "invalid").unwrap();
-        assert!(field.is_none());
-        assert!(event.get::<i64>(ModuleId::Common, "field1").is_err());
+        let event = super::parse_raw_event(&data, &mut factories).unwrap();
+        let section = event.get_section::<TestEvent>(ModuleId::Common).unwrap();
+        assert!(section.field1 == Some(42));
+        assert!(section.field2 == Some(1337));
     }
 }

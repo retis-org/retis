@@ -7,13 +7,7 @@ use super::{bpf::*, skb_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::{
-        events::{
-            bpf::{BpfEvents, BpfRawSection},
-            EventField,
-        },
-        probe::{Hook, ProbeManager},
-    },
+    core::probe::{Hook, ProbeManager},
     module::ModuleId,
 };
 
@@ -44,12 +38,7 @@ impl Collector for SkbCollector {
         cmd.register_module::<SkbCollectorArgs>(ModuleId::Skb.to_str())
     }
 
-    fn init(
-        &mut self,
-        cli: &CliConfig,
-        probes: &mut ProbeManager,
-        events: &mut BpfEvents,
-    ) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         // First, get the cli parameters.
         let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb.to_str())?;
 
@@ -68,29 +57,6 @@ impl Collector for SkbCollector {
                 x => bail!("Unknown skb_collect value ({})", x),
             }
         }
-
-        // Register our event unmarshaler.
-        events.register_unmarshaler(
-            ModuleId::Skb,
-            Box::new(
-                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| match raw_section
-                    .header
-                    .data_type
-                    as u64
-                {
-                    SECTION_L2 => unmarshal_l2(raw_section, fields),
-                    SECTION_IPV4 => unmarshal_ipv4(raw_section, fields),
-                    SECTION_IPV6 => unmarshal_ipv6(raw_section, fields),
-                    SECTION_TCP => unmarshal_tcp(raw_section, fields),
-                    SECTION_UDP => unmarshal_udp(raw_section, fields),
-                    SECTION_ICMP => unmarshal_icmp(raw_section, fields),
-                    SECTION_DEV => unmarshal_dev(raw_section, fields),
-                    SECTION_NS => unmarshal_ns(raw_section, fields),
-                    SECTION_DATA_REF => unmarshal_data_ref(raw_section, fields),
-                    _ => bail!("Unknown data type"),
-                },
-            ),
-        )?;
 
         // Then, create the config map.
         let config_map = Self::config_map()?;

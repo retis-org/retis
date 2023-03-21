@@ -12,13 +12,8 @@ use std::{
 use anyhow::Result;
 use plain::Plain;
 
-use crate::{
-    core::events::{
-        bpf::{parse_raw_section, BpfRawSection},
-        EventField,
-    },
-    event_field,
-};
+use super::SkbEvent;
+use crate::core::events::bpf::{parse_raw_section, BpfRawSection};
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
@@ -53,26 +48,17 @@ struct SkbL2Event {
 }
 unsafe impl Plain for SkbL2Event {}
 
-pub(super) fn unmarshal_l2(
-    raw_section: &BpfRawSection,
-    fields: &mut Vec<EventField>,
-) -> Result<()> {
-    let event = parse_raw_section::<SkbL2Event>(raw_section)?;
+pub(super) fn unmarshal_l2(raw_section: &BpfRawSection, event: &mut SkbEvent) -> Result<()> {
+    let raw = parse_raw_section::<SkbL2Event>(raw_section)?;
 
-    fields.push(event_field!("etype", u16::from_be(event.etype)));
-    fields.push(event_field!(
-        "src",
-        format!(
-            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-            event.src[0], event.src[1], event.src[2], event.src[3], event.src[4], event.src[5],
-        )
+    event.etype = Some(u16::from_be(raw.etype));
+    event.src = Some(format!(
+        "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        raw.src[0], raw.src[1], raw.src[2], raw.src[3], raw.src[4], raw.src[5],
     ));
-    fields.push(event_field!(
-        "dst",
-        format!(
-            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-            event.dst[0], event.dst[1], event.dst[2], event.dst[3], event.dst[4], event.dst[5],
-        )
+    event.dst = Some(format!(
+        "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        raw.dst[0], raw.dst[1], raw.dst[2], raw.dst[3], raw.dst[4], raw.dst[5],
     ));
 
     Ok(())
@@ -93,20 +79,17 @@ struct SkbIpv4Event {
 }
 unsafe impl Plain for SkbIpv4Event {}
 
-pub(super) fn unmarshal_ipv4(
-    raw_section: &BpfRawSection,
-    fields: &mut Vec<EventField>,
-) -> Result<()> {
-    let event = parse_raw_section::<SkbIpv4Event>(raw_section)?;
+pub(super) fn unmarshal_ipv4(raw_section: &BpfRawSection, event: &mut SkbEvent) -> Result<()> {
+    let raw = parse_raw_section::<SkbIpv4Event>(raw_section)?;
 
-    let src = Ipv4Addr::from(u32::from_be(event.src));
-    fields.push(event_field!("saddr", format!("{src}")));
-    let dst = Ipv4Addr::from(u32::from_be(event.dst));
-    fields.push(event_field!("daddr", format!("{dst}")));
+    let src = Ipv4Addr::from(u32::from_be(raw.src));
+    event.saddr = Some(format!("{src}"));
+    let dst = Ipv4Addr::from(u32::from_be(raw.dst));
+    event.daddr = Some(format!("{dst}"));
 
-    fields.push(event_field!("ip_version", 4));
-    fields.push(event_field!("l3_len", u16::from_be(event.len)));
-    fields.push(event_field!("protocol", event.protocol));
+    event.ip_version = Some(4);
+    event.l3_len = Some(u16::from_be(raw.len));
+    event.protocol = Some(raw.protocol);
 
     Ok(())
 }
@@ -126,20 +109,17 @@ struct SkbIpv6Event {
 }
 unsafe impl Plain for SkbIpv6Event {}
 
-pub(super) fn unmarshal_ipv6(
-    raw_section: &BpfRawSection,
-    fields: &mut Vec<EventField>,
-) -> Result<()> {
-    let event = parse_raw_section::<SkbIpv6Event>(raw_section)?;
+pub(super) fn unmarshal_ipv6(raw_section: &BpfRawSection, event: &mut SkbEvent) -> Result<()> {
+    let raw = parse_raw_section::<SkbIpv6Event>(raw_section)?;
 
-    let src = Ipv6Addr::from(u128::from_be(event.src));
-    fields.push(event_field!("saddr", format!("{src}")));
-    let dst = Ipv6Addr::from(u128::from_be(event.dst));
-    fields.push(event_field!("daddr", format!("{dst}")));
+    let src = Ipv6Addr::from(u128::from_be(raw.src));
+    event.saddr = Some(format!("{src}"));
+    let dst = Ipv6Addr::from(u128::from_be(raw.dst));
+    event.daddr = Some(format!("{dst}"));
 
-    fields.push(event_field!("ip_version", 6));
-    fields.push(event_field!("l3_len", u16::from_be(event.len)));
-    fields.push(event_field!("protocol", event.protocol));
+    event.ip_version = Some(6);
+    event.l3_len = Some(u16::from_be(raw.len));
+    event.protocol = Some(raw.protocol);
 
     Ok(())
 }
@@ -165,18 +145,15 @@ struct SkbTcpEvent {
 }
 unsafe impl Plain for SkbTcpEvent {}
 
-pub(super) fn unmarshal_tcp(
-    raw_section: &BpfRawSection,
-    fields: &mut Vec<EventField>,
-) -> Result<()> {
-    let event = parse_raw_section::<SkbTcpEvent>(raw_section)?;
+pub(super) fn unmarshal_tcp(raw_section: &BpfRawSection, event: &mut SkbEvent) -> Result<()> {
+    let raw = parse_raw_section::<SkbTcpEvent>(raw_section)?;
 
-    fields.push(event_field!("sport", u16::from_be(event.sport)));
-    fields.push(event_field!("dport", u16::from_be(event.dport)));
-    fields.push(event_field!("tcp_seq", u32::from_be(event.seq)));
-    fields.push(event_field!("tcp_ack_seq", u32::from_be(event.ack_seq)));
-    fields.push(event_field!("tcp_window", u16::from_be(event.window)));
-    fields.push(event_field!("tcp_flags", event.flags));
+    event.sport = Some(u16::from_be(raw.sport));
+    event.dport = Some(u16::from_be(raw.dport));
+    event.tcp_seq = Some(u32::from_be(raw.seq));
+    event.tcp_ack_seq = Some(u32::from_be(raw.ack_seq));
+    event.tcp_window = Some(u16::from_be(raw.window));
+    event.tcp_flags = Some(raw.flags);
 
     Ok(())
 }
@@ -194,15 +171,12 @@ struct SkbUdpEvent {
 }
 unsafe impl Plain for SkbUdpEvent {}
 
-pub(super) fn unmarshal_udp(
-    raw_section: &BpfRawSection,
-    fields: &mut Vec<EventField>,
-) -> Result<()> {
-    let event = parse_raw_section::<SkbUdpEvent>(raw_section)?;
+pub(super) fn unmarshal_udp(raw_section: &BpfRawSection, event: &mut SkbEvent) -> Result<()> {
+    let raw = parse_raw_section::<SkbUdpEvent>(raw_section)?;
 
-    fields.push(event_field!("sport", u16::from_be(event.sport)));
-    fields.push(event_field!("dport", u16::from_be(event.dport)));
-    fields.push(event_field!("udp_len", u16::from_be(event.len)));
+    event.sport = Some(u16::from_be(raw.sport));
+    event.dport = Some(u16::from_be(raw.dport));
+    event.udp_len = Some(u16::from_be(raw.len));
 
     Ok(())
 }
@@ -218,14 +192,11 @@ struct SkbIcmpEvent {
 }
 unsafe impl Plain for SkbIcmpEvent {}
 
-pub(super) fn unmarshal_icmp(
-    raw_section: &BpfRawSection,
-    fields: &mut Vec<EventField>,
-) -> Result<()> {
-    let event = parse_raw_section::<SkbIcmpEvent>(raw_section)?;
+pub(super) fn unmarshal_icmp(raw_section: &BpfRawSection, event: &mut SkbEvent) -> Result<()> {
+    let raw = parse_raw_section::<SkbIcmpEvent>(raw_section)?;
 
-    fields.push(event_field!("icmp_type", event.r#type));
-    fields.push(event_field!("icmp_code", event.code));
+    event.icmp_type = Some(raw.r#type);
+    event.icmp_code = Some(raw.code);
 
     Ok(())
 }
@@ -243,22 +214,20 @@ struct SkbDevEvent {
 }
 unsafe impl Plain for SkbDevEvent {}
 
-pub(super) fn unmarshal_dev(
-    raw_section: &BpfRawSection,
-    fields: &mut Vec<EventField>,
-) -> Result<()> {
-    let event = parse_raw_section::<SkbDevEvent>(raw_section)?;
+pub(super) fn unmarshal_dev(raw_section: &BpfRawSection, event: &mut SkbEvent) -> Result<()> {
+    let raw = parse_raw_section::<SkbDevEvent>(raw_section)?;
 
-    let dev_name = str::from_utf8(&event.dev_name)?.trim_end_matches(char::from(0));
+    let dev_name = str::from_utf8(&raw.dev_name)?.trim_end_matches(char::from(0));
     if !dev_name.is_empty() {
-        fields.push(event_field!("dev_name", dev_name.to_string()));
+        event.dev_name = Some(dev_name.to_string());
     }
 
-    if event.ifindex > 0 {
-        fields.push(event_field!("ifindex", event.ifindex));
+    if raw.ifindex > 0 {
+        event.ifindex = Some(raw.ifindex);
     }
-    if event.iif > 0 {
-        fields.push(event_field!("rx_ifindex", event.iif));
+
+    if raw.iif > 0 {
+        event.rx_ifindex = Some(raw.iif);
     }
 
     Ok(())
@@ -273,12 +242,9 @@ struct SkbNsEvent {
 }
 unsafe impl Plain for SkbNsEvent {}
 
-pub(super) fn unmarshal_ns(
-    raw_section: &BpfRawSection,
-    fields: &mut Vec<EventField>,
-) -> Result<()> {
-    let event = parse_raw_section::<SkbNsEvent>(raw_section)?;
-    fields.push(event_field!("netns", event.netns));
+pub(super) fn unmarshal_ns(raw_section: &BpfRawSection, event: &mut SkbEvent) -> Result<()> {
+    let raw = parse_raw_section::<SkbNsEvent>(raw_section)?;
+    event.netns = Some(raw.netns);
     Ok(())
 }
 
@@ -297,16 +263,13 @@ struct SkbDataRefEvent {
 }
 unsafe impl Plain for SkbDataRefEvent {}
 
-pub(super) fn unmarshal_data_ref(
-    raw_section: &BpfRawSection,
-    fields: &mut Vec<EventField>,
-) -> Result<()> {
-    let event = parse_raw_section::<SkbDataRefEvent>(raw_section)?;
+pub(super) fn unmarshal_data_ref(raw_section: &BpfRawSection, event: &mut SkbEvent) -> Result<()> {
+    let raw = parse_raw_section::<SkbDataRefEvent>(raw_section)?;
 
-    fields.push(event_field!("cloned", event.cloned));
-    fields.push(event_field!("fclone", event.fclone));
-    fields.push(event_field!("users", event.users));
-    fields.push(event_field!("dataref", event.dataref));
+    event.cloned = Some(raw.cloned == 1);
+    event.fclone = Some(raw.fclone == 1);
+    event.users = Some(raw.users);
+    event.dataref = Some(raw.dataref);
 
     Ok(())
 }

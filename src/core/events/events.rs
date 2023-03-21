@@ -32,156 +32,134 @@
 //! }
 
 #![allow(dead_code)] // FIXME
+#![allow(clippy::wrong_self_convention)]
 
-use std::{any::Any, collections::HashMap};
+use std::{any::Any, collections::HashMap, time::Duration};
 
 use anyhow::{bail, Result};
-use serde_json::json;
 
+use super::bpf::BpfRawSection;
 use crate::module::ModuleId;
 
 /// Full event. Internal representation. The first key is the collector from
 /// which the event sections originate. The second one is the field name of a
 /// given (collector) event field.
-pub(crate) struct Event(HashMap<ModuleId, HashMap<String, EventField>>);
+#[derive(Default)]
+pub(crate) struct Event(HashMap<ModuleId, Box<dyn EventSection>>);
 
 impl Event {
     pub(crate) fn new() -> Event {
-        Event(HashMap::new())
-    }
-
-    /// Get the event len, aka. its # of fields.
-    pub(crate) fn len(&self) -> usize {
-        let mut len = 0;
-        for fields in self.0.values() {
-            len += fields.len();
-        }
-        len
-    }
-
-    /// Get a reference to an event field by its owner and key.
-    pub(crate) fn get<T: 'static>(&self, owner: ModuleId, key: &str) -> Result<Option<&T>> {
-        if let Some(section) = self.0.get(&owner) {
-            if let Some(field) = section.get(&key.to_string()) {
-                return match field.val.as_any().downcast_ref::<T>() {
-                    Some(val) => Ok(Some(val)),
-                    None => bail!(
-                        "Can't get {}:{}, invalid type {}",
-                        owner,
-                        key,
-                        stringify!(T)
-                    ),
-                };
-            }
-        }
-        Ok(None)
+        Event::default()
     }
 
     /// Insert a new event field into an event.
-    pub(crate) fn insert(&mut self, owner: ModuleId, val: EventField) {
-        self.0.entry(owner).or_insert_with(HashMap::new);
+    pub(crate) fn insert_section(
+        &mut self,
+        owner: ModuleId,
+        section: Box<dyn EventSection>,
+    ) -> Result<()> {
+        if self.0.get(&owner).is_some() {
+            bail!("Section for {} already found in the event", owner);
+        }
 
-        // Unwrap can't fail as we checked the key exists in the above block.
-        let map = self.0.get_mut(&owner).unwrap();
-        map.insert(val.key.clone(), val);
+        self.0.insert(owner, section);
+        Ok(())
+    }
+
+    /// Get a reference to an event field by its owner and key.
+    pub(crate) fn get_section<T: EventSection + 'static>(&self, owner: ModuleId) -> Option<&T> {
+        match self.0.get(&owner) {
+            Some(section) => section.as_any().downcast_ref::<T>(),
+            None => None,
+        }
     }
 
     pub(crate) fn to_json(&self) -> serde_json::Value {
-        self.into()
-    }
-}
-
-// This allows converting an Event to a serde_json::Value in the
-// Event::to_json() helper.
-impl From<&Event> for serde_json::Value {
-    fn from(f: &Event) -> Self {
         let mut event = serde_json::Map::new();
 
-        for (owner, data) in f.0.iter() {
-            let mut section = serde_json::Map::new();
-
-            for (key, field) in data.iter() {
-                section.insert(key.clone(), field.val.to_json());
-            }
-
-            event.insert(
-                owner.to_str().to_string(),
-                serde_json::Value::Object(section),
-            );
+        for (owner, section) in self.0.iter() {
+            event.insert(owner.to_str().to_string(), section.to_json());
         }
 
         serde_json::Value::Object(event)
     }
 }
 
-/// Event fields are the events building blocks. They hold per-type data.
-pub(crate) struct EventField {
-    key: String,
-    val: Box<dyn EventFieldType + Send>,
+pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
+
+/// Implemented by objects generating events from a given source (BPF, file,
+/// etc).
+pub(crate) trait EventFactory {
+    /// Starts the factory events collection.
+    fn start(
+        &mut self,
+        section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>>,
+    ) -> Result<()>;
+    /// Gets the next Event.
+    ///
+    /// Either returns EOF if the underlying source is consumed, or is a
+    /// blocking call and waits for more data. Optionally a timeout can be
+    /// given, in such case None can be returned. Specific factories should
+    /// document those behaviors.
+    fn next_event(&mut self, timeout: Option<Duration>) -> Result<Option<Event>>;
 }
 
-impl EventField {
-    pub(crate) fn new(key: &str, val: Box<dyn EventFieldType + Send>) -> EventField {
-        EventField {
-            key: key.to_string(),
-            val,
-        }
+/// Per-module event section, should map 1:1 with a ModuleId. Requiring specific
+/// traits to be implemented helps handling those sections in the core directly
+/// without requiring all modules to serialize and deserialize their events by
+/// hand (except for the special case of BPF section events as there is an n:1
+/// mapping there).
+///
+/// Please use `#[derive(EventSection)]` to implement the common traits.
+///
+/// The underlying objects are free to hold their data in any way, although
+/// having a proper structure is encouraged as it allows easier consumption at
+/// post-processing. Those objects can also define their own specialized
+/// helpers.
+pub(crate) trait EventSection: EventSectionInternal {}
+impl<T> EventSection for T where T: EventSectionInternal {}
+
+/// EventSection helpers defined in the core for all events. Common definition
+/// needs Sized but that is a requirement for all EventSection.
+///
+/// There should not be a need to have per-object implementations for this.
+pub(crate) trait EventSectionInternal {
+    fn as_any(&self) -> &dyn Any;
+    fn to_json(&self) -> serde_json::Value;
+}
+
+// We need this as the value given as the input when deserializing something
+// into an event could be mapped to (), e.g. serde_json::Value::Null.
+impl EventSectionInternal for () {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::Value::Null
     }
 }
 
-/// Wrapper to easily create a new event field to insert into an event.
+/// EventSection factory, providing helpers to create event sections from
+/// various formats.
 ///
-/// `event_field!("key", 42);`
-#[macro_export]
-macro_rules! event_field {
-    ($key:expr, $val:expr) => {
-        EventField::new($key, Box::new($val))
-    };
+/// Please use `#[derive(EventSection)]` to implement the common traits.
+pub(crate) trait EventSectionFactory:
+    RawEventSectionFactory + SerdeEventSectionFactory
+{
+}
+impl<T> EventSectionFactory for T where T: RawEventSectionFactory + SerdeEventSectionFactory {}
+
+/// Event section factory helpers to convert from BPF raw events. Requires a
+/// per-object implementation.
+pub(crate) trait RawEventSectionFactory {
+    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>>;
 }
 
-/// Implementation of an event field type, used to hold the actual data and
-/// provide helpers to serialize/deserialize it.
-pub(crate) trait EventFieldType {
-    fn name(&self) -> &'static str;
-    fn as_any(&self) -> &dyn Any;
-    fn to_json(&self) -> serde_json::Value;
-    fn from_json(from: serde_json::Value) -> Result<Self>
-    where
-        Self: Sized + Send;
+/// Event section factory helpers to convert from serde compatible inputs.
+///
+/// In most cases an event section object should not have to define thoses as
+/// there is an implementation for serde::Deserialize + serde::Serialize.
+pub(crate) trait SerdeEventSectionFactory {
+    fn from_json(&self, val: serde_json::Value) -> Result<Box<dyn EventSection>>;
 }
-
-/// Macro helping to define common event field types not requiring special
-/// handling.
-macro_rules! event_field_type {
-    ($type:ty) => {
-        impl EventFieldType for $type {
-            fn name(&self) -> &'static str {
-                stringify!($type)
-            }
-
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
-
-            fn to_json(&self) -> serde_json::Value {
-                json!(*self)
-            }
-
-            fn from_json(from: serde_json::Value) -> Result<Self> {
-                Ok(serde_json::from_value(from)?)
-            }
-        }
-    };
-}
-
-// Common types definition.
-event_field_type!(u8);
-event_field_type!(u16);
-event_field_type!(u32);
-event_field_type!(u64);
-event_field_type!(i8);
-event_field_type!(i16);
-event_field_type!(i32);
-event_field_type!(i64);
-event_field_type!(String);
-event_field_type!(Vec<String>);
