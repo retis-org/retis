@@ -147,8 +147,8 @@ impl EventSectionInternal for () {
 pub(crate) trait EventSectionFactory:
     RawEventSectionFactory + SerdeEventSectionFactory
 {
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
-impl<T> EventSectionFactory for T where T: RawEventSectionFactory + SerdeEventSectionFactory {}
 
 /// Event section factory helpers to convert from BPF raw events. Requires a
 /// per-object implementation.

@@ -203,14 +203,13 @@ fn parse_raw_event<'a>(
     }
 
     let mut event = Event::new();
-    for (owner, sections) in raw_sections.iter() {
-        let factory = match factories.get_mut(owner) {
+    raw_sections.drain().try_for_each(|(owner, sections)| {
+        let factory = match factories.get_mut(&owner) {
             Some(factory) => factory,
             None => bail!("Unknown factory for event section owner {}", owner),
         };
-
-        event.insert_section(*owner, factory.from_raw(sections.clone())?)?;
-    }
+        event.insert_section(owner, factory.from_raw(sections)?)
+    })?;
 
     Ok(event)
 }

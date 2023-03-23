@@ -27,6 +27,13 @@ pub fn derive_event_section(input: TokenStream) -> TokenStream {
 pub fn derive_event_section_factory(input: TokenStream) -> TokenStream {
     let DeriveInput { ident, .. } = parse_macro_input!(input);
     let output = quote! {
+        impl EventSectionFactory for #ident {
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any
+                where Self: Sized,
+            {
+                self
+            }
+        }
         impl SerdeEventSectionFactory for #ident {
             fn from_json(&self, val: serde_json::Value) -> Result<Box<dyn EventSection>>
                 where Self: for<'a> serde::Deserialize<'a>,
