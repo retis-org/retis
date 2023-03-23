@@ -1,9 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::mpsc,
-    thread,
-    time::Duration,
-};
+use std::{collections::HashSet, sync::mpsc, thread, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
 use log::{error, info, warn};
@@ -14,27 +9,19 @@ use super::{
     output::{get_processors, JsonFormat},
 };
 #[cfg(not(test))]
-use crate::core::probe::kernel::config::init_stack_map;
+use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEvent};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     core::{
-        events::{
-            bpf::{BpfEventsFactory, CommonEvent},
-            EventFactory, EventSectionFactory,
-        },
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
         },
+        events::bpf::BpfEventsFactory,
         kernel::Symbol,
-        probe::{self, kernel::KernelEvent, user::UserEvent, Probe},
+        probe::{self, Probe},
     },
-    module::{
-        ovs::{OvsCollector, OvsEvent},
-        skb::{SkbCollector, SkbEvent},
-        skb_tracking::{SkbTrackingCollector, SkbTrackingEvent},
-        ModuleId,
-    },
+    module::{get_modules, Group, ModuleId},
 };
 
 /// Generic trait representing a collector. All collectors are required to
@@ -73,17 +60,15 @@ pub(crate) trait Collector {
 
 /// Group of collectors. Used to handle a set of collectors and to perform
 /// group actions.
-pub(crate) struct Group {
-    list: HashMap<ModuleId, Box<dyn Collector>>,
-    factory: Box<dyn EventFactory>,
-    section_factories: Option<HashMap<ModuleId, Box<dyn EventSectionFactory>>>,
+pub(crate) struct Collectors {
+    group: Group,
     probes: probe::ProbeManager,
     known_kernel_types: HashSet<String>,
 }
 
-impl Group {
-    fn new(factory: Box<dyn EventFactory>) -> Result<Group> {
-        let mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
+impl Collectors {
+    #[allow(unused_mut)] // For tests.
+    fn new(mut group: Group) -> Result<Self> {
         #[cfg(not(test))]
         let mut probes = probe::ProbeManager::new()?;
         #[cfg(test)]
@@ -94,55 +79,17 @@ impl Group {
         #[cfg(not(test))]
         probes.reuse_map("stack_map", sm.fd())?;
 
-        let kernel_event = KernelEvent {
-            #[cfg(not(test))]
-            stack_map: Some(sm),
-            ..Default::default()
-        };
+        #[cfg(not(test))]
+        match group.get_section_factory::<KernelEvent>(ModuleId::Kernel)? {
+            Some(kernel_factory) => kernel_factory.stack_map = Some(sm),
+            None => bail!("Can't get kernel section factory"),
+        }
 
-        section_factories.insert(ModuleId::Common, Box::<CommonEvent>::default());
-        section_factories.insert(ModuleId::Kernel, Box::new(kernel_event));
-        section_factories.insert(ModuleId::Userspace, Box::<UserEvent>::default());
-
-        Ok(Group {
-            list: HashMap::new(),
-            factory,
-            section_factories: Some(section_factories),
+        Ok(Collectors {
+            group,
             probes,
             known_kernel_types: HashSet::new(),
         })
-    }
-
-    /// Register a collector to the group.
-    ///
-    /// ```
-    /// group
-    ///     .register(Box::new(FirstCollector::new()?))?
-    ///     .register(Box::new(SecondCollector::new()?))?
-    ///     .register(Box::new(ThirdCollector::new()?))?;
-    /// ```
-    fn register(
-        &mut self,
-        id: ModuleId,
-        collector: Box<dyn Collector>,
-        section_factory: Box<dyn EventSectionFactory>,
-    ) -> Result<&mut Self> {
-        // Ensure uniqueness of the collector name. This is important as their
-        // name is used as a key.
-        if self.list.get(&id).is_some() {
-            bail!(
-                "Could not insert collector '{}'; name already registered",
-                id,
-            );
-        }
-
-        match &mut self.section_factories {
-            Some(factories) => factories.insert(id, section_factory),
-            None => bail!("Section factories map no found"),
-        };
-
-        self.list.insert(id, collector);
-        Ok(self)
     }
 
     /// Setup user defined input filter.
@@ -173,7 +120,8 @@ impl Group {
         for name in &collect.args()?.collectors {
             let id = ModuleId::from_str(name)?;
             let c = self
-                .list
+                .group
+                .modules
                 .get_mut(&id)
                 .ok_or_else(|| anyhow!("unknown collector {}", name))?;
 
@@ -201,7 +149,7 @@ impl Group {
 
     /// Register all collectors' command line arguments by calling their register_cli function.
     pub(crate) fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        for (_, c) in self.list.iter() {
+        for (_, c) in self.group.modules.iter() {
             // Cli registration errors are fatal.
             c.register_cli(cmd)?;
         }
@@ -212,15 +160,10 @@ impl Group {
     /// their `start()` function. Collectors failing to start the event
     /// retrieval will be kept in the group.
     pub(crate) fn start(&mut self, _: &CliConfig) -> Result<()> {
-        let section_factories = match self.section_factories.take() {
-            Some(factories) => factories,
-            None => bail!("No section factory found, aborting"),
-        };
-
-        self.factory.start(section_factories)?;
+        self.group.start_factory()?;
         self.probes.attach()?;
 
-        for (id, c) in self.list.iter_mut() {
+        for (id, c) in self.group.modules.iter_mut() {
             if c.start().is_err() {
                 warn!("Could not start '{}'", id);
             }
@@ -261,7 +204,11 @@ impl Group {
         });
 
         loop {
-            match self.factory.next_event(Some(Duration::from_secs(1)))? {
+            match self
+                .group
+                .factory
+                .next_event(Some(Duration::from_secs(1)))?
+            {
                 Some(event) => processors
                     .iter_mut()
                     .try_for_each(|p| p.process_one(&event))?,
@@ -320,32 +267,14 @@ impl Group {
 /// Allocate collectors and retrieve a group containing them, used to perform
 /// batched operations. This is the primary entry point for manipulating the
 /// collectors.
-pub(crate) fn get_collectors() -> Result<Group> {
+pub(crate) fn get_collectors() -> Result<Collectors> {
     let factory = BpfEventsFactory::new()?;
     let event_map_fd = factory.map_fd();
-    let mut group = Group::new(Box::new(factory))?;
 
-    group.probes.reuse_map("events_map", event_map_fd)?;
+    let mut collectors = Collectors::new(get_modules(Box::new(factory))?)?;
+    collectors.probes.reuse_map("events_map", event_map_fd)?;
 
-    // Register all collectors here.
-    group
-        .register(
-            ModuleId::SkbTracking,
-            Box::new(SkbTrackingCollector::new()?),
-            Box::<SkbTrackingEvent>::default(),
-        )?
-        .register(
-            ModuleId::Skb,
-            Box::new(SkbCollector::new()?),
-            Box::<SkbEvent>::default(),
-        )?
-        .register(
-            ModuleId::Ovs,
-            Box::new(OvsCollector::new()?),
-            Box::<OvsEvent>::default(),
-        )?;
-
-    Ok(group)
+    Ok(collectors)
 }
 
 #[cfg(test)]
@@ -473,11 +402,12 @@ mod tests {
             Box::<TestEvent>::default(),
         )?;
 
+        let mut collectors = Collectors::new(group)?;
         let mut mgr = probe::ProbeManager::new()?;
 
         assert!(dummy_a.init(&config, &mut mgr).is_ok());
         assert!(dummy_b.init(&config, &mut mgr).is_err());
-        assert!(group.init(&config).is_ok());
+        assert!(collectors.init(&config).is_ok());
         Ok(())
     }
 
@@ -502,9 +432,11 @@ mod tests {
             Box::<TestEvent>::default(),
         )?;
 
+        let mut collectors = Collectors::new(group)?;
+
         assert!(dummy_a.start().is_ok());
         assert!(dummy_b.start().is_err());
-        assert!(group.start(&config).is_ok());
+        assert!(collectors.start(&config).is_ok());
         Ok(())
     }
 
@@ -522,27 +454,29 @@ mod tests {
             Box::<TestEvent>::default(),
         )?;
 
+        let collectors = Collectors::new(group)?;
+
         // Valid probes.
-        assert!(group.parse_probe("consume_skb").is_ok());
-        assert!(group.parse_probe("kprobe:kfree_skb_reason").is_ok());
-        assert!(group.parse_probe("tp:skb:kfree_skb").is_ok());
+        assert!(collectors.parse_probe("consume_skb").is_ok());
+        assert!(collectors.parse_probe("kprobe:kfree_skb_reason").is_ok());
+        assert!(collectors.parse_probe("tp:skb:kfree_skb").is_ok());
 
         // Invalid probe: symbol does not exist.
-        assert!(group.parse_probe("foobar").is_err());
-        assert!(group.parse_probe("kprobe:foobar").is_err());
-        assert!(group.parse_probe("tp:42:foobar").is_err());
+        assert!(collectors.parse_probe("foobar").is_err());
+        assert!(collectors.parse_probe("kprobe:foobar").is_err());
+        assert!(collectors.parse_probe("tp:42:foobar").is_err());
 
         // Invalid probe: wrong TYPE.
-        assert!(group.parse_probe("kprobe:skb:kfree_skb").is_err());
-        assert!(group.parse_probe("skb:kfree_skb").is_err());
-        assert!(group.parse_probe("foo:kfree_skb").is_err());
+        assert!(collectors.parse_probe("kprobe:skb:kfree_skb").is_err());
+        assert!(collectors.parse_probe("skb:kfree_skb").is_err());
+        assert!(collectors.parse_probe("foo:kfree_skb").is_err());
 
         // Invalid probe: empty parts.
-        assert!(group.parse_probe("").is_err());
-        assert!(group.parse_probe("kprobe:").is_err());
-        assert!(group.parse_probe("tp:").is_err());
-        assert!(group.parse_probe("tp:skb:").is_err());
-        assert!(group.parse_probe(":kfree_skb_reason").is_err());
+        assert!(collectors.parse_probe("").is_err());
+        assert!(collectors.parse_probe("kprobe:").is_err());
+        assert!(collectors.parse_probe("tp:").is_err());
+        assert!(collectors.parse_probe("tp:skb:").is_err());
+        assert!(collectors.parse_probe(":kfree_skb_reason").is_err());
 
         Ok(())
     }
