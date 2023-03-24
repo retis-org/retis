@@ -2,12 +2,16 @@ use std::mem;
 
 use anyhow::{bail, Result};
 use clap::{arg, builder::PossibleValuesParser, Parser};
+use log::{error, info};
 
 use super::{bpf::*, skb_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::probe::{Hook, ProbeManager},
+    core::{
+        kernel::Symbol,
+        probe::{Hook, Probe, ProbeManager},
+    },
     module::ModuleId,
 };
 
@@ -15,9 +19,9 @@ use crate::{
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
-        value_parser=PossibleValuesParser::new(["all", "l2", "l3", "tcp", "udp", "icmp", "dev", "ns", "dataref"]),
+        value_parser=PossibleValuesParser::new(["all", "l2", "l3", "tcp", "udp", "icmp", "dev", "ns", "dataref", "drop_reason"]),
         value_delimiter=',',
-        default_value="l3,tcp,udp,icmp",
+        default_value="l3,tcp,udp,icmp,drop_reason",
         help = "Comma separated list of data to collect from skbs"
     )]
     skb_sections: Vec<String>,
@@ -54,6 +58,7 @@ impl Collector for SkbCollector {
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
+                "drop_reason" => sections |= 1 << SECTION_DROP_REASON,
                 x => bail!("Unknown skb_collect value ({})", x),
             }
         }
@@ -67,6 +72,23 @@ impl Collector for SkbCollector {
 
         let key = 0_u32.to_ne_bytes();
         config_map.update(&key, cfg, libbpf_rs::MapFlags::empty())?;
+
+        // Special case the "drop_reason" section retrieval and automatically
+        // add a kprobe to the right function as it's the ~only way to get it.
+        if sections & 1 << SECTION_DROP_REASON != 0 {
+            let symbol = Symbol::from_name("kfree_skb_reason");
+            // Did the probe failed because of an error or because it wasn't
+            // available? In case we can't know, do not issue an error.
+            match symbol.is_ok() {
+                true => {
+                    // Unwrap as we just checked the value is valid.
+                    if let Err(e) = probes.add_probe(Probe::kprobe(symbol.unwrap())?) {
+                        error!("Could not attach to kfree_skb_reason: {}", e);
+                    }
+                }
+                false => info!("Skb drop reasons are not retrievable on this kernel"),
+            }
+        }
 
         // Register our generic skb hook.
         probes.register_kernel_hook(

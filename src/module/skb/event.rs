@@ -60,6 +60,10 @@ pub(crate) struct SkbEvent {
     pub(crate) fclone: Option<bool>,
     pub(crate) users: Option<u8>,
     pub(crate) dataref: Option<u8>,
+    // Drop reason
+    /// Reason why a packet was freed/dropped. Only reported from specific
+    /// functions. See `enum skb_drop_reason` in the kernel.
+    pub(crate) drop_reason: Option<u32>,
 }
 
 impl RawEventSectionFactory for SkbEvent {
@@ -77,6 +81,7 @@ impl RawEventSectionFactory for SkbEvent {
                 SECTION_DEV => unmarshal_dev(section, &mut event),
                 SECTION_NS => unmarshal_ns(section, &mut event),
                 SECTION_DATA_REF => unmarshal_data_ref(section, &mut event),
+                SECTION_DROP_REASON => unmarshal_drop_reason(section, &mut event),
                 _ => bail!("Unknown data type"),
             }?;
         }

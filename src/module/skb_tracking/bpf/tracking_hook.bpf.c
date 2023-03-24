@@ -52,7 +52,6 @@ struct skb_tracking_event {
 	u64 orig_head;
 	u64 timestamp;
 	u64 skb;
-	s32 drop_reason;
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
@@ -136,10 +135,6 @@ static __always_inline int track_skb(struct retis_context *ctx,
 	e->orig_head = ti->orig_head;
 	e->timestamp = ti->timestamp;
 	e->skb = (u64)skb;
-	if (retis_arg_valid(ctx, skb_drop_reason))
-		e->drop_reason = retis_get_skb_drop_reason(ctx);
-	else
-		e->drop_reason = -1;
 
 	return 0;
 }

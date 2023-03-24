@@ -26,6 +26,7 @@ pub(super) const SECTION_ICMP: u64 = 5;
 pub(super) const SECTION_DEV: u64 = 6;
 pub(super) const SECTION_NS: u64 = 7;
 pub(super) const SECTION_DATA_REF: u64 = 8;
+pub(super) const SECTION_DROP_REASON: u64 = 9;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -270,6 +271,27 @@ pub(super) fn unmarshal_data_ref(raw_section: &BpfRawSection, event: &mut SkbEve
     event.fclone = Some(raw.fclone == 1);
     event.users = Some(raw.users);
     event.dataref = Some(raw.dataref);
+
+    Ok(())
+}
+
+/// Skb drop reason when an skb is being freed.
+#[derive(Default)]
+#[repr(C, packed)]
+struct SkbDropReasonEvent {
+    reason: i32,
+}
+unsafe impl Plain for SkbDropReasonEvent {}
+
+pub(super) fn unmarshal_drop_reason(
+    raw_section: &BpfRawSection,
+    event: &mut SkbEvent,
+) -> Result<()> {
+    let raw = parse_raw_section::<SkbDropReasonEvent>(raw_section)?;
+
+    if raw.reason >= 0 {
+        event.drop_reason = Some(raw.reason as u32);
+    }
 
     Ok(())
 }

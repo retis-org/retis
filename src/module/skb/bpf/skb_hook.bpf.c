@@ -19,6 +19,7 @@
 #define COLLECT_DEV		6
 #define COLLECT_NS		7
 #define COLLECT_DATA_REF	8
+#define COLLECT_DROP_REASON	9
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -87,6 +88,9 @@ struct skb_data_ref_event {
 	u8 fclone;
 	u8 users;
 	u8 dataref;
+} __attribute__((packed));
+struct skb_drop_reason_event {
+	s32 drop_reason;
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
@@ -305,6 +309,19 @@ skip_netns:
 		head = BPF_CORE_READ(skb, head);
 		si = (struct skb_shared_info *)(BPF_CORE_READ(skb, end) + head);
 		e->dataref = (u8)BPF_CORE_READ(si, dataref.counter);
+	}
+
+	if (cfg->sections & BIT(COLLECT_DROP_REASON)) {
+		struct skb_drop_reason_event *e =
+			get_event_section(event, COLLECTOR_SKB,
+					  COLLECT_DROP_REASON, sizeof(*e));
+		if (!e)
+			return 0;
+
+		if (retis_arg_valid(ctx, skb_drop_reason))
+			e->drop_reason = retis_get_skb_drop_reason(ctx);
+		else
+			e->drop_reason = -1;
 	}
 
 	return process_skb_l2_l4(ctx, event, cfg, skb);
