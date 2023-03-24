@@ -14,7 +14,8 @@ enum retis_event_owners {
 	USERSPACE = 3,
 	COLLECTOR_SKB_TRACKING = 4,
 	COLLECTOR_SKB = 5,
-	COLLECTOR_OVS = 6,
+	COLLECTOR_SKB_DROP = 6,
+	COLLECTOR_OVS = 7,
 };
 
 struct retis_raw_event {

@@ -5,6 +5,7 @@ use anyhow::{bail, Result};
 use super::{
     ovs::{OvsCollector, OvsEvent},
     skb::{SkbCollector, SkbEvent},
+    skb_drop::{SkbDropCollector, SkbDropEvent},
     skb_tracking::{SkbTrackingCollector, SkbTrackingEvent},
 };
 use crate::{
@@ -23,7 +24,8 @@ pub(crate) enum ModuleId {
     Userspace = 3,
     SkbTracking = 4,
     Skb = 5,
-    Ovs = 6,
+    SkbDrop = 6,
+    Ovs = 7,
 }
 
 impl ModuleId {
@@ -37,7 +39,8 @@ impl ModuleId {
             3 => Userspace,
             4 => SkbTracking,
             5 => Skb,
-            6 => Ovs,
+            6 => SkbDrop,
+            7 => Ovs,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -53,7 +56,8 @@ impl ModuleId {
             Userspace => 3,
             SkbTracking => 4,
             Skb => 5,
-            Ovs => 6,
+            SkbDrop => 6,
+            Ovs => 7,
         }
     }
 
@@ -66,6 +70,7 @@ impl ModuleId {
             "userspace" => Userspace,
             "skb-tracking" => SkbTracking,
             "skb" => Skb,
+            "skb-drop" => SkbDrop,
             "ovs" => Ovs,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
@@ -80,6 +85,7 @@ impl ModuleId {
             Userspace => "userspace",
             SkbTracking => "skb-tracking",
             Skb => "skb",
+            SkbDrop => "skb-drop",
             Ovs => "ovs",
         }
     }
@@ -202,6 +208,11 @@ pub(crate) fn get_modules(factory: Box<dyn EventFactory>) -> Result<Modules> {
             ModuleId::Skb,
             Box::new(SkbCollector::new()?),
             Box::<SkbEvent>::default(),
+        )?
+        .register(
+            ModuleId::SkbDrop,
+            Box::new(SkbDropCollector::new()?),
+            Box::<SkbDropEvent>::default(),
         )?
         .register(
             ModuleId::Ovs,

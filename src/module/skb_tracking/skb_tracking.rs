@@ -1,7 +1,7 @@
 use std::{mem, thread, time::Duration};
 
 use anyhow::{bail, Result};
-use log::{error, info, warn};
+use log::warn;
 use nix::time;
 use plain::Plain;
 
@@ -49,24 +49,7 @@ impl Collector for SkbTrackingCollector {
     }
 
     fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
-        self.init_tracking(probes)?;
-
-        // We'd like to track free reasons as well.
-        let symbol = Symbol::from_name("kfree_skb_reason");
-        // Did the probe failed because of an error or because it wasn't
-        // available? In case we can't know, do not issue an error.
-        match symbol.is_ok() {
-            true => {
-                // Unwrap as we just checked the value is valid.
-
-                if let Err(e) = probes.add_probe(Probe::kprobe(symbol.unwrap())?) {
-                    error!("Could not attach to kfree_skb_reason: {}", e);
-                }
-            }
-            false => info!("Skb drop reasons are not retrievable on this kernel"),
-        }
-
-        Ok(())
+        self.init_tracking(probes)
     }
 }
 

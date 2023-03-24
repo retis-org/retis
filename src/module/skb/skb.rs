@@ -73,8 +73,7 @@ impl Collector for SkbCollector {
             Hook::from(skb_hook::DATA)
                 .reuse_map("skb_config_map", config_map.fd())?
                 .to_owned(),
-        )?;
-        Ok(())
+        )
     }
 }
 

@@ -1,4 +1,4 @@
-//! # SkbCollector
+//! # Skb module
 //!
 //! Provide support for retrieving data from `struct sk_buff` kernel objects.
 

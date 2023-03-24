@@ -13,11 +13,11 @@ use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEvent};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     core::{
+        events::bpf::BpfEventsFactory,
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
         },
-        events::bpf::BpfEventsFactory,
         kernel::Symbol,
         probe::{self, Probe},
     },
