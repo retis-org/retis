@@ -2,8 +2,8 @@
 #include <bpf/usdt.bpf.h>
 
 #include <user_common.h>
-#include "ovs_common.h"
-#include "ovs_operation.h"
+#include <ovs_common.h>
+#include <ovs_operation.h>
 
 /* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 struct recv_upcall_event {

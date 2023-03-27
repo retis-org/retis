@@ -2,7 +2,7 @@
 #include <bpf/bpf_core_read.h>
 
 #include <common.h>
-#include "ovs_common.h"
+#include <ovs_common.h>
 
 /* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 struct upcall_event {

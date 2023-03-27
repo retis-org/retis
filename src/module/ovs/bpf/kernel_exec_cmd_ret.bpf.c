@@ -1,5 +1,5 @@
 #include <common.h>
-#include "ovs_common.h"
+#include <ovs_common.h>
 
 /* Hook for kretprobe:ovs_packet_cmd_execute. */
 DEFINE_HOOK(

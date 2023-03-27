@@ -2,8 +2,8 @@
 #include <bpf/bpf_core_read.h>
 
 #include <common.h>
-#include "ovs_common.h"
-#include "netlink.h"
+#include <ovs_common.h>
+#include <netlink.h>
 
 /* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 struct exec_event {
