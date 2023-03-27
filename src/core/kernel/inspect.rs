@@ -50,7 +50,11 @@ impl Inspector {
 
         // First parse the symbol file.
         let mut symbols = BiBTreeMap::new();
-        for line in fs::read_to_string(symbols_file)?.lines() {
+        // Lines have to be processed backward in order to overwrite
+        // duplicate addresses and keep the first (which is the last
+        // inserted in the common case involving module init
+        // functions) instead of the last one.
+        for line in fs::read_to_string(symbols_file)?.lines().rev() {
             let data: Vec<&str> = line.split(' ').collect();
             if data.len() < 3 {
                 bail!("Invalid kallsyms line: {}", line);
