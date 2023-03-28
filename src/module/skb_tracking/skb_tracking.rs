@@ -11,11 +11,9 @@ use crate::{
     collect::Collector,
     core::{
         kernel::Symbol,
-        probe::{
-            manager::{ProbeManager, PROBE_MAX},
-            Hook, Probe,
-        },
+        probe::{manager::PROBE_MAX, Hook, Probe, ProbeManager},
         workaround::SendableMap,
+        Retis,
     },
     module::ModuleId,
 };
@@ -48,8 +46,8 @@ impl Collector for SkbTrackingCollector {
         cmd.register_module_noargs(ModuleId::SkbTracking)
     }
 
-    fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
-        self.init_tracking(probes)
+    fn init(&mut self, _: &CliConfig, retis: &mut Retis) -> Result<()> {
+        self.init_tracking(retis.probes_mut()?)
     }
 }
 

@@ -4,6 +4,7 @@ use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
 
 use super::hooks;
+
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
@@ -11,6 +12,7 @@ use crate::{
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
         user::proc::{Process, ThreadInfo},
+        Retis,
     },
     module::ModuleId,
 };
@@ -45,7 +47,9 @@ impl Collector for OvsCollector {
         cmd.register_module::<OvsCollectorArgs>(ModuleId::Ovs)
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig, retis: &mut Retis) -> Result<()> {
+        let probes = retis.probes_mut()?;
+
         self.track = cli
             .get_section::<OvsCollectorArgs>(ModuleId::Ovs)?
             .ovs_track;

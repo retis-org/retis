@@ -49,7 +49,7 @@ pub(crate) trait Collector {
     /// will make the whole program to fail. In general collectors should try
     /// hard to run in various setups, see the `crate::collector` top
     /// documentation for more information.
-    fn init(&mut self, cli: &CliConfig, probes: &mut probe::ProbeManager) -> Result<()>;
+    fn init(&mut self, cli: &CliConfig, retis: &mut Retis) -> Result<()>;
     /// Start the group of events (non-probes).
     fn start(&mut self) -> Result<()> {
         Ok(())
@@ -106,7 +106,7 @@ impl Collectors {
                 .get_mut(&id)
                 .ok_or_else(|| anyhow!("unknown collector {}", name))?;
 
-            if let Err(e) = c.init(cli, self.retis.probes_mut()?) {
+            if let Err(e) = c.init(cli, &mut self.retis) {
                 bail!("Could not initialize the {} collector: {}", id, e);
             }
 

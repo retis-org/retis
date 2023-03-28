@@ -10,7 +10,8 @@ use crate::{
     collect::Collector,
     core::{
         kernel::Symbol,
-        probe::{Hook, Probe, ProbeManager},
+        probe::{Hook, Probe},
+        Retis,
     },
     module::ModuleId,
 };
@@ -42,7 +43,9 @@ impl Collector for SkbCollector {
         cmd.register_module::<SkbCollectorArgs>(ModuleId::Skb)
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig, retis: &mut Retis) -> Result<()> {
+        let probes = retis.probes_mut()?;
+
         // First, get the cli parameters.
         let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
 
