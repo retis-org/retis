@@ -92,9 +92,9 @@ impl fmt::Display for ModuleId {
     }
 }
 
-/// Group of modules; used to handle a set of modules. Module "registration"
-/// happens there. We expect a single Group object when running the program.
-pub(crate) struct Group {
+/// All modules are registered there. The following is the main API and object
+/// to manipulate them.
+pub(crate) struct Modules {
     /// Set of registered modules we can use.
     pub(crate) modules: HashMap<ModuleId, Box<dyn Collector>>,
     /// Factory used to retrieve events.
@@ -106,15 +106,15 @@ pub(crate) struct Group {
     pub(crate) section_factories: Option<HashMap<ModuleId, Box<dyn EventSectionFactory>>>,
 }
 
-impl Group {
-    pub(crate) fn new(factory: Box<dyn EventFactory>) -> Result<Group> {
+impl Modules {
+    pub(crate) fn new(factory: Box<dyn EventFactory>) -> Result<Modules> {
         let mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
 
         section_factories.insert(ModuleId::Common, Box::<CommonEvent>::default());
         section_factories.insert(ModuleId::Kernel, Box::<KernelEvent>::default());
         section_factories.insert(ModuleId::Userspace, Box::<UserEvent>::default());
 
-        Ok(Group {
+        Ok(Modules {
             modules: HashMap::new(),
             factory,
             section_factories: Some(section_factories),
@@ -124,7 +124,7 @@ impl Group {
     /// Register a collector to the group.
     ///
     /// ```
-    /// group
+    /// modules
     ///     .register(
     ///         Box::new(FirstCollector::new()?,
     ///         Box::<FirstEvent>::default()))?,
@@ -188,8 +188,8 @@ impl Group {
     }
 }
 
-pub(crate) fn get_modules(factory: Box<dyn EventFactory>) -> Result<Group> {
-    let mut group = Group::new(factory)?;
+pub(crate) fn get_modules(factory: Box<dyn EventFactory>) -> Result<Modules> {
+    let mut group = Modules::new(factory)?;
 
     // Register all collectors here.
     group
