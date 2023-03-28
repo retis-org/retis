@@ -21,7 +21,7 @@ use crate::{
         kernel::Symbol,
         probe::{self, Probe},
     },
-    module::{get_modules, Group, ModuleId},
+    module::{get_modules, Modules, ModuleId},
 };
 
 /// Generic trait representing a collector. All collectors are required to
@@ -58,17 +58,16 @@ pub(crate) trait Collector {
     }
 }
 
-/// Group of collectors. Used to handle a set of collectors and to perform
-/// group actions.
+/// Main collectors object and API.
 pub(crate) struct Collectors {
-    group: Group,
+    group: Modules,
     probes: probe::ProbeManager,
     known_kernel_types: HashSet<String>,
 }
 
 impl Collectors {
     #[allow(unused_mut)] // For tests.
-    fn new(mut group: Group) -> Result<Self> {
+    fn new(mut group: Modules) -> Result<Self> {
         #[cfg(not(test))]
         let mut probes = probe::ProbeManager::new()?;
         #[cfg(test)]
@@ -338,7 +337,7 @@ mod tests {
 
     #[test]
     fn register_collectors() -> Result<()> {
-        let mut group = Group::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
         assert!(group
             .register(
                 ModuleId::Skb,
@@ -358,7 +357,7 @@ mod tests {
 
     #[test]
     fn register_uniqueness() -> Result<()> {
-        let mut group = Group::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
         assert!(group
             .register(
                 ModuleId::Skb,
@@ -387,7 +386,7 @@ mod tests {
             main_config: MainConfig::default(),
             subcommand: Box::new(Collect::new()?),
         };
-        let mut group = Group::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
@@ -417,7 +416,7 @@ mod tests {
             main_config: MainConfig::default(),
             subcommand: Box::new(Collect::new()?),
         };
-        let mut group = Group::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
@@ -442,7 +441,7 @@ mod tests {
 
     #[test]
     fn parse_probe() -> Result<()> {
-        let mut group = Group::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
         group.register(
             ModuleId::Skb,
             Box::new(DummyCollectorA::new()?),
