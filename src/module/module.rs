@@ -97,8 +97,6 @@ impl fmt::Display for ModuleId {
 pub(crate) struct Modules {
     /// Set of registered modules we can use.
     pub(crate) modules: HashMap<ModuleId, Box<dyn Collector>>,
-    /// Factory used to retrieve events.
-    pub(crate) factory: Box<dyn EventFactory>,
     /// Event section factories to parse sections into an event. Section
     /// factories come from modules. They are under an Option to allow ownership
     /// change so they can be consumed by the event factory (and moved to a
@@ -107,18 +105,18 @@ pub(crate) struct Modules {
 }
 
 impl Modules {
-    pub(crate) fn new(factory: Box<dyn EventFactory>) -> Result<Modules> {
+    pub(crate) fn new() -> Modules {
         let mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
 
+        // Register core event sections.
         section_factories.insert(ModuleId::Common, Box::<CommonEvent>::default());
         section_factories.insert(ModuleId::Kernel, Box::<KernelEvent>::default());
         section_factories.insert(ModuleId::Userspace, Box::<UserEvent>::default());
 
-        Ok(Modules {
+        Modules {
             modules: HashMap::new(),
-            factory,
             section_factories: Some(section_factories),
-        })
+        }
     }
 
     /// Register a collector to the group.
@@ -158,16 +156,6 @@ impl Modules {
         Ok(self)
     }
 
-    /// Start the event retrieval in the factory.
-    pub(crate) fn start_factory(&mut self) -> Result<()> {
-        let section_factories = match self.section_factories.take() {
-            Some(factories) => factories,
-            None => bail!("No section factory found, aborting"),
-        };
-
-        self.factory.start(section_factories)
-    }
-
     /// Sometimes we need to perform actions on factories at a higher level.
     /// It's a bit of an hack for now, it would be good to remove it. One option
     /// would be to move the core EventSection and their factories into modules
@@ -188,8 +176,8 @@ impl Modules {
     }
 }
 
-pub(crate) fn get_modules(factory: Box<dyn EventFactory>) -> Result<Modules> {
-    let mut group = Modules::new(factory)?;
+pub(crate) fn get_modules() -> Result<Modules> {
+    let mut group = Modules::new();
 
     // Register all collectors here.
     group
