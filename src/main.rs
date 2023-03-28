@@ -52,16 +52,13 @@ fn main() -> Result<()> {
             retis.enable_probes(&mut modules, event_map_fd)?;
 
             // Finally we can start working with the collectors.
-            let mut collectors = Collectors::new(modules, retis);
+            let mut collectors = Collectors::new(modules, retis, cli)?;
 
-            collectors.register_cli(command.dynamic_mut().unwrap())?;
-            let config = cli.run()?;
-
-            collectors.init(&config)?;
-            collectors.start(&config)?;
+            collectors.init()?;
+            collectors.start()?;
 
             // Starts a loop.
-            collectors.process(&config)?;
+            collectors.process()?;
         }
         _ => {
             error!("not implemented");
