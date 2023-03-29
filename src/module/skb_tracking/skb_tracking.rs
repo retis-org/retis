@@ -155,7 +155,7 @@ impl SkbTrackingCollector {
     }
 
     fn init_tracking(&mut self, probes: &mut ProbeManager) -> Result<()> {
-        let mut tracking_config_map = Self::tracking_config_map()?;
+        let tracking_config_map = Self::tracking_config_map()?;
         let mut tracking_map = SendableMap::from(Self::tracking_map()?);
         let tracking_fd = tracking_map.get().fd();
 
