@@ -16,7 +16,7 @@ use log::error;
 use plain::Plain;
 
 use super::{Event, EventField};
-use crate::{core::workaround::SendableRingBuffer, event_field};
+use crate::event_field;
 
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
@@ -162,15 +162,12 @@ impl BpfEvents {
         // processing closure.
         let mut rb = libbpf_rs::RingBufferBuilder::new();
         rb.add(&self.map, process_event)?;
-        let rb = SendableRingBuffer::from(rb.build()?);
+        let rb = rb.build()?;
 
         // Start an event polling thread.
-        thread::spawn(move || {
-            let rb = rb.get();
-            loop {
-                rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS))
-                    .unwrap();
-            }
+        thread::spawn(move || loop {
+            rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS))
+                .unwrap();
         });
 
         Ok(())
