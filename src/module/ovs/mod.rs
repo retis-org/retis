@@ -8,6 +8,33 @@ pub(crate) mod ovs;
 // Re-export ovs.rs
 pub(crate) use ovs::*;
 
-mod main_hook {
-    include!("bpf/.out/main_hook.rs");
+mod bpf;
+mod hooks {
+    pub(super) mod kernel_enqueue {
+        include!("bpf/.out/kernel_enqueue.rs");
+    }
+    pub(super) mod kernel_exec_cmd {
+        include!("bpf/.out/kernel_exec_cmd.rs");
+    }
+    pub(super) mod kernel_exec_cmd_ret {
+        include!("bpf/.out/kernel_exec_cmd_ret.rs");
+    }
+    pub(super) mod kernel_exec_tp {
+        include!("bpf/.out/kernel_exec_tp.rs");
+    }
+    pub(super) mod kernel_upcall_tp {
+        include!("bpf/.out/kernel_upcall_tp.rs");
+    }
+    pub(super) mod kernel_upcall_ret {
+        include!("bpf/.out/kernel_upcall_ret.rs");
+    }
+    pub(super) mod user_op_exec {
+        include!("bpf/.out/user_op_exec.rs");
+    }
+    pub(super) mod user_op_put {
+        include!("bpf/.out/user_op_put.rs");
+    }
+    pub(super) mod user_recv_upcall {
+        include!("bpf/.out/user_recv_upcall.rs");
+    }
 }

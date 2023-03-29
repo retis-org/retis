@@ -18,13 +18,23 @@ const INCLUDE_PATHS: &[&str] = &[
     // Taking errno.h from libc instead of linux headers.
     // TODO: Remove when we fix proper header dependencies.
     "/usr/include/x86_64-linux-gnu",
+    "vendor/linux/include",
+    "vendor/linux/asm/x86/include",
 ];
+const OVS_INCLUDES: &[&str] = &["src/module/ovs/bpf/include"];
 const CLANG_ARGS: &[&str] = &["-Werror"];
 
-fn get_probe_clang_args() -> String {
+fn get_probe_clang_args(extra_includes: Option<&[&str]>) -> String {
     let mut args: Vec<String> = CLANG_ARGS.iter().map(|x| x.to_string()).collect();
     args.push(
         INCLUDE_PATHS
+            .iter()
+            .map(|x| format!("-I{x} "))
+            .collect::<String>(),
+    );
+    args.push(
+        extra_includes
+            .unwrap_or_default()
             .iter()
             .map(|x| format!("-I{x} "))
             .collect::<String>(),
@@ -43,7 +53,7 @@ fn get_paths(source: &str) -> (String, String) {
     (out, name.to_string())
 }
 
-fn build_hook(source: &str) {
+fn build_hook(source: &str, extra_includes: Option<&[&str]>) {
     let (out, name) = get_paths(source);
     let output = format!("{}/{}.o", out.as_str(), name);
     let skel = format!("{}/{}.rs", out.as_str(), name);
@@ -51,7 +61,7 @@ fn build_hook(source: &str) {
     if let Err(e) = SkeletonBuilder::new()
         .source(source)
         .obj(output.as_str())
-        .clang_args(get_probe_clang_args())
+        .clang_args(get_probe_clang_args(extra_includes))
         .build()
     {
         panic!("{}", e);
@@ -70,6 +80,9 @@ fn build_hook(source: &str) {
     .unwrap();
 
     println!("cargo:rerun-if-changed={source}");
+    for inc in extra_includes.unwrap_or_default().iter() {
+        println!("cargo:rerun-if-changed={inc}");
+    }
 }
 
 fn build_probe(source: &str) {
@@ -78,7 +91,7 @@ fn build_probe(source: &str) {
 
     if let Err(e) = SkeletonBuilder::new()
         .source(source)
-        .clang_args(get_probe_clang_args())
+        .clang_args(get_probe_clang_args(None))
         .build_and_generate(skel)
     {
         panic!("{}", e);
@@ -155,9 +168,38 @@ fn main() {
     build_probe("src/core/probe/kernel/bpf/raw_tracepoint.bpf.c");
     build_probe("src/core/probe/user/bpf/usdt.bpf.c");
 
-    build_hook("src/module/skb/bpf/skb_hook.bpf.c");
-    build_hook("src/module/skb_tracking/bpf/tracking_hook.bpf.c");
-    build_hook("src/module/ovs/bpf/main_hook.bpf.c");
+    build_hook("src/module/skb/bpf/skb_hook.bpf.c", None);
+    build_hook("src/module/skb_tracking/bpf/tracking_hook.bpf.c", None);
+    build_hook(
+        "src/module/ovs/bpf/kernel_enqueue.bpf.c",
+        Some(OVS_INCLUDES),
+    );
+    build_hook(
+        "src/module/ovs/bpf/kernel_exec_cmd.bpf.c",
+        Some(OVS_INCLUDES),
+    );
+    build_hook(
+        "src/module/ovs/bpf/kernel_exec_cmd_ret.bpf.c",
+        Some(OVS_INCLUDES),
+    );
+    build_hook(
+        "src/module/ovs/bpf/kernel_exec_tp.bpf.c",
+        Some(OVS_INCLUDES),
+    );
+    build_hook(
+        "src/module/ovs/bpf/kernel_upcall_tp.bpf.c",
+        Some(OVS_INCLUDES),
+    );
+    build_hook(
+        "src/module/ovs/bpf/kernel_upcall_ret.bpf.c",
+        Some(OVS_INCLUDES),
+    );
+    build_hook(
+        "src/module/ovs/bpf/user_recv_upcall.bpf.c",
+        Some(OVS_INCLUDES),
+    );
+    build_hook("src/module/ovs/bpf/user_op_exec.bpf.c", Some(OVS_INCLUDES));
+    build_hook("src/module/ovs/bpf/user_op_put.bpf.c", Some(OVS_INCLUDES));
 
     build_extract_stub("src/core/filters/packets/bpf/stub.bpf.c");
 

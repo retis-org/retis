@@ -5,9 +5,11 @@
 #![allow(dead_code)] // FIXME
 
 use std::{
+    collections::{BTreeMap, HashMap},
     ffi::CStr,
     fmt, fs,
     io::{BufRead, BufReader, Cursor},
+    ops::Bound::{Included, Unbounded},
     path::{Path, PathBuf},
 };
 
@@ -47,13 +49,13 @@ type Address = u64;
 pub struct UsdtInfo {
     /// Base address for USDT address calculation (from stapsdt).
     base_addr: u64,
-    /// List of USDT Notes containing information of each USDT probe.
-    notes: Vec<UsdtNote>,
+    /// Map of USDT Notes containing information of each USDT probe indexed by address.
+    notes: HashMap<u64, UsdtNote>,
 }
 
 impl UsdtInfo {
     fn new(path: &PathBuf) -> Result<Self> {
-        let mut notes = Vec::new();
+        let mut notes = HashMap::new();
         let file = fs::File::open(path)?;
         let mut elf = ElfStream::<AnyEndian, _>::open_stream(file)?;
 
@@ -84,10 +86,16 @@ impl UsdtInfo {
                         note.name
                     );
                 }
-                notes.push(UsdtNote::from_elf(note.desc)?);
-            }
-        };
 
+                let note = UsdtNote::from_elf(note.desc)?;
+                // Insert the notes in the map indexed by their effective address after
+                // compensating the "prelink effect" for faster lookups.
+                // For more information see:
+                // https://sourceware.org/systemtap/wiki/UserSpaceProbeImplementation
+                let link_addr = note.addr + base_addr - note.base_addr;
+                notes.insert(link_addr, note);
+            }
+        }
         Ok(UsdtInfo { base_addr, notes })
     }
 
@@ -108,17 +116,14 @@ impl UsdtInfo {
         Ok(self
             .notes
             .iter()
-            .find(|note| note.provider == provider && note.name == name))
+            .find(|(_, note)| note.provider == provider && note.name == name)
+            .map(|(_, note)| note))
     }
 
     /// Retrieves the Usdt note information whose address matches the given offset.
     pub(crate) fn get_note_from_offset(&self, addr: u64) -> Result<Option<&UsdtNote>> {
-        Ok(self.notes.iter().find(|note| {
-            // We need to compensate "prelink effect". For more information see:
-            // https://sourceware.org/systemtap/wiki/UserSpaceProbeImplementation
-            let link_addr = note.addr + self.base_addr - note.base_addr;
-            link_addr == addr
-        }))
+        // "prelink effect" has been compensated when the notes are inserted into the map.
+        Ok(self.notes.get(&addr))
     }
 }
 
@@ -195,15 +200,40 @@ impl fmt::Display for UsdtNote {
     }
 }
 
+/// Object that represents a contiguous region of mapped memory of a binary in the virtual address of a
+/// process.
+#[derive(Debug, Default)]
+pub(crate) struct Map {
+    /// Address where the mapping starts.
+    addr_start: u64,
+    /// Address where the mapping ends.
+    addr_end: u64,
+}
+
+impl Map {
+    /// Extend the memory region.
+    fn extend(&mut self, other: &Map) {
+        if self.addr_start == 0 {
+            self.addr_start = other.addr_start;
+        }
+        self.addr_end = other.addr_end;
+    }
+
+    /// Return whether an address is contained in the map.
+    fn contains_addr(&self, addr: u64) -> bool {
+        addr >= self.addr_start && addr < self.addr_end
+    }
+}
+
 /// Object that represents a binary (library or executable) that might have USDT probes.
 #[derive(Debug)]
 pub(crate) struct Binary {
     /// The path of the program.
     path: PathBuf,
-    /// USDT information
+    /// USDT information.
     usdt_info: Option<UsdtInfo>,
-    /// Address where the binary is loaded within a process address space.
-    addr: Option<u64>,
+    /// Virtual memory mapping of this binary in a process.
+    map: Map,
 }
 
 impl Binary {
@@ -219,14 +249,14 @@ impl Binary {
         Ok(Binary {
             path,
             usdt_info,
-            addr: None,
+            map: Map::default(),
         })
     }
 
     /// Create a new loaded Binary object.
-    pub(crate) fn new_loaded(path: PathBuf, addr: u64) -> Result<Binary> {
+    pub(crate) fn new_loaded(path: PathBuf, map: Map) -> Result<Binary> {
         let mut binary = Binary::new(path)?;
-        binary.addr = Some(addr);
+        binary.map = map;
         Ok(binary)
     }
 
@@ -238,12 +268,21 @@ impl Binary {
         }
     }
 
-    /// Retrieves the Usdt note information whose address matches the given offset.
-    pub(crate) fn get_note_from_offset(&self, addr: u64) -> Result<Option<&UsdtNote>> {
-        match &self.usdt_info {
-            Some(info) => info.get_note_from_offset(addr),
-            None => Ok(None),
+    /// Retrieves the Usdt note information whose address matches the given address.
+    pub(crate) fn get_note_from_addr(&self, addr: u64) -> Result<Option<&UsdtNote>> {
+        if self.map.contains_addr(addr) {
+            // Safely calculate the offset as we know the map exists and contains addr.
+            let offset = addr - self.map.addr_start;
+            return self.get_note_from_offset(offset);
         }
+        Ok(None)
+    }
+
+    /// Retrieves the Usdt note information whose address matches the given offset.
+    pub(crate) fn get_note_from_offset(&self, offset: u64) -> Result<Option<&UsdtNote>> {
+        self.usdt_info
+            .as_ref()
+            .map_or(Ok(None), |info| info.get_note_from_offset(offset))
     }
 }
 
@@ -256,8 +295,8 @@ pub(crate) struct Process {
     pid: i32,
     /// Executable information.
     exec: Binary,
-    /// Shared libraries.
-    libs: Vec<Binary>,
+    /// Shared libraries (indexed by start addr).
+    libs: BTreeMap<u64, Binary>,
 }
 
 impl Process {
@@ -280,37 +319,43 @@ impl Process {
         Process::new(pid, path)
     }
 
-    fn new(pid: i32, path: PathBuf) -> Result<Process> {
+    fn new(pid: i32, bin_path: PathBuf) -> Result<Process> {
         if pid == PID_ALL {
             return Ok(Process {
                 pid,
-                exec: Binary::new(path)?,
-                libs: Vec::new(),
+                exec: Binary::new(bin_path)?,
+                libs: BTreeMap::new(),
             });
         }
 
-        let mut maps = get_process_maps(pid)?;
-        // Get the binary address from the first entry in the map.
-        let bin_addr = maps
-            .get(0)
-            .ok_or_else(|| anyhow!("Failed to get process maps"))?
-            .addr_start;
+        // Process Map objects for both exec and library binaries.
+        let map_entries = get_process_maps(pid)?;
+        // Temporarily store library maps in a path-indexed HashMap.
+        let mut libs_map = HashMap::new();
+        let mut exec_map = Map::default();
 
-        let mut libs = Vec::new();
+        for map_entry in map_entries.iter().filter(|m| m.is_file()) {
+            let path = PathBuf::from(&map_entry.path);
+            let map = Map {
+                addr_start: map_entry.addr_start,
+                addr_end: map_entry.addr_end,
+            };
 
-        // We're only interested on the map first entry of each shared library.
-        maps.dedup_by(|a, b| a.path.eq(&b.path));
-        for map in maps.iter().filter(|m| m.is_file()) {
-            let path = PathBuf::from(&map.path);
-
+            if path.eq(&bin_path) {
+                exec_map.extend(&map);
             // Check the path is one of a library as /proc/<pid>/maps contains
             // all mapped files, e.g. /dev/zero.
-            if is_shared_library(path.as_path()) {
-                libs.push(Binary::new_loaded(path, map.addr_start)?);
+            } else if is_shared_library(path.as_path()) {
+                libs_map.entry(path).or_insert(Map::default()).extend(&map);
             }
         }
 
-        let exec = Binary::new_loaded(path, bin_addr)?;
+        let exec = Binary::new_loaded(bin_path, exec_map)?;
+        // library objects are stored in a BTreeMap indexed by its map's addr_start for fast lookups.
+        let mut libs = BTreeMap::new();
+        for (path, map) in libs_map.drain() {
+            libs.insert(map.addr_start, Binary::new_loaded(path, map)?);
+        }
         Ok(Process { pid, exec, libs })
     }
 
@@ -373,20 +418,13 @@ impl Process {
     /// Gets the runtime USDT information of a symbol.
     pub(crate) fn get_note_from_symbol(&self, symbol: u64) -> Result<Option<&UsdtNote>> {
         // Find in the executable.
-        if let Some(addr) = self.exec.addr {
-            if let Some(note) = self.exec.get_note_from_offset(symbol - addr)? {
-                return Ok(Some(note));
-            }
+        if let Some(note) = self.exec.get_note_from_offset(symbol)? {
+            Ok(Some(note))
+        } else if let Some((_, lib)) = self.libs.range((Unbounded, Included(&symbol))).next_back() {
+            Ok(lib.get_note_from_addr(symbol)?)
+        } else {
+            Ok(None)
         }
-
-        for lib in self.libs.iter() {
-            if let Some(addr) = lib.addr {
-                if let Some(note) = lib.get_note_from_offset(symbol - addr)? {
-                    return Ok(Some(note));
-                }
-            }
-        }
-        Ok(None)
     }
 
     /// Returns the USDT note and path associated with a target. Targets are specified as "provider::name".
@@ -396,8 +434,11 @@ impl Process {
             return Ok(Some((&self.exec.path, note)));
         }
 
-        // Find in libraries.
-        for lib in self.libs.iter() {
+        // Find in libraries. This has linear compexity as the libs structure is optimized for
+        // symbol lookup (which happens during event decoding).
+        // Given normal number of libraries and the fact looking for notes is likely be done
+        // during module initialization it's probably OK not to optimize further.
+        for (_, lib) in self.libs.iter() {
             if let Some(note) = lib.get_note(target)? {
                 return Ok(Some((&lib.path, note)));
             }
@@ -408,6 +449,11 @@ impl Process {
     /// Determines whether a target specified as "provider::name" is a valid USDT.
     pub(crate) fn is_usdt(&self, target: &str) -> Result<bool> {
         Ok(self.get_note(target)?.is_some())
+    }
+
+    /// Returns the Process's thread information
+    pub(crate) fn thread_info(&self) -> Result<Vec<ThreadInfo>> {
+        get_thread_info(self.pid)
     }
 }
 
@@ -440,8 +486,9 @@ fn is_shared_library(path: &Path) -> bool {
     false
 }
 
+/// An entry (line) in /proc/{PID}/maps file.
 #[derive(Debug)]
-struct ProcessMap {
+struct ProcMapEntry {
     addr_start: u64,
     addr_end: u64,
     perm: String,
@@ -450,10 +497,10 @@ struct ProcessMap {
     path: String,
 }
 
-impl ProcessMap {
-    /// Returns a ProcessMap object from a string that has the following cannonical format:
+impl ProcMapEntry {
+    /// Returns a ProcMapEntry object from a string that has the following cannonical format:
     /// 5594f8dce000-5594f8dd7000 r--p 00000000 00:1f 3526003                    /usr/bin/kitty
-    fn from_string(mapstr: String) -> Result<ProcessMap> {
+    fn from_string(mapstr: String) -> Result<ProcMapEntry> {
         let parts: Vec<&str> = mapstr.split_whitespace().collect();
         if parts.len() < 5 {
             bail!("Invalid map string format {}", mapstr);
@@ -463,7 +510,7 @@ impl ProcessMap {
             bail!("Invalid map string format {}", mapstr);
         }
 
-        Ok(ProcessMap {
+        Ok(ProcMapEntry {
             addr_start: u64::from_str_radix(addr_parts[0], 16)?,
             addr_end: u64::from_str_radix(addr_parts[1], 16)?,
             perm: parts[1].to_owned(),
@@ -482,8 +529,8 @@ impl ProcessMap {
     }
 }
 
-/// Returns the list of ProcessMaps of a given pid.
-fn get_process_maps(pid: i32) -> Result<Vec<ProcessMap>> {
+/// Returns the list of ProcMapEntry objects of a given pid.
+fn get_process_maps(pid: i32) -> Result<Vec<ProcMapEntry>> {
     let mut maps = Vec::new();
     // Open /proc/{pid}/maps.
     let maps_file = PathBuf::from("/proc").join(pid.to_string()).join("maps");
@@ -492,13 +539,48 @@ fn get_process_maps(pid: i32) -> Result<Vec<ProcessMap>> {
     }
     let file = fs::File::open(maps_file)?;
     for line in BufReader::new(file).lines() {
-        maps.push(ProcessMap::from_string(line?)?);
+        maps.push(ProcMapEntry::from_string(line?)?);
     }
     Ok(maps)
 }
 
+/// Information of a single thread.
+#[derive(Debug)]
+pub(crate) struct ThreadInfo {
+    /// Process id of the thread
+    pub(crate) pid: i32,
+    /// Name of the thread
+    pub(crate) comm: String,
+}
+
+/// Returns the list of ThreadInfo objects of a given pid.
+fn get_thread_info(pid: i32) -> Result<Vec<ThreadInfo>> {
+    let mut threads = Vec::new();
+
+    for entry in Path::new("/proc/")
+        .join(pid.to_string())
+        .join("task")
+        .read_dir()?
+    {
+        let entry = entry?;
+        let comm = fs::read_to_string(entry.path().join("comm"))?;
+        threads.push(ThreadInfo {
+            pid: entry
+                .file_name()
+                .into_string()
+                .map_err(|_| anyhow!("Failed to parse thread pid"))?
+                .parse::<i32>()?,
+            comm: comm.trim().to_string(),
+        });
+    }
+
+    Ok(threads)
+}
+
 #[cfg(test)]
 mod tests {
+    use std::{sync::mpsc, thread, time::Duration};
+
     use super::*;
     use probe::probe;
 
@@ -568,14 +650,13 @@ mod tests {
     fn shared_libs() -> Result<()> {
         let p = Process::from_pid(std::process::id() as i32)?;
         assert!(!p.libs.is_empty()); // At least ld should be listed.
-        for lib in p.libs.iter().as_ref() {
+        for lib in p.libs.values() {
             for note in lib
                 .usdt_info
                 .as_ref()
                 .expect("should have valid USDT info")
                 .notes
-                .iter()
-                .as_ref()
+                .values()
             {
                 // All available notes should be available at from the Program.
                 let name = format!("{}::{}", note.provider, note.name);
@@ -583,6 +664,31 @@ mod tests {
                 assert!(traceable.is_ok() && traceable.unwrap());
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn get_threads() -> Result<()> {
+        let (tx, rx) = mpsc::channel();
+        thread::Builder::new()
+            .name("test_thread".to_string())
+            .spawn(move || loop {
+                if let Ok(_) = rx.try_recv() {
+                    break;
+                }
+                thread::sleep(Duration::from_secs(1));
+            })?;
+
+        let threads = Process::from_pid(std::process::id() as i32)?.thread_info()?;
+        assert!(threads.len() > 1);
+
+        // Main thread should have the same pid as process.
+        assert!(threads.first().unwrap().pid == std::process::id() as i32);
+
+        // Find test thread
+        assert!(threads.iter().find(|t| t.comm.eq("test_thread")).is_some());
+        tx.send(())?;
+
         Ok(())
     }
 }
