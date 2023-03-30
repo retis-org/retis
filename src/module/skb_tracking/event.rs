@@ -1,12 +1,15 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use plain::Plain;
 use serde::{Deserialize, Serialize};
 
-use crate::core::events::{
-    bpf::{parse_raw_section, BpfRawSection},
-    *,
+use crate::{
+    core::events::{
+        bpf::{parse_single_raw_section, BpfRawSection},
+        *,
+    },
+    module::ModuleId,
+    EventSection, EventSectionFactory,
 };
-use crate::{EventSection, EventSectionFactory};
 
 // Tracking event section.
 /// For more information of how the tracking logic is designed and how it can be
@@ -29,13 +32,9 @@ pub(crate) struct SkbTrackingEvent {
 }
 
 impl RawEventSectionFactory for SkbTrackingEvent {
-    fn from_raw(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        if raw_sections.len() != 1 {
-            bail!("Skb tracking event from BPF must be a single section");
-        }
-
-        // Unwrap as we just checked the vector contains 1 element.
-        let raw = parse_raw_section::<BpfTrackingEvent>(&raw_sections.pop().unwrap())?;
+    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        let raw =
+            parse_single_raw_section::<BpfTrackingEvent>(ModuleId::SkbTracking, raw_sections)?;
 
         let mut section = SkbTrackingEvent {
             orig_head: raw.orig_head,

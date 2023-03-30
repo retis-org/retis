@@ -21,7 +21,7 @@ use crate::{
         kernel::Symbol,
         probe::{self, Probe},
     },
-    module::{get_modules, Modules, ModuleId},
+    module::{get_modules, ModuleId, Modules},
 };
 
 /// Generic trait representing a collector. All collectors are required to

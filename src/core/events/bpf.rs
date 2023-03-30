@@ -230,6 +230,23 @@ where
     Ok(event)
 }
 
+/// Helper to parse a single raw section from BPF raw sections, checking the
+/// section validity and parsing it into a structured type.
+pub(crate) fn parse_single_raw_section<T>(
+    id: ModuleId,
+    mut raw_sections: Vec<BpfRawSection>,
+) -> Result<T>
+where
+    T: Default + Plain,
+{
+    if raw_sections.len() != 1 {
+        bail!("{id} event from BPF must be a single section");
+    }
+
+    // Unwrap as we just checked the vector contains 1 element.
+    parse_raw_section::<T>(&raw_sections.pop().unwrap())
+}
+
 #[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
 pub(crate) struct CommonEvent {
     /// Timestamp of when the event was generated.
