@@ -42,12 +42,12 @@ impl Collector for OvsCollector {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<OvsCollectorArgs>(ModuleId::Ovs.to_str())
+        cmd.register_module::<OvsCollectorArgs>(ModuleId::Ovs)
     }
 
     fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         self.track = cli
-            .get_section::<OvsCollectorArgs>(ModuleId::Ovs.to_str())?
+            .get_section::<OvsCollectorArgs>(ModuleId::Ovs)?
             .ovs_track;
 
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);

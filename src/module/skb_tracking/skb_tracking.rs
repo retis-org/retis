@@ -45,7 +45,7 @@ impl Collector for SkbTrackingCollector {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(ModuleId::SkbTracking.to_str())
+        cmd.register_module_noargs(ModuleId::SkbTracking)
     }
 
     fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {

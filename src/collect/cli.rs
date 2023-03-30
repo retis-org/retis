@@ -115,7 +115,7 @@ impl SubCommand for Collect {
         // Determine all registerd collectors and specify both the possible values and the default
         // value of the "collectors" argument
         let possible_collectors =
-            Vec::from_iter(self.collectors.modules().iter().map(|x| x.to_owned()));
+            Vec::from_iter(self.collectors.modules().iter().map(|x| x.to_str()));
 
         let full_command = self
             .collectors

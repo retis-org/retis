@@ -13,7 +13,7 @@ use clap::{
 };
 
 use super::dynamic::DynamicCommand;
-use crate::collect::cli::Collect;
+use crate::{collect::cli::Collect, module::ModuleId};
 
 /// SubCommand defines the way to handle SubCommands.
 /// SubCommands arguments are parsed in two rounds, the "thin" and the "full" round.
@@ -248,7 +248,7 @@ pub(crate) struct CliConfig {
 
 impl CliConfig {
     /// Creates and returns a new instance of dynamic module argument type M
-    pub(crate) fn get_section<M>(&self, name: &str) -> Result<M>
+    pub(crate) fn get_section<M>(&self, id: ModuleId) -> Result<M>
     where
         M: Default + FromArgMatches,
     {
@@ -260,7 +260,7 @@ impl CliConfig {
                     self.subcommand.name()
                 ))
             })?
-            .get_section::<M>(name)
+            .get_section::<M>(id)
     }
 }
 
