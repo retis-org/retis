@@ -230,6 +230,24 @@ where
     Ok(event)
 }
 
+/// Helper to parse a single raw section from BPF raw sections, checking the
+/// section validity and parsing it into a structured type.
+pub(crate) fn parse_single_raw_section<T>(
+    id: ModuleId,
+    mut raw_sections: Vec<BpfRawSection>,
+) -> Result<T>
+where
+    T: Default + Plain,
+{
+    if raw_sections.len() != 1 {
+        bail!("{id} event from BPF must be a single section");
+    }
+
+    // Unwrap as we just checked the vector contains 1 element.
+    parse_raw_section::<T>(&raw_sections.pop().unwrap())
+}
+
+#[repr(C, packed)]
 #[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
 pub(crate) struct CommonEvent {
     /// Timestamp of when the event was generated.
@@ -239,14 +257,10 @@ pub(crate) struct CommonEvent {
 unsafe impl Plain for CommonEvent {}
 
 impl RawEventSectionFactory for CommonEvent {
-    fn from_raw(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        if raw_sections.len() != 1 {
-            bail!("Common event from BPF must be a single section");
-        }
-
-        // Unwrap as we just checked the vector contains 1 element.
-        Ok(Box::new(parse_raw_section::<CommonEvent>(
-            &raw_sections.pop().unwrap(),
+    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        Ok(Box::new(parse_single_raw_section::<CommonEvent>(
+            ModuleId::Common,
+            raw_sections,
         )?))
     }
 }
