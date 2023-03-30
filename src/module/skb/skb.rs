@@ -35,12 +35,12 @@ impl Collector for SkbCollector {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<SkbCollectorArgs>(ModuleId::Skb.to_str())
+        cmd.register_module::<SkbCollectorArgs>(ModuleId::Skb)
     }
 
     fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         // First, get the cli parameters.
-        let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb.to_str())?;
+        let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
 
         let mut sections: u64 = 0;
         for category in args.skb_sections.iter() {
