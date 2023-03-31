@@ -669,11 +669,13 @@ mod tests {
 
     #[test]
     fn get_threads() -> Result<()> {
-        let (tx, rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let (ready_tx, ready_rx) = mpsc::channel();
         thread::Builder::new()
             .name("test_thread".to_string())
             .spawn(move || loop {
-                if let Ok(_) = rx.try_recv() {
+                ready_tx.send(()).unwrap();
+                if let Ok(_) = stop_rx.try_recv() {
                     break;
                 }
                 thread::sleep(Duration::from_secs(1));
@@ -686,8 +688,17 @@ mod tests {
         assert!(threads.first().unwrap().pid == std::process::id() as i32);
 
         // Find test thread
-        assert!(threads.iter().find(|t| t.comm.eq("test_thread")).is_some());
-        tx.send(())?;
+        let mut thread_started = false;
+        for _ in 1..10 {
+            if let Ok(_) = ready_rx.try_recv() {
+                assert!(threads.iter().find(|t| t.comm.eq("test_thread")).is_some());
+                thread_started = true;
+                break;
+            }
+            thread::sleep(Duration::from_secs(1));
+        }
+        stop_tx.send(())?;
+        assert!(thread_started);
 
         Ok(())
     }
