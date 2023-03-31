@@ -579,7 +579,10 @@ fn get_thread_info(pid: i32) -> Result<Vec<ThreadInfo>> {
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::mpsc, thread, time::Duration};
+    use std::{
+        sync::{Arc, Barrier},
+        thread,
+    };
 
     use super::*;
     use probe::probe;
@@ -669,15 +672,19 @@ mod tests {
 
     #[test]
     fn get_threads() -> Result<()> {
-        let (tx, rx) = mpsc::channel();
+        let start = Arc::new(Barrier::new(2));
+        let done = Arc::new(Barrier::new(2));
+
+        let t_start = Arc::clone(&start);
+        let t_done = Arc::clone(&done);
         thread::Builder::new()
             .name("test_thread".to_string())
-            .spawn(move || loop {
-                if let Ok(_) = rx.try_recv() {
-                    break;
-                }
-                thread::sleep(Duration::from_secs(1));
+            .spawn(move || {
+                t_start.wait();
+                t_done.wait();
             })?;
+
+        start.wait();
 
         let threads = Process::from_pid(std::process::id() as i32)?.thread_info()?;
         assert!(threads.len() > 1);
@@ -687,8 +694,8 @@ mod tests {
 
         // Find test thread
         assert!(threads.iter().find(|t| t.comm.eq("test_thread")).is_some());
-        tx.send(())?;
 
+        done.wait();
         Ok(())
     }
 }
