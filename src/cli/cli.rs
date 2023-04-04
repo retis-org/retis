@@ -6,8 +6,11 @@
 use std::{any::Any, collections::HashMap, env, ffi::OsString, fmt::Debug};
 
 use anyhow::{anyhow, bail, Result};
-use clap::error::Error as ClapError;
-use clap::{ArgMatches, Args, Command, FromArgMatches};
+use clap::{
+    builder::PossibleValuesParser,
+    error::Error as ClapError,
+    {ArgMatches, Args, Command, FromArgMatches},
+};
 
 use super::dynamic::DynamicCommand;
 use crate::collect::cli::Collect;
@@ -72,8 +75,16 @@ impl Debug for dyn SubCommand {
 /// Trace packets on the Linux kernel
 ///
 /// retis is a tool for capturing networking-related events from the system using ebpf and analyzing them.
-#[derive(Args, Default, Debug)]
-pub(crate) struct MainConfig {}
+#[derive(Args, Debug, Default)]
+pub(crate) struct MainConfig {
+    #[arg(
+        long,
+        value_parser=PossibleValuesParser::new(["error", "warn", "info", "debug"]),
+        default_value = "info",
+        help = "Log level",
+    )]
+    pub(crate) log_level: String,
+}
 
 /// ThinCli handles the first (a.k.a "thin") round of Command Line Interface parsing.
 ///
@@ -106,11 +117,11 @@ impl ThinCli {
     /// Build a FullCli by running a first round of CLI parsing without subcommand argument
     /// validation.
     pub(crate) fn build(self) -> Result<FullCli, ClapError> {
-        self.build_from(env::args_os(), false)
+        self.build_from(env::args_os())
     }
 
     /// Build a FullCli by running a first round of CLI parsing with the given list of arguments.
-    pub(crate) fn build_from<I, T>(mut self, args: I, dry_run: bool) -> Result<FullCli, ClapError>
+    pub(crate) fn build_from<I, T>(mut self, args: I) -> Result<FullCli, ClapError>
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
@@ -143,17 +154,21 @@ impl ThinCli {
                 .try_get_matches_from_mut(args.iter())
                 .expect_err("clap should fail with no arguments");
 
-            match dry_run {
+            match cfg!(test) {
                 true => return Err(err),
                 false => err.exit(),
             };
         }
 
+        // Get main config.
+        let mut main_config = MainConfig::default();
+        main_config.update_from_arg_matches(&matches)?;
+
         // A command was run, build the FullCli so we can parse it.
         Ok(FullCli {
             args,
+            main_config,
             command,
-            dry_run,
             subcommand: self
                 .subcommands
                 .remove(&ran_subcommand.unwrap().to_string())
@@ -169,9 +184,9 @@ impl ThinCli {
 /// validation.
 #[derive(Debug)]
 pub(crate) struct FullCli {
+    pub(crate) main_config: MainConfig,
     args: Vec<OsString>,
     command: Command,
-    dry_run: bool,
     subcommand: Box<dyn SubCommand>,
 }
 
@@ -184,17 +199,13 @@ impl FullCli {
             .mut_subcommand(self.subcommand.name(), |_| self.subcommand.full().unwrap());
 
         // Get the matches.
-        let matches = match self.dry_run {
+        let matches = match cfg!(test) {
             true => self.command.try_get_matches_from_mut(self.args.iter())?,
             false => self
                 .command
                 .try_get_matches_from_mut(self.args.iter())
                 .unwrap_or_else(|e| e.exit()),
         };
-
-        // Get main config.
-        let mut main_config = MainConfig::default();
-        main_config.update_from_arg_matches(&matches)?;
 
         let (subcommand, matches) = matches
             .subcommand()
@@ -206,7 +217,7 @@ impl FullCli {
         }
 
         // Update subcommand options.
-        match self.dry_run {
+        match cfg!(test) {
             true => self.subcommand.update_from_arg_matches(matches)?,
             false => self
                 .subcommand
@@ -214,7 +225,7 @@ impl FullCli {
                 .unwrap_or_else(|e| e.exit()),
         }
         Ok(CliConfig {
-            main_config,
+            main_config: self.main_config,
             subcommand: self.subcommand,
         })
     }
@@ -342,7 +353,7 @@ mod tests {
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
 
-        let err = cli.build_from(vec!["retis", "--help"], true);
+        let err = cli.build_from(vec!["retis", "--help"]);
         assert!(err.is_err() && err.unwrap_err().kind() == ErrorKind::DisplayHelp);
 
         Ok(())
@@ -354,7 +365,7 @@ mod tests {
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
 
-        let cli = cli.build_from(vec!["retis", "sub1", "--help"], true);
+        let cli = cli.build_from(vec!["retis", "sub1", "--help"]);
         assert!(cli.is_ok());
 
         let err = cli?.run();
@@ -369,7 +380,7 @@ mod tests {
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
 
-        let cli = cli.build_from(vec!["retis", "sub1", "--sub1-arg", "foo"], true);
+        let cli = cli.build_from(vec!["retis", "sub1", "--sub1-arg", "foo"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         assert!(cli.get_subcommand().is_ok() && cli.get_subcommand().unwrap().name().eq("sub1"));
@@ -391,7 +402,7 @@ mod tests {
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
 
-        let cli = cli.build_from(vec!["retis", "sub1", "--noexists", "foo"], true);
+        let cli = cli.build_from(vec!["retis", "sub1", "--noexists", "foo"]);
         assert!(cli.is_ok());
         let cli = cli.unwrap();
         assert!(cli.get_subcommand().is_ok() && cli.get_subcommand().unwrap().name().eq("sub1"));

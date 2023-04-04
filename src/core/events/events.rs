@@ -116,11 +116,11 @@ impl From<&Event> for serde_json::Value {
 /// Event fields are the events building blocks. They hold per-type data.
 pub(crate) struct EventField {
     key: String,
-    val: Box<dyn EventFieldType>,
+    val: Box<dyn EventFieldType + Send>,
 }
 
 impl EventField {
-    pub(crate) fn new(key: &str, val: Box<dyn EventFieldType>) -> EventField {
+    pub(crate) fn new(key: &str, val: Box<dyn EventFieldType + Send>) -> EventField {
         EventField {
             key: key.to_string(),
             val,
@@ -146,7 +146,7 @@ pub(crate) trait EventFieldType {
     fn to_json(&self) -> serde_json::Value;
     fn from_json(from: serde_json::Value) -> Result<Self>
     where
-        Self: Sized;
+        Self: Sized + Send;
 }
 
 /// Macro helping to define common event field types not requiring special

@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use log::error;
 use plain::Plain;
 
@@ -176,12 +176,22 @@ impl BpfEvents {
         Ok(())
     }
 
-    /// Retrieve the next event. This is a blocking call.
-    pub(crate) fn poll(&self) -> Result<Event> {
-        match &self.rxc {
-            Some(rxc) => Ok(rxc.recv()?),
+    /// Retrieve the next event. This is a blocking call and can return early if
+    /// a timeout is provided.
+    pub(crate) fn poll(&self, timeout: Option<Duration>) -> Result<Option<Event>> {
+        let rxc = match &self.rxc {
+            Some(rxc) => rxc,
             None => bail!("Can't get event, no rx channel found."),
-        }
+        };
+
+        Ok(match timeout {
+            Some(timeout) => match rxc.recv_timeout(timeout) {
+                Ok(event) => Some(event),
+                Err(mpsc::RecvTimeoutError::Timeout) => None,
+                Err(e) => return Err(anyhow!(e)),
+            },
+            None => Some(rxc.recv()?),
+        })
     }
 
     /// Get the events map fd for reuse.
@@ -327,8 +337,8 @@ impl BpfEvents {
     pub(crate) fn start_polling(&self) -> Result<()> {
         Ok(())
     }
-    pub(crate) fn poll(&self) -> Result<Event> {
-        Ok(Event::new())
+    pub(crate) fn poll(&self, _: Option<Duration>) -> Result<Option<Event>> {
+        Ok(Some(Event::new()))
     }
     pub(crate) fn map_fd(&self) -> i32 {
         0

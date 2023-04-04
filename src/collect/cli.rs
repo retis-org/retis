@@ -2,18 +2,20 @@
 //!
 //! Collect is a dynamic CLI subcommand that allows collectors to register their arguments.
 
-use anyhow::Result;
-use std::any::Any;
+use std::{any::Any, path::PathBuf};
 
-use clap::error::Error as ClapError;
-use clap::{builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command};
+use anyhow::Result;
+use clap::{
+    error::Error as ClapError,
+    {builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command},
+};
 
 use crate::cli::{dynamic::DynamicCommand, SubCommand};
 
 #[derive(Args, Debug, Default)]
 pub(crate) struct CollectArgs {
     #[arg(long, default_value = "false")]
-    pub(super) ebpf_debug: Option<bool>,
+    pub(super) ebpf_debug: bool,
     #[arg(
         long,
         default_value = "false",
@@ -42,6 +44,14 @@ Valid TYPEs:
 Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
     )]
     pub(super) probes: Vec<String>,
+    #[arg(short, long, help = "Write the events to a file rather than to sdout.")]
+    pub(super) out: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "Write the events to stdout even if --out is used.",
+        default_value = "false"
+    )]
+    pub(super) print: bool,
 }
 
 #[derive(Debug)]
