@@ -1,5 +1,8 @@
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use anyhow::{bail, Result};
+use plain::Plain;
+use serde::{
+    de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer, Serialize, Serializer,
+};
 
 use super::bpf::*;
 use crate::{
@@ -76,6 +79,138 @@ pub(crate) enum OvsEventType {
     Undefined,
 }
 
+// This struct is also used for ebpf decoding.
+// Please keep it sync with it's ebpf counterpart in
+// "bpf/kernel_upcall_tp.bpf.c".
+/// OVS upcall event
+#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[repr(C, packed)]
+pub(crate) struct UpcallEvent {
+    /// Upcall command. Holds OVS_PACKET_CMD:
+    ///   OVS_PACKET_CMD_UNSPEC   = 0
+    ///   OVS_PACKET_CMD_MISS     = 1
+    ///   OVS_PACKET_CMD_ACTION   = 2
+    ///   OVS_PACKET_CMD_EXECUTE  = 3
+    pub(crate) cmd: u8,
+    /// Upcall port.
+    pub(crate) port: u32,
+    /// Cpu ID
+    pub(crate) cpu: u32,
+}
+unsafe impl Plain for UpcallEvent {}
+
+// This struct is also used for ebpf decoding.
+// Please keep it sync with it's ebpf counterpart in
+// "bpf/kernel_enqueue.bpf.c".
+/// Upcall enqueue event.
+#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[repr(C, packed)]
+pub(crate) struct UpcallEnqueueEvent {
+    /// Return code. Any value different from zero indicates the upcall enqueue
+    /// failed probably indicating a packet drop.
+    pub(crate) ret: i32,
+    /// Upcall command executed.
+    pub(crate) cmd: u8,
+    /// Upcall port id.
+    pub(crate) port: u32,
+    /// Timestamp of the associated UpcallEvent.
+    pub(crate) upcall_ts: u64,
+    /// CPU id of the associated UpcallEvent.
+    pub(crate) upcall_cpu: u32,
+    /// Enqueue id used for tracking.
+    pub(crate) queue_id: u32,
+}
+unsafe impl Plain for UpcallEnqueueEvent {}
+
+// This struct is also used for ebpf decoding.
+// Please keep it sync with it's ebpf counterpart in
+// "bpf/kernel_upcall_ret.bpf.c".
+/// Upcall return event
+#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[repr(C, packed)]
+pub(crate) struct UpcallReturnEvent {
+    pub(crate) upcall_ts: u64,
+    pub(crate) upcall_cpu: u32,
+    pub(crate) ret: i32,
+}
+unsafe impl Plain for UpcallReturnEvent {}
+
+// This struct is also used for ebpf decoding.
+// Please keep it sync with it's ebpf counterpart in
+// "bpf/include/ovs_operation.h".
+/// Operation event.
+#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[repr(C, packed)]
+pub(crate) struct OperationEvent {
+    /// Operation type ("put" or "exec")
+    #[serde(
+        deserialize_with = "OperationEvent::deserialize_op",
+        serialize_with = "OperationEvent::serialize_op"
+    )]
+    pub(crate) op_type: u8,
+    /// Queue id used for tracking
+    pub(crate) queue_id: u32,
+    /// Timestamp of the begining of batch
+    pub(crate) batch_ts: u64,
+    /// Index within the batch
+    pub(crate) batch_idx: u8,
+}
+unsafe impl Plain for OperationEvent {}
+
+impl OperationEvent {
+    fn operation_str(op_type: u8) -> Result<&'static str> {
+        Ok(match op_type {
+            0 => "exec",
+            1 => "put",
+            x => bail!("Unknown operation type {x}"),
+        })
+    }
+
+    fn deserialize_op<'de, D>(deserializer: D) -> Result<u8, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let st = String::deserialize(deserializer)?;
+        match st.as_str() {
+            "exec" => Ok(0),
+            "put" => Ok(1),
+            other => Err(D::Error::custom(format!(
+                "Unknown operation string {other}"
+            ))),
+        }
+    }
+
+    fn serialize_op<S>(op_type: &u8, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(OperationEvent::operation_str(*op_type).map_err(S::Error::custom)?)
+    }
+}
+
+// This struct is also used for ebpf decoding.
+// Please keep it sync with its ebpf counterpart in
+// "bpf/user_recv_upcall.bpf.c".
+/// OVS Receive Event
+#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[repr(C, packed)]
+pub(crate) struct RecvUpcallEvent {
+    /// Type of upcall
+    pub(crate) r#type: u32,
+    /// Packet size
+    pub(crate) pkt_size: u32,
+    /// Key size
+    pub(crate) key_size: u64,
+    /// Queue id used for tracking
+    pub(crate) queue_id: u32,
+    /// Timestamp of the begining of batch
+    pub(crate) batch_ts: u64,
+    /// Index within the batch
+    pub(crate) batch_idx: u8,
+}
+unsafe impl Plain for RecvUpcallEvent {}
+
+/// OVS output action data.
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
 pub(crate) struct ActionEvent {
     /// Action to be executed.
