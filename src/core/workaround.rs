@@ -47,7 +47,6 @@ unsafe impl<T: self::private::Sealed> Send for SendWrapper<T> {}
 
 // Define below types where it is actually safe to send them to another thread.
 pub(crate) type SendableMap = SendWrapper<libbpf_rs::Map>;
-pub(crate) type SendableRingBuffer<'a> = SendWrapper<libbpf_rs::RingBuffer<'a>>;
 
 /// We use a sealed trait to restrict the use of SendWrapper to carefully
 /// allowed types.
@@ -62,7 +61,6 @@ mod private {
     //    here for any reason.
     // 2. The long-term plan is to fix the upstream library.
     impl Sealed for libbpf_rs::Map {}
-    impl Sealed for libbpf_rs::RingBuffer<'_> {}
 }
 
 #[cfg(test)]

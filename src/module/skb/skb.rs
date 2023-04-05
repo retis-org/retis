@@ -98,7 +98,7 @@ impl Collector for SkbCollector {
         )?;
 
         // Then, create the config map.
-        let mut config_map = Self::config_map()?;
+        let config_map = Self::config_map()?;
 
         // Set the config.
         let cfg = SkbConfig { sections };
