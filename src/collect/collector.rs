@@ -65,12 +65,12 @@ pub(crate) struct Collectors {
 }
 
 impl Collectors {
-    pub(crate) fn new(modules: Modules, retis: Retis, mut cli: FullCli) -> Result<Self> {
+    pub(crate) fn new(mut modules: Modules, retis: Retis, mut cli: FullCli) -> Result<Self> {
         // Register all collectors' command line arguments. Cli registration
         // errors are fatal.
         let cmd = cli.get_subcommand_mut()?.dynamic_mut().unwrap();
         modules
-            .modules
+            .collectors()
             .iter()
             .try_for_each(|(_, c)| c.register_cli(cmd))?;
 
@@ -116,8 +116,7 @@ impl Collectors {
             let id = ModuleId::from_str(name)?;
             let c = self
                 .modules
-                .modules
-                .get_mut(&id)
+                .get_collector(&id)
                 .ok_or_else(|| anyhow!("unknown collector {}", name))?;
 
             if let Err(e) = c.init(&self.cli, &mut self.retis) {
@@ -159,11 +158,11 @@ impl Collectors {
         )?;
         self.retis.probes_mut()?.attach()?;
 
-        for (id, c) in self.modules.modules.iter_mut() {
+        self.modules.collectors().iter_mut().for_each(|(id, c)| {
             if c.start().is_err() {
-                warn!("Could not start '{}'", id);
+                warn!("Could not start collector '{id}'");
             }
-        }
+        });
 
         Ok(())
     }
