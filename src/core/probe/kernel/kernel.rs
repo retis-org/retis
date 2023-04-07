@@ -3,7 +3,6 @@
 use std::fmt;
 
 use anyhow::{bail, Result};
-use serde::{Deserialize, Serialize};
 
 use super::{config::ProbeConfig, inspect::inspect_symbol};
 use crate::core::{
@@ -11,7 +10,7 @@ use crate::core::{
     kernel::Symbol,
     probe::ProbeOption,
 };
-use crate::{EventSection, EventSectionFactory};
+use crate::{event_section, event_section_factory};
 
 // Split to exclude from tests.
 #[cfg(not(test))]
@@ -56,7 +55,7 @@ impl fmt::Display for KernelProbe {
     }
 }
 
-#[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
+#[event_section]
 pub(crate) struct KernelEvent {
     /// Kernel symbol name associated with the event (i.e. which probe generated
     /// the event).
@@ -64,12 +63,16 @@ pub(crate) struct KernelEvent {
     /// Probe type: one of "kprobe", "kretprobe" or "raw_tracepoint".
     pub(crate) probe_type: String,
     pub(crate) stack_trace: Option<Vec<String>>,
+}
+
+#[derive(Default)]
+#[event_section_factory(KernelEvent)]
+pub(crate) struct KernelEventFactory {
     #[cfg(not(test))]
-    #[serde(skip)]
     pub(crate) stack_map: Option<libbpf_rs::Map>,
 }
 
-impl KernelEvent {
+impl KernelEventFactory {
     #[cfg(not(test))]
     fn unmarshal_stackid(&self, event: &mut KernelEvent, stackid: i32) -> Result<()> {
         if stackid >= 0 {
@@ -107,7 +110,7 @@ impl KernelEvent {
     }
 }
 
-impl RawEventSectionFactory for KernelEvent {
+impl RawEventSectionFactory for KernelEventFactory {
     fn from_raw(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         if raw_sections.len() != 1 {
             bail!("Kernel event from BPF must be a single section");

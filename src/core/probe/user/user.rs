@@ -3,13 +3,12 @@
 use std::{any::Any, collections::HashMap, fmt, path::PathBuf};
 
 use anyhow::{anyhow, bail, Result};
-use serde::{Deserialize, Serialize};
 
 use crate::core::{
     events::{bpf::BpfRawSection, *},
     user::proc::Process,
 };
-use crate::{EventSection, EventSectionFactory};
+use crate::{event_section, event_section_factory};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct UsdtProbe {
@@ -54,7 +53,7 @@ impl fmt::Display for UsdtProbe {
     }
 }
 
-#[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
+#[event_section]
 pub(crate) struct UserEvent {
     /// Probe type: for now only "usdt" is supported.
     pub(crate) probe_type: String,
@@ -69,11 +68,15 @@ pub(crate) struct UserEvent {
     pub(crate) pid: i32,
     /// Thread id.
     pub(crate) tid: i32,
-    #[serde(skip)]
+}
+
+#[derive(Default)]
+#[event_section_factory(UserEvent)]
+pub(crate) struct UserEventFactory {
     cache: HashMap<String, Box<dyn Any>>,
 }
 
-impl RawEventSectionFactory for UserEvent {
+impl RawEventSectionFactory for UserEventFactory {
     fn from_raw(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         if raw_sections.len() != 1 {
             bail!("User event from BPF must be a single section")
@@ -132,7 +135,6 @@ impl RawEventSectionFactory for UserEvent {
                 _ => "unknown",
             }
             .to_string(),
-            ..Default::default()
         }))
     }
 }

@@ -1,13 +1,12 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 
 use super::bpf::*;
 use crate::{
     core::events::{bpf::BpfRawSection, *},
-    EventSection, EventSectionFactory,
+    event_section, event_section_factory,
 };
 
-#[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
+#[event_section]
 pub(crate) struct OvsEvent {
     /// Shared by upcall, action, recv upcall, operation, upcall enqueue events.
     pub(crate) event_type: Option<String>,
@@ -46,7 +45,11 @@ pub(crate) struct OvsEvent {
     pub(crate) return_code: Option<i32>, // Shouldn't we reuse "r#return"?
 }
 
-impl RawEventSectionFactory for OvsEvent {
+#[derive(Default)]
+#[event_section_factory(OvsEvent)]
+pub(crate) struct OvsEventFactory {}
+
+impl RawEventSectionFactory for OvsEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = OvsEvent::default();
 

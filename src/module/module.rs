@@ -3,16 +3,16 @@ use std::{collections::HashMap, fmt};
 use anyhow::{bail, Result};
 
 use super::{
-    ovs::{OvsCollector, OvsEvent},
-    skb::{SkbCollector, SkbEvent},
-    skb_drop::{SkbDropCollector, SkbDropEvent},
-    skb_tracking::{SkbTrackingCollector, SkbTrackingEvent},
+    ovs::{OvsCollector, OvsEventFactory},
+    skb::{SkbCollector, SkbEventFactory},
+    skb_drop::{SkbDropCollector, SkbDropEventFactory},
+    skb_tracking::{SkbTrackingCollector, SkbTrackingEventFactory},
 };
 use crate::{
     collect::Collector,
     core::{
-        events::{bpf::CommonEvent, *},
-        probe::{kernel::KernelEvent, user::UserEvent},
+        events::{bpf::CommonEventFactory, *},
+        probe::{kernel::KernelEventFactory, user::UserEventFactory},
     },
 };
 
@@ -116,9 +116,10 @@ impl Modules {
     pub(crate) fn new(factory: Box<dyn EventFactory>) -> Result<Modules> {
         let mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
 
-        section_factories.insert(ModuleId::Common, Box::<CommonEvent>::default());
-        section_factories.insert(ModuleId::Kernel, Box::<KernelEvent>::default());
-        section_factories.insert(ModuleId::Userspace, Box::<UserEvent>::default());
+        // Register core event sections.
+        section_factories.insert(ModuleId::Common, Box::<CommonEventFactory>::default());
+        section_factories.insert(ModuleId::Kernel, Box::<KernelEventFactory>::default());
+        section_factories.insert(ModuleId::Userspace, Box::<UserEventFactory>::default());
 
         Ok(Modules {
             modules: HashMap::new(),
@@ -202,22 +203,22 @@ pub(crate) fn get_modules(factory: Box<dyn EventFactory>) -> Result<Modules> {
         .register(
             ModuleId::SkbTracking,
             Box::new(SkbTrackingCollector::new()?),
-            Box::<SkbTrackingEvent>::default(),
+            Box::<SkbTrackingEventFactory>::default(),
         )?
         .register(
             ModuleId::Skb,
             Box::new(SkbCollector::new()?),
-            Box::<SkbEvent>::default(),
+            Box::<SkbEventFactory>::default(),
         )?
         .register(
             ModuleId::SkbDrop,
             Box::new(SkbDropCollector::new()?),
-            Box::<SkbDropEvent>::default(),
+            Box::<SkbDropEventFactory>::default(),
         )?
         .register(
             ModuleId::Ovs,
             Box::new(OvsCollector::new()?),
-            Box::<OvsEvent>::default(),
+            Box::<OvsEventFactory>::default(),
         )?;
 
     Ok(group)

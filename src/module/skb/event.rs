@@ -1,13 +1,14 @@
 use anyhow::{bail, Result};
-use serde::{Deserialize, Serialize};
 
 use super::bpf::*;
-use crate::core::events::{bpf::BpfRawSection, *};
-use crate::{EventSection, EventSectionFactory};
+use crate::{
+    core::events::{bpf::BpfRawSection, *},
+    event_section, event_section_factory,
+};
 
 /// Skb event section
 /// TODO: unflatten?
-#[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
+#[event_section]
 pub(crate) struct SkbEvent {
     // L2 fields
     /// Ethertype.
@@ -62,7 +63,11 @@ pub(crate) struct SkbEvent {
     pub(crate) dataref: Option<u8>,
 }
 
-impl RawEventSectionFactory for SkbEvent {
+#[derive(Default)]
+#[event_section_factory(SkbEvent)]
+pub(crate) struct SkbEventFactory {}
+
+impl RawEventSectionFactory for SkbEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = SkbEvent::default();
 

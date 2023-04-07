@@ -9,7 +9,7 @@ use super::{
     output::{get_processors, JsonFormat},
 };
 #[cfg(not(test))]
-use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEvent};
+use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     core::{
@@ -79,7 +79,7 @@ impl Collectors {
         probes.reuse_map("stack_map", sm.fd())?;
 
         #[cfg(not(test))]
-        match group.get_section_factory::<KernelEvent>(ModuleId::Kernel)? {
+        match group.get_section_factory::<KernelEventFactory>(ModuleId::Kernel)? {
             Some(kernel_factory) => kernel_factory.stack_map = Some(sm),
             None => bail!("Can't get kernel section factory"),
         }
@@ -278,14 +278,12 @@ pub(crate) fn get_collectors() -> Result<Collectors> {
 
 #[cfg(test)]
 mod tests {
-    use serde::{Deserialize, Serialize};
-
     use super::*;
     use crate::{
         cli::{MainConfig, SubCommand},
         core::events::{bpf::BpfRawSection, *},
+        event_section, event_section_factory,
     };
-    use crate::{EventSection, EventSectionFactory};
 
     struct DummyCollectorA;
     struct DummyCollectorB;
@@ -326,7 +324,8 @@ mod tests {
         }
     }
 
-    #[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
+    #[event_section]
+    #[event_section_factory(Self)]
     struct TestEvent {}
 
     impl RawEventSectionFactory for TestEvent {

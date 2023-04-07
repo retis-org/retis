@@ -8,10 +8,9 @@ use std::{collections::HashMap, mem, sync::mpsc, thread, time::Duration};
 use anyhow::{anyhow, bail, Result};
 use log::error;
 use plain::Plain;
-use serde::{Deserialize, Serialize};
 
-use super::{Event, EventFactory, EventSectionFactory};
-use crate::{core::events::*, module::ModuleId, EventSection, EventSectionFactory};
+use super::Event;
+use crate::{core::events::*, event_section, event_section_factory, module::ModuleId};
 
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
@@ -247,8 +246,8 @@ where
     parse_raw_section::<T>(&raw_sections.pop().unwrap())
 }
 
+#[event_section]
 #[repr(C, packed)]
-#[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
 pub(crate) struct CommonEvent {
     /// Timestamp of when the event was generated.
     pub(crate) timestamp: u64,
@@ -256,7 +255,11 @@ pub(crate) struct CommonEvent {
 
 unsafe impl Plain for CommonEvent {}
 
-impl RawEventSectionFactory for CommonEvent {
+#[derive(Default)]
+#[event_section_factory(CommonEvent)]
+pub(crate) struct CommonEventFactory {}
+
+impl RawEventSectionFactory for CommonEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         Ok(Box::new(parse_single_raw_section::<CommonEvent>(
             ModuleId::Common,

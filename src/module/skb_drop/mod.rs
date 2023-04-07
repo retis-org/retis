@@ -8,7 +8,7 @@ pub(crate) mod skb_drop;
 pub(crate) use skb_drop::*;
 
 pub(crate) mod event;
-pub(crate) use event::SkbDropEvent;
+pub(crate) use event::*;
 
 mod skb_drop_hook {
     include!("bpf/.out/skb_drop_hook.rs");

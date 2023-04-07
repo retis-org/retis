@@ -110,7 +110,7 @@ pub(crate) trait EventFactory {
 /// hand (except for the special case of BPF section events as there is an n:1
 /// mapping there).
 ///
-/// Please use `#[derive(EventSection)]` to implement the common traits.
+/// Please use `#[retis_derive::event_section]` to implement the common traits.
 ///
 /// The underlying objects are free to hold their data in any way, although
 /// having a proper structure is encouraged as it allows easier consumption at
@@ -143,7 +143,8 @@ impl EventSectionInternal for () {
 /// EventSection factory, providing helpers to create event sections from
 /// various formats.
 ///
-/// Please use `#[derive(EventSection)]` to implement the common traits.
+/// Please use `#[retis_derive::event_section_factory(SectionType)]` to
+/// implement the common traits.
 pub(crate) trait EventSectionFactory:
     RawEventSectionFactory + SerdeEventSectionFactory
 {

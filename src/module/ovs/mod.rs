@@ -9,7 +9,7 @@ pub(crate) mod ovs;
 pub(crate) use ovs::*;
 
 pub(crate) mod event;
-pub(crate) use event::OvsEvent;
+pub(crate) use event::*;
 
 mod bpf;
 mod hooks {
