@@ -6,6 +6,7 @@
 
 use anyhow::{anyhow, bail, Result};
 
+use crate::core::filters::Filter;
 use crate::core::probe::builder::*;
 use crate::core::probe::*;
 
@@ -25,7 +26,12 @@ impl ProbeBuilder for KprobeBuilder {
         KprobeBuilder::default()
     }
 
-    fn init(&mut self, map_fds: Vec<(String, i32)>, hooks: Vec<Hook>) -> Result<()> {
+    fn init(
+        &mut self,
+        map_fds: Vec<(String, i32)>,
+        hooks: Vec<Hook>,
+        filters: Vec<Filter>,
+    ) -> Result<()> {
         if self.obj.is_some() {
             bail!("Kprobe builder already initialized");
         }
@@ -43,6 +49,7 @@ impl ProbeBuilder for KprobeBuilder {
             .prog("probe_kprobe")
             .ok_or_else(|| anyhow!("Couldn't get program"))?
             .fd();
+        replace_filters(fd, &filters)?;
         let mut links = replace_hooks(fd, &hooks)?;
         self.links.append(&mut links);
 
@@ -80,7 +87,7 @@ mod tests {
     fn init_and_attach() {
         let mut builder = KprobeBuilder::new();
 
-        assert!(builder.init(Vec::new(), Vec::new()).is_ok());
+        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
         assert!(builder
             .attach(&Probe::kprobe(Symbol::from_name("kfree_skb_reason").unwrap()).unwrap())
             .is_ok());

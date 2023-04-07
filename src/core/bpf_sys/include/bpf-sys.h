@@ -4,4 +4,7 @@
 
 #include "linux/bpf.h"
 
+/* bpf specific definitions (BPF_A, BPF_{TAX,TXA}). */
+#include "linux/filter.h"
+
 #endif

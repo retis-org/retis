@@ -12,7 +12,7 @@ use super::{
     kernel::{kprobe, kretprobe, raw_tracepoint},
     user::usdt,
 };
-use crate::core::events::bpf::BpfEvents;
+use crate::core::{events::bpf::BpfEvents, filters::Filter};
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
 pub(crate) const PROBE_MAX: usize = 128; // TODO add checks on probe registration.
@@ -27,6 +27,9 @@ pub(crate) struct ProbeManager {
 
     /// Dynamic Hooks. A list of hooks to be attached to all dynamic probes.
     dynamic_hooks: Vec<Hook>,
+
+    /// Dynamic Filters. A list of filters to be attached to all dynamic probes.
+    filters: Vec<Filter>,
 
     /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
     #[cfg(not(test))]
@@ -61,6 +64,7 @@ impl ProbeManager {
         let mut mgr = ProbeManager {
             dynamic_probes,
             dynamic_hooks: Vec::new(),
+            filters: Vec::new(),
             #[cfg(not(test))]
             config_map: init_config_map()?,
             options: Vec::new(),
@@ -141,6 +145,26 @@ impl ProbeManager {
         }
 
         self.maps.insert(name, fd);
+        Ok(())
+    }
+
+    /// Request a filter to be attached to all probes.
+    ///
+    /// ```
+    /// mgr.register_filter(filter)?;
+    /// ```
+    pub(crate) fn register_filter(&mut self, filter: Filter) -> Result<()> {
+        // Avoid duplicate filter types as any Filter variant should
+        // be present only once
+        if self
+            .filters
+            .iter()
+            .any(|f| std::mem::discriminant(f) == std::mem::discriminant(&filter))
+        {
+            bail!("Tried to register multiple filters of the same type");
+        }
+
+        self.filters.push(filter);
         Ok(())
     }
 
@@ -241,6 +265,7 @@ impl ProbeManager {
         // Take care of generic probes first.
         for set in self.dynamic_probes.iter_mut() {
             set.hooks = self.dynamic_hooks.clone();
+            set.filters = self.filters.clone();
             set.attach(
                 #[cfg(not(test))]
                 &mut self.config_map,
@@ -256,6 +281,7 @@ impl ProbeManager {
                 // Extend targeted hooks with dynamic ones.
                 if set.supports_dynamic {
                     set.hooks.extend(self.dynamic_hooks.iter().cloned());
+                    set.filters = self.filters.clone();
                 }
                 set.attach(
                     #[cfg(not(test))]
@@ -275,6 +301,7 @@ struct ProbeSet {
     builder: Box<dyn ProbeBuilder>,
     targets: HashMap<String, Probe>,
     hooks: Vec<Hook>,
+    filters: Vec<Filter>,
     supports_dynamic: bool,
 }
 
@@ -285,6 +312,7 @@ impl ProbeSet {
             builder,
             targets: HashMap::new(),
             hooks: Vec::new(),
+            filters: Vec::new(),
             supports_dynamic,
         }
     }
@@ -302,7 +330,8 @@ impl ProbeSet {
 
         // Initialize the probe builder, only once for all targets.
         let map_fds = maps.into_iter().collect();
-        self.builder.init(map_fds, self.hooks.clone())?;
+        self.builder
+            .init(map_fds, self.hooks.clone(), self.filters.clone())?;
 
         // Then handle all probes in the set.
         for (_, probe) in self.targets.iter_mut() {

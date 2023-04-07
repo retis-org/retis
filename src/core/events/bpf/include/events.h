@@ -49,7 +49,7 @@ static __always_inline struct retis_raw_event *get_event()
 
 static __always_inline void discard_event(struct retis_raw_event *event)
 {
-	bpf_ringbuf_discard(event, BPF_RB_NO_WAKEUP);
+	bpf_ringbuf_discard(event, 0);
 }
 
 static __always_inline void send_event(struct retis_raw_event *event)
@@ -90,6 +90,11 @@ static __always_inline void *get_event_zsection(struct retis_raw_event *event,
 
 	__builtin_memset(section, 0, size);
 	return section;
+}
+
+static __always_inline u16 get_event_size(struct retis_raw_event *event)
+{
+	return event->size;
 }
 
 struct common_event {

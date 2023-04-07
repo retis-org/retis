@@ -4,3 +4,4 @@
 
 #[allow(clippy::module_inception)]
 pub(crate) mod bpf_sys;
+pub(crate) use bpf_sys::*;

@@ -50,6 +50,8 @@ static __always_inline int get_args(struct user_ctx *uctx,
 SEC("usdt")
 int probe_usdt(struct pt_regs *ctx)
 {
+	struct pt_regs ctx_fp = *ctx;
+	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct retis_raw_event *event;
 	struct user_event *u;
@@ -80,10 +82,15 @@ int probe_usdt(struct pt_regs *ctx)
 	u->pid = bpf_get_current_pid_tgid();
 	u->event_type = USDT;
 
+	pass_threshold = get_event_size(event);
+
 	/* UST only supports a single hook. */
 	hook0(&uctx, event);
 
-	send_event(event);
+	if (get_event_size(event) <= pass_threshold)
+		discard_event(event);
+	else
+		send_event(event);
 
 	return 0;
 }

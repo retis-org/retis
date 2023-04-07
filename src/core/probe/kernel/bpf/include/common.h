@@ -2,9 +2,11 @@
 #define __CORE_PROBE_KERNEL_BPF_COMMON__
 
 #include <vmlinux.h>
+#include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 
 #include "events.h"
+#include "packet-filter.h"
 
 enum kernel_probe_type {
 	KERNEL_PROBE_KPROBE = 0,
@@ -96,6 +98,20 @@ struct retis_context {
 	struct retis_regs regs;
 	/* Pointer to the original ctx. Needed for helper calls. */
 	void *orig_ctx;
+	/* Contains the bits identifying what filters yield a hit outcome.
+	 * A bit is set means that the filter matched the data based on its
+	 * criteria .
+	 */
+	u32 filters_ret;
+};
+
+#define RETIS_F_PASS(f, v)			\
+	RETIS_F_##f##_PASS_SH = v,		\
+	RETIS_F_##f##_PASS = 1 << v
+
+/* Defines the bit position for each filter */
+enum {
+	RETIS_F_PASS(PACKET, 0),
 };
 
 /* Helper to retrieve a function parameter argument using the common context */
@@ -123,6 +139,11 @@ struct retis_context {
 #define retis_get_net(ctx)		\
 	RETIS_GET(ctx, net, struct net *)
 
+/* Filters chain is an and */
+#define F_AND		0
+/* Filters chain is an or */
+#define F_OR		1
+
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
  * and should help with maintenance.
@@ -131,7 +152,7 @@ struct retis_context {
  * ```
  * #include <common.h>
  *
- * DEFINE_HOOK(
+ * DEFINE_HOOK(AND_OR_SEL, FILTER_FLAG1 | FILTER_FLAG2 | ...,
  *	do_something(ctx);
  *	return 0;
  * )
@@ -141,15 +162,40 @@ struct retis_context {
  *
  * Do not forget to add the hook to build.rs
  */
-#define DEFINE_HOOK(inst)							\
+#define DEFINE_HOOK(fmode, fflags, statements)					\
 	SEC("ext/hook")								\
 	int hook(struct retis_context *ctx, struct retis_raw_event *event)	\
 	{									\
 		/* Let the verifier be happy */					\
 		if (!ctx || !event)						\
 			return 0;						\
-		inst								\
+		if (!((fmode == F_OR) ?						\
+		      (ctx->filters_ret & (fflags)) :				\
+		      ((ctx->filters_ret & (fflags)) == (fflags))))		\
+			return 0;						\
+		statements							\
 	}
+
+/* Helper that defines a hook that doesn't depend on any filtering
+ * result and runs regardless.  Filtering outcome is still available
+ * through ctx->filters_ret for actions that need special handling not
+ * covered by DEFINE_HOOK([F_AND|F_OR], flags, ...).
+ *
+ * To define a hook in a collector hook, say hook.bpf.c,
+ * ```
+ * #include <common.h>
+ *
+ * DEFINE_HOOK_RAW(
+ *	do_something(ctx);
+ *	return 0;
+ * )
+ *
+ * char __license[] SEC("license") = "GPL";
+ * ```
+ *
+ * Do not forget to add the hook to build.rs
+ */
+#define DEFINE_HOOK_RAW(statements) DEFINE_HOOK(F_AND, 0, statements)
 
 /* Number of hooks installed, used to micro-optimize the call chain */
 const volatile u32 nhooks = 0;
@@ -179,6 +225,52 @@ HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
 
+/* Always return true. Use 0x40000 as it's typically used by
+ * generated filters while 0 means no match, instead.
+ */
+__attribute__ ((noinline))
+unsigned int packet_filter(struct retis_filter_context *ctx)
+{
+	if (!ctx)
+		return 0;
+
+	ctx->ret = 0x40000;
+
+	return ctx->ret;
+}
+
+static __always_inline char *skb_mac_header(struct sk_buff *skb)
+{
+	char *head = (char *)BPF_CORE_READ(skb, head);
+	u16 mh = BPF_CORE_READ(skb, mac_header);
+
+	if (mh == (u16)~0)
+		return NULL;
+
+	return head + mh;
+}
+
+static __always_inline void filter(struct retis_context *ctx)
+{
+	struct retis_filter_context fctx = {};
+	struct sk_buff *skb;
+
+	skb = retis_get_sk_buff(ctx);
+	if (!skb)
+		return;
+
+	fctx.data = skb_mac_header(skb);
+	if (fctx.data == NULL)
+		return;
+
+	fctx.len = BPF_CORE_READ(skb, len);
+	/* Due to a bug we can't use the return value of packet_filter(), but
+	 * we have to rely on the value returned into the context.
+	 */
+	packet_filter(&fctx);
+	ctx->filters_ret |= (!!fctx.ret) << RETIS_F_PACKET_PASS_SH;
+}
+
 /* The chaining function, which contains all our core probe logic. This is
  * called from each probe specific part after filling the common context and
  * just before returning.
@@ -187,6 +279,10 @@ static __always_inline int chain(struct retis_context *ctx)
 {
 	struct retis_probe_config *cfg;
 	struct retis_raw_event *event;
+	/* volatile needed here to prevent from optimizing the
+	 * event usage length read before and after the hook chain.
+	 */
+	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct kernel_event *k;
 
@@ -195,6 +291,8 @@ static __always_inline int chain(struct retis_context *ctx)
 		return 0;
 
 	ctx->offsets = cfg->offsets;
+
+	filter(ctx);
 
 	event = get_event();
 	if (!event)
@@ -221,6 +319,8 @@ static __always_inline int chain(struct retis_context *ctx)
 	else
 		k->stack_id = -1;
 
+	pass_threshold = get_event_size(event);
+
 #define CALL_HOOK(x)		\
 	if (x < nhooks)		\
 		hook##x(ctx, event);
@@ -235,7 +335,11 @@ static __always_inline int chain(struct retis_context *ctx)
 	CALL_HOOK(8)
 	CALL_HOOK(9)
 
-	send_event(event);
+	if (get_event_size(event) <= pass_threshold)
+		discard_event(event);
+	else
+		send_event(event);
+
 	return 0;
 }
 

@@ -20,6 +20,7 @@ const INCLUDE_PATHS: &[&str] = &[
     "/usr/include/x86_64-linux-gnu",
     "vendor/linux/include",
     "vendor/linux/asm/x86/include",
+    FILTER_INCLUDE_PATH,
 ];
 const OVS_INCLUDES: &[&str] = &["src/module/ovs/bpf/include"];
 const CLANG_ARGS: &[&str] = &["-Werror"];
@@ -111,6 +112,7 @@ fn gen_bindings() {
         })
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .layout_tests(cfg!(feature = "test_bindgen_layout"))
+        .fit_macro_constants(true)
         .generate()
         .expect("Failed during bindings generation")
         .write_to_file(format!("{}/bpf_gen.rs", env::var("OUT_DIR").unwrap()))
