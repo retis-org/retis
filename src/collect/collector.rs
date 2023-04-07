@@ -60,14 +60,14 @@ pub(crate) trait Collector {
 
 /// Main collectors object and API.
 pub(crate) struct Collectors {
-    group: Modules,
+    modules: Modules,
     probes: probe::ProbeManager,
     known_kernel_types: HashSet<String>,
 }
 
 impl Collectors {
     #[allow(unused_mut)] // For tests.
-    fn new(mut group: Modules) -> Result<Self> {
+    fn new(mut modules: Modules) -> Result<Self> {
         #[cfg(not(test))]
         let mut probes = probe::ProbeManager::new()?;
         #[cfg(test)]
@@ -79,13 +79,13 @@ impl Collectors {
         probes.reuse_map("stack_map", sm.fd())?;
 
         #[cfg(not(test))]
-        match group.get_section_factory::<KernelEventFactory>(ModuleId::Kernel)? {
+        match modules.get_section_factory::<KernelEventFactory>(ModuleId::Kernel)? {
             Some(kernel_factory) => kernel_factory.stack_map = Some(sm),
             None => bail!("Can't get kernel section factory"),
         }
 
         Ok(Collectors {
-            group,
+            modules,
             probes,
             known_kernel_types: HashSet::new(),
         })
@@ -115,13 +115,12 @@ impl Collectors {
             self.probes.add_probe_opt(probe::ProbeOption::StackTrace);
         }
 
-        // Try initializing all collectors in the group.
+        // Try initializing all collectors.
         for name in &collect.args()?.collectors {
             let id = ModuleId::from_str(name)?;
             let c = self
-                .group
                 .modules
-                .get_mut(&id)
+                .get_collector(&id)
                 .ok_or_else(|| anyhow!("unknown collector {}", name))?;
 
             if let Err(e) = c.init(cli, &mut self.probes) {
@@ -147,26 +146,21 @@ impl Collectors {
     }
 
     /// Register all collectors' command line arguments by calling their register_cli function.
-    pub(crate) fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        for (_, c) in self.group.modules.iter() {
-            // Cli registration errors are fatal.
-            c.register_cli(cmd)?;
-        }
-        Ok(())
+    pub(crate) fn register_cli(&mut self, cmd: &mut DynamicCommand) -> Result<()> {
+        self.modules.collectors().iter().try_for_each(|(_, c)| c.register_cli(cmd))
     }
 
-    /// Start the event retrieval for all collectors in the group by calling
-    /// their `start()` function. Collectors failing to start the event
-    /// retrieval will be kept in the group.
+    /// Start the event retrieval for all collectors by calling
+    /// their `start()` function.
     pub(crate) fn start(&mut self, _: &CliConfig) -> Result<()> {
-        self.group.start_factory()?;
+        self.modules.start_factory()?;
         self.probes.attach()?;
 
-        for (id, c) in self.group.modules.iter_mut() {
+        self.modules.collectors().iter_mut().for_each(|(id, c)| {
             if c.start().is_err() {
-                warn!("Could not start '{}'", id);
+                warn!("Could not start collector '{id}'");
             }
-        }
+        });
 
         Ok(())
     }
@@ -204,7 +198,7 @@ impl Collectors {
 
         loop {
             match self
-                .group
+                .modules
                 .factory
                 .next_event(Some(Duration::from_secs(1)))?
             {

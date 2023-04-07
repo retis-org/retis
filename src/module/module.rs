@@ -98,11 +98,24 @@ impl fmt::Display for ModuleId {
     }
 }
 
+pub(crate) trait Module {
+    fn to_collector(&mut self) -> &mut dyn Collector;
+}
+
+impl<T> Module for T
+where
+    T: Collector,
+{
+    fn to_collector(&mut self) -> &mut dyn Collector {
+        self
+    }
+}
+
 /// All modules are registered there. The following is the main API and object
 /// to manipulate them.
 pub(crate) struct Modules {
     /// Set of registered modules we can use.
-    pub(crate) modules: HashMap<ModuleId, Box<dyn Collector>>,
+    modules: HashMap<ModuleId, Box<dyn Module>>,
     /// Factory used to retrieve events.
     pub(crate) factory: Box<dyn EventFactory>,
     /// Event section factories to parse sections into an event. Section
@@ -128,32 +141,29 @@ impl Modules {
         })
     }
 
-    /// Register a collector to the group.
+    /// Register a module and its event section factory.
     ///
     /// ```
     /// modules
     ///     .register(
-    ///         Box::new(FirstCollector::new()?,
+    ///         Box::new(FirstModule::new()?,
     ///         Box::<FirstEvent>::default()))?,
     ///     )?
     ///     .register(
-    ///         Box::new(SecondCollector::new()?,
+    ///         Box::new(SecondModule::new()?,
     ///         Box::<SecondEvent>::default()))?,
     ///     )?;
     /// ```
     pub(crate) fn register(
         &mut self,
         id: ModuleId,
-        collector: Box<dyn Collector>,
+        module: Box<dyn Module>,
         section_factory: Box<dyn EventSectionFactory>,
     ) -> Result<&mut Self> {
-        // Ensure uniqueness of the collector name. This is important as their
+        // Ensure uniqueness of the module name. This is important as their
         // name is used as a key.
         if self.modules.get(&id).is_some() {
-            bail!(
-                "Could not insert collector '{}'; name already registered",
-                id,
-            );
+            bail!("Could not insert module '{}'; name already registered", id,);
         }
 
         match &mut self.section_factories {
@@ -161,7 +171,7 @@ impl Modules {
             None => bail!("Section factories map no found"),
         };
 
-        self.modules.insert(id, collector);
+        self.modules.insert(id, module);
         Ok(self)
     }
 
@@ -173,6 +183,20 @@ impl Modules {
         };
 
         self.factory.start(section_factories)
+    }
+
+    /// Get an hashmap of all the collectors available in the registered
+    /// modules.
+    pub(crate) fn collectors(&mut self) -> HashMap<&ModuleId, &mut dyn Collector> {
+        self.modules
+            .iter_mut()
+            .map(|(id, m)| (id, m.to_collector()))
+            .collect()
+    }
+
+    /// Get a specific collector, if found in the registered modules.
+    pub(crate) fn get_collector(&mut self, id: &ModuleId) -> Option<&mut dyn Collector> {
+        self.modules.get_mut(id).map(|m| m.to_collector())
     }
 
     /// Sometimes we need to perform actions on factories at a higher level.
