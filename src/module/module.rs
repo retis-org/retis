@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 
 use super::{
     ovs::{OvsCollector, OvsEvent},
-    skb::{SkbCollector, SkbEvent},
+    skb::{SkbCollector, SkbEventFactory},
     skb_tracking::{SkbTrackingCollector, SkbTrackingEvent},
 };
 use crate::{
@@ -201,7 +201,7 @@ pub(crate) fn get_modules(factory: Box<dyn EventFactory>) -> Result<Modules> {
         .register(
             ModuleId::Skb,
             Box::new(SkbCollector::new()?),
-            Box::<SkbEvent>::default(),
+            Box::<SkbEventFactory>::default(),
         )?
         .register(
             ModuleId::Ovs,

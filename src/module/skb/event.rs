@@ -7,7 +7,7 @@ use crate::{EventSection, EventSectionFactory};
 
 /// Skb event section
 /// TODO: unflatten?
-#[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
+#[derive(Default, Deserialize, Serialize, EventSection)]
 pub(crate) struct SkbEvent {
     // L2 fields
     /// Ethertype.
@@ -66,7 +66,11 @@ pub(crate) struct SkbEvent {
     pub(crate) drop_reason: Option<u32>,
 }
 
-impl RawEventSectionFactory for SkbEvent {
+#[derive(Default, EventSectionFactory)]
+#[event_section(SkbEvent)]
+pub(crate) struct SkbEventFactory {}
+
+impl RawEventSectionFactory for SkbEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = SkbEvent::default();
 
