@@ -1,0 +1,6 @@
+# semantic versioning.
+version: 1.0.0
+# kebab-case is recommended for better integration with the cli.
+name: example-profile
+# An arbitrary string to help understand what the profile does.
+about: Collects information from a certain area of the networking stack

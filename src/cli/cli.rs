@@ -18,6 +18,7 @@ use crate::{
     module::{ModuleId, Modules},
     process::cli::Print,
     process::cli::Sort,
+    profiles::cli::ProfileCmd,
 };
 
 /// SubCommandRunner defines the common interface to run SubCommands.
@@ -375,6 +376,7 @@ pub(crate) fn get_cli() -> Result<ThinCli> {
     cli.add_subcommand(Box::new(Collect::new()?))?;
     cli.add_subcommand(Box::new(Print::new()?))?;
     cli.add_subcommand(Box::new(Sort::new()?))?;
+    cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
     Ok(cli)
 }
 
