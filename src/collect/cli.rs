@@ -7,7 +7,7 @@ use std::{any::Any, collections::HashSet, path::PathBuf};
 use anyhow::Result;
 use clap::{
     error::Error as ClapError,
-    {builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command},
+    {builder::PossibleValuesParser, error::ErrorKind, Arg, ArgAction, ArgMatches, Args, Command},
 };
 
 use super::run_collect;
@@ -117,6 +117,7 @@ impl SubCommand for Collect {
                         .long("collectors")
                         .short('c')
                         .value_delimiter(',')
+                        .action(ArgAction::Append)
                         .help("Comma-separated list of collectors to enable. When not specified default to auto-mode (all collectors are enabled unless a prerequisite is missing)."),
                 ),
                 "collector",
