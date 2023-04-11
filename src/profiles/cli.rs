@@ -3,18 +3,13 @@
 //! Profiles is a CLI subcommand that allows listing and inspecting
 //! profiles.
 
-use std::path::Path;
-
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::debug;
 
-use super::Profile;
+use super::{get_profile_paths, Profile};
 
 use crate::{cli::*, module::Modules};
-
-//FIXME: Change
-const DEFAULT_PROFILES_PATH: &str = "test_data/profiles/";
 
 #[derive(Debug, Default, Subcommand)]
 enum ProfileSubCommand {
@@ -35,16 +30,18 @@ impl SubCommandParserRunner for ProfileCmd {
     fn run(&mut self, _: Modules) -> Result<()> {
         match &self.command {
             ProfileSubCommand::List => {
-                for entry in Path::new(DEFAULT_PROFILES_PATH).read_dir()? {
-                    let entry = entry?;
-                    match Profile::load(entry.path()) {
-                        Ok(profile) => println!(
-                            "{}: {}",
-                            profile.name,
-                            profile.about.unwrap_or(String::new()),
-                        ),
-                        Err(err) => {
-                            debug!("Skipping invalid profile {}: {err}", entry.path().display())
+                for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {
+                    for entry in path.read_dir()? {
+                        let entry = entry?;
+                        match Profile::load(entry.path()) {
+                            Ok(profile) => println!(
+                                "{}: {}",
+                                profile.name,
+                                profile.about.unwrap_or(String::new()),
+                            ),
+                            Err(err) => {
+                                debug!("Skipping invalid profile {}: {err}", entry.path().display())
+                            }
                         }
                     }
                 }

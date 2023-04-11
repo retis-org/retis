@@ -1,5 +1,5 @@
 #![allow(dead_code)] // FIXME
-use std::{fs::read_to_string, path::PathBuf};
+use std::{env, fs::read_to_string, path::PathBuf};
 
 use anyhow::Result;
 use serde::Deserialize;
@@ -139,6 +139,20 @@ impl Profile {
         }
         Ok(None)
     }
+}
+
+/// Return the list of paths to be used for profile lookup.
+pub(super) fn get_profile_paths() -> Result<Vec<PathBuf>> {
+    // Paths are inspected in order so keep them ordered by (descending) priority.
+    let mut paths = Vec::new();
+    if cfg!(debug_assertions) {
+        paths.push(PathBuf::from("test_data/profiles/"));
+    }
+    if let Ok(home) = env::var("HOME") {
+        paths.push(PathBuf::from(home).join(".config/retis/profiles/"));
+    }
+    paths.push(PathBuf::from("/etc/retis/profiles/"));
+    Ok(paths)
 }
 
 #[cfg(test)]
