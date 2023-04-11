@@ -23,6 +23,9 @@ collect:
 # The existance of a symbol can be specified.
       - type: symbol
         name: some_kprobe
+    args:
+# Add arguments to CLI key: value
+      collectors: skb
   - name: The specific kernel without a symbol
     when:
       - type: version
@@ -32,15 +35,26 @@ collect:
         name: some_tracepoint
 # The non-existance of a symbol can also be specified.
         exists: false
+    args:
+      collectors: skb
   - name: Most of old kernels
     when:
 # A version range can be specified.
       - type: version
         version: ">=3.5.5, <6"
+    args:
+      collectors: skb
+      skb-sections: l3
   - name: Recent kernels with a tracepoins
     when:
       - type: version
         version: ">6.1.2"
       - type: symbol
         name: sometracepoint
+    args:
+      collectors: skb
+      probe: sometracepoint
+      skb-sections: l3
   - name: Default
+    args:
+      collectors: skb

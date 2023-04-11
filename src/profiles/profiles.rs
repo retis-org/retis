@@ -1,5 +1,5 @@
 #![allow(dead_code)] // FIXME
-use std::{env, fs::read_to_string, path::PathBuf};
+use std::{collections::HashMap, env, fs::read_to_string, path::PathBuf};
 
 use anyhow::Result;
 use serde::Deserialize;
@@ -68,6 +68,13 @@ impl CollectCondition {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(untagged)]
+pub(crate) enum ArgValue {
+    Single(String),
+    Sequence(Vec<String>),
+}
+
 /// Collect profile.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -78,6 +85,8 @@ pub(crate) struct CollectProfile {
     /// Set of conditions associated with the profile
     #[serde(default = "Vec::default")]
     pub(crate) when: Vec<CollectCondition>,
+    /// Arguments to be appended to the CLI if this profile is active
+    pub(crate) args: HashMap<String, ArgValue>,
 }
 
 impl CollectProfile {
@@ -191,6 +200,7 @@ collect:
   - when:
       - type: version
         version: "=4.6.1"
+    args:
 "#,
         );
         assert!(w.matches_ver(&KernelVersion::parse("4.6.1").unwrap()));
@@ -204,6 +214,7 @@ collect:
   - when:
       - type: version
         version: ">4.6.1"
+    args:
 "#,
         );
         assert!(!w.matches_ver(&KernelVersion::parse("4.6.1").unwrap()));
@@ -217,6 +228,7 @@ collect:
   - when:
       - type: version
         version: ">4.6.1, <5.1.1"
+    args:
 "#,
         );
         assert!(!w.matches_ver(&KernelVersion::parse("4.6.1").unwrap()));
@@ -235,6 +247,7 @@ collect:
   - when:
       - type: symbol
         name: foo
+    args:
 "#
         )
         .unwrap()
@@ -252,6 +265,7 @@ collect:
       - type: symbol
         name: foo
         exists: false
+    args:
 "#
         )
         .unwrap()
@@ -268,6 +282,7 @@ collect:
   - when:
       - type: symbol
         name: consume_skb
+    args:
 "#
         )
         .unwrap()
@@ -285,6 +300,7 @@ collect:
       - type: symbol
         name: consume_skb
         exists: false
+    args:
 "#
         )
         .unwrap()
@@ -305,20 +321,25 @@ collect:
     when:
       - type: version
         version: "= 3"
+    args:
   - name: Too new
     when:
       - type: version
         version: "> 9"
+    args:
   - name: Symbol exsists
     when:
       - type: symbol
         name: unexisting_symbol
+    args:
   - name: Symbol does not exist
     when:
       - type: symbol
         name: skb:kfree_skb
         exists: false
+    args:
   - name: Correct
+    args:
 "#,
         )
         .expect("parsing")
@@ -337,7 +358,9 @@ collect:
     when:
       - type: version
         version: "> 6.0.0 <= 7"
+    args:
   - name: Last
+    args:
 "#
         )
         .expect("parsing")
