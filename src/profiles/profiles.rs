@@ -2,9 +2,8 @@
 use std::{collections::BTreeMap, env, ffi::OsString, fs::read_to_string, path::PathBuf};
 
 use anyhow::{bail, Result};
-use log::{info, warn};
-use serde::Deserialize;
-use serde::Serialize;
+use log::{debug, info, warn};
+use serde::{Deserialize, Serialize};
 
 use crate::core::{
     inspect::{
@@ -124,6 +123,26 @@ pub(crate) struct Profile {
 }
 
 impl Profile {
+    /// Find a profile
+    pub fn find(name: &str) -> Result<Profile> {
+        for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {
+            for entry in path.read_dir()? {
+                let entry = entry?;
+                match Profile::load(entry.path()) {
+                    Ok(profile) => {
+                        if profile.name.eq(name) {
+                            return Ok(profile);
+                        }
+                    }
+                    Err(err) => {
+                        debug!("Skipping invalid profile {}: {err}", entry.path().display())
+                    }
+                }
+            }
+        }
+        bail!("Profile with name {name} not found");
+    }
+
     /// Load a profile from a path.
     pub fn load(path: PathBuf) -> Result<Profile> {
         let contents = read_to_string(path)?;
