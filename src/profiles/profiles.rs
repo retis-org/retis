@@ -1,7 +1,8 @@
 #![allow(dead_code)] // FIXME
-use std::{collections::HashMap, env, fs::read_to_string, path::PathBuf};
+use std::{collections::BTreeMap, env, ffi::OsString, fs::read_to_string, path::PathBuf};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
+use log::{info, warn};
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -86,7 +87,7 @@ pub(crate) struct CollectProfile {
     #[serde(default = "Vec::default")]
     pub(crate) when: Vec<CollectCondition>,
     /// Arguments to be appended to the CLI if this profile is active
-    pub(crate) args: HashMap<String, ArgValue>,
+    pub(crate) args: BTreeMap<String, ArgValue>,
 }
 
 impl CollectProfile {
@@ -147,6 +148,46 @@ impl Profile {
             }
         }
         Ok(None)
+    }
+
+    /// Generate cli arguments from a profile. The result is a list of arguments that can be
+    /// concatenated to the ones provided by the user.
+    pub fn cli_args(&self, subcommand: &str) -> Result<Vec<OsString>> {
+        let mut result = Vec::new();
+        let args = match subcommand {
+            "collect" => {
+                let collect = match self.match_collect()? {
+                    None => {
+                        warn!(
+                            "None of the collect profiles defined in {} were selected",
+                            self.name
+                        );
+                        return Ok(result);
+                    }
+                    Some(collect) => collect,
+                };
+                info!("Applying profile {}: {}", self.name, collect.name);
+                &collect.args
+            }
+            _ => bail!("Subcommand {subcommand} does not support profile enhancement"),
+        };
+
+        args.iter()
+            .map(|(k, v)| (format!("--{}", &k.replace('_', "-")), v))
+            .for_each(|(k, v)| match v {
+                ArgValue::Single(s) => {
+                    result.push(k.into());
+                    result.push(s.into())
+                }
+                ArgValue::Sequence(sec) => {
+                    for value in sec.iter() {
+                        result.push(k.clone().into());
+                        result.push(value.into())
+                    }
+                }
+            });
+
+        Ok(result)
     }
 }
 
@@ -369,5 +410,72 @@ collect:
         .unwrap()
         .name
         .eq("First"));
+    }
+
+    #[test]
+    fn collect_args() {
+        assert!(&Profile::from_str(
+            r#"
+version: 1.0.0
+name: test
+collect:
+  - name: Default
+    args:
+      probe:
+        - kprobe:ip_rcv
+        - kprobe:ip_finish_output2
+        - kprobe:napi_gro_receive
+        - kprobe:inet_gro_receive
+      skb_sections:
+       - l3
+       - tcp
+"#,
+        )
+        .expect("parsing")
+        .cli_args("collect")
+        .and_then(|e| {
+            println!("{:?}", e);
+            Ok(e)
+        })
+        .unwrap()
+        .eq(&vec![
+            "--probe",
+            "kprobe:ip_rcv",
+            "--probe",
+            "kprobe:ip_finish_output2",
+            "--probe",
+            "kprobe:napi_gro_receive",
+            "--probe",
+            "kprobe:inet_gro_receive",
+            "--skb-sections",
+            "l3",
+            "--skb-sections",
+            "tcp"
+        ]));
+
+        assert!(&Profile::from_str(
+            r#"
+version: 1.0.0
+name: test
+collect:
+  - name: Default
+    args:
+      probe: kprobe:ip_rcv
+      skb_sections: l3,tcp
+"#,
+        )
+        .expect("parsing")
+        .cli_args("collect")
+        .and_then(|e| {
+            println!("{:?}", e);
+            Ok(e)
+        })
+        .unwrap()
+        .eq(&vec![
+            "--probe",
+            "kprobe:ip_rcv",
+            "--skb-sections",
+            "l3,tcp",
+        ]));
     }
 }
