@@ -73,6 +73,7 @@ impl CollectCondition {
 pub(crate) enum ArgValue {
     Single(String),
     Sequence(Vec<String>),
+    Flag,
 }
 
 /// Collect profile.
@@ -204,6 +205,7 @@ impl Profile {
                         result.push(value.into())
                     }
                 }
+                ArgValue::Flag => result.push(k.into()),
             });
 
         Ok(result)
@@ -481,6 +483,7 @@ collect:
     args:
       probe: kprobe:ip_rcv
       skb_sections: l3,tcp
+      ovs-track: ~
 "#,
         )
         .expect("parsing")
@@ -491,6 +494,7 @@ collect:
         })
         .unwrap()
         .eq(&vec![
+            "--ovs-track",
             "--probe",
             "kprobe:ip_rcv",
             "--skb-sections",

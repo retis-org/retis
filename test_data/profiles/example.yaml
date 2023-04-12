@@ -26,6 +26,8 @@ collect:
     args:
 # Add arguments to CLI key: value
       collectors: skb
+# Use yaml null value to add flags
+      ovs-track: ~
   - name: The specific kernel without a symbol
     when:
       - type: version
