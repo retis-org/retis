@@ -2,7 +2,7 @@
 //!
 //! Collect is a dynamic CLI subcommand that allows collectors to register their arguments.
 
-use std::{any::Any, path::PathBuf};
+use std::{any::Any, collections::HashSet, path::PathBuf};
 
 use anyhow::Result;
 use clap::{
@@ -35,7 +35,7 @@ not released. If exhausted, no stack trace will be included."
     // Some of the options that we want for this arg are not available in clap's derive interface
     // so both the argument definition and the field population will be done manually.
     #[arg(skip)]
-    pub(super) collectors: Vec<String>,
+    pub(super) collectors: HashSet<String>,
     // Use the plural in the struct but singular for the cli parameter as we're
     // dealing with a list here.
     #[arg(
