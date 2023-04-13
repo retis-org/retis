@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use log::debug;
+use log::warn;
 
 use super::{get_profile_paths, Profile};
 
@@ -34,13 +34,17 @@ impl SubCommandParserRunner for ProfileCmd {
                     for entry in path.read_dir()? {
                         let entry = entry?;
                         match Profile::load(entry.path()) {
-                            Ok(profile) => println!(
-                                "{}: {}",
-                                profile.name,
-                                profile.about.unwrap_or(String::new()),
-                            ),
+                            Ok(mut profiles) => {
+                                for profile in profiles.drain(..) {
+                                    println!(
+                                        "{}: {}",
+                                        profile.name,
+                                        profile.about.unwrap_or(String::new()),
+                                    );
+                                }
+                            }
                             Err(err) => {
-                                debug!("Skipping invalid profile {}: {err}", entry.path().display())
+                                warn!("Skipping invalid file {}: {err}", entry.path().display())
                             }
                         }
                     }

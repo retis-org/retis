@@ -130,13 +130,16 @@ impl Profile {
             for entry in path.read_dir()? {
                 let entry = entry?;
                 match Profile::load(entry.path()) {
-                    Ok(profile) => {
-                        if profile.name.eq(name) {
-                            return Ok(profile);
+                    Ok(mut profiles) => {
+                        for profile in profiles.drain(..) {
+                            if profile.name.eq(name) {
+                                return Ok(profile);
+                            }
                         }
                     }
+
                     Err(err) => {
-                        debug!("Skipping invalid profile {}: {err}", entry.path().display())
+                        debug!("Skipping invalid file {}: {err}", entry.path().display())
                     }
                 }
             }
@@ -145,10 +148,14 @@ impl Profile {
     }
 
     /// Load a profile from a path.
-    pub fn load(path: PathBuf) -> Result<Profile> {
+    /// A file can contain multiple yaml objects so we return a list of objects.
+    pub fn load(path: PathBuf) -> Result<Vec<Profile>> {
+        let mut result = Vec::new();
         let contents = read_to_string(path)?;
-        let profile = Profile::from_str(contents.as_str())?;
-        Ok(profile)
+        for document in serde_yaml::Deserializer::from_str(&contents) {
+            result.push(Profile::deserialize(document)?);
+        }
+        Ok(result)
     }
 
     /// Load a profile from a string.
@@ -232,7 +239,7 @@ mod tests {
 
     #[test]
     fn load_file() {
-        let p = Profile::load(PathBuf::from("test_data/profiles/example.yaml")).unwrap();
+        let p = &Profile::load(PathBuf::from("test_data/profiles/example.yaml")).unwrap()[0];
         assert_eq!(p.name, "example-profile");
         assert_eq!(p.version, "1.0");
     }
