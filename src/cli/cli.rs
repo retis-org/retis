@@ -13,7 +13,26 @@ use clap::{
 };
 
 use super::dynamic::DynamicCommand;
-use crate::{collect::cli::Collect, module::ModuleId};
+use crate::{
+    collect::cli::Collect,
+    module::{ModuleId, Modules},
+};
+
+/// A SubCommandRunner defines the common interface to run SubCommands.
+pub(crate) trait SubCommandRunner {
+    /// Run the subcommand with a given set of modules and cli configuration
+    fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()>;
+}
+
+// Default implementation of SubCommandRunner for functions or closures.
+impl<F> SubCommandRunner for F
+where
+    F: Fn(FullCli, Modules) -> Result<()>,
+{
+    fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
+        self(cli, modules)
+    }
+}
 
 /// SubCommand defines the way to handle SubCommands.
 /// SubCommands arguments are parsed in two rounds, the "thin" and the "full" round.
@@ -64,6 +83,9 @@ pub(crate) trait SubCommand {
     fn dynamic_mut(&mut self) -> Option<&mut DynamicCommand> {
         None
     }
+
+    /// Return a SubCommandRunner capable of running this command.
+    fn runner(&self) -> Result<Box<dyn SubCommandRunner>>;
 }
 
 impl Debug for dyn SubCommand {
@@ -305,6 +327,9 @@ mod tests {
         fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), ClapError> {
             <Self as FromArgMatches>::update_from_arg_matches(self, matches)
         }
+        fn runner(&self) -> Result<Box<dyn SubCommandRunner>> {
+            Ok(Box::new(|_: FullCli, _: Modules| Ok(())))
+        }
     }
 
     #[derive(Debug, Default, Args)]
@@ -335,6 +360,9 @@ mod tests {
         }
         fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), ClapError> {
             <Self as FromArgMatches>::update_from_arg_matches(self, matches)
+        }
+        fn runner(&self) -> Result<Box<dyn SubCommandRunner>> {
+            Ok(Box::new(|_: FullCli, _: Modules| Ok(())))
         }
     }
 
