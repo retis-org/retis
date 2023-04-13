@@ -13,7 +13,42 @@ use clap::{
 };
 
 use super::dynamic::DynamicCommand;
-use crate::{collect::cli::Collect, module::ModuleId};
+use crate::{
+    collect::cli::Collect,
+    module::{ModuleId, Modules},
+};
+
+/// SubCommandRunner defines the common interface to run SubCommands.
+pub(crate) trait SubCommandRunner {
+    /// Run the subcommand with a given set of modules and cli configuration
+    fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()>;
+}
+
+/// SubCommandRunnerFunc is a wrapper for functions that implements SubCommandRunner
+pub(crate) struct SubCommandRunnerFunc<F>
+where
+    F: Fn(FullCli, Modules) -> Result<()>,
+{
+    func: F,
+}
+
+impl<F> SubCommandRunnerFunc<F>
+where
+    F: Fn(FullCli, Modules) -> Result<()>,
+{
+    pub(crate) fn new(func: F) -> Self {
+        Self { func }
+    }
+}
+
+impl<F> SubCommandRunner for SubCommandRunnerFunc<F>
+where
+    F: Fn(FullCli, Modules) -> Result<()>,
+{
+    fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
+        (self.func)(cli, modules)
+    }
+}
 
 /// SubCommand defines the way to handle SubCommands.
 /// SubCommands arguments are parsed in two rounds, the "thin" and the "full" round.
@@ -40,6 +75,12 @@ pub(crate) trait SubCommand {
     /// subcommand-specific functionality.
     fn as_any(&self) -> &dyn Any;
 
+    /// Returns self as a mutable std::any::Any trait.
+    ///
+    /// This is useful for dynamically downcast the SubCommand into it's specific type to access
+    /// subcommand-specific functionality.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+
     /// Generate the clap Command to be used for "thin" parsing.
     fn thin(&self) -> Result<Command>;
 
@@ -64,6 +105,9 @@ pub(crate) trait SubCommand {
     fn dynamic_mut(&mut self) -> Option<&mut DynamicCommand> {
         None
     }
+
+    /// Return a SubCommandRunner capable of running this command.
+    fn runner(&self) -> Result<Box<dyn SubCommandRunner>>;
 }
 
 impl Debug for dyn SubCommand {
@@ -292,6 +336,9 @@ mod tests {
         fn as_any(&self) -> &dyn Any {
             self
         }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
         fn thin(&self) -> Result<Command> {
             Ok(Command::new("sub1").about("does some things"))
         }
@@ -304,6 +351,11 @@ mod tests {
         }
         fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), ClapError> {
             <Self as FromArgMatches>::update_from_arg_matches(self, matches)
+        }
+        fn runner(&self) -> Result<Box<dyn SubCommandRunner>> {
+            Ok(Box::new(SubCommandRunnerFunc::new(
+                |_: FullCli, _: Modules| Ok(()),
+            )))
         }
     }
 
@@ -323,6 +375,9 @@ mod tests {
         fn as_any(&self) -> &dyn Any {
             self
         }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
         fn thin(&self) -> Result<Command> {
             Ok(Command::new("sub2").about("does some things"))
         }
@@ -335,6 +390,11 @@ mod tests {
         }
         fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), ClapError> {
             <Self as FromArgMatches>::update_from_arg_matches(self, matches)
+        }
+        fn runner(&self) -> Result<Box<dyn SubCommandRunner>> {
+            Ok(Box::new(SubCommandRunnerFunc::new(
+                |_: FullCli, _: Modules| Ok(()),
+            )))
         }
     }
 
