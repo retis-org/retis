@@ -418,7 +418,7 @@ impl Process {
     /// Gets the runtime USDT information of a symbol.
     pub(crate) fn get_note_from_symbol(&self, symbol: u64) -> Result<Option<&UsdtNote>> {
         // Find in the executable.
-        if let Some(note) = self.exec.get_note_from_offset(symbol)? {
+        if let Some(note) = self.exec.get_note_from_addr(symbol)? {
             Ok(Some(note))
         } else if let Some((_, lib)) = self.libs.range((Unbounded, Included(&symbol))).next_back() {
             Ok(lib.get_note_from_addr(symbol)?)
