@@ -13,7 +13,7 @@ use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFact
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
     core::{
-        events::bpf::BpfEventsFactory,
+        events::{bpf::BpfEventsFactory, EventFactory},
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
@@ -63,12 +63,13 @@ pub(crate) struct Collectors {
     modules: Modules,
     probes: probe::ProbeManager,
     cli: CliConfig,
+    factory: Box<dyn EventFactory>,
     known_kernel_types: HashSet<String>,
 }
 
 impl Collectors {
     #[allow(unused_mut)] // For tests.
-    fn new(mut modules: Modules, mut cli: FullCli) -> Result<Self> {
+    fn new(mut modules: Modules, mut cli: FullCli, factory: Box<dyn EventFactory>) -> Result<Self> {
         // Register all collectors' command line arguments. Cli registration
         // errors are fatal.
         let cmd = cli.get_subcommand_mut()?.dynamic_mut().unwrap();
@@ -101,6 +102,7 @@ impl Collectors {
             probes,
             known_kernel_types: HashSet::new(),
             cli,
+            factory,
         })
     }
 
@@ -170,7 +172,12 @@ impl Collectors {
     /// Start the event retrieval for all collectors by calling
     /// their `start()` function.
     pub(crate) fn start(&mut self) -> Result<()> {
-        self.modules.start_factory()?;
+        let section_factories = match self.modules.section_factories.take() {
+            Some(factories) => factories,
+            None => bail!("No section factory found, aborting"),
+        };
+        self.factory.start(section_factories)?;
+
         self.probes.attach()?;
 
         self.modules.collectors().iter_mut().for_each(|(id, c)| {
@@ -215,11 +222,7 @@ impl Collectors {
         });
 
         loop {
-            match self
-                .modules
-                .factory
-                .next_event(Some(Duration::from_secs(1)))?
-            {
+            match self.factory.next_event(Some(Duration::from_secs(1)))? {
                 Some(event) => processors
                     .iter_mut()
                     .try_for_each(|p| p.process_one(&event))?,
@@ -282,7 +285,7 @@ pub(crate) fn get_collectors(cli: FullCli) -> Result<Collectors> {
     let factory = BpfEventsFactory::new()?;
     let event_map_fd = factory.map_fd();
 
-    let mut collectors = Collectors::new(get_modules(Box::new(factory))?, cli)?;
+    let mut collectors = Collectors::new(get_modules()?, cli, Box::new(factory))?;
     collectors.probes.reuse_map("events_map", event_map_fd)?;
 
     Ok(collectors)
@@ -358,12 +361,12 @@ mod tests {
     }
 
     fn new_collectors(modules: Modules) -> Result<Collectors> {
-        Collectors::new(modules, get_cli()?)
+        Collectors::new(modules, get_cli()?, Box::new(BpfEventsFactory::new()?))
     }
 
     #[test]
     fn register_collectors() -> Result<()> {
-        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new()?;
         assert!(group
             .register(
                 ModuleId::Skb,
@@ -383,7 +386,7 @@ mod tests {
 
     #[test]
     fn register_uniqueness() -> Result<()> {
-        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new()?;
         assert!(group
             .register(
                 ModuleId::Skb,
@@ -409,7 +412,7 @@ mod tests {
 
     #[test]
     fn init_collectors() -> Result<()> {
-        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new()?;
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
@@ -437,7 +440,7 @@ mod tests {
 
     #[test]
     fn start_collectors() -> Result<()> {
-        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new()?;
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
@@ -462,7 +465,7 @@ mod tests {
 
     #[test]
     fn parse_probe() -> Result<()> {
-        let mut group = Modules::new(Box::new(BpfEventsFactory::new()?))?;
+        let mut group = Modules::new()?;
         group.register(
             ModuleId::Skb,
             Box::new(DummyCollectorA::new()?),

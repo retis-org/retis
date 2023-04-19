@@ -116,8 +116,6 @@ where
 pub(crate) struct Modules {
     /// Set of registered modules we can use.
     modules: HashMap<ModuleId, Box<dyn Module>>,
-    /// Factory used to retrieve events.
-    pub(crate) factory: Box<dyn EventFactory>,
     /// Event section factories to parse sections into an event. Section
     /// factories come from modules. They are under an Option to allow ownership
     /// change so they can be consumed by the event factory (and moved to a
@@ -126,7 +124,7 @@ pub(crate) struct Modules {
 }
 
 impl Modules {
-    pub(crate) fn new(factory: Box<dyn EventFactory>) -> Result<Modules> {
+    pub(crate) fn new() -> Result<Modules> {
         let mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
 
         // Register core event sections.
@@ -136,7 +134,6 @@ impl Modules {
 
         Ok(Modules {
             modules: HashMap::new(),
-            factory,
             section_factories: Some(section_factories),
         })
     }
@@ -175,16 +172,6 @@ impl Modules {
         Ok(self)
     }
 
-    /// Start the event retrieval in the factory.
-    pub(crate) fn start_factory(&mut self) -> Result<()> {
-        let section_factories = match self.section_factories.take() {
-            Some(factories) => factories,
-            None => bail!("No section factory found, aborting"),
-        };
-
-        self.factory.start(section_factories)
-    }
-
     /// Get an hashmap of all the collectors available in the registered
     /// modules.
     pub(crate) fn collectors(&mut self) -> HashMap<&ModuleId, &mut dyn Collector> {
@@ -219,8 +206,8 @@ impl Modules {
     }
 }
 
-pub(crate) fn get_modules(factory: Box<dyn EventFactory>) -> Result<Modules> {
-    let mut group = Modules::new(factory)?;
+pub(crate) fn get_modules() -> Result<Modules> {
+    let mut group = Modules::new()?;
 
     // Register all collectors here.
     group
@@ -250,11 +237,8 @@ pub(crate) fn get_modules(factory: Box<dyn EventFactory>) -> Result<Modules> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::events::bpf::BpfEventsFactory;
-
     #[test]
     fn get_modules() {
-        let factory = BpfEventsFactory::new().unwrap();
-        assert!(super::get_modules(Box::new(factory)).is_ok());
+        assert!(super::get_modules().is_ok());
     }
 }
