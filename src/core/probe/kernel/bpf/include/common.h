@@ -262,6 +262,17 @@ static __always_inline void filter(struct retis_context *ctx)
 	if (!skb)
 		return;
 
+	/* Special case the packet filtering logic if the skb is already
+	 * tracked. This helps in may ways, including:
+	 * - Performances.
+	 * - Following packet transformations.
+	 * - Filtering packets when the whole data isn't available anymore.
+	 */
+	if (skb_is_tracked(skb)) {
+		ctx->filters_ret |= RETIS_F_PACKET_PASS;
+		return;
+	}
+
 	fctx.data = skb_mac_header(skb);
 	if (fctx.data == NULL)
 		return;
@@ -326,7 +337,8 @@ static __always_inline int chain(struct retis_context *ctx)
 	/* Track the skb. Note that this is done *after* filtering! If no skb is
 	 * available this is a no-op.
 	 */
-	track_skb(ctx);
+	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
+		track_skb(ctx);
 
 	pass_threshold = get_event_size(event);
 

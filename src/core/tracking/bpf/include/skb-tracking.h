@@ -144,4 +144,10 @@ static __always_inline int track_skb(struct retis_context *ctx)
 	return 0;
 }
 
+/* Must be called with a valid skb pointer */
+static __always_inline bool skb_is_tracked(struct sk_buff *skb)
+{
+	return skb_tracking_info(skb) != NULL;
+}
+
 #endif /* __CORE_FILTERS_SKB_TRACKING__ */
