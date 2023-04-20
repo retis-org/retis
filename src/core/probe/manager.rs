@@ -15,7 +15,7 @@ use super::{
 use crate::core::filters::Filter;
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
-pub(crate) const PROBE_MAX: usize = 128; // TODO add checks on probe registration.
+pub(crate) const PROBE_MAX: usize = 1024; // TODO add checks on probe registration.
 pub(super) const HOOK_MAX: usize = 10;
 
 /// ProbeManager is the main object providing an API for consumers to register probes, hooks, maps,
