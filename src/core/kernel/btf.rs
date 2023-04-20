@@ -7,7 +7,7 @@ use btf_rs::{Btf, Type};
 use super::Symbol;
 
 /// Btf provides multi-module Btf lookups.
-pub(super) struct BtfInfo {
+pub(crate) struct BtfInfo {
     /// Main Btf object (vmlinux).
     vmlinux: Btf,
     /// Extra Btf objects (modules).
@@ -79,25 +79,34 @@ impl BtfInfo {
         Ok(None)
     }
 
-    /// Look for a symbol and return its Type object as well as the Btf object where it was
-    /// found.
+    /// Look for a type based on its name and return both a Type object as well
+    /// as the Btf object where it was found.
     /// Subsequent lookups based on this type (such as nested types by id) must be done on
     /// the returned Btf object since type ids of different modules overlap.
     ///
     /// vmlinux is given priority in the lookups.
-    fn find_symbol_btf(&self, symbol: &Symbol) -> Result<(&Btf, Type)> {
-        let target = symbol.typedef_name();
-        match self.vmlinux.resolve_type_by_name(&target) {
+    pub(crate) fn resolve_type_by_name(&self, name: &str) -> Result<(&Btf, Type)> {
+        match self.vmlinux.resolve_type_by_name(name) {
             Ok(res) => Ok((&self.vmlinux, res)),
             Err(e) => {
                 for module in self.modules.iter() {
-                    if let Ok(res) = module.resolve_type_by_name(&target) {
+                    if let Ok(res) = module.resolve_type_by_name(name) {
                         return Ok((module, res));
                     }
                 }
                 Err(e)
             }
         }
+    }
+
+    /// Look for a symbol and return its Type object as well as the Btf object where it was
+    /// found.
+    /// Subsequent lookups based on this type (such as nested types by id) must be done on
+    /// the returned Btf object since type ids of different modules overlap.
+    ///
+    /// vmlinux is given priority in the lookups.
+    pub(crate) fn find_symbol_btf(&self, symbol: &Symbol) -> Result<(&Btf, Type)> {
+        self.resolve_type_by_name(&symbol.typedef_name())
     }
 
     /// Look for symbol prototype. Return the prototype and the Btf object that contains it.

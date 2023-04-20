@@ -216,6 +216,11 @@ pub(crate) fn get_name_offt_from_addr_near(addr: u64) -> Result<(String, u64)> {
     ))
 }
 
+/// Gets a reference to the BTF information for further inspection.
+pub(crate) fn btf_info() -> Result<&'static BtfInfo> {
+    Ok(&get_inspector!()?.btf)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
