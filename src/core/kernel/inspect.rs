@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Result};
 use bimap::BiBTreeMap;
 use log::warn;
 use once_cell::sync::OnceCell;
+use regex::Regex;
 
 use super::{btf::BtfInfo, Symbol};
 
@@ -214,6 +215,28 @@ pub(crate) fn get_name_offt_from_addr_near(addr: u64) -> Result<(String, u64)> {
         get_symbol_name(sym_addr)?,
         u64::checked_sub(addr, sym_addr).ok_or_else(|| anyhow!("failed to get symbol offset"))?,
     ))
+}
+
+/// Find functions matching a given pattern. So far only wildcards (*) are
+/// supported, e.g. "tcp_v6_*".
+pub(crate) fn matching_functions(target: &str) -> Result<Vec<String>> {
+    let set = &get_inspector!()?.traceable_funcs;
+
+    if set.is_none() {
+        bail!("Can't get matching functions, consider mounting /sys/kernel/debug");
+    }
+
+    let target = format!("^{}$", target.replace('*', ".*"));
+    let re = Regex::new(&target)?;
+
+    // Unwrap as we checked above we have a set of valid events.
+    Ok(set
+        .as_ref()
+        .unwrap()
+        .iter()
+        .filter(|f| re.is_match(f))
+        .cloned()
+        .collect())
 }
 
 /// Gets a reference to the BTF information for further inspection.

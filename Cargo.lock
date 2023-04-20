@@ -998,6 +998,7 @@ dependencies = [
  "plain",
  "probe",
  "rbpf",
+ "regex",
  "retis-derive",
  "serde",
  "serde_json",

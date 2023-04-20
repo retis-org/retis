@@ -178,6 +178,23 @@ impl fmt::Display for Symbol {
     }
 }
 
+pub(crate) fn matching_functions_to_symbols(target: &str) -> Result<Vec<Symbol>> {
+    let symbols: Vec<Symbol> = inspect::matching_functions(target)?
+        .iter()
+        // We do not support <func>.isra/part for now.
+        .filter_map(|t| match t.contains('.') {
+            false => Symbol::from_name(t).ok(),
+            true => None,
+        })
+        .collect();
+
+    if symbols.is_empty() {
+        bail!("Could not get traceable symbols matching '{target}'");
+    }
+
+    Ok(symbols)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
