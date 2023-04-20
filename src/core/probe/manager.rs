@@ -251,11 +251,13 @@ impl ProbeManager {
 
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
+        let mut attached = 0;
+
         // Take care of generic probes first.
         for set in self.dynamic_probes.iter_mut() {
             set.hooks = self.dynamic_hooks.clone();
             set.filters = self.filters.clone();
-            set.attach(
+            attached += set.attach(
                 #[cfg(not(test))]
                 &mut self.config_map,
                 self.maps.clone(),
@@ -272,7 +274,7 @@ impl ProbeManager {
                     set.hooks.extend(self.dynamic_hooks.iter().cloned());
                     set.filters = self.filters.clone();
                 }
-                set.attach(
+                attached += set.attach(
                     #[cfg(not(test))]
                     &mut self.config_map,
                     self.maps.clone(),
@@ -281,6 +283,9 @@ impl ProbeManager {
                 )?;
             }
         }
+
+        // All probes loaded, issue an info log.
+        info!("{} probe(s) loaded", attached);
 
         Ok(())
     }
@@ -312,9 +317,9 @@ impl ProbeSet {
         #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
         maps: HashMap<String, i32>,
         #[cfg(not(test))] options: &[ProbeOption],
-    ) -> Result<()> {
+    ) -> Result<usize> {
         if self.targets.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
 
         // Initialize the probe builder, only once for all targets.
@@ -342,10 +347,7 @@ impl ProbeSet {
             self.builder.attach(probe)?;
         }
 
-        // All probes loaded, issue an info log.
-        info!("{} probe(s) loaded", self.targets.len());
-
-        Ok(())
+        Ok(self.targets.len())
     }
 }
 
