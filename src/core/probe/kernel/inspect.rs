@@ -53,7 +53,7 @@ mod tests {
         assert!(desc.is_ok());
 
         let desc = desc.unwrap();
-        assert!(desc.ksym == 0xffffffff983c29a0);
+        assert!(desc.ksym == 0xffffffff9b2e5480);
         assert!(desc.nargs == 3);
         assert!(desc.probe_cfg.offsets.sk_buff == 0);
         assert!(desc.probe_cfg.offsets.skb_drop_reason == 2);
@@ -65,7 +65,7 @@ mod tests {
         assert!(desc.is_ok());
 
         let desc = desc.unwrap();
-        assert!(desc.ksym == 0xffffffff95612980);
+        assert!(desc.ksym == 0xffffffff99d1ddf0);
         assert!(desc.nargs == 2);
         assert!(desc.probe_cfg.offsets.sk_buff == 0);
         assert!(desc.probe_cfg.offsets.skb_drop_reason == 1);
@@ -77,7 +77,7 @@ mod tests {
         assert!(desc.is_ok());
 
         let desc = desc.unwrap();
-        assert!(desc.ksym == 0xffffffff959754a0);
+        assert!(desc.ksym == 0xffffffff99e46990);
         assert!(desc.nargs == 3);
         assert!(desc.probe_cfg.offsets.sk_buff == -1);
         assert!(desc.probe_cfg.offsets.skb_drop_reason == -1);

@@ -227,12 +227,12 @@ mod tests {
 
     #[test]
     fn symbol_name() {
-        assert!(get_symbol_name(0xffffffff95617530).unwrap() == "consume_skb");
+        assert!(get_symbol_name(0xffffffff99d1da80).unwrap() == "consume_skb");
     }
 
     #[test]
     fn symbol_addr() {
-        assert!(get_symbol_addr("consume_skb").unwrap() == 0xffffffff95617530);
+        assert!(get_symbol_addr("consume_skb").unwrap() == 0xffffffff99d1da80);
     }
 
     #[test]
@@ -255,15 +255,15 @@ mod tests {
 
     #[test]
     fn name_from_addr_near() {
-        let mut sym_info = get_name_offt_from_addr_near(0xffffffff95617530 + 1).unwrap();
+        let mut sym_info = get_name_offt_from_addr_near(0xffffffff99d1da80 + 1).unwrap();
 
         assert_eq!(sym_info.0, "consume_skb");
         assert_eq!(sym_info.1, 0x1_u64);
 
-        sym_info = get_name_offt_from_addr_near(0xffffffff95617530 - 1).unwrap();
+        sym_info = get_name_offt_from_addr_near(0xffffffff99d1da80 - 1).unwrap();
         assert_ne!(sym_info.0, "consume_skb");
 
-        sym_info = get_name_offt_from_addr_near(0xffffffff95617530).unwrap();
+        sym_info = get_name_offt_from_addr_near(0xffffffff99d1da80).unwrap();
         assert_eq!(sym_info.0, "consume_skb");
         assert_eq!(sym_info.1, 0x0_u64);
     }
