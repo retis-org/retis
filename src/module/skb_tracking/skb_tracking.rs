@@ -1,7 +1,7 @@
 use std::{mem, thread, time::Duration};
 
 use anyhow::{bail, Result};
-use log::{error, info, warn};
+use log::warn;
 use nix::time;
 use plain::Plain;
 
@@ -10,10 +10,6 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        events::{
-            bpf::{parse_raw_section, BpfEventOwner, BpfEvents, BpfRawSection},
-            EventField,
-        },
         kernel::Symbol,
         probe::{
             manager::{ProbeManager, PROBE_MAX},
@@ -21,10 +17,8 @@ use crate::{
         },
         workaround::SendableMap,
     },
-    event_field,
+    module::ModuleId,
 };
-
-const SKB_TRACKING_COLLECTOR: &str = "skb-tracking";
 
 // GC runs in a thread every SKB_TRACKING_GC_INTERVAL seconds to collect and
 // remove old entries.
@@ -36,17 +30,6 @@ const SKB_TRACKING_GC_INTERVAL: u64 = 5;
 // shouldn't happen much — or it is a bug.
 const TRACKING_OLD_LIMIT: u64 = 60;
 
-// Tracking event. Please keep in sync with its BPF counterpart.
-#[derive(Default)]
-#[repr(C, packed)]
-struct SkbTrackingEvent {
-    orig_head: u64,
-    timestamp: u64,
-    skb: u64,
-    drop_reason: u32,
-}
-unsafe impl Plain for SkbTrackingEvent {}
-
 #[derive(Default)]
 pub(crate) struct SkbTrackingCollector {
     garbage_collector: Option<thread::JoinHandle<()>>,
@@ -57,61 +40,16 @@ impl Collector for SkbTrackingCollector {
         Ok(SkbTrackingCollector::default())
     }
 
-    fn name(&self) -> &'static str {
-        SKB_TRACKING_COLLECTOR
-    }
-
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
         Some(vec!["struct sk_buff *"])
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(SKB_TRACKING_COLLECTOR)
+        cmd.register_module_noargs(ModuleId::SkbTracking)
     }
 
-    fn init(
-        &mut self,
-        _: &CliConfig,
-        probes: &mut ProbeManager,
-        events: &mut BpfEvents,
-    ) -> Result<()> {
-        events.register_unmarshaler(
-            BpfEventOwner::CollectorSkbTracking,
-            Box::new(
-                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| {
-                    if raw_section.header.data_type != 1 {
-                        bail!("Unknown data type");
-                    }
-
-                    let event = parse_raw_section::<SkbTrackingEvent>(raw_section)?;
-
-                    fields.push(event_field!("orig_head", event.orig_head));
-                    fields.push(event_field!("timestamp", event.timestamp));
-                    fields.push(event_field!("skb", event.skb));
-                    fields.push(event_field!("drop_reason", event.drop_reason));
-                    Ok(())
-                },
-            ),
-        )?;
-
-        self.init_tracking(probes)?;
-
-        // We'd like to track free reasons as well.
-        let symbol = Symbol::from_name("kfree_skb_reason");
-        // Did the probe failed because of an error or because it wasn't
-        // available? In case we can't know, do not issue an error.
-        match symbol.is_ok() {
-            true => {
-                // Unwrap as we just checked the value is valid.
-
-                if let Err(e) = probes.add_probe(Probe::kprobe(symbol.unwrap())?) {
-                    error!("Could not attach to kfree_skb_reason: {}", e);
-                }
-            }
-            false => info!("Skb drop reasons are not retrievable on this kernel"),
-        }
-
-        Ok(())
+    fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+        self.init_tracking(probes)
     }
 }
 

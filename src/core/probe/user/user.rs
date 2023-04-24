@@ -5,13 +5,10 @@ use std::{any::Any, collections::HashMap, fmt, path::PathBuf};
 use anyhow::{anyhow, bail, Result};
 
 use crate::core::{
-    events::{
-        bpf::{BpfEventOwner, BpfEvents, BpfRawSection, EventUnmarshaler},
-        EventField,
-    },
+    events::{bpf::BpfRawSection, *},
     user::proc::Process,
 };
-use crate::event_field;
+use crate::{event_section, event_section_factory};
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct UsdtProbe {
@@ -56,33 +53,52 @@ impl fmt::Display for UsdtProbe {
     }
 }
 
-struct UserUnmarshaler {
+#[event_section]
+pub(crate) struct UserEvent {
+    /// Probe type: for now only "usdt" is supported.
+    pub(crate) probe_type: String,
+    /// Symbol name associated with the event (i.e. which probe generated the
+    /// event).
+    pub(crate) symbol: String,
+    /// Instruction pointer: address of the symbol associted with the event.
+    pub(crate) ip: u64,
+    /// Path of the binary associated with the event.
+    pub(crate) path: String,
+    /// Process id.
+    pub(crate) pid: i32,
+    /// Thread id.
+    pub(crate) tid: i32,
+}
+
+#[derive(Default)]
+#[event_section_factory(UserEvent)]
+pub(crate) struct UserEventFactory {
     cache: HashMap<String, Box<dyn Any>>,
 }
 
-impl EventUnmarshaler for UserUnmarshaler {
-    fn unmarshal(
-        &mut self,
-        raw_section: &BpfRawSection,
-        fields: &mut Vec<EventField>,
-    ) -> Result<()> {
-        if raw_section.data.len() != 17 {
+impl RawEventSectionFactory for UserEventFactory {
+    fn from_raw(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        if raw_sections.len() != 1 {
+            bail!("User event from BPF must be a single section")
+        }
+
+        // Unwrap as we just checked the vector contains 1 element.
+        let raw = raw_sections.pop().unwrap();
+
+        if raw.data.len() != 17 {
             bail!(
                 "Section data is not the expected size {} != 17",
-                raw_section.data.len()
+                raw.data.len()
             );
         }
 
-        let symbol = u64::from_ne_bytes(raw_section.data[0..8].try_into()?);
-        let pid_tid = u64::from_ne_bytes(raw_section.data[8..16].try_into()?);
-        let r#type = u8::from_ne_bytes(raw_section.data[16..17].try_into()?);
+        let symbol = u64::from_ne_bytes(raw.data[0..8].try_into()?);
+        let pid_tid = u64::from_ne_bytes(raw.data[8..16].try_into()?);
+        let r#type = u8::from_ne_bytes(raw.data[16..17].try_into()?);
 
         // Split pid and tid
         let pid = (pid_tid & 0xFFFFFFFF) as i32;
         let tid = (pid_tid >> 32) as i32;
-
-        fields.push(event_field!("pid", pid));
-        fields.push(event_field!("tid", tid));
 
         let pid_key = format!("user_proc_{pid}");
         // Try to obtain the Process object from the Context.
@@ -104,29 +120,21 @@ impl EventUnmarshaler for UserUnmarshaler {
             .get_note_from_symbol(symbol)?
             .ok_or_else(|| anyhow!("Failed to get symbol information"))?;
 
-        fields.push(event_field!("symbol", format!("{note}")));
-        fields.push(event_field!("ip", symbol));
-        fields.push(event_field!(
-            "path",
-            proc.path()
+        Ok(Box::new(UserEvent {
+            pid,
+            tid,
+            symbol: format!("{note}"),
+            ip: symbol,
+            path: proc
+                .path()
                 .to_str()
                 .ok_or_else(|| anyhow!("Wrong binary path"))?
-                .to_string()
-        ));
-
-        let type_str = match r#type {
-            1 => "usdt",
-            _ => "unknown",
-        };
-        fields.push(event_field!("type", type_str.to_string()));
-        Ok(())
+                .to_string(),
+            probe_type: match r#type {
+                1 => "usdt",
+                _ => "unknown",
+            }
+            .to_string(),
+        }))
     }
-}
-
-/// Registers the unmarshaler for the userpsace section of the event.
-pub(crate) fn register_unmarshaler(events: &mut BpfEvents) -> Result<()> {
-    let unmarshaler = UserUnmarshaler {
-        cache: HashMap::new(),
-    };
-    events.register_unmarshaler(BpfEventOwner::Userspace, Box::new(unmarshaler))
 }

@@ -9,6 +9,9 @@ mod module;
 use cli::get_cli;
 use collect::get_collectors;
 
+// Re-export derive macros.
+use retis_derive::*;
+
 fn main() -> Result<()> {
     let mut cli = get_cli()?.build()?;
 
@@ -29,16 +32,13 @@ fn main() -> Result<()> {
     let command = cli.get_subcommand_mut()?;
     match command.name() {
         "collect" => {
-            let mut collectors = get_collectors()?;
+            let mut collectors = get_collectors(cli)?;
 
-            collectors.register_cli(command.dynamic_mut().unwrap())?;
-            let config = cli.run()?;
-
-            collectors.init(&config)?;
-            collectors.start(&config)?;
+            collectors.init()?;
+            collectors.start()?;
 
             // Starts a loop.
-            collectors.process(&config)?;
+            collectors.process()?;
         }
         _ => {
             error!("not implemented");

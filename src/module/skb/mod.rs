@@ -1,4 +1,4 @@
-//! # SkbCollector
+//! # Skb module
 //!
 //! Provide support for retrieving data from `struct sk_buff` kernel objects.
 
@@ -6,6 +6,9 @@
 #[allow(clippy::module_inception)]
 pub(crate) mod skb;
 pub(crate) use skb::*;
+
+pub(crate) mod event;
+pub(crate) use event::*;
 
 mod bpf;
 mod skb_hook {

@@ -7,16 +7,9 @@ use super::{bpf::*, skb_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::{
-        events::{
-            bpf::{BpfEventOwner, BpfEvents, BpfRawSection},
-            EventField,
-        },
-        probe::{Hook, ProbeManager},
-    },
+    core::probe::{Hook, ProbeManager},
+    module::ModuleId,
 };
-
-const SKB_COLLECTOR: &str = "skb";
 
 #[derive(Parser, Default)]
 pub(crate) struct SkbCollectorArgs {
@@ -37,26 +30,17 @@ impl Collector for SkbCollector {
         Ok(SkbCollector {})
     }
 
-    fn name(&self) -> &'static str {
-        SKB_COLLECTOR
-    }
-
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
         Some(vec!["struct sk_buff *"])
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<SkbCollectorArgs>(SKB_COLLECTOR)
+        cmd.register_module::<SkbCollectorArgs>(ModuleId::Skb)
     }
 
-    fn init(
-        &mut self,
-        cli: &CliConfig,
-        probes: &mut ProbeManager,
-        events: &mut BpfEvents,
-    ) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         // First, get the cli parameters.
-        let args = cli.get_section::<SkbCollectorArgs>(SKB_COLLECTOR)?;
+        let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
 
         let mut sections: u64 = 0;
         for category in args.skb_sections.iter() {
@@ -74,29 +58,6 @@ impl Collector for SkbCollector {
             }
         }
 
-        // Register our event unmarshaler.
-        events.register_unmarshaler(
-            BpfEventOwner::CollectorSkb,
-            Box::new(
-                |raw_section: &BpfRawSection, fields: &mut Vec<EventField>| match raw_section
-                    .header
-                    .data_type
-                    as u64
-                {
-                    SECTION_L2 => unmarshal_l2(raw_section, fields),
-                    SECTION_IPV4 => unmarshal_ipv4(raw_section, fields),
-                    SECTION_IPV6 => unmarshal_ipv6(raw_section, fields),
-                    SECTION_TCP => unmarshal_tcp(raw_section, fields),
-                    SECTION_UDP => unmarshal_udp(raw_section, fields),
-                    SECTION_ICMP => unmarshal_icmp(raw_section, fields),
-                    SECTION_DEV => unmarshal_dev(raw_section, fields),
-                    SECTION_NS => unmarshal_ns(raw_section, fields),
-                    SECTION_DATA_REF => unmarshal_data_ref(raw_section, fields),
-                    _ => bail!("Unknown data type"),
-                },
-            ),
-        )?;
-
         // Then, create the config map.
         let config_map = Self::config_map()?;
 
@@ -112,8 +73,7 @@ impl Collector for SkbCollector {
             Hook::from(skb_hook::DATA)
                 .reuse_map("skb_config_map", config_map.fd())?
                 .to_owned(),
-        )?;
-        Ok(())
+        )
     }
 }
 
