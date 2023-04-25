@@ -55,7 +55,7 @@ static __always_inline s32 handle_tracking(struct retis_context *ctx,
 }
 
 /* Hook for ovs_do_execute_action tracepoint. */
-DEFINE_HOOK_RAW(
+DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	struct nlattr *attr;
 	struct sw_flow_key *key;
 	struct exec_event *exec;
