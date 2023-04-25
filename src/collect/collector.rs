@@ -1,13 +1,17 @@
-use std::{collections::HashSet, sync::mpsc, thread, time::Duration};
+use std::{
+    collections::HashSet,
+    fs::OpenOptions,
+    io::{self, BufWriter, Write},
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
 use log::{error, info, warn};
 use signal_hook::{consts::SIGINT, iterator::Signals};
 
-use super::{
-    cli::Collect,
-    output::{get_processors, JsonFormat},
-};
+use super::cli::{Collect, CollectArgs};
 #[cfg(not(test))]
 use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
 use crate::{
@@ -23,6 +27,7 @@ use crate::{
         tracking::skb_tracking::init_tracking,
     },
     module::{get_modules, ModuleId, Modules},
+    process::{output, Processor},
 };
 
 /// Generic trait representing a collector. All collectors are required to
@@ -207,8 +212,8 @@ impl Collectors {
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
         // We use JSON format output for all events for now.
-        let mut json = JsonFormat::default();
-        let mut processors = get_processors(&mut json, collect.args()?)?;
+        let mut json = output::JsonFormat::default();
+        let mut processors = Self::get_processors(&mut json, collect.args()?)?;
 
         let mut sigint = Signals::new([SIGINT])?;
         let (txc, rxc) = mpsc::channel();
@@ -281,6 +286,39 @@ impl Collectors {
             "tp" => Ok(Probe::raw_tracepoint(symbol)?),
             x => bail!("Invalid TYPE {}. See the help.", x),
         }
+    }
+
+    /// Given a Formatter and cli arguments, get a list of output processors, for
+    /// later event output processing.
+    fn get_processors<'a, F: output::Formatter>(
+        formatter: &'a mut F,
+        args: &CollectArgs,
+    ) -> Result<Vec<Box<dyn Processor + 'a>>> {
+        // The actual output selection will be decided by the user (--out and/or
+        // --print) below.
+        let mut writers: Vec<Box<dyn Write>> = Vec::new();
+
+        // Write the events to a file if asked to.
+        if let Some(out) = args.out.as_ref() {
+            writers.push(Box::new(BufWriter::new(
+                OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(out)
+                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+            )));
+        }
+
+        // Write events to stdout if we don't write to a file (--out) or if
+        // explicitly asked to (--print).
+        if args.out.is_none() || args.print {
+            writers.push(Box::new(io::stdout()));
+        }
+
+        Ok(vec![Box::new(output::FormatAndWrite::new(
+            formatter, writers,
+        ))])
     }
 }
 
