@@ -1,5 +1,5 @@
-use anyhow::Result;
-use log::{error, info};
+use anyhow::{bail, Result};
+use log::warn;
 
 use super::skb_drop_hook;
 use crate::{
@@ -37,14 +37,14 @@ impl Collector for SkbDropCollector {
         // reason, so check this and handle it nicely.
         match inspect::parameter_offset(&symbol, "enum skb_drop_reason") {
             Err(_) | Ok(None) => {
-                info!("Skb drop reasons are not retrievable on this kernel");
+                warn!("Skb drop reasons are not retrievable on this kernel");
                 return Ok(());
             }
             _ => (),
         }
 
         if let Err(e) = probes.add_probe(Probe::raw_tracepoint(symbol)?) {
-            error!("Could not attach to skb:kfree_skb: {}", e);
+            bail!("Could not attach to skb:kfree_skb: {}", e);
         }
 
         probes.register_kernel_hook(Hook::from(skb_drop_hook::DATA))
