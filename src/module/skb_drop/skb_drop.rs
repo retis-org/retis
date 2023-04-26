@@ -6,7 +6,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        kernel::Symbol,
+        kernel::{inspect, Symbol},
         probe::{Hook, Probe, ProbeManager},
     },
     module::ModuleId,
@@ -28,16 +28,23 @@ impl Collector for SkbDropCollector {
     }
 
     fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
-        let symbol = Symbol::from_name("kfree_skb_reason");
-        // Did the probe failed because of an error or because it wasn't
-        // available? In case we can't know, do not issue an error.
-        match symbol {
-            Ok(symbol) => {
-                if let Err(e) = probes.add_probe(Probe::kprobe(symbol)?) {
-                    error!("Could not attach to kfree_skb_reason: {}", e);
-                }
+        // It makes no sense to use Retis on a kernel older enough not to have
+        // the skb:kfree_skb tracepoint (it was introduced in 2009), we might
+        // fail earlier anyway. So do not handle the error case nicely.
+        let symbol = Symbol::from_name("skb:kfree_skb")?;
+
+        // But we could see a kernel where skb:kfree_skb does not access a drop
+        // reason, so check this and handle it nicely.
+        match inspect::parameter_offset(&symbol, "enum skb_drop_reason") {
+            Err(_) | Ok(None) => {
+                info!("Skb drop reasons are not retrievable on this kernel");
+                return Ok(());
             }
-            Err(_) => info!("Skb drop reasons are not retrievable on this kernel"),
+            _ => (),
+        }
+
+        if let Err(e) = probes.add_probe(Probe::raw_tracepoint(symbol)?) {
+            error!("Could not attach to skb:kfree_skb: {}", e);
         }
 
         probes.register_kernel_hook(Hook::from(skb_drop_hook::DATA))
