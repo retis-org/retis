@@ -196,14 +196,14 @@ pub(super) fn find_matching_event(name: &str) -> Result<Option<String>> {
 /// Get a parameter offset given a kernel function, if  any. Can be used to
 /// check a function has a given parameter by using:
 /// `parameter_offset()?.is_some()`
-pub(super) fn parameter_offset(symbol: &Symbol, parameter_type: &str) -> Result<Option<u32>> {
+pub(crate) fn parameter_offset(symbol: &Symbol, parameter_type: &str) -> Result<Option<u32>> {
     get_inspector!()?
         .btf
         .parameter_offset(symbol, parameter_type)
 }
 
 /// Get a function's number of arguments.
-pub(super) fn function_nargs(symbol: &Symbol) -> Result<u32> {
+pub(crate) fn function_nargs(symbol: &Symbol) -> Result<u32> {
     get_inspector!()?.btf.function_nargs(symbol)
 }
 
