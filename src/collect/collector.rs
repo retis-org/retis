@@ -128,7 +128,7 @@ impl Collectors {
 
         probe::common::set_ebpf_debug(collect.args()?.ebpf_debug)?;
         if collect.args()?.stack {
-            self.probes.add_probe_opt(probe::ProbeOption::StackTrace);
+            self.probes.set_probe_opt(probe::ProbeOption::StackTrace)?;
         }
 
         // Try initializing all collectors.
