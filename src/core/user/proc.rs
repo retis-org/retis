@@ -297,6 +297,8 @@ pub(crate) struct Process {
     exec: Binary,
     /// Shared libraries (indexed by start addr).
     libs: BTreeMap<u64, Binary>,
+    /// If the process was compiled with -pie
+    pie: bool,
 }
 
 impl Process {
@@ -325,6 +327,7 @@ impl Process {
                 pid,
                 exec: Binary::new(bin_path)?,
                 libs: BTreeMap::new(),
+                pie: false,
             });
         }
 
@@ -350,13 +353,19 @@ impl Process {
             }
         }
 
+        let pie = is_shared_library(&bin_path);
         let exec = Binary::new_loaded(bin_path, exec_map)?;
         // library objects are stored in a BTreeMap indexed by its map's addr_start for fast lookups.
         let mut libs = BTreeMap::new();
         for (path, map) in libs_map.drain() {
             libs.insert(map.addr_start, Binary::new_loaded(path, map)?);
         }
-        Ok(Process { pid, exec, libs })
+        Ok(Process {
+            pid,
+            exec,
+            libs,
+            pie,
+        })
     }
 
     /// Create a new Process object with a specific cmd.
@@ -417,8 +426,14 @@ impl Process {
 
     /// Gets the runtime USDT information of a symbol.
     pub(crate) fn get_note_from_symbol(&self, symbol: u64) -> Result<Option<&UsdtNote>> {
-        // Find in the executable.
-        if let Some(note) = self.exec.get_note_from_addr(symbol)? {
+        // First look in the executable.
+        // PIE executables are loaded at an arbitrary address so we have to treat them as
+        // shared libraries.
+        let exec_note = match self.pie {
+            true => self.exec.get_note_from_addr(symbol)?,
+            false => self.exec.get_note_from_offset(symbol)?,
+        };
+        if let Some(note) = exec_note {
             Ok(Some(note))
         } else if let Some((_, lib)) = self.libs.range((Unbounded, Included(&symbol))).next_back() {
             Ok(lib.get_note_from_addr(symbol)?)
