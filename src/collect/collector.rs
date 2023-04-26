@@ -1,8 +1,8 @@
-use std::{collections::HashSet, sync::mpsc, thread, time::Duration};
+use std::{collections::HashSet, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
-use log::{error, info, warn};
-use signal_hook::{consts::SIGINT, iterator::Signals};
+use log::{info, warn};
+use signal_hook::low_level::signal_name;
 
 use super::{
     cli::Collect,
@@ -20,6 +20,7 @@ use crate::{
         },
         kernel::Symbol,
         probe::{self, Probe, ProbeManager},
+        signals::Running,
     },
     module::{get_modules, ModuleId, Modules},
 };
@@ -56,6 +57,10 @@ pub(crate) trait Collector {
     fn start(&mut self) -> Result<()> {
         Ok(())
     }
+    /// Stop the group of events.
+    fn stop(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Main collectors object and API.
@@ -65,6 +70,7 @@ pub(crate) struct Collectors {
     cli: CliConfig,
     factory: Box<dyn EventFactory>,
     known_kernel_types: HashSet<String>,
+    run: Running,
 }
 
 impl Collectors {
@@ -103,6 +109,7 @@ impl Collectors {
             known_kernel_types: HashSet::new(),
             cli,
             factory,
+            run: Running::new(),
         })
     }
 
@@ -118,6 +125,11 @@ impl Collectors {
 
     /// Initialize all collectors by calling their `init()` function.
     pub(crate) fn init(&mut self) -> Result<()> {
+        for sig in signal_hook::consts::TERM_SIGNALS {
+            info!("Registering {}", signal_name(*sig).unwrap());
+            self.run.register_signal(*sig)?;
+        }
+
         let collect = self
             .cli
             .subcommand
@@ -189,6 +201,23 @@ impl Collectors {
         Ok(())
     }
 
+    /// Stop the event retrieval for all collectors in the group by calling
+    /// their `stop()` function. All the collectors are in charge to clean-up
+    /// their temporary side effects and exit gracefully.
+    pub(crate) fn stop(&mut self) -> Result<()> {
+        self.modules.collectors().iter_mut().for_each(|(id, c)| {
+            info!("Stopping {}", id.to_str());
+            if c.stop().is_err() {
+                warn!("Could not stop '{}'", id.to_str());
+            }
+        });
+
+        info!("Stopping events");
+        self.factory.stop()?;
+
+        Ok(())
+    }
+
     /// Starts the processing loop and block until we get a single SIGINT
     /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
     /// collector cmd loop.
@@ -204,34 +233,12 @@ impl Collectors {
         let mut json = JsonFormat::default();
         let mut processors = get_processors(&mut json, collect.args()?)?;
 
-        let mut sigint = Signals::new([SIGINT])?;
-        let (txc, rxc) = mpsc::channel();
-
-        thread::spawn(move || {
-            // Only wait for a single SIGINT to let the user really interrupt us
-            // in case it's needed.
-            sigint.wait();
-            info!("Received SIGINT, terminating...");
-
-            if let Err(e) = txc.send(()) {
-                error!(
-                    "Failed to send message after receiving ctrl+c signal: {}",
-                    e
-                );
-            }
-        });
-
-        loop {
+        while self.run.running() {
             match self.factory.next_event(Some(Duration::from_secs(1)))? {
                 Some(event) => processors
                     .iter_mut()
                     .try_for_each(|p| p.process_one(&event))?,
                 None => continue,
-            }
-
-            // If we're interrupted, break the loop to allow nicely exiting.
-            if rxc.try_recv().is_ok() {
-                break;
             }
         }
 

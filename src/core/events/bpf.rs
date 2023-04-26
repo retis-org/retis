@@ -10,7 +10,9 @@ use log::error;
 use plain::Plain;
 
 use super::Event;
-use crate::{core::events::*, event_section, event_section_factory, module::ModuleId};
+use crate::{
+    core::events::*, core::signals::Running, event_section, event_section_factory, module::ModuleId,
+};
 
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
@@ -22,6 +24,9 @@ pub(crate) struct BpfEventsFactory {
     map: libbpf_rs::Map,
     /// Receiver channel to retrieve events from the processing loop.
     rxc: Option<mpsc::Receiver<Event>>,
+    /// Polling thread handle.
+    handle: Option<thread::JoinHandle<()>>,
+    event_run: Running,
 }
 
 #[cfg(not(test))]
@@ -42,7 +47,12 @@ impl BpfEventsFactory {
         )
         .or_else(|e| bail!("Failed to create events map: {}", e))?;
 
-        Ok(BpfEventsFactory { map, rxc: None })
+        Ok(BpfEventsFactory {
+            map,
+            rxc: None,
+            handle: None,
+            event_run: Running::new(),
+        })
     }
 
     /// Get the events map fd for reuse.
@@ -67,8 +77,12 @@ impl EventFactory for BpfEventsFactory {
         let (txc, rxc) = mpsc::channel();
         self.rxc = Some(rxc);
 
+        let run_state = self.event_run.clone();
         // Closure to handle the raw events coming from the BPF part.
         let process_event = move |data: &[u8]| -> i32 {
+            if !run_state.running() {
+                return -4;
+            }
             // Parse the raw event.
             let event = match parse_raw_event(data, &mut section_factories) {
                 Ok(event) => event,
@@ -91,15 +105,35 @@ impl EventFactory for BpfEventsFactory {
         let mut rb = libbpf_rs::RingBufferBuilder::new();
         rb.add(&self.map, process_event)?;
         let rb = rb.build()?;
-
+        let rs = self.event_run.clone();
         // Start an event polling thread.
-        thread::spawn(move || loop {
-            if let Err(e) = rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS)) {
-                error!("Unexpected error while polling ({e})");
+        self.handle = Some(thread::spawn(move || {
+            while rs.running() {
+                if let Err(e) = rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS)) {
+                    match e {
+                        // Received EINTR, exit without printing any error.
+                        libbpf_rs::Error::System(4) => (),
+                        _ => error!("Unexpected error while polling ({e})"),
+                    }
+                    break;
+                }
             }
-        });
+        }));
 
         Ok(())
+    }
+
+    /// Stops the event polling mechanism. The dedicated thread is stopped
+    /// joining the execution
+    fn stop(&mut self) -> Result<()> {
+        match self.handle.take() {
+            Some(th) => {
+                self.event_run.terminate();
+                th.join()
+                    .or_else(|_| bail!("while joining bpf event thread"))
+            }
+            None => Ok(()),
+        }
     }
 
     /// Retrieve the next event. This is a blocking call and never returns EOF.
@@ -289,6 +323,9 @@ impl EventFactory for BpfEventsFactory {
     }
     fn next_event(&mut self, _: Option<Duration>) -> Result<Option<Event>> {
         Ok(Some(Event::new()))
+    }
+    fn stop(&mut self) -> Result<()> {
+        Ok(())
     }
 }
 

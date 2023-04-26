@@ -39,6 +39,7 @@ fn main() -> Result<()> {
 
             // Starts a loop.
             collectors.process()?;
+            collectors.stop()?;
         }
         _ => {
             error!("not implemented");

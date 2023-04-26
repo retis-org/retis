@@ -15,6 +15,7 @@ use crate::{
             manager::{ProbeManager, PROBE_MAX},
             Hook, Probe,
         },
+        signals::Running,
         workaround::SendableMap,
     },
     module::ModuleId,
@@ -33,6 +34,7 @@ const TRACKING_OLD_LIMIT: u64 = 60;
 #[derive(Default)]
 pub(crate) struct SkbTrackingCollector {
     garbage_collector: Option<thread::JoinHandle<()>>,
+    state: Running,
 }
 
 impl Collector for SkbTrackingCollector {
@@ -50,6 +52,16 @@ impl Collector for SkbTrackingCollector {
 
     fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         self.init_tracking(probes)
+    }
+
+    fn stop(&mut self) -> Result<()> {
+        match self.garbage_collector.take() {
+            Some(gc) => {
+                self.state.terminate();
+                gc.join().or_else(|_| bail!("failed to stop gc"))
+            }
+            None => Ok(()),
+        }
     }
 }
 
@@ -128,6 +140,7 @@ impl SkbTrackingCollector {
         tracking_config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
         probes.add_probe(Probe::kprobe(symbol)?)?;
 
+        let run_state = self.state.clone();
         // Take care of gargabe collection of tracking info. This should be done
         // in the BPF part for most if not all skbs but we might lose some
         // information (and tracked functions might fail resulting in incorrect
@@ -135,7 +148,7 @@ impl SkbTrackingCollector {
         self.garbage_collector = Some(thread::spawn(move || {
             let tracking_map = tracking_map.get_mut();
 
-            loop {
+            while run_state.running() {
                 // Let's run every SKB_TRACKING_GC_INTERVAL seconds.
                 thread::sleep(Duration::from_secs(SKB_TRACKING_GC_INTERVAL));
                 let now =
