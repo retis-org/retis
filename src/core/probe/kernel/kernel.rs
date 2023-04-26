@@ -40,12 +40,13 @@ impl KernelProbe {
     }
 
     /// Set, for probes only, a single config option used to change the default probe behavior.
-    pub(crate) fn set_option(&mut self, opt: &ProbeOption) {
+    pub(crate) fn set_option(&mut self, opt: &ProbeOption) -> Result<()> {
         match opt {
             ProbeOption::StackTrace => {
                 self.config.stack_trace = 1;
             }
         }
+        Ok(())
     }
 }
 

@@ -80,9 +80,20 @@ impl ProbeManager {
         Ok(mgr)
     }
 
-    /// Add a probe option for later fixup during the attach phase
-    pub(crate) fn add_probe_opt(&mut self, opt: ProbeOption) {
+    /// Set a probe option for later fixup during the attach phase. A given
+    /// option can only be set once as those are global and we can't decide
+    /// which version to keep.
+    pub(crate) fn set_probe_opt(&mut self, opt: ProbeOption) -> Result<()> {
+        if self
+            .options
+            .iter()
+            .any(|o| std::mem::discriminant(o) == std::mem::discriminant(&opt))
+        {
+            bail!("Option is already set");
+        }
+
         self.options.push(opt);
+        Ok(())
     }
 
     /// Request to attach a dynamic probe to `Probe`.
@@ -330,7 +341,7 @@ impl ProbeSet {
                 Probe::Kprobe(ref mut p)
                 | Probe::Kretprobe(ref mut p)
                 | Probe::RawTracepoint(ref mut p) => {
-                    options.iter().for_each(|c| p.set_option(c));
+                    options.iter().try_for_each(|c| p.set_option(c))?;
                     let config = unsafe { plain::as_bytes(&p.config) };
                     config_map.update(&p.ksym.to_ne_bytes(), config, libbpf_rs::MapFlags::ANY)?;
                 }
