@@ -46,12 +46,15 @@ impl Probe {
     }
 }
 
-// Use mem::variant_count::<Probe>() when available in stable.
-pub(crate) const PROBE_VARIANTS: usize = 4;
-
 impl Probe {
+    /// Use the underlying symbol to get its name and use it as a key which can
+    /// be used to differenciate between probes.
+    pub(crate) fn key(&self) -> String {
+        format!("{self}")
+    }
+
     /// We do use probe types as indexes, the following makes it easy.
-    pub(crate) fn as_key(&self) -> usize {
+    pub(crate) fn type_key(&self) -> usize {
         match self {
             Probe::Kprobe(_) => 0,
             Probe::Kretprobe(_) => 1,
