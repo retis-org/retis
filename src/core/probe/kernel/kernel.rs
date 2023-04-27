@@ -17,6 +17,7 @@ use crate::{event_section, event_section_factory};
 use crate::core::kernel::inspect;
 
 /// Kernel encapsulates all the information about a kernel probe (kprobe or tracepoint) needed to attach to it.
+#[derive(Clone)]
 pub(crate) struct KernelProbe {
     /// Symbol name
     pub(crate) symbol: Symbol,
