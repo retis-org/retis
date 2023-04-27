@@ -35,6 +35,18 @@ struct {
 	__type(value, struct upcall_context);
 } inflight_upcalls SEC(".maps");
 
+/* Used to track enqueue operations through a netlink socket.
+ * When a packet that satisfied the filter is enqueued, its queue_id
+ * is stored in the map.
+ * When the same packet is dequeued in userspace, it's removed from the map.
+  Please keep in sync with its Rust counterpart in crate::module::ovs::ovs.rs. */
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, u32);
+	__type(value, u32);
+} inflight_enqueue SEC(".maps");
+
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_INFLIGHT_UPCALLS);

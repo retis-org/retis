@@ -32,6 +32,7 @@ pub(crate) struct OvsCollector {
     track: bool,
     inflight_upcalls_map: Option<libbpf_rs::Map>,
     inflight_exec_cmd_map: Option<libbpf_rs::Map>,
+    inflight_enqueue_map: Option<libbpf_rs::Map>,
     /* Batch tracking maps. */
     upcall_batches: Option<libbpf_rs::Map>,
     pid_to_batch: Option<libbpf_rs::Map>,
@@ -70,6 +71,10 @@ impl Collector for OvsCollector {
 
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
+        if self.track {
+            self.inflight_enqueue_map = Some(Self::create_inflight_enqueue_cmd_map()?);
+        }
+
         // Add targetted hooks.
         // Upcall related hooks:
         self.add_upcall_hooks(probes)?;
@@ -85,6 +90,24 @@ impl Collector for OvsCollector {
 }
 
 impl OvsCollector {
+    fn create_inflight_enqueue_cmd_map() -> Result<libbpf_rs::Map> {
+        // Please keep in sync with its C counterpart in bpf/ovs_common.h
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+
+        libbpf_rs::Map::create(
+            libbpf_rs::MapType::Hash,
+            Some("inflight_enqueue"),
+            mem::size_of::<u32>() as u32,
+            mem::size_of::<u32>() as u32,
+            8192,
+            &opts,
+        )
+        .or_else(|e| bail!("Could not create the inflight_enqueue map: {}", e))
+    }
+
     fn create_inflight_exec_cmd_map() -> Result<libbpf_rs::Map> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         let opts = libbpf_sys::bpf_map_create_opts {
@@ -140,6 +163,7 @@ impl OvsCollector {
         struct UserUpcallInfo {
             queue_id: u32,
             process_ops: u8,
+            skip_event: u8,
         }
         #[repr(C, packed)]
         struct UpcallBatch {
@@ -221,6 +245,13 @@ impl OvsCollector {
             // Upcall enqueue.
             let mut kernel_enqueue_hook = Hook::from(hooks::kernel_enqueue::DATA);
             kernel_enqueue_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
+            kernel_enqueue_hook.reuse_map(
+                "inflight_enqueue",
+                self.inflight_enqueue_map
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("inflight enqueue map not created"))?
+                    .fd(),
+            )?;
             let mut probe = Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?;
             probe.add_hook(kernel_enqueue_hook)?;
             probes.register_probe(probe)?;
@@ -234,24 +265,24 @@ impl OvsCollector {
         let mut exec_action_hook = Hook::from(hooks::kernel_exec_tp::DATA);
 
         if self.track {
-            let inflight_map = Self::create_inflight_exec_cmd_map()?;
+            let inflight_exec_map = Self::create_inflight_exec_cmd_map()?;
 
-            exec_action_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
+            exec_action_hook.reuse_map("inflight_exec_cmd", inflight_exec_map.fd())?;
 
             let mut exec_cmd_hook = Hook::from(hooks::kernel_exec_cmd::DATA);
             let cmd_execute_sym = Symbol::from_name("ovs_packet_cmd_execute")?;
-            exec_cmd_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
+            exec_cmd_hook.reuse_map("inflight_exec_cmd", inflight_exec_map.fd())?;
             let mut probe = Probe::kprobe(cmd_execute_sym.clone())?;
             probe.add_hook(exec_cmd_hook)?;
             probes.register_probe(probe)?;
 
             let mut exec_cmd_ret_hook = Hook::from(hooks::kernel_exec_cmd_ret::DATA);
-            exec_cmd_ret_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
+            exec_cmd_ret_hook.reuse_map("inflight_exec_cmd", inflight_exec_map.fd())?;
             let mut probe = Probe::kretprobe(cmd_execute_sym)?;
             probe.add_hook(exec_cmd_ret_hook)?;
             probes.register_probe(probe)?;
 
-            self.inflight_exec_cmd_map = Some(inflight_map);
+            self.inflight_exec_cmd_map = Some(inflight_exec_map);
         }
 
         // Action execute probe.
@@ -283,10 +314,19 @@ impl OvsCollector {
             .ok_or_else(|| anyhow!("pid_to_batch map not created"))?
             .fd();
 
+        let mut user_recv_hook = Hook::from(hooks::user_recv_upcall::DATA);
+        user_recv_hook.reuse_map(
+            "inflight_enqueue",
+            self.inflight_enqueue_map
+                .as_ref()
+                .ok_or_else(|| anyhow!("inflight enqueue map not created"))?
+                .fd(),
+        )?;
+
         let mut batch_probes = vec![
             (
                 Probe::usdt(UsdtProbe::new(&ovs, "dpif_recv::recv_upcall")?)?,
-                Hook::from(hooks::user_recv_upcall::DATA),
+                user_recv_hook,
             ),
             (
                 Probe::usdt(UsdtProbe::new(
@@ -307,7 +347,6 @@ impl OvsCollector {
             probe.add_hook(hook)?;
             probes.register_probe(probe)?;
         }
-
         Ok(())
     }
 }
