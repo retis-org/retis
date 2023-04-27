@@ -50,6 +50,7 @@ struct {
 /* Context saved between the begining and end of ovs_execute_actions calls. */
 struct execute_actions_ctx {
 	struct sk_buff *skb;
+	bool command;
 } __attribute__((packed));
 
 /* Map used to store context between the begining and end of
@@ -60,6 +61,17 @@ struct {
 	__type(key, u64);
 	__type(value, struct execute_actions_ctx);
 } inflight_exec SEC(".maps");
+
+/* Used to track flow execute operations through a netlink socket.
+ * When userspace puts a packet on a netlink socket to be executed, it saves
+ * it's queue id. When it's received from the kernel, the queue id is looked up.
+ * Please keep in sync with its Rust counterpart in crate::module::ovs::ovs.rs. */
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 8192);
+	__type(key, u32);
+	__type(value, u32);
+} flow_exec_tracking SEC(".maps");
 
 #define PACKET_HASH_SIZE 64
 /* Packet data to be used to for hashing.
@@ -109,6 +121,18 @@ static __always_inline u32 hash_skb(struct packet_buffer *buff,
 		size = len;
 	}
 	return hash_packet(buff, BPF_CORE_READ(skb, data), size);
+}
+
+static __always_inline u32 queue_id_gen_skb(struct sk_buff *skb)
+{
+	int zero = 0;
+	struct packet_buffer *buff = bpf_map_lookup_elem(&packet_buffers, &zero);
+	/* This should always succeed but checks are still needed to keep the
+	* verifier happy. */
+	if (!buff)
+		return 0;
+
+	return hash_skb(buff, skb);
 }
 
 #endif /* __MODULE_OVS_COMMON__ */

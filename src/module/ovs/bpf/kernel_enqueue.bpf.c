@@ -14,16 +14,6 @@ struct upcall_enqueue_event {
 	u32 queue_id;
 } __attribute__((packed));
 
-static __always_inline u32 queue_id_gen(struct sk_buff *skb)
-{
-	int zero = 0;
-	struct packet_buffer *buff = bpf_map_lookup_elem(&packet_buffers, &zero);
-	if (!buff)
-		return 0;
-
-	return hash_skb(buff, skb);
-}
-
 static __always_inline u8 update_inflight_enqueue(u32 queue_id)
 {
 	uint32_t zero = 0;
@@ -72,7 +62,7 @@ DEFINE_HOOK_RAW(
 	enqueue->port = BPF_CORE_READ(upcall, portid);
 	enqueue->cmd = BPF_CORE_READ(upcall, cmd);
 	enqueue->ret = (int) ctx->regs.ret;
-	enqueue->queue_id = queue_id_gen(skb);
+	enqueue->queue_id = queue_id_gen_skb(skb);
 
 	update_inflight_enqueue(enqueue->queue_id);
 

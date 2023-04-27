@@ -15,7 +15,7 @@ struct recv_upcall_event {
 	u8 batch_idx;
 } __attribute__((packed));
 
-static __always_inline u32 queue_id_gen(void *data, u32 len)
+static __always_inline u32 queue_id_gen_data(void *data, u32 len)
 {
 	int zero = 0;
 	struct packet_buffer *buff =
@@ -33,7 +33,7 @@ DEFINE_USDT_HOOK (
 	struct upcall_batch *batch;
 	struct recv_upcall_event *recv_event;
 	u32 size = (u32) ctx->args[3];
-	u32 queue_id = queue_id_gen((void *) ctx->args[2], size);
+	u32 queue_id = queue_id_gen_data((void *) ctx->args[2], size);
 	bool skip_event = false;
 
 	if (!bpf_map_lookup_elem(&inflight_enqueue, &queue_id)) {

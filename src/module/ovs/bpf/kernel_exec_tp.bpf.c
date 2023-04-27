@@ -48,10 +48,11 @@ static __always_inline void handle_tracking(struct retis_context *ctx,
 }
 
 /* Hook for ovs_do_execute_action tracepoint. */
-DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+DEFINE_HOOK_RAW(
 	struct nlattr *attr;
 	struct sw_flow_key *key;
 	struct exec_event *exec;
+	struct execute_actions_ctx *ectx;
 	u64 tid = bpf_get_current_pid_tgid();
 
 	key = (struct sw_flow_key *) ctx->regs.reg[2];
@@ -62,10 +63,10 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	if (!attr)
 		return 0;
 
-	if (!bpf_map_lookup_elem(&inflight_exec, &tid)) {
-		/* Filtering is done at the ovs_execute_actions kprobe. */
+	ectx = bpf_map_lookup_elem(&inflight_exec, &tid);
+	/* Filtering is done at the ovs_execute_actions kprobe. */
+	if (!ectx)
 		return 0;
-	}
 
 	exec = get_event_section(event, COLLECTOR_OVS, OVS_DP_ACTION,
 				 sizeof(*exec));
@@ -74,7 +75,11 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 
 	exec->action = nla_type(attr);
 	exec->recirc_id = BPF_CORE_READ(key, recirc_id);
-	handle_tracking(ctx, event);
+	/* Do not calculate tracking information if it's not a flow_exec action
+	 * upcall. */
+	if (ectx->command) {
+		handle_tracking(ctx, event);
+	}
 
 	// Add action-specific data for some actions.
 	switch (exec->action) {

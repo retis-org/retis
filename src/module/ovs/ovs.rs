@@ -32,6 +32,8 @@ pub(crate) struct OvsCollector {
     track: bool,
     inflight_upcalls_map: Option<libbpf_rs::Map>,
     inflight_exec_map: Option<libbpf_rs::Map>,
+
+    flow_exec_tracking: Option<libbpf_rs::Map>,
     inflight_enqueue_map: Option<libbpf_rs::Map>,
     /* Batch tracking maps. */
     upcall_batches: Option<libbpf_rs::Map>,
@@ -73,6 +75,7 @@ impl Collector for OvsCollector {
 
         if self.track {
             self.inflight_enqueue_map = Some(Self::create_inflight_enqueue_cmd_map()?);
+            self.flow_exec_tracking = Some(Self::create_flow_exec_tracking_map()?);
         }
 
         // Add targetted hooks.
@@ -90,6 +93,24 @@ impl Collector for OvsCollector {
 }
 
 impl OvsCollector {
+    fn create_flow_exec_tracking_map() -> Result<libbpf_rs::Map> {
+        // Please keep in sync with its C counterpart in bpf/ovs_common.h
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+
+        libbpf_rs::Map::create(
+            libbpf_rs::MapType::Hash,
+            Some("flow_exec_tracking"),
+            mem::size_of::<u32>() as u32,
+            mem::size_of::<u32>() as u32,
+            8192,
+            &opts,
+        )
+        .or_else(|e| bail!("Could not create the flow_exec_tracking map: {}", e))
+    }
+
     fn create_inflight_enqueue_cmd_map() -> Result<libbpf_rs::Map> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         let opts = libbpf_sys::bpf_map_create_opts {
@@ -113,6 +134,7 @@ impl OvsCollector {
         #[repr(C, packed)]
         struct ExecuteActionsContext {
             skb: u64,
+            command: bool,
         }
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
@@ -273,17 +295,31 @@ impl OvsCollector {
 
             exec_action_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
 
-            let mut exec_cmd_hook = Hook::from(hooks::kernel_exec_actions::DATA);
+            let mut exec_actions_hook = Hook::from(hooks::kernel_exec_actions::DATA);
             let ovs_execute_actions_sym = Symbol::from_name("ovs_execute_actions")?;
-            exec_cmd_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
+            exec_actions_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
+            exec_actions_hook.reuse_map(
+                "flow_exec_tracking",
+                self.flow_exec_tracking
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("flow_exec_tracking map not created"))?
+                    .fd(),
+            )?;
             let mut probe = Probe::kprobe(ovs_execute_actions_sym.clone())?;
-            probe.add_hook(exec_cmd_hook)?;
+            probe.add_hook(exec_actions_hook)?;
             probes.register_probe(probe)?;
 
-            let mut exec_cmd_ret_hook = Hook::from(hooks::kernel_exec_actions_ret::DATA);
-            exec_cmd_ret_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
-            let mut probe = Probe::kprobe(ovs_execute_actions_sym)?;
-            probe.add_hook(exec_cmd_ret_hook)?;
+            let mut exec_actions_ret_hook = Hook::from(hooks::kernel_exec_actions_ret::DATA);
+            exec_actions_ret_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
+            exec_actions_ret_hook.reuse_map(
+                "flow_exec_tracking",
+                self.flow_exec_tracking
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("flow_exec_tracking map not created"))?
+                    .fd(),
+            )?;
+            let mut probe = Probe::kretprobe(ovs_execute_actions_sym)?;
+            probe.add_hook(exec_actions_ret_hook)?;
             probes.register_probe(probe)?;
 
             self.inflight_exec_map = Some(inflight_exec_map);
@@ -327,6 +363,14 @@ impl OvsCollector {
                 .fd(),
         )?;
 
+        let mut user_exec_hook = Hook::from(hooks::user_op_exec::DATA);
+        user_exec_hook.reuse_map(
+            "flow_exec_tracking",
+            self.flow_exec_tracking
+                .as_ref()
+                .ok_or_else(|| anyhow!("flow_exec_tracking map not created"))?
+                .fd(),
+        )?;
         let mut batch_probes = vec![
             (
                 Probe::usdt(UsdtProbe::new(&ovs, "dpif_recv::recv_upcall")?)?,
@@ -337,7 +381,7 @@ impl OvsCollector {
                     &ovs,
                     "dpif_netlink_operate__::op_flow_execute",
                 )?)?,
-                Hook::from(hooks::user_op_exec::DATA),
+                user_exec_hook,
             ),
             (
                 Probe::usdt(UsdtProbe::new(&ovs, "dpif_netlink_operate__::op_flow_put")?)?,
