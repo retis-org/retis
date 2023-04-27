@@ -10,7 +10,7 @@ use crate::core::{
 };
 use crate::{event_section, event_section_factory};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct UsdtProbe {
     /// The provider name.
     pub provider: String,

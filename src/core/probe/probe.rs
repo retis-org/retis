@@ -9,6 +9,7 @@ use crate::core::kernel;
 /// Probe types supported by this program. This is the main object given to
 /// tracing APIs and it does contain everything needed to target a symbol in a
 /// given running program.
+#[derive(Clone)]
 pub(crate) enum Probe {
     Kprobe(KernelProbe),
     #[allow(dead_code)]
