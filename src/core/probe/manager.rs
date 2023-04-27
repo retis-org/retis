@@ -15,7 +15,7 @@ use super::{
 use crate::core::filters::Filter;
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
-pub(crate) const PROBE_MAX: usize = 1024; // TODO add checks on probe registration.
+pub(crate) const PROBE_MAX: usize = 1024;
 pub(super) const HOOK_MAX: usize = 10;
 
 /// ProbeManager is the main object providing an API for consumers to register probes, hooks, maps,
@@ -109,6 +109,8 @@ impl ProbeManager {
                 return Ok(());
             }
         }
+
+        self.check_probe_max()?;
 
         // If not, insert it in the generic probe list, if not there already.
         self.generic_probes.entry(key).or_insert(probe);
@@ -216,6 +218,8 @@ impl ProbeManager {
             }
         }
 
+        self.check_probe_max()?;
+
         // New target, let's build a new probe set.
         let mut set = ProbeSet {
             supports_generic_hooks: match &probe {
@@ -275,6 +279,22 @@ impl ProbeManager {
 
         // All probes loaded, issue an info log.
         info!("{} probe(s) loaded", attached);
+
+        Ok(())
+    }
+
+    fn check_probe_max(&self) -> Result<()> {
+        let mut size: usize = self.generic_probes.len();
+        self.targeted_probes
+            .iter()
+            .for_each(|set| size += set.probes.len());
+
+        if size >= PROBE_MAX {
+            bail!(
+                "Can't register probe, reached maximum capacity ({})",
+                PROBE_MAX
+            );
+        }
 
         Ok(())
     }
