@@ -195,13 +195,18 @@ static __always_inline struct upcall_batch *batch_process_recv(u64 timestamp,
 }
 
 /* Process an operation event and populate the event with the batch
- * information. */
+ * information.
+ * If an event is generated, it's returned in *op. */
 static __always_inline int batch_process_op(enum ovs_operation_type type,
-					    struct retis_raw_event *event)
+					    struct retis_raw_event *event,
+					    struct ovs_operation_event **op)
 {
 	struct upcall_batch *batch;
 	struct user_upcall_info *info;
 	u8 op_flag = 0x1 << type;
+
+	if (op)
+		*op = NULL;
 
 	batch = batch_get();
 	if (!batch)
@@ -237,6 +242,9 @@ static __always_inline int batch_process_op(enum ovs_operation_type type,
 	op_event->queue_id = info->queue_id;
 	op_event->batch_ts = batch->leader_ts;
 	op_event->batch_idx = batch->current_upcall;
+
+	if (op)
+		*op = op_event;
 
 	return 0;
 }
