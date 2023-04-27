@@ -195,6 +195,10 @@ impl ProbeManager {
     /// mgr.register_hook_to(hook::DATA, Probe::kprobe(symbol).unwrap()).unwrap();
     /// ```
     pub(crate) fn register_hook_to(&mut self, hook: Hook, probe: Probe) -> Result<()> {
+        if self.generic_hooks.len() == HOOK_MAX {
+            bail!("Hook list is already full");
+        }
+
         let key = probe.key();
 
         // First check if the target isn't already registered to the generic
@@ -229,10 +233,6 @@ impl ProbeManager {
             ..Default::default()
         };
         set.probes.insert(key, probe);
-
-        if self.generic_hooks.len() == HOOK_MAX {
-            bail!("Hook list is already full");
-        }
         set.hooks.push(hook);
 
         self.targeted_probes.push(set);
