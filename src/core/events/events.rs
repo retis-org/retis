@@ -38,7 +38,7 @@ use std::{any::Any, collections::HashMap, time::Duration};
 
 use anyhow::{bail, Result};
 
-use super::bpf::BpfRawSection;
+use super::{bpf::BpfRawSection, format::*};
 use crate::module::ModuleId;
 
 /// Full event. Internal representation. The first key is the collector from
@@ -85,6 +85,18 @@ impl Event {
     }
 }
 
+impl EventFormat for Event {
+    fn format(&self, format: &FormatOpts) -> String {
+        ModuleId::variants()
+            .iter()
+            .map(|owner| self.0.get(owner))
+            .filter(|e| e.is_some())
+            .map(|e| e.unwrap().format(format))
+            .collect::<Vec<String>>()
+            .join(" ")
+    }
+}
+
 pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
 
 /// Implemented by objects generating events from a given source (BPF, file,
@@ -118,8 +130,8 @@ pub(crate) trait EventFactory {
 /// having a proper structure is encouraged as it allows easier consumption at
 /// post-processing. Those objects can also define their own specialized
 /// helpers.
-pub(crate) trait EventSection: EventSectionInternal {}
-impl<T> EventSection for T where T: EventSectionInternal {}
+pub(crate) trait EventSection: EventSectionInternal + EventFormat {}
+impl<T> EventSection for T where T: EventSectionInternal + EventFormat {}
 
 /// EventSection helpers defined in the core for all events. Common definition
 /// needs Sized but that is a requirement for all EventSection.

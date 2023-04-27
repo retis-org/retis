@@ -58,7 +58,20 @@ pub(crate) struct KernelEvent {
     pub(crate) probe_type: String,
     pub(crate) stack_trace: Option<Vec<String>>,
 }
-
+impl EventFormat for KernelEvent {
+    fn format(&self, _format: &FormatOpts) -> String {
+        format!(
+            "({}) {}",
+            match self.probe_type.as_str() {
+                "raw_tracepoint" => "T".to_string(),
+                "kprobe" => "P".to_string(),
+                "kretprobe" => "R".to_string(),
+                _ => "?".to_string(),
+            },
+            self.symbol
+        )
+    }
+}
 #[derive(Default)]
 #[event_section_factory(KernelEvent)]
 pub(crate) struct KernelEventFactory {

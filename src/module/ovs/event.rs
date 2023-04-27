@@ -19,6 +19,12 @@ pub(crate) struct OvsEvent {
     pub(crate) event: OvsEventType,
 }
 
+impl EventFormat for OvsEvent {
+    fn format(&self, format: &FormatOpts) -> String {
+        format!("ovs: {}", self.event.format(format))
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(OvsEvent)]
 pub(crate) struct OvsEventFactory {}
@@ -79,6 +85,22 @@ pub(crate) enum OvsEventType {
     Undefined,
 }
 
+impl OvsEventType {
+    // Dispatch to_string to variants
+    fn format(&self, format: &FormatOpts) -> String {
+        use OvsEventType::*;
+        match self {
+            Upcall(e) => e.format(format),
+            UpcallEnqueue(e) => e.format(format),
+            UpcallReturn(e) => e.format(format),
+            RecvUpcall(e) => e.format(format),
+            Operation(e) => e.format(format),
+            Action(e) => e.format(format),
+            Undefined => "?".to_string(),
+        }
+    }
+}
+
 // This struct is also used for ebpf decoding.
 // Please keep it sync with its ebpf counterpart in
 // "bpf/kernel_upcall_tp.bpf.c".
@@ -98,6 +120,13 @@ pub(crate) struct UpcallEvent {
     pub(crate) cpu: u32,
 }
 unsafe impl Plain for UpcallEvent {}
+
+impl UpcallEvent {
+    fn format(&self, _format: &FormatOpts) -> String {
+        let cpu = self.cpu;
+        format!("UPCALL port = {}, cpu = {}", self.cmd, cpu)
+    }
+}
 
 // This struct is also used for ebpf decoding.
 // Please keep it sync with its ebpf counterpart in
@@ -122,6 +151,18 @@ pub(crate) struct UpcallEnqueueEvent {
 }
 unsafe impl Plain for UpcallEnqueueEvent {}
 
+impl UpcallEnqueueEvent {
+    fn format(&self, _format: &FormatOpts) -> String {
+        let queue = self.queue_id;
+        let ts = self.upcall_ts;
+        let cpu = self.upcall_cpu;
+        let ret = self.ret;
+        format!(
+            "UPCALL_EQUEUE ({}/{}) queue_id = {}, ret: {}",
+            cpu, ts, queue, ret
+        )
+    }
+}
 // This struct is also used for ebpf decoding.
 // Please keep it sync with its ebpf counterpart in
 // "bpf/kernel_upcall_ret.bpf.c".
@@ -134,6 +175,15 @@ pub(crate) struct UpcallReturnEvent {
     pub(crate) ret: i32,
 }
 unsafe impl Plain for UpcallReturnEvent {}
+
+impl UpcallReturnEvent {
+    fn format(&self, _format: &FormatOpts) -> String {
+        let cpu = self.upcall_cpu;
+        let ts = self.upcall_ts;
+        let ret = self.ret;
+        format!("UPCALL_RET ({}/{}), ret = {}", cpu, ts, ret)
+    }
+}
 
 // This struct is also used for ebpf decoding.
 // Please keep it sync with its ebpf counterpart in
@@ -156,6 +206,8 @@ pub(crate) struct OperationEvent {
     pub(crate) batch_idx: u8,
 }
 unsafe impl Plain for OperationEvent {}
+
+impl OperationEvent {}
 
 impl OperationEvent {
     fn operation_str(op_type: u8) -> Result<&'static str> {
@@ -186,6 +238,18 @@ impl OperationEvent {
     {
         serializer.serialize_str(OperationEvent::operation_str(*op_type).map_err(S::Error::custom)?)
     }
+
+    fn format(&self, _format: &FormatOpts) -> String {
+        let queue = self.queue_id;
+        format!(
+            "FLOW_{} queue_id = {}",
+            OperationEvent::operation_str(self.op_type)
+                .unwrap_or("?")
+                .to_string()
+                .to_uppercase(),
+            queue
+        )
+    }
 }
 
 // This struct is also used for ebpf decoding.
@@ -210,6 +274,14 @@ pub(crate) struct RecvUpcallEvent {
 }
 unsafe impl Plain for RecvUpcallEvent {}
 
+impl RecvUpcallEvent {
+    fn format(&self, _format: &FormatOpts) -> String {
+        let queue = self.queue_id;
+        let size = self.pkt_size;
+        format!("UPCALL_RECV queue_id = {}, pkt_size = {}", queue, size)
+    }
+}
+
 /// OVS output action data.
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
 pub(crate) struct ActionEvent {
@@ -222,6 +294,25 @@ pub(crate) struct ActionEvent {
     /// an upcall.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) queue_id: Option<u32>,
+}
+
+impl ActionEvent {
+    fn format(&self, _format: &FormatOpts) -> String {
+        let mut chunks = Vec::new();
+        match self.action {
+            OvsAction::Output(a) => chunks.push(format!("output port: {}", a.port)),
+            other => chunks.push(format!("{:?} ", other)),
+        }
+
+        if self.recirc_id != 0 {
+            chunks.push(format!("recirc_id = {}", self.recirc_id));
+        }
+
+        if let Some(p) = self.queue_id {
+            chunks.push(format!("queue_id: {}", p));
+        }
+        format!("EXEC {}", chunks.join(" "))
+    }
 }
 
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]

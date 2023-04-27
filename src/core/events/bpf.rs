@@ -9,7 +9,10 @@ use anyhow::{anyhow, bail, Result};
 use log::error;
 use plain::Plain;
 
-use super::Event;
+use super::{
+    format::{EventFormat, FormatOpts},
+    Event,
+};
 use crate::{
     core::events::*, core::signals::Running, event_section, event_section_factory, module::ModuleId,
 };
@@ -299,6 +302,13 @@ pub(crate) struct CommonEvent {
 
 unsafe impl Plain for CommonEvent {}
 
+impl EventFormat for CommonEvent {
+    fn format(&self, _format: &FormatOpts) -> String {
+        let ts = self.timestamp;
+        format!("{}", ts)
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(CommonEvent)]
 pub(crate) struct CommonEventFactory {}
@@ -381,7 +391,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{EventSection, EventSectionFactory};
+    use crate::{core::events::format::EventFormat, EventSection, EventSectionFactory};
 
     const DATA_TYPE_U64: u8 = 1;
     const DATA_TYPE_U128: u8 = 2;
@@ -391,6 +401,12 @@ mod tests {
         field0: Option<u64>,
         field1: Option<u64>,
         field2: Option<u64>,
+    }
+
+    impl EventFormat for TestEvent {
+        fn format(&self, _format: &FormatOpts) -> String {
+            String::new()
+        }
     }
 
     impl RawEventSectionFactory for TestEvent {

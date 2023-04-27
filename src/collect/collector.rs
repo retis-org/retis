@@ -1,19 +1,22 @@
-use std::{collections::HashSet, thread::JoinHandle, time::Duration};
+use std::{
+    collections::HashSet,
+    fs::OpenOptions,
+    io::{self, BufWriter, Write},
+    thread::JoinHandle,
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
 use signal_hook::low_level::signal_name;
 
-use super::{
-    cli::Collect,
-    output::{get_processors, JsonFormat},
-};
+use super::cli::{Collect, CollectArgs, OutputFormat};
 #[cfg(not(test))]
 use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
     core::{
-        events::{bpf::BpfEventsFactory, EventFactory},
+        events::{bpf::BpfEventsFactory, format, EventFactory},
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
@@ -24,6 +27,7 @@ use crate::{
         tracking::skb_tracking::init_tracking,
     },
     module::{get_modules, ModuleId, Modules},
+    output,
 };
 
 /// Generic trait representing a collector. All collectors are required to
@@ -243,22 +247,19 @@ impl Collectors {
             .subcommand
             .as_any()
             .downcast_ref::<Collect>()
-            .ok_or_else(|| anyhow!("wrong subcommand"))?;
+            .ok_or_else(|| anyhow!("wrong subcommand"))?
+            .args()?;
 
-        // We use JSON format output for all events for now.
-        let mut json = JsonFormat::default();
-        let mut processors = get_processors(&mut json, collect.args()?)?;
+        let mut outputs = Self::get_outputs(collect)?;
 
         while self.run.running() {
             match self.factory.next_event(Some(Duration::from_secs(1)))? {
-                Some(event) => processors
-                    .iter_mut()
-                    .try_for_each(|p| p.process_one(&event))?,
+                Some(event) => outputs.iter_mut().try_for_each(|p| p.output_one(&event))?,
                 None => continue,
             }
         }
 
-        processors.iter_mut().try_for_each(|p| p.flush())?;
+        outputs.iter_mut().try_for_each(|p| p.flush())?;
         self.stop()
     }
 
@@ -310,6 +311,55 @@ impl Collectors {
 
         Ok(probes)
     }
+
+    /// Given a Formatter and cli arguments, get a list of output outputs, for
+    /// later event output processing.
+    fn get_outputs(args: &CollectArgs) -> Result<Vec<Box<dyn output::Output>>> {
+        let mut outputs = Vec::<Box<dyn output::Output>>::new();
+
+        // Write the events to a file if asked to.
+        if let Some(out) = args.out.as_ref() {
+            // File-based output is always json.
+            let formatter = Box::<format::JsonFormat>::default();
+            let mut writers: Vec<Box<dyn Write>> = Vec::new();
+            writers.push(Box::new(BufWriter::new(
+                OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(out)
+                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+            )));
+
+            // If the stdout format is also json, share the formatter.
+            if args.print {
+                if let OutputFormat::Json = args.format {
+                    writers.push(Box::new(io::stdout()));
+                }
+            }
+            outputs.push(Box::new(output::FormatAndWrite::new(formatter, writers)));
+        }
+
+        // Write events to stdout if we don't write to a file (--out) or if
+        // explicitly asked to (--print) with a non-json format.
+        if args.out.is_none() || args.print {
+            let formatter: Option<Box<dyn output::Formatter>> = match args.format {
+                OutputFormat::Json => match args.out {
+                    // If output was requested, a single JsonFormatter is used and share for both
+                    // outputs. No need to add another one.
+                    Some(_) => None,
+                    None => Some(Box::<format::JsonFormat>::default()),
+                },
+                OutputFormat::Text => Some(Box::<format::TextFormat>::default()),
+            };
+            if let Some(f) = formatter {
+                let writer: Box<dyn Write> = Box::new(io::stdout());
+                outputs.push(Box::new(output::FormatAndWrite::new(f, vec![writer])));
+            }
+        }
+
+        Ok(outputs)
+    }
 }
 
 /// Allocate collectors and retrieve a group containing them, used to perform
@@ -330,7 +380,7 @@ mod tests {
     use super::*;
     use crate::{
         cli::{MainConfig, SubCommand},
-        core::events::{bpf::BpfRawSection, *},
+        core::events::{bpf::BpfRawSection, format::*, *},
         event_section, event_section_factory,
     };
 
@@ -376,6 +426,12 @@ mod tests {
     #[event_section]
     #[event_section_factory(Self)]
     struct TestEvent {}
+
+    impl EventFormat for TestEvent {
+        fn format(&self, _format: &FormatOpts) -> String {
+            String::new()
+        }
+    }
 
     impl RawEventSectionFactory for TestEvent {
         fn from_raw(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {

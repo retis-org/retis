@@ -6,6 +6,7 @@ mod cli;
 mod collect;
 mod core;
 mod module;
+mod output;
 use cli::get_cli;
 use collect::get_collectors;
 

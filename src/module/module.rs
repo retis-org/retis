@@ -26,6 +26,7 @@ pub(crate) enum ModuleId {
     Skb = 5,
     SkbDrop = 6,
     Ovs = 7,
+    _MAX = 8,
 }
 
 impl ModuleId {
@@ -58,6 +59,7 @@ impl ModuleId {
             Skb => 5,
             SkbDrop => 6,
             Ovs => 7,
+            _MAX => 8,
         }
     }
 
@@ -87,7 +89,14 @@ impl ModuleId {
             Skb => "skb",
             SkbDrop => "skb-drop",
             Ovs => "ovs",
+            _MAX => "_max",
         }
+    }
+
+    pub(crate) fn variants() -> Vec<ModuleId> {
+        (1..ModuleId::_MAX.to_u8())
+            .map(|u| ModuleId::from_u8(u).unwrap())
+            .collect()
     }
 }
 
