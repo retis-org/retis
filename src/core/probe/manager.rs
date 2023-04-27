@@ -174,7 +174,7 @@ impl ProbeManager {
             }
         });
 
-        if self.generic_hooks.len() + max == HOOK_MAX {
+        if self.generic_hooks.len() + max >= HOOK_MAX {
             bail!("Hook list is already full");
         }
 
@@ -195,7 +195,7 @@ impl ProbeManager {
     /// mgr.register_hook_to(hook::DATA, Probe::kprobe(symbol).unwrap()).unwrap();
     /// ```
     pub(crate) fn register_hook_to(&mut self, hook: Hook, probe: Probe) -> Result<()> {
-        if self.generic_hooks.len() == HOOK_MAX {
+        if self.generic_hooks.len() >= HOOK_MAX {
             bail!("Hook list is already full");
         }
 
@@ -213,7 +213,7 @@ impl ProbeManager {
                     bail!("USDT probes only support a single hook");
                 }
 
-                if self.generic_hooks.len() + set.hooks.len() == HOOK_MAX {
+                if self.generic_hooks.len() + set.hooks.len() >= HOOK_MAX {
                     bail!("Hook list is already full");
                 }
 
