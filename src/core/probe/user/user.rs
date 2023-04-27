@@ -70,6 +70,12 @@ pub(crate) struct UserEvent {
     pub(crate) tid: i32,
 }
 
+impl EventFormat for UserEvent {
+    fn to_string(&self) -> String {
+        format!("(U) {}/{}", self.pid, self.symbol)
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(UserEvent)]
 pub(crate) struct UserEventFactory {

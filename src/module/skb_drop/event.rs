@@ -26,6 +26,12 @@ pub(crate) struct SkbDropEvent {
     pub(crate) drop_reason: String,
 }
 
+impl EventFormat for SkbDropEvent {
+    fn to_string(&self) -> String {
+        format!("drop: {}", self.drop_reason)
+    }
+}
+
 #[event_section_factory(SkbDropEvent)]
 pub(crate) struct SkbDropEventFactory {
     reasons: HashMap<u32, String>,

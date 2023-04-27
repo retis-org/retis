@@ -11,7 +11,7 @@ use anyhow::{anyhow, bail, Result};
 use log::{error, info, warn};
 use signal_hook::{consts::SIGINT, iterator::Signals};
 
-use super::cli::{Collect, CollectArgs};
+use super::cli::{Collect, CollectArgs, OutputFormat};
 #[cfg(not(test))]
 use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
 use crate::{
@@ -209,11 +209,10 @@ impl Collectors {
             .subcommand
             .as_any()
             .downcast_ref::<Collect>()
-            .ok_or_else(|| anyhow!("wrong subcommand"))?;
+            .ok_or_else(|| anyhow!("wrong subcommand"))?
+            .args()?;
 
-        // We use JSON format output for all events for now.
-        let mut json = output::JsonFormat::default();
-        let mut processors = Self::get_processors(&mut json, collect.args()?)?;
+        let mut processors = Self::get_processors(collect)?;
 
         let mut sigint = Signals::new([SIGINT])?;
         let (txc, rxc) = mpsc::channel();
@@ -290,16 +289,14 @@ impl Collectors {
 
     /// Given a Formatter and cli arguments, get a list of output processors, for
     /// later event output processing.
-    fn get_processors<'a, F: output::Formatter>(
-        formatter: &'a mut F,
-        args: &CollectArgs,
-    ) -> Result<Vec<Box<dyn Processor + 'a>>> {
-        // The actual output selection will be decided by the user (--out and/or
-        // --print) below.
-        let mut writers: Vec<Box<dyn Write>> = Vec::new();
+    fn get_processors(args: &CollectArgs) -> Result<Vec<Box<dyn Processor>>> {
+        let mut processors = Vec::<Box<dyn Processor>>::new();
 
         // Write the events to a file if asked to.
         if let Some(out) = args.out.as_ref() {
+            // File-based output is always json.
+            let formatter = Box::new(output::JsonFormat::default());
+            let mut writers: Vec<Box<dyn Write>> = Vec::new();
             writers.push(Box::new(BufWriter::new(
                 OpenOptions::new()
                     .create(true)
@@ -308,17 +305,30 @@ impl Collectors {
                     .open(out)
                     .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
             )));
+
+            // If the stdout format is also json, share the formatter.
+            if args.print {
+                if let OutputFormat::Json = args.format {
+                    writers.push(Box::new(io::stdout()));
+                }
+            }
+            processors.push(Box::new(output::FormatAndWrite::new(formatter, writers)));
         }
 
         // Write events to stdout if we don't write to a file (--out) or if
-        // explicitly asked to (--print).
+        // explicitly asked to (--print) with a non-json format.
         if args.out.is_none() || args.print {
-            writers.push(Box::new(io::stdout()));
+            let formatter = match args.format {
+                OutputFormat::Json => None,
+                OutputFormat::Text => Some(Box::new(output::TextFormat::default())),
+            };
+            if let Some(f) = formatter {
+                let writer: Box<dyn Write> = Box::new(io::stdout());
+                processors.push(Box::new(output::FormatAndWrite::new(f, vec![writer])));
+            }
         }
 
-        Ok(vec![Box::new(output::FormatAndWrite::new(
-            formatter, writers,
-        ))])
+        Ok(processors)
     }
 }
 

@@ -255,6 +255,13 @@ pub(crate) struct CommonEvent {
 
 unsafe impl Plain for CommonEvent {}
 
+impl EventFormat for CommonEvent {
+    fn to_string(&self) -> String {
+        let ts = self.timestamp;
+        format!("ts: {}", ts)
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(CommonEvent)]
 pub(crate) struct CommonEventFactory {}

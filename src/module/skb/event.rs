@@ -63,6 +63,47 @@ pub(crate) struct SkbEvent {
     pub(crate) dataref: Option<u8>,
 }
 
+impl EventFormat for SkbEvent {
+    fn to_string(&self) -> String {
+        let mut chunks = Vec::new();
+        if let (Some(src), Some(dst)) = (self.src.as_ref(), self.dst.as_ref()) {
+            chunks.push(format!("{} > {}", src, dst));
+        }
+
+        let l34_s = format!(
+            "{}{}",
+            self.saddr.as_ref().unwrap_or(&String::new()),
+            match &self.sport {
+                Some(port) => format!(".{port}"),
+                None => String::new(),
+            }
+        );
+
+        let l34_d = format!(
+            "{}{}",
+            self.daddr.as_ref().unwrap_or(&String::new()),
+            match &self.dport {
+                Some(port) => format!(".{port}"),
+                None => String::new(),
+            }
+        );
+
+        chunks.push(format!("IP {l34_s} > {l34_d}"));
+
+        match self.protocol {
+            Some(1) => chunks.push("ICMP".to_string()),
+            Some(6) => chunks.push("TCP".to_string()),
+            Some(17) => chunks.push("UDP".to_string()),
+            _ => (),
+        }
+
+        if let Some(dev) = &self.dev_name {
+            chunks.push(format!("device {}", dev));
+        }
+        format!("skb: {}", chunks.join(" "))
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(SkbEvent)]
 pub(crate) struct SkbEventFactory {}

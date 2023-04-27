@@ -83,6 +83,16 @@ impl Event {
 
         serde_json::Value::Object(event)
     }
+
+    pub(crate) fn to_string(&self) -> String {
+        ModuleId::variants()
+            .iter()
+            .map(|owner| self.0.get(&owner))
+            .filter(|e| e.is_some())
+            .map(|e| e.unwrap().to_string())
+            .collect::<Vec<String>>()
+            .join(" ")
+    }
 }
 
 pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
@@ -116,8 +126,15 @@ pub(crate) trait EventFactory {
 /// having a proper structure is encouraged as it allows easier consumption at
 /// post-processing. Those objects can also define their own specialized
 /// helpers.
-pub(crate) trait EventSection: EventSectionInternal {}
-impl<T> EventSection for T where T: EventSectionInternal {}
+pub(crate) trait EventSection: EventSectionInternal + EventFormat {}
+impl<T> EventSection for T where T: EventSectionInternal + EventFormat {}
+
+pub(crate) trait EventFormat {
+    /// Function to be used to print an event in console
+    fn to_string(&self) -> String {
+        String::new()
+    }
+}
 
 /// EventSection helpers defined in the core for all events. Common definition
 /// needs Sized but that is a requirement for all EventSection.

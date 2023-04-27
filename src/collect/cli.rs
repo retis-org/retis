@@ -7,7 +7,7 @@ use std::{any::Any, path::PathBuf};
 use anyhow::Result;
 use clap::{
     error::Error as ClapError,
-    {builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command},
+    {builder::PossibleValuesParser, error::ErrorKind, Arg, ArgMatches, Args, Command, ValueEnum},
 };
 
 use crate::cli::{dynamic::DynamicCommand, SubCommand};
@@ -16,6 +16,7 @@ use crate::cli::{dynamic::DynamicCommand, SubCommand};
 pub(crate) struct CollectArgs {
     #[arg(long, default_value = "false")]
     pub(super) ebpf_debug: bool,
+
     #[arg(
         long,
         default_value = "false",
@@ -23,10 +24,12 @@ pub(crate) struct CollectArgs {
 not released. If exhausted, no stack trace will be included."
     )]
     pub(super) stack: bool,
+
     // Some of the options that we want for this arg are not available in clap's derive interface
     // so both the argument definition and the field population will be done manually.
     #[arg(skip)]
     pub(super) collectors: Vec<String>,
+
     // Use the plural in the struct but singular for the cli parameter as we're
     // dealing with a list here.
     #[arg(
@@ -44,7 +47,8 @@ Valid TYPEs:
 Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
     )]
     pub(super) probes: Vec<String>,
-    #[arg(short, long, help = "Write the events to a file rather than to sdout.")]
+
+    #[arg(short, long, help = "Write the events to a file rather than to stdout.")]
     pub(super) out: Option<PathBuf>,
     #[arg(
         long,
@@ -52,6 +56,20 @@ Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
         default_value = "false"
     )]
     pub(super) print: bool,
+
+    #[arg(
+        short = 'O',
+        long,
+        default_value = "text",
+        help = "Specify the output format used for printing flows on stdout."
+    )]
+    pub(super) format: OutputFormat,
+
+    #[arg(
+        long,
+        help = "Write the events to stdout even if --out is used.",
+        default_value = "false"
+    )]
     #[arg(
         id = "filter-packet",
         short,
@@ -61,6 +79,13 @@ Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
 Example: --filter-packet "ip dst host 10.0.0.1""#
     )]
     pub(super) packet_filter: Option<String>,
+}
+
+#[derive(Default, Clone, Copy, Debug, ValueEnum)]
+pub(crate) enum OutputFormat {
+    Json,
+    #[default]
+    Text,
 }
 
 #[derive(Debug)]

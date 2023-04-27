@@ -29,6 +29,11 @@ pub(crate) struct SkbTrackingEvent {
     pub(crate) skb: u64,
 }
 
+impl EventFormat for SkbTrackingEvent {
+    fn to_string(&self) -> String {
+        format!("skb-track: {:#x}", self.tracking_id())
+    }
+}
 unsafe impl Plain for SkbTrackingEvent {}
 
 #[allow(dead_code)]

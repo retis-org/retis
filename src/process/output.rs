@@ -13,27 +13,18 @@ pub(crate) trait Formatter {
 
 /// Takes a Formatter and one-or-more Write and combines them for handling
 /// events.
-pub(crate) struct FormatAndWrite<'a, F>
-where
-    F: Formatter,
-{
-    formatter: &'a mut F,
+pub(crate) struct FormatAndWrite {
+    formatter: Box<dyn Formatter>,
     writers: Vec<Box<dyn Write>>,
 }
 
-impl<'a, F> FormatAndWrite<'a, F>
-where
-    F: Formatter,
-{
-    pub(crate) fn new(formatter: &'a mut F, writers: Vec<Box<dyn Write>>) -> Self {
+impl FormatAndWrite {
+    pub(crate) fn new(formatter: Box<dyn Formatter>, writers: Vec<Box<dyn Write>>) -> Self {
         FormatAndWrite { formatter, writers }
     }
 }
 
-impl<'a, F> Processor for FormatAndWrite<'a, F>
-where
-    F: Formatter,
-{
+impl Processor for FormatAndWrite {
     fn process_one(&mut self, e: &Event) -> Result<()> {
         let bytes = self.formatter.format_one(e)?;
         for w in &mut self.writers {
@@ -58,5 +49,15 @@ pub(crate) struct JsonFormat {}
 impl Formatter for JsonFormat {
     fn format_one(&mut self, e: &Event) -> Result<Vec<u8>> {
         Ok(e.to_json().to_string().as_bytes().to_vec())
+    }
+}
+
+/// Formatter to get events in Text.
+#[derive(Default)]
+pub(crate) struct TextFormat {}
+
+impl Formatter for TextFormat {
+    fn format_one(&mut self, e: &Event) -> Result<Vec<u8>> {
+        Ok(e.to_string().into())
     }
 }
