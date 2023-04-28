@@ -242,6 +242,9 @@ impl ProbeManager {
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
         let mut attached = self.generic_probes.len();
+        self.generic_hooks
+            .iter_mut()
+            .for_each(|h| h.maps.extend(self.maps.clone()));
 
         // First, handle generic probes.
         let mut set = ProbeSet {
@@ -263,9 +266,13 @@ impl ProbeManager {
             .iter_mut()
             .try_for_each(|set| -> Result<()> {
                 attached += set.probes.len();
+                set.hooks
+                    .iter_mut()
+                    .for_each(|h| h.maps.extend(self.maps.clone()));
                 if set.supports_generic_hooks {
                     set.hooks.extend(self.generic_hooks.clone());
                 }
+
                 self.builders.extend(set.attach(
                     &self.filters,
                     #[cfg(not(test))]
