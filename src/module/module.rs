@@ -224,7 +224,7 @@ pub(crate) fn get_modules() -> Result<Modules> {
         .register(
             ModuleId::SkbDrop,
             Box::new(SkbDropCollector::new()?),
-            Box::<SkbDropEventFactory>::default(),
+            Box::new(SkbDropEventFactory::new()?),
         )?
         .register(
             ModuleId::Ovs,
