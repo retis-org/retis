@@ -47,12 +47,19 @@ struct {
 	__type(value, u32);
 } inflight_enqueue SEC(".maps");
 
+/* Context saved between the begining and end of ovs_execute_actions calls. */
+struct execute_actions_ctx {
+	struct sk_buff *skb;
+} __attribute__((packed));
+
+/* Map used to store context between the begining and end of
+ * ovs_execute_actions calls. Indexed by pid_tgid. */
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_INFLIGHT_UPCALLS);
 	__type(key, u64);
-	__type(value, u32);
-} inflight_exec_cmd SEC(".maps");
+	__type(value, struct execute_actions_ctx);
+} inflight_exec SEC(".maps");
 
 #define PACKET_HASH_SIZE 64
 /* Packet data to be used to for hashing.
