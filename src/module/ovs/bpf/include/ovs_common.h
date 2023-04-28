@@ -44,7 +44,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
 	__type(key, u32);
-	__type(value, u32);
+	__type(value, u64);
 } inflight_enqueue SEC(".maps");
 
 /* Context saved between the begining and end of ovs_execute_actions calls. */
@@ -70,7 +70,7 @@ struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);
 	__type(key, u32);
-	__type(value, u32);
+	__type(value, 64);
 } flow_exec_tracking SEC(".maps");
 
 #define PACKET_HASH_SIZE 64

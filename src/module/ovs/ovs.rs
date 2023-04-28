@@ -1,7 +1,9 @@
-use std::mem;
+use std::{collections::HashMap, mem, thread, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
+use log::warn;
+use nix::time;
 
 use super::hooks;
 use crate::{
@@ -12,9 +14,20 @@ use crate::{
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
         user::proc::{Process, ThreadInfo},
+        workaround::SendableMap,
     },
     module::ModuleId,
 };
+
+// GC runs in a thread every OVS_TRACKING_GC_INTERVAL seconds to collect and
+// remove old entries.
+const OVS_TRACKING_GC_INTERVAL: u64 = 5;
+
+// Time in seconds after entries in the upcall tracking maps are considered outdated
+// and should be manually removed. It's a tradeoff between having consistent
+// data and not having the map full of old entries. However, this logic
+// shouldn't happen much — or it is a bug.
+const TRACKING_OLD_LIMIT: u64 = 60;
 
 #[derive(Parser, Default)]
 pub(crate) struct OvsCollectorArgs {
@@ -33,8 +46,10 @@ pub(crate) struct OvsCollector {
     inflight_upcalls_map: Option<libbpf_rs::Map>,
     inflight_exec_map: Option<libbpf_rs::Map>,
 
-    flow_exec_tracking: Option<libbpf_rs::Map>,
-    inflight_enqueue_map: Option<libbpf_rs::Map>,
+    /* Tracking file descriptors (the maps are owned by the GC's thread) */
+    flow_exec_tracking_fd: i32,
+    inflight_enqueue_map_fd: i32,
+    garbage_collector: Option<thread::JoinHandle<()>>,
     /* Batch tracking maps. */
     upcall_batches: Option<libbpf_rs::Map>,
     pid_to_batch: Option<libbpf_rs::Map>,
@@ -73,21 +88,17 @@ impl Collector for OvsCollector {
 
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
+        // Create tracking maps and add USDT hooks.
         if self.track {
-            self.inflight_enqueue_map = Some(Self::create_inflight_enqueue_cmd_map()?);
-            self.flow_exec_tracking = Some(Self::create_flow_exec_tracking_map()?);
+            self.init_tracking_maps()?;
+            self.add_usdt_hooks(probes)?;
         }
-
         // Add targetted hooks.
         // Upcall related hooks:
         self.add_upcall_hooks(probes)?;
         // Exec related hooks
         self.add_exec_hooks(probes)?;
 
-        // Add USDT hooks.
-        if self.track {
-            self.add_usdt_hooks(probes)?;
-        }
         Ok(())
     }
 }
@@ -104,7 +115,7 @@ impl OvsCollector {
             libbpf_rs::MapType::Hash,
             Some("flow_exec_tracking"),
             mem::size_of::<u32>() as u32,
-            mem::size_of::<u32>() as u32,
+            mem::size_of::<u64>() as u32,
             8192,
             &opts,
         )
@@ -122,7 +133,7 @@ impl OvsCollector {
             libbpf_rs::MapType::Hash,
             Some("inflight_enqueue"),
             mem::size_of::<u32>() as u32,
-            mem::size_of::<u32>() as u32,
+            mem::size_of::<u64>() as u32,
             8192,
             &opts,
         )
@@ -271,13 +282,8 @@ impl OvsCollector {
             // Upcall enqueue.
             let mut kernel_enqueue_hook = Hook::from(hooks::kernel_enqueue::DATA);
             kernel_enqueue_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
-            kernel_enqueue_hook.reuse_map(
-                "inflight_enqueue",
-                self.inflight_enqueue_map
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("inflight enqueue map not created"))?
-                    .fd(),
-            )?;
+            kernel_enqueue_hook.reuse_map("inflight_enqueue", self.inflight_enqueue_map_fd)?;
+
             let mut probe = Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?;
             probe.add_hook(kernel_enqueue_hook)?;
             probes.register_probe(probe)?;
@@ -298,26 +304,14 @@ impl OvsCollector {
             let mut exec_actions_hook = Hook::from(hooks::kernel_exec_actions::DATA);
             let ovs_execute_actions_sym = Symbol::from_name("ovs_execute_actions")?;
             exec_actions_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
-            exec_actions_hook.reuse_map(
-                "flow_exec_tracking",
-                self.flow_exec_tracking
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("flow_exec_tracking map not created"))?
-                    .fd(),
-            )?;
+            exec_actions_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
             let mut probe = Probe::kprobe(ovs_execute_actions_sym.clone())?;
             probe.add_hook(exec_actions_hook)?;
             probes.register_probe(probe)?;
 
             let mut exec_actions_ret_hook = Hook::from(hooks::kernel_exec_actions_ret::DATA);
             exec_actions_ret_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
-            exec_actions_ret_hook.reuse_map(
-                "flow_exec_tracking",
-                self.flow_exec_tracking
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("flow_exec_tracking map not created"))?
-                    .fd(),
-            )?;
+            exec_actions_ret_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
             let mut probe = Probe::kretprobe(ovs_execute_actions_sym)?;
             probe.add_hook(exec_actions_ret_hook)?;
             probes.register_probe(probe)?;
@@ -355,22 +349,10 @@ impl OvsCollector {
             .fd();
 
         let mut user_recv_hook = Hook::from(hooks::user_recv_upcall::DATA);
-        user_recv_hook.reuse_map(
-            "inflight_enqueue",
-            self.inflight_enqueue_map
-                .as_ref()
-                .ok_or_else(|| anyhow!("inflight enqueue map not created"))?
-                .fd(),
-        )?;
+        user_recv_hook.reuse_map("inflight_enqueue", self.inflight_enqueue_map_fd)?;
 
         let mut user_exec_hook = Hook::from(hooks::user_op_exec::DATA);
-        user_exec_hook.reuse_map(
-            "flow_exec_tracking",
-            self.flow_exec_tracking
-                .as_ref()
-                .ok_or_else(|| anyhow!("flow_exec_tracking map not created"))?
-                .fd(),
-        )?;
+        user_exec_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
         let mut batch_probes = vec![
             (
                 Probe::usdt(UsdtProbe::new(&ovs, "dpif_recv::recv_upcall")?)?,
@@ -395,6 +377,64 @@ impl OvsCollector {
             probe.add_hook(hook)?;
             probes.register_probe(probe)?;
         }
+        Ok(())
+    }
+
+    fn init_tracking_maps(&mut self) -> Result<()> {
+        let inflight_enqueue_map = Self::create_inflight_enqueue_cmd_map()?;
+        let flow_exec_tracking = Self::create_flow_exec_tracking_map()?;
+        self.inflight_enqueue_map_fd = inflight_enqueue_map.fd();
+        self.flow_exec_tracking_fd = flow_exec_tracking.fd();
+
+        let mut tracking_maps = HashMap::from([
+            ("infligth_enqueue", SendableMap::from(inflight_enqueue_map)),
+            ("flow_exec_tracking", SendableMap::from(flow_exec_tracking)),
+        ]);
+
+        // Take care of gargabe collection of tracking info. This should be done
+        // in the BPF part for most if not all upcalls, but we might lose some
+        // events so this garbage collector periodically cleans stale tracking information
+        self.garbage_collector = Some(thread::spawn(move || {
+            //let tracking_map = tracking_map.get_mut();
+
+            loop {
+                // Let's run every OVS_TRACKING_GC_INTERVAL seconds.
+                thread::sleep(Duration::from_secs(OVS_TRACKING_GC_INTERVAL));
+                let now =
+                    Duration::from(time::clock_gettime(time::ClockId::CLOCK_MONOTONIC).unwrap());
+
+                // Loop through the tracking map entries and see if we see old
+                // ones we should remove manually.
+                for (name, map) in tracking_maps.iter_mut() {
+                    let map = map.get_mut();
+                    let mut to_remove = Vec::new();
+                    for key in map.keys() {
+                        if let Ok(Some(raw)) = map.lookup(&key, libbpf_rs::MapFlags::ANY) {
+                            // Get the timesmap associated with the entry.
+                            let insert_time = u64::from_ne_bytes(raw[0..8].try_into().unwrap());
+                            // Remove old entries. Actually put them on a remove
+                            // list as we can't live remove them here (we already
+                            // have a reference to the map).
+                            let last_seen = Duration::from_nanos(insert_time);
+                            if now.saturating_sub(last_seen)
+                                > Duration::from_secs(TRACKING_OLD_LIMIT)
+                            {
+                                to_remove.push(key);
+                            }
+                        }
+                    }
+                    // Actually remove the outdated entries and issue a warning as
+                    // while it can be expected, it should not happen too often.
+                    for key in to_remove {
+                        map.delete(&key).ok();
+                        warn!(
+                            "Removed old entry from {name} tracking map: {:#x}",
+                            u32::from_ne_bytes(key[..4].try_into().unwrap())
+                        );
+                    }
+                }
+            }
+        }));
         Ok(())
     }
 }
