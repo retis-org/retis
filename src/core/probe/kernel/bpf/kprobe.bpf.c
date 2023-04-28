@@ -20,7 +20,7 @@ int probe_kprobe(struct pt_regs *ctx)
 	struct retis_context context = {};
 
 	context.timestamp = bpf_ktime_get_ns();
-	context.ksym = PT_REGS_IP(ctx) - 1;
+	context.ksym = kprobe_get_func_ip(ctx);
 	context.probe_type = KERNEL_PROBE_KPROBE;
 	context.orig_ctx = ctx;
 	get_regs(&context.regs, ctx);

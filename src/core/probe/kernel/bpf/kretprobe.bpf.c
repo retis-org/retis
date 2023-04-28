@@ -69,7 +69,7 @@ int probe_kprobe(struct pt_regs *ctx)
 	u64 tid = bpf_get_current_pid_tgid();
 
 	context.timestamp = bpf_ktime_get_ns();
-	context.ksym = PT_REGS_IP(ctx) - 1;
+	context.ksym = kprobe_get_func_ip(ctx);
 	kprobe_get_regs(&context.regs, ctx);
 
 	/* Store the current context and let the kretprobe run the hooks. */
