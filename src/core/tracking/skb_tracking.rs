@@ -78,12 +78,12 @@
 //!    garbage collecting old events from the tracking map (such events should
 //!    be fairly rare, otherwise it's a bug).
 
-use std::{mem, thread, time::Duration};
+use std::{collections::HashMap, mem, time::Duration};
 
-use anyhow::{bail, Result};
-use log::warn;
-use nix::time;
+use anyhow::{anyhow, bail, Result};
 use plain::Plain;
+
+use super::gc::TrackingGC;
 
 use crate::core::{
     kernel::Symbol,
@@ -91,8 +91,6 @@ use crate::core::{
         manager::{ProbeManager, PROBE_MAX},
         Probe, ProbeOption,
     },
-    signals::Running,
-    workaround::SendableMap,
 };
 
 // GC runs in a thread every SKB_TRACKING_GC_INTERVAL seconds to collect and
@@ -141,15 +139,12 @@ fn tracking_map() -> Result<libbpf_rs::Map> {
     .or_else(|e| bail!("Could not create the tracking map: {}", e))
 }
 
-pub(crate) fn init_tracking(
-    probes: &mut ProbeManager,
-    run_state: Running,
-) -> Result<Option<thread::JoinHandle<()>>> {
+pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<TrackingGC> {
     let config_map = config_map()?;
-    let mut tracking_map = SendableMap::from(tracking_map()?);
+    let tracking_map = tracking_map()?;
 
     probes.reuse_map("tracking_config_map", config_map.fd())?;
-    probes.reuse_map("tracking_map", tracking_map.get().fd())?;
+    probes.reuse_map("tracking_map", tracking_map.fd())?;
 
     // For tracking skbs we only need the following three functions. First
     // track free events.
@@ -215,55 +210,17 @@ pub(crate) fn init_tracking(
     // in the BPF part for most if not all skbs but we might lose some
     // information (and tracked functions might fail resulting in incorrect
     // information).
-    let gc = thread::spawn(move || {
-        let tracking_map = tracking_map.get_mut();
-
-        let running = || -> bool {
-            // Let's run every SKB_TRACKING_GC_INTERVAL seconds.
-            for _ in 0..SKB_TRACKING_GC_INTERVAL {
-                thread::sleep(Duration::from_secs(1));
-                if !run_state.running() {
-                    return false;
-                }
-            }
-            true
-        };
-
-        while running() {
-            let now = Duration::from(time::clock_gettime(time::ClockId::CLOCK_MONOTONIC).unwrap());
-
-            // Loop through the tracking map entries and see if we see old
-            // ones we should remove manually.
-            let mut to_remove = Vec::new();
-            for key in tracking_map.keys() {
-                if let Ok(Some(raw)) = tracking_map.lookup(&key, libbpf_rs::MapFlags::ANY) {
-                    // Get the tracking info associated with the entry.
-                    let mut info = TrackingInfo::default();
-                    plain::copy_from_bytes(&mut info, &raw[..]).unwrap();
-
-                    // Remove old entries. Actually put them on a remove
-                    // list as we can't live remove them here (we already
-                    // have a reference to the map).
-                    let last_seen = Duration::from_nanos(info.last_seen);
-                    if now.saturating_sub(last_seen) > Duration::from_secs(TRACKING_OLD_LIMIT) {
-                        to_remove.push(key);
-                    }
-                }
-            }
-
-            // Actually remove the outdated entries and issue a warning as
-            // while it can be expected, it should not happen too often.
-            for key in to_remove {
-                tracking_map.delete(&key).ok();
-                warn!(
-                    "Removed old entry from skb tracking map: {}",
-                    u64::from_ne_bytes(key[..8].try_into().unwrap())
-                );
-            }
-        }
-    });
-
-    Ok(Some(gc))
+    Ok(TrackingGC::new(
+        "skb-tracking-gc",
+        HashMap::from([("skb_tracking", tracking_map)]),
+        |v| {
+            let mut info = TrackingInfo::default();
+            plain::copy_from_bytes(&mut info, &v[..]).map_err(|e| anyhow!("{:?}", e))?;
+            Ok(Duration::from_nanos(info.last_seen))
+        },
+    )
+    .interval(SKB_TRACKING_GC_INTERVAL)
+    .limit(TRACKING_OLD_LIMIT))
 }
 
 // Please keep in sync with its BPF counterpart.
