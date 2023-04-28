@@ -1,4 +1,4 @@
-use std::{collections::HashSet, thread::JoinHandle, time::Duration};
+use std::{collections::HashSet, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
@@ -20,7 +20,7 @@ use crate::{
         kernel::{symbol::matching_functions_to_symbols, Symbol},
         probe::{self, Probe, ProbeManager},
         signals::Running,
-        tracking::skb_tracking::init_tracking,
+        tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
     module::{get_modules, ModuleId, Modules},
 };
@@ -78,8 +78,8 @@ pub(crate) struct Collectors {
     cli: CliConfig,
     factory: Box<dyn EventFactory>,
     known_kernel_types: HashSet<String>,
-    gc_handle: Option<JoinHandle<()>>,
     run: Running,
+    tracking_gc: Option<TrackingGC>,
 }
 
 impl Collectors {
@@ -118,8 +118,8 @@ impl Collectors {
             known_kernel_types: HashSet::new(),
             cli,
             factory,
-            gc_handle: None,
             run: Running::new(),
+            tracking_gc: None,
         })
     }
 
@@ -199,7 +199,7 @@ impl Collectors {
 
         // Initialize tracking & filters.
         if self.known_kernel_types.contains("struct sk_buff *") {
-            self.gc_handle = init_tracking(&mut self.probes, self.run.clone())?;
+            self.tracking_gc = Some(init_tracking(&mut self.probes)?);
         }
         Self::setup_filters(&mut self.probes, collect)?;
 
@@ -227,6 +227,11 @@ impl Collectors {
             Some(factories) => factories,
             None => bail!("No section factory found, aborting"),
         };
+
+        if let Some(gc) = &mut self.tracking_gc {
+            gc.start(self.run.clone())?;
+        }
+
         self.factory.start(section_factories)?;
 
         self.probes.attach()?;
@@ -255,8 +260,8 @@ impl Collectors {
         // termination got performed implicitly by the signal handler.
         // The print-out is just for consistency.
         debug!("Stopping tracking gc");
-        if let Some(gc) = self.gc_handle.take() {
-            gc.join().or_else(|_| bail!("failed to stop tracking gc"))?;
+        if let Some(gc) = &mut self.tracking_gc {
+            gc.join()?;
         }
 
         debug!("Stopping events");
