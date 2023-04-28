@@ -45,7 +45,7 @@ struct {
 	__uint(max_entries, 8192);
 	__type(key, u32);
 	__type(value, u64);
-} inflight_enqueue SEC(".maps");
+} upcall_tracking SEC(".maps");
 
 /* Context saved between the begining and end of ovs_execute_actions calls. */
 struct execute_actions_ctx {

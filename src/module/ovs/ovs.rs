@@ -47,7 +47,7 @@ pub(crate) struct OvsCollector {
 
     /* Tracking file descriptors (the maps are owned by the GC) */
     flow_exec_tracking_fd: i32,
-    inflight_enqueue_map_fd: i32,
+    upcall_tracking_fd: i32,
     gc: Option<TrackingGC>,
     running: Running,
     /* Batch tracking maps. */
@@ -138,7 +138,7 @@ impl OvsCollector {
         .or_else(|e| bail!("Could not create the flow_exec_tracking map: {}", e))
     }
 
-    fn create_inflight_enqueue_cmd_map() -> Result<libbpf_rs::Map> {
+    fn create_upcall_tracking_map() -> Result<libbpf_rs::Map> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
@@ -147,13 +147,13 @@ impl OvsCollector {
 
         libbpf_rs::Map::create(
             libbpf_rs::MapType::Hash,
-            Some("inflight_enqueue"),
+            Some("upcall_tracking"),
             mem::size_of::<u32>() as u32,
             mem::size_of::<u64>() as u32,
             8192,
             &opts,
         )
-        .or_else(|e| bail!("Could not create the inflight_enqueue map: {}", e))
+        .or_else(|e| bail!("Could not create the upcall tracking map: {}", e))
     }
 
     fn create_inflight_exec_map() -> Result<libbpf_rs::Map> {
@@ -298,7 +298,7 @@ impl OvsCollector {
             // Upcall enqueue.
             let mut kernel_enqueue_hook = Hook::from(hooks::kernel_enqueue::DATA);
             kernel_enqueue_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
-            kernel_enqueue_hook.reuse_map("inflight_enqueue", self.inflight_enqueue_map_fd)?;
+            kernel_enqueue_hook.reuse_map("upcall_tracking", self.upcall_tracking_fd)?;
 
             let mut probe = Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?;
             probe.add_hook(kernel_enqueue_hook)?;
@@ -365,7 +365,7 @@ impl OvsCollector {
             .fd();
 
         let mut user_recv_hook = Hook::from(hooks::user_recv_upcall::DATA);
-        user_recv_hook.reuse_map("inflight_enqueue", self.inflight_enqueue_map_fd)?;
+        user_recv_hook.reuse_map("upcall_tracking", self.upcall_tracking_fd)?;
 
         let mut user_exec_hook = Hook::from(hooks::user_op_exec::DATA);
         user_exec_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
@@ -397,13 +397,13 @@ impl OvsCollector {
     }
 
     fn init_tracking_maps(&mut self) -> Result<()> {
-        let inflight_enqueue_map = Self::create_inflight_enqueue_cmd_map()?;
+        let upcall_tracking = Self::create_upcall_tracking_map()?;
         let flow_exec_tracking = Self::create_flow_exec_tracking_map()?;
-        self.inflight_enqueue_map_fd = inflight_enqueue_map.fd();
+        self.upcall_tracking_fd = upcall_tracking.fd();
         self.flow_exec_tracking_fd = flow_exec_tracking.fd();
 
         let tracking_maps = HashMap::from([
-            ("enqueue_tracking", inflight_enqueue_map),
+            ("enqueue_tracking", upcall_tracking),
             ("flow_exec_tracking", flow_exec_tracking),
         ]);
 

@@ -36,11 +36,11 @@ DEFINE_USDT_HOOK (
 	u32 queue_id = queue_id_gen_data((void *) ctx->args[2], size);
 	bool skip_event = false;
 
-	if (!bpf_map_lookup_elem(&inflight_enqueue, &queue_id)) {
+	if (!bpf_map_lookup_elem(&upcall_tracking, &queue_id)) {
 	    /* The upcall enqueue event was missed or filtered. */
 	    skip_event = true;
 	}
-	bpf_map_delete_elem(&inflight_enqueue, &queue_id);
+	bpf_map_delete_elem(&upcall_tracking, &queue_id);
 
 
 	batch = batch_process_recv(ctx->timestamp, queue_id, skip_event);
