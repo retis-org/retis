@@ -16,11 +16,11 @@ mod hooks {
     pub(super) mod kernel_enqueue {
         include!("bpf/.out/kernel_enqueue.rs");
     }
-    pub(super) mod kernel_exec_cmd {
-        include!("bpf/.out/kernel_exec_cmd.rs");
+    pub(super) mod kernel_exec_actions {
+        include!("bpf/.out/kernel_exec_actions.rs");
     }
-    pub(super) mod kernel_exec_cmd_ret {
-        include!("bpf/.out/kernel_exec_cmd_ret.rs");
+    pub(super) mod kernel_exec_actions_ret {
+        include!("bpf/.out/kernel_exec_actions_ret.rs");
     }
     pub(super) mod kernel_exec_tp {
         include!("bpf/.out/kernel_exec_tp.rs");

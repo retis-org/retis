@@ -179,11 +179,11 @@ fn main() {
         Some(OVS_INCLUDES),
     );
     build_hook(
-        "src/module/ovs/bpf/kernel_exec_cmd.bpf.c",
+        "src/module/ovs/bpf/kernel_exec_actions.bpf.c",
         Some(OVS_INCLUDES),
     );
     build_hook(
-        "src/module/ovs/bpf/kernel_exec_cmd_ret.bpf.c",
+        "src/module/ovs/bpf/kernel_exec_actions_ret.bpf.c",
         Some(OVS_INCLUDES),
     );
     build_hook(

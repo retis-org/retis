@@ -6,8 +6,8 @@ DEFINE_HOOK_RAW(
 	u64 tid = bpf_get_current_pid_tgid();
 
 	/* The execute command has finished. Remove the entry from the
-	* inflight_exec_cmd map. */
-	bpf_map_delete_elem(&inflight_exec_cmd, &tid);
+	* inflight_exec map. */
+	bpf_map_delete_elem(&inflight_exec, &tid);
 	return 0;
 )
 
