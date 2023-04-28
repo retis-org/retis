@@ -14,10 +14,9 @@ struct upcall_enqueue_event {
 	u32 queue_id;
 } __attribute__((packed));
 
-static __always_inline u8 update_inflight_enqueue(u32 queue_id)
+static __always_inline u8 update_inflight_enqueue(u32 queue_id, u64 ts)
 {
-	uint32_t zero = 0;
-	if (bpf_map_update_elem(&inflight_enqueue, &queue_id, &zero,
+	if (bpf_map_update_elem(&inflight_enqueue, &queue_id, &ts,
 				BPF_NOEXIST)) {
 		/* The entry already exists. This means an upcall was enqueued
 		 * with the same queue_id and it has not been received (i.e
@@ -64,7 +63,7 @@ DEFINE_HOOK_RAW(
 	enqueue->ret = (int) ctx->regs.ret;
 	enqueue->queue_id = queue_id_gen_skb(skb);
 
-	update_inflight_enqueue(enqueue->queue_id);
+	update_inflight_enqueue(enqueue->queue_id, ctx->timestamp);
 
 	return 0;
 )
