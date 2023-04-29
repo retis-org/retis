@@ -188,27 +188,24 @@ impl OvsCollector {
         // Upcall probe.
         let mut kernel_upcall_tp_hook = Hook::from(hooks::kernel_upcall_tp::DATA);
         kernel_upcall_tp_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
-        probes.register_hook_to(
-            kernel_upcall_tp_hook,
-            Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_dp_upcall")?)?,
-        )?;
+        let mut probe = Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_dp_upcall")?)?;
+        probe.add_hook(kernel_upcall_tp_hook)?;
+        probes.add_probe(probe)?;
 
         // Upcall return probe.
         let mut kernel_upcall_ret_hook = Hook::from(hooks::kernel_upcall_ret::DATA);
         kernel_upcall_ret_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
-        probes.register_hook_to(
-            kernel_upcall_ret_hook,
-            Probe::kretprobe(Symbol::from_name("ovs_dp_upcall")?)?,
-        )?;
+        let mut probe = Probe::kretprobe(Symbol::from_name("ovs_dp_upcall")?)?;
+        probe.add_hook(kernel_upcall_ret_hook)?;
+        probes.add_probe(probe)?;
 
         if self.track {
             // Upcall enqueue.
             let mut kernel_enqueue_hook = Hook::from(hooks::kernel_enqueue::DATA);
             kernel_enqueue_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
-            probes.register_hook_to(
-                kernel_enqueue_hook,
-                Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?,
-            )?;
+            let mut probe = Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?;
+            probe.add_hook(kernel_enqueue_hook)?;
+            probes.add_probe(probe)?;
         }
 
         Ok(())
@@ -226,20 +223,24 @@ impl OvsCollector {
             let mut exec_cmd_hook = Hook::from(hooks::kernel_exec_cmd::DATA);
             let cmd_execute_sym = Symbol::from_name("ovs_packet_cmd_execute")?;
             exec_cmd_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
-            probes.register_hook_to(exec_cmd_hook, Probe::kprobe(cmd_execute_sym.clone())?)?;
+            let mut probe = Probe::kprobe(cmd_execute_sym.clone())?;
+            probe.add_hook(exec_cmd_hook)?;
+            probes.add_probe(probe)?;
 
             let mut exec_cmd_ret_hook = Hook::from(hooks::kernel_exec_cmd_ret::DATA);
             exec_cmd_ret_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
-            probes.register_hook_to(exec_cmd_ret_hook, Probe::kretprobe(cmd_execute_sym)?)?;
+            let mut probe = Probe::kretprobe(cmd_execute_sym)?;
+            probe.add_hook(exec_cmd_ret_hook)?;
+            probes.add_probe(probe)?;
 
             self.inflight_exec_cmd_map = Some(inflight_map);
         }
 
         // Action execute probe.
-        probes.register_hook_to(
-            exec_action_hook,
-            Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?,
-        )?;
+        let mut probe =
+            Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?;
+        probe.add_hook(exec_action_hook)?;
+        probes.add_probe(probe)?;
 
         Ok(())
     }
@@ -282,10 +283,11 @@ impl OvsCollector {
             ),
         ];
 
-        while let Some((probe, mut hook)) = batch_probes.pop() {
+        while let Some((mut probe, mut hook)) = batch_probes.pop() {
             hook.reuse_map("upcall_batches", upcall_batches_fd)?
                 .reuse_map("pid_to_batch", pid_to_batch_fd)?;
-            probes.register_hook_to(hook, probe)?;
+            probe.add_hook(hook)?;
+            probes.add_probe(probe)?;
         }
 
         Ok(())
