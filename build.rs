@@ -15,6 +15,7 @@ const INCLUDE_PATHS: &[&str] = &[
     "src/core/probe/kernel/bpf/include",
     "src/core/probe/user/bpf/include",
     "src/core/events/bpf/include",
+    "src/core/tracking/bpf/include",
     // Taking errno.h from libc instead of linux headers.
     // TODO: Remove when we fix proper header dependencies.
     "/usr/include/x86_64-linux-gnu",

@@ -5,9 +5,9 @@
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 
-#include "events.h"
-#include "helpers.h"
-#include "packet-filter.h"
+#include <events.h>
+#include <helpers.h>
+#include <packet-filter.h>
 
 enum kernel_probe_type {
 	KERNEL_PROBE_KPROBE = 0,
@@ -144,6 +144,8 @@ enum {
 #define F_AND		0
 /* Filters chain is an or */
 #define F_OR		1
+
+#include <skb-tracking.h>
 
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
@@ -319,6 +321,12 @@ static __always_inline int chain(struct retis_context *ctx)
 		k->stack_id = bpf_get_stackid(ctx->orig_ctx, &stack_map, BPF_F_FAST_STACK_CMP);
 	else
 		k->stack_id = -1;
+
+
+	/* Track the skb. Note that this is done *after* filtering! If no skb is
+	 * available this is a no-op.
+	 */
+	track_skb(ctx);
 
 	pass_threshold = get_event_size(event);
 
