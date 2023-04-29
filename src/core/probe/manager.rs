@@ -21,18 +21,15 @@ pub(super) const HOOK_MAX: usize = 10;
 /// ProbeManager is the main object providing an API for consumers to register probes, hooks, maps,
 /// etc.
 pub(crate) struct ProbeManager {
-    /// All generic probes.
-    generic_probes: HashMap<String, Probe>,
+    /// Generic probes (with no hook attached) & targeted probes (with hooks
+    /// attached).
+    probes: HashMap<String, Probe>,
 
     /// Generic hooks, meant to be attached to all probes supporting it..
     generic_hooks: Vec<Hook>,
 
     /// Filters, meant to be attached to all probes.
     filters: Vec<Filter>,
-
-    /// Targeted sets, for hooks requesting to be specifically attached to a set
-    /// of probes. Those might also support generic hooks.
-    targeted_probes: Vec<ProbeSet>,
 
     /// List of global probe options to enable/disable additional probes behavior at a high level.
     global_probes_options: Vec<ProbeOption>,
@@ -57,10 +54,9 @@ impl ProbeManager {
         // config map is this map is hidden.
         #[allow(unused_mut)]
         let mut mgr = ProbeManager {
-            generic_probes: HashMap::new(),
+            probes: HashMap::new(),
             generic_hooks: Vec::new(),
             filters: Vec::new(),
-            targeted_probes: Vec::new(),
             global_probes_options: Vec::new(),
             maps: HashMap::new(),
             #[cfg(not(test))]
@@ -103,17 +99,24 @@ impl ProbeManager {
     pub(crate) fn add_probe(&mut self, probe: Probe) -> Result<()> {
         let key = probe.key();
 
-        // Check if it is already in the targeted probe list.
-        for set in self.targeted_probes.iter() {
-            if set.probes.contains_key(&key) {
-                return Ok(());
-            }
+        let len = probe.hooks_len();
+        if len + self.generic_hooks.len() > HOOK_MAX {
+            bail!("Hook list is already full");
         }
 
-        self.check_probe_max()?;
+        // Check if it is already in the probe list.
+        if let Some(prev) = self.probes.get_mut(&key) {
+            if prev.hooks_len() + len + self.generic_hooks.len() > HOOK_MAX {
+                bail!("Hook list is already full");
+            }
 
-        // If not, insert it in the generic probe list, if not there already.
-        self.generic_probes.entry(key).or_insert(probe);
+            prev.merge(&probe)?;
+            return Ok(());
+        }
+
+        // If not, insert it.
+        self.check_probe_max()?;
+        self.probes.insert(key, probe);
 
         Ok(())
     }
@@ -168,9 +171,9 @@ impl ProbeManager {
     /// ```
     pub(crate) fn register_kernel_hook(&mut self, hook: Hook) -> Result<()> {
         let mut max: usize = 0;
-        self.targeted_probes.iter_mut().for_each(|set| {
-            if max < set.hooks.len() {
-                max = set.hooks.len();
+        self.probes.iter().for_each(|(_, p)| {
+            if max < p.hooks_len() {
+                max = p.hooks_len();
             }
         });
 
@@ -194,50 +197,27 @@ impl ProbeManager {
     /// let symbol = kernel::Symbol::from_name("kfree_skb_reason").unwrap();
     /// mgr.register_hook_to(hook::DATA, Probe::kprobe(symbol).unwrap()).unwrap();
     /// ```
-    pub(crate) fn register_hook_to(&mut self, hook: Hook, probe: Probe) -> Result<()> {
+    pub(crate) fn register_hook_to(&mut self, hook: Hook, mut probe: Probe) -> Result<()> {
         if self.generic_hooks.len() >= HOOK_MAX {
             bail!("Hook list is already full");
         }
 
         let key = probe.key();
 
-        // First check if the target isn't already registered to the generic
-        // probes list. If so, remove it from there.
-        self.generic_probes.remove(&key);
-
-        // Now check if we already have a targeted probe for this. If so, append
-        // the new hook to it.
-        for set in self.targeted_probes.iter_mut() {
-            if set.probes.contains_key(&key) {
-                if let ProbeType::Usdt(_) = probe.r#type() {
-                    bail!("USDT probes only support a single hook");
-                }
-
-                if self.generic_hooks.len() + set.hooks.len() >= HOOK_MAX {
-                    bail!("Hook list is already full");
-                }
-
-                set.hooks.push(hook);
-                return Ok(());
+        // Check if we already have a probe for this. If so, reuse it to install
+        // the hook.
+        if let Some(probe) = self.probes.get_mut(&key) {
+            if self.generic_hooks.len() + probe.hooks_len() >= HOOK_MAX {
+                bail!("Hook list is already full");
             }
+
+            return probe.add_hook(hook);
         }
 
         self.check_probe_max()?;
+        probe.add_hook(hook)?;
 
-        // New target, let's build a new probe set.
-        let mut set = ProbeSet {
-            supports_generic_hooks: match probe.r#type() {
-                ProbeType::Kprobe(_) | ProbeType::Kretprobe(_) | ProbeType::RawTracepoint(_) => {
-                    true
-                }
-                ProbeType::Usdt(_) => false,
-            },
-            ..Default::default()
-        };
-        set.probes.insert(key, probe);
-        set.hooks.push(hook);
-
-        self.targeted_probes.push(set);
+        self.probes.insert(key, probe);
         Ok(())
     }
 
@@ -249,9 +229,13 @@ impl ProbeManager {
 
         // First, handle generic probes.
         let mut set = ProbeSet {
-            probes: self.generic_probes.clone(),
+            probes: self
+                .probes
+                .clone()
+                .into_iter()
+                .filter(|(_, p)| p.hooks_len() == 0)
+                .collect(),
             hooks: self.generic_hooks.clone(),
-            supports_generic_hooks: true,
         };
         self.builders.extend(set.attach(
             &self.filters,
@@ -263,13 +247,22 @@ impl ProbeManager {
         )?);
 
         // Then targeted ones.
-        self.targeted_probes
+        self.probes
             .iter_mut()
-            .try_for_each(|set| -> Result<()> {
-                set.hooks
+            .filter(|(_, p)| p.hooks_len() != 0)
+            .try_for_each(|(_, p)| -> Result<()> {
+                p.hooks
                     .iter_mut()
                     .for_each(|h| h.maps.extend(self.maps.clone()));
-                if set.supports_generic_hooks {
+
+                let mut probes = HashMap::new();
+                probes.insert(p.key(), p.clone());
+
+                let mut set = ProbeSet {
+                    probes,
+                    hooks: p.hooks.clone(),
+                };
+                if p.supports_generic_hooks() {
                     set.hooks.extend(self.generic_hooks.clone());
                 }
 
@@ -288,18 +281,12 @@ impl ProbeManager {
     }
 
     fn check_probe_max(&self) -> Result<()> {
-        let mut size: usize = self.generic_probes.len();
-        self.targeted_probes
-            .iter()
-            .for_each(|set| size += set.probes.len());
-
-        if size >= PROBE_MAX {
+        if self.probes.len() >= PROBE_MAX {
             bail!(
                 "Can't register probe, reached maximum capacity ({})",
                 PROBE_MAX
             );
         }
-
         Ok(())
     }
 }
@@ -308,7 +295,6 @@ impl ProbeManager {
 struct ProbeSet {
     probes: HashMap<String, Probe>,
     hooks: Vec<Hook>,
-    supports_generic_hooks: bool,
 }
 
 impl ProbeSet {

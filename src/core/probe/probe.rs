@@ -25,16 +25,24 @@ pub(crate) enum ProbeType {
 #[derive(Clone)]
 pub(crate) struct Probe {
     r#type: ProbeType,
+    pub(super) hooks: Vec<Hook>,
 }
 
 impl Probe {
+    fn from(r#type: ProbeType) -> Probe {
+        Probe {
+            r#type,
+            hooks: Vec::new(),
+        }
+    }
+
     /// Create a new kprobe.
     pub(crate) fn kprobe(symbol: kernel::Symbol) -> Result<Probe> {
         let r#type = match symbol {
             kernel::Symbol::Func(_) => ProbeType::Kprobe(KernelProbe::new(symbol)?),
             kernel::Symbol::Event(_) => bail!("Symbol cannot be probed with a kprobe"),
         };
-        Ok(Probe { r#type })
+        Ok(Probe::from(r#type))
     }
 
     /// Create a new kretprobe
@@ -43,7 +51,7 @@ impl Probe {
             kernel::Symbol::Func(_) => ProbeType::Kretprobe(KernelProbe::new(symbol)?),
             kernel::Symbol::Event(_) => bail!("Symbol cannot be probed with a kretprobe"),
         };
-        Ok(Probe { r#type })
+        Ok(Probe::from(r#type))
     }
 
     /// Create a new raw tracepoint.
@@ -52,13 +60,13 @@ impl Probe {
             kernel::Symbol::Event(_) => ProbeType::RawTracepoint(KernelProbe::new(symbol)?),
             kernel::Symbol::Func(_) => bail!("Symbol cannot be probed with a raw tracepoint"),
         };
-        Ok(Probe { r#type })
+        Ok(Probe::from(r#type))
     }
 
     /// Create a new usdt probe.
     pub(crate) fn usdt(usdt_probe: UsdtProbe) -> Result<Probe> {
         let r#type = ProbeType::Usdt(usdt_probe);
-        Ok(Probe { r#type })
+        Ok(Probe::from(r#type))
     }
 
     /// Retrieve a reference to the underlying ProbeType.
@@ -87,6 +95,38 @@ impl Probe {
             ProbeType::RawTracepoint(_) => 2,
             ProbeType::Usdt(_) => 3,
         }
+    }
+
+    /// Append a new targeted hook to the probe.
+    pub(crate) fn add_hook(&mut self, hook: Hook) -> Result<()> {
+        if let ProbeType::Usdt(_) = self.r#type() {
+            if !self.hooks.is_empty() {
+                bail!("USDT probes only support a single hook");
+            }
+        }
+
+        self.hooks.push(hook);
+        Ok(())
+    }
+
+    /// Returns the number of hooks installed on the probe.
+    pub(crate) fn hooks_len(&self) -> usize {
+        self.hooks.len()
+    }
+
+    /// Are generic hooks supported by the of probe?
+    pub(crate) fn supports_generic_hooks(&self) -> bool {
+        !matches!(self.r#type(), ProbeType::Usdt(_))
+    }
+
+    /// Merge two probes into the current one.
+    pub(crate) fn merge(&mut self, other: &Probe) -> Result<()> {
+        if std::mem::discriminant(self.r#type()) != std::mem::discriminant(other.r#type()) {
+            bail!("Can't merge two probe with a different underlying type");
+        }
+
+        self.hooks.extend(other.hooks.clone());
+        Ok(())
     }
 }
 
