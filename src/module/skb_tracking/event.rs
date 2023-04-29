@@ -31,6 +31,25 @@ pub(crate) struct SkbTrackingEvent {
 
 unsafe impl Plain for SkbTrackingEvent {}
 
+#[allow(dead_code)]
+impl SkbTrackingEvent {
+    /// Get the tracking id.
+    pub(crate) fn tracking_id(&self) -> u128 {
+        (self.timestamp as u128) << 64 | self.orig_head as u128
+    }
+
+    /// Check if two tracking event sections are from related skbs, including
+    /// clones.
+    pub(crate) fn r#match(&self, other: &SkbTrackingEvent) -> bool {
+        self.tracking_id() == other.tracking_id()
+    }
+
+    /// Check if two tracking event sections are from the exact same skb.
+    pub(crate) fn strict_match(&self, other: &SkbTrackingEvent) -> bool {
+        self.r#match(other) && self.skb == other.skb
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(SkbTrackingEvent)]
 pub(crate) struct SkbTrackingEventFactory {}
