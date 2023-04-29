@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::core::filters::Filter;
 use crate::core::probe::builder::*;
-use crate::core::probe::{get_ebpf_debug, Hook, Probe};
+use crate::core::probe::{get_ebpf_debug, Hook, Probe, ProbeType};
 
 mod usdt_bpf {
     include!("bpf/.out/usdt.skel.rs");
@@ -36,8 +36,8 @@ impl ProbeBuilder for UsdtBuilder {
     }
 
     fn attach(&mut self, probe: &Probe) -> Result<()> {
-        let probe = match probe {
-            Probe::Usdt(usdt) => usdt,
+        let probe = match probe.r#type() {
+            ProbeType::Usdt(usdt) => usdt,
             _ => bail!("Wrong probe type"),
         };
 
@@ -81,9 +81,7 @@ mod tests {
         // It's for now, the probes below won't do much.
         assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
         assert!(builder
-            .attach(&Probe::Usdt(
-                UsdtProbe::new(&p, "test_builder::usdt").unwrap()
-            ))
+            .attach(&Probe::usdt(UsdtProbe::new(&p, "test_builder::usdt").unwrap()).unwrap())
             .is_ok());
     }
 }

@@ -266,18 +266,18 @@ impl OvsCollector {
 
         let mut batch_probes = vec![
             (
-                Probe::Usdt(UsdtProbe::new(&ovs, "dpif_recv::recv_upcall")?),
+                Probe::usdt(UsdtProbe::new(&ovs, "dpif_recv::recv_upcall")?)?,
                 Hook::from(hooks::user_recv_upcall::DATA),
             ),
             (
-                Probe::Usdt(UsdtProbe::new(
+                Probe::usdt(UsdtProbe::new(
                     &ovs,
                     "dpif_netlink_operate__::op_flow_execute",
-                )?),
+                )?)?,
                 Hook::from(hooks::user_op_exec::DATA),
             ),
             (
-                Probe::Usdt(UsdtProbe::new(&ovs, "dpif_netlink_operate__::op_flow_put")?),
+                Probe::usdt(UsdtProbe::new(&ovs, "dpif_netlink_operate__::op_flow_put")?)?,
                 Hook::from(hooks::user_op_put::DATA),
             ),
         ];

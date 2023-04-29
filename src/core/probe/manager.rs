@@ -209,7 +209,7 @@ impl ProbeManager {
         // the new hook to it.
         for set in self.targeted_probes.iter_mut() {
             if set.probes.contains_key(&key) {
-                if let Probe::Usdt(_) = probe {
+                if let ProbeType::Usdt(_) = probe.r#type() {
                     bail!("USDT probes only support a single hook");
                 }
 
@@ -226,9 +226,11 @@ impl ProbeManager {
 
         // New target, let's build a new probe set.
         let mut set = ProbeSet {
-            supports_generic_hooks: match &probe {
-                Probe::Kprobe(_) | Probe::Kretprobe(_) | Probe::RawTracepoint(_) => true,
-                Probe::Usdt(_) => false,
+            supports_generic_hooks: match probe.r#type() {
+                ProbeType::Kprobe(_) | ProbeType::Kretprobe(_) | ProbeType::RawTracepoint(_) => {
+                    true
+                }
+                ProbeType::Usdt(_) => false,
             },
             ..Default::default()
         };
@@ -331,13 +333,13 @@ impl ProbeSet {
             // are shared for all probes of the same type within this set.
             match builders.contains_key(&probe.type_key()) {
                 false => {
-                    let mut builder: Box<dyn ProbeBuilder> = match probe {
-                        Probe::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
-                        Probe::Kretprobe(_) => Box::new(kretprobe::KretprobeBuilder::new()),
-                        Probe::RawTracepoint(_) => {
+                    let mut builder: Box<dyn ProbeBuilder> = match probe.r#type() {
+                        ProbeType::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
+                        ProbeType::Kretprobe(_) => Box::new(kretprobe::KretprobeBuilder::new()),
+                        ProbeType::RawTracepoint(_) => {
                             Box::new(raw_tracepoint::RawTracepointBuilder::new())
                         }
-                        Probe::Usdt(_) => Box::new(usdt::UsdtBuilder::new()),
+                        ProbeType::Usdt(_) => Box::new(usdt::UsdtBuilder::new()),
                     };
 
                     // Initialize the probe builder, only once for all targets.
@@ -352,10 +354,10 @@ impl ProbeSet {
 
             // First load the probe configuration.
             #[cfg(not(test))]
-            match probe {
-                Probe::Kprobe(ref mut p)
-                | Probe::Kretprobe(ref mut p)
-                | Probe::RawTracepoint(ref mut p) => {
+            match probe.type_mut() {
+                ProbeType::Kprobe(ref mut p)
+                | ProbeType::Kretprobe(ref mut p)
+                | ProbeType::RawTracepoint(ref mut p) => {
                     options.iter().try_for_each(|c| p.set_option(c))?;
                     let config = unsafe { plain::as_bytes(&p.config) };
                     config_map.update(&p.ksym.to_ne_bytes(), config, libbpf_rs::MapFlags::ANY)?;

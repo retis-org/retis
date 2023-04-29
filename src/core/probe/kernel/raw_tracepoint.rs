@@ -46,8 +46,8 @@ impl ProbeBuilder for RawTracepointBuilder {
         skel.obj_builder.debug(get_ebpf_debug());
         let mut skel = skel.open()?;
 
-        let probe = match probe {
-            Probe::RawTracepoint(probe) => probe,
+        let probe = match probe.r#type() {
+            ProbeType::RawTracepoint(probe) => probe,
             _ => bail!("Wrong probe type {}", probe),
         };
 
