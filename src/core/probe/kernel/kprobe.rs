@@ -62,8 +62,8 @@ impl ProbeBuilder for KprobeBuilder {
             Some(obj) => obj,
             _ => bail!("Kprobe builder is uninitialized"),
         };
-        let probe = match probe {
-            Probe::Kprobe(probe) => probe,
+        let probe = match probe.r#type() {
+            ProbeType::Kprobe(probe) => probe,
             _ => bail!("Wrong probe type {}", probe),
         };
 

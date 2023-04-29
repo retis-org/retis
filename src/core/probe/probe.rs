@@ -10,7 +10,7 @@ use crate::core::kernel;
 /// tracing APIs and it does contain everything needed to target a symbol in a
 /// given running program.
 #[derive(Clone)]
-pub(crate) enum Probe {
+pub(crate) enum ProbeType {
     Kprobe(KernelProbe),
     #[allow(dead_code)]
     Kretprobe(KernelProbe),
@@ -19,34 +19,60 @@ pub(crate) enum Probe {
     Usdt(UsdtProbe),
 }
 
+/// Represents a probe we can install in a target (kernel, user space program,
+/// etc). It can be of various underlying types, which can be retrieved using
+/// `let r#type = probe.r#type();`
+#[derive(Clone)]
+pub(crate) struct Probe {
+    r#type: ProbeType,
+}
+
 impl Probe {
     /// Create a new kprobe.
     pub(crate) fn kprobe(symbol: kernel::Symbol) -> Result<Probe> {
-        match symbol {
-            kernel::Symbol::Func(_) => Ok(Probe::Kprobe(KernelProbe::new(symbol)?)),
+        let r#type = match symbol {
+            kernel::Symbol::Func(_) => ProbeType::Kprobe(KernelProbe::new(symbol)?),
             kernel::Symbol::Event(_) => bail!("Symbol cannot be probed with a kprobe"),
-        }
+        };
+        Ok(Probe { r#type })
     }
 
     /// Create a new kretprobe
-    #[allow(dead_code)]
     pub(crate) fn kretprobe(symbol: kernel::Symbol) -> Result<Probe> {
-        match symbol {
-            kernel::Symbol::Func(_) => Ok(Probe::Kretprobe(KernelProbe::new(symbol)?)),
+        let r#type = match symbol {
+            kernel::Symbol::Func(_) => ProbeType::Kretprobe(KernelProbe::new(symbol)?),
             kernel::Symbol::Event(_) => bail!("Symbol cannot be probed with a kretprobe"),
-        }
+        };
+        Ok(Probe { r#type })
     }
 
     /// Create a new raw tracepoint.
     pub(crate) fn raw_tracepoint(symbol: kernel::Symbol) -> Result<Probe> {
-        match symbol {
-            kernel::Symbol::Event(_) => Ok(Probe::RawTracepoint(KernelProbe::new(symbol)?)),
+        let r#type = match symbol {
+            kernel::Symbol::Event(_) => ProbeType::RawTracepoint(KernelProbe::new(symbol)?),
             kernel::Symbol::Func(_) => bail!("Symbol cannot be probed with a raw tracepoint"),
-        }
+        };
+        Ok(Probe { r#type })
     }
-}
 
-impl Probe {
+    /// Create a new usdt probe.
+    pub(crate) fn usdt(usdt_probe: UsdtProbe) -> Result<Probe> {
+        let r#type = ProbeType::Usdt(usdt_probe);
+        Ok(Probe { r#type })
+    }
+
+    /// Retrieve a reference to the underlying ProbeType.
+    #[allow(dead_code)]
+    pub(crate) fn r#type(&self) -> &ProbeType {
+        &self.r#type
+    }
+
+    /// Retrieve a mutable reference to the underlying ProbeType.
+    #[allow(dead_code)]
+    pub(crate) fn type_mut(&mut self) -> &mut ProbeType {
+        &mut self.r#type
+    }
+
     /// Use the underlying symbol to get its name and use it as a key which can
     /// be used to differenciate between probes.
     pub(crate) fn key(&self) -> String {
@@ -55,11 +81,11 @@ impl Probe {
 
     /// We do use probe types as indexes, the following makes it easy.
     pub(crate) fn type_key(&self) -> usize {
-        match self {
-            Probe::Kprobe(_) => 0,
-            Probe::Kretprobe(_) => 1,
-            Probe::RawTracepoint(_) => 2,
-            Probe::Usdt(_) => 3,
+        match self.r#type() {
+            ProbeType::Kprobe(_) => 0,
+            ProbeType::Kretprobe(_) => 1,
+            ProbeType::RawTracepoint(_) => 2,
+            ProbeType::Usdt(_) => 3,
         }
     }
 }
@@ -67,11 +93,11 @@ impl Probe {
 /// Allow nice log messages.
 impl fmt::Display for Probe {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Probe::Kprobe(symbol) => write!(f, "kprobe:{symbol}"),
-            Probe::Kretprobe(symbol) => write!(f, "kretprobe:{symbol}"),
-            Probe::RawTracepoint(symbol) => write!(f, "raw_tracepoint:{symbol}"),
-            Probe::Usdt(symbol) => write!(f, "usdt {symbol}"),
+        match self.r#type() {
+            ProbeType::Kprobe(symbol) => write!(f, "kprobe:{symbol}"),
+            ProbeType::Kretprobe(symbol) => write!(f, "kretprobe:{symbol}"),
+            ProbeType::RawTracepoint(symbol) => write!(f, "raw_tracepoint:{symbol}"),
+            ProbeType::Usdt(symbol) => write!(f, "usdt {symbol}"),
         }
     }
 }
