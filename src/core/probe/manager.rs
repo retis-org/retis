@@ -286,9 +286,13 @@ impl ProbeManager {
                 ProbeType::Kprobe(ref mut p)
                 | ProbeType::Kretprobe(ref mut p)
                 | ProbeType::RawTracepoint(ref mut p) => {
-                    options.iter().try_for_each(|c| p.set_option(c))?;
-                    let config = unsafe { plain::as_bytes(&p.config) };
-                    config_map.update(&p.ksym.to_ne_bytes(), config, libbpf_rs::MapFlags::ANY)?;
+                    let config = p.gen_config(&options)?;
+                    let config = unsafe { plain::as_bytes(&config) };
+                    config_map.update(
+                        &p.symbol.addr()?.to_ne_bytes(),
+                        config,
+                        libbpf_rs::MapFlags::ANY,
+                    )?;
                 }
                 _ => (),
             }

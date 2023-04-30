@@ -51,8 +51,8 @@ impl ProbeBuilder for RawTracepointBuilder {
             _ => bail!("Wrong probe type {}", probe),
         };
 
-        skel.rodata().ksym = probe.ksym;
-        skel.rodata().nargs = probe.nargs;
+        skel.rodata().ksym = probe.symbol.addr()?;
+        skel.rodata().nargs = probe.symbol.nargs()?;
         skel.rodata().nhooks = self.hooks.len() as u32;
 
         let open_obj = skel.obj;
