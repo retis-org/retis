@@ -187,56 +187,52 @@ impl ProbeManager {
 
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
+        // Prepare all hooks:
+        // - Reuse global maps in all hooks.
         self.generic_hooks
             .iter_mut()
             .for_each(|h| h.maps.extend(self.maps.clone()));
+        self.probes.iter_mut().for_each(|(_, p)| {
+            p.hooks
+                .iter_mut()
+                .for_each(|h| h.maps.extend(self.maps.clone()))
+        });
 
-        // First, handle generic probes.
-        let mut set = ProbeSet {
-            probes: self
+        // Handle generic probes.
+        self.builders.extend(Self::attach_probes(
+            &mut self
                 .probes
-                .clone()
-                .into_iter()
-                .filter(|(_, p)| p.hooks_len() == 0)
-                .collect(),
-            hooks: self.generic_hooks.clone(),
-        };
-        self.builders.extend(set.attach(
+                .values_mut()
+                .filter(|p| p.hooks_len() == 0)
+                .collect::<Vec<&mut Probe>>(),
+            &self.generic_hooks,
             &self.filters,
-            #[cfg(not(test))]
-            &mut self.config_map,
             self.maps.clone(),
             #[cfg(not(test))]
             &self.global_probes_options,
+            #[cfg(not(test))]
+            &mut self.config_map,
         )?);
 
         // Then targeted ones.
         self.probes
             .iter_mut()
-            .filter(|(_, p)| p.hooks_len() != 0)
+            .filter(|(_, p)| p.hooks_len() > 0)
             .try_for_each(|(_, p)| -> Result<()> {
-                p.hooks
-                    .iter_mut()
-                    .for_each(|h| h.maps.extend(self.maps.clone()));
-
-                let mut probes = HashMap::new();
-                probes.insert(p.key(), p.clone());
-
-                let mut set = ProbeSet {
-                    probes,
-                    hooks: p.hooks.clone(),
-                };
+                let mut hooks = p.hooks.clone();
                 if p.supports_generic_hooks() {
-                    set.hooks.extend(self.generic_hooks.clone());
+                    hooks.extend(self.generic_hooks.clone());
                 }
 
-                self.builders.extend(set.attach(
+                self.builders.extend(Self::attach_probes(
+                    &mut [p],
+                    &hooks,
                     &self.filters,
-                    #[cfg(not(test))]
-                    &mut self.config_map,
                     self.maps.clone(),
                     #[cfg(not(test))]
                     &self.global_probes_options,
+                    #[cfg(not(test))]
+                    &mut self.config_map,
                 )?);
                 Ok(())
             })?;
@@ -244,41 +240,23 @@ impl ProbeManager {
         Ok(())
     }
 
-    fn check_probe_max(&self) -> Result<()> {
-        if self.probes.len() >= PROBE_MAX {
-            bail!(
-                "Can't register probe, reached maximum capacity ({})",
-                PROBE_MAX
-            );
-        }
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-struct ProbeSet {
-    probes: HashMap<String, Probe>,
-    hooks: Vec<Hook>,
-}
-
-impl ProbeSet {
-    /// Attach all the probes and hook in the ProbeSet.
-    fn attach(
-        &mut self,
+    // Behind the scene logic to attach a set of probes using a common context
+    // (hooks, filters, etc).
+    //
+    // Returns a reference to the probe builders used, so the attached BPF
+    // programs don't go away.
+    fn attach_probes(
+        probes: &mut [&mut Probe],
+        hooks: &[Hook],
         filters: &[Filter],
-        #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
         maps: HashMap<String, i32>,
         #[cfg(not(test))] options: &[ProbeOption],
+        #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
     ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
-        if self.probes.is_empty() {
-            debug!("No probe in probe set");
-            return Ok(Vec::new());
-        }
-
         let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
         let map_fds: Vec<(String, i32)> = maps.into_iter().collect();
 
-        self.probes.iter_mut().try_for_each(|(_, probe)| {
+        probes.iter_mut().try_for_each(|probe| {
             // Make a new builder if none if found for the current type. Builder
             // are shared for all probes of the same type within this set.
             match builders.contains_key(&probe.type_key()) {
@@ -293,7 +271,7 @@ impl ProbeSet {
                     };
 
                     // Initialize the probe builder, only once for all targets.
-                    builder.init(map_fds.clone(), self.hooks.clone(), filters.to_owned())?;
+                    builder.init(map_fds.clone(), hooks.to_vec(), filters.to_owned())?;
 
                     builders.insert(probe.type_key(), builder);
                 }
@@ -321,8 +299,19 @@ impl ProbeSet {
         })?;
 
         // All probes loaded, issue an info log.
-        info!("{} probe(s) loaded", self.probes.len());
+        info!("{} probe(s) loaded", probes.len());
+
         Ok(builders.drain().map(|(_, v)| v).collect())
+    }
+
+    fn check_probe_max(&self) -> Result<()> {
+        if self.probes.len() >= PROBE_MAX {
+            bail!(
+                "Can't register probe, reached maximum capacity ({})",
+                PROBE_MAX
+            );
+        }
+        Ok(())
     }
 }
 
