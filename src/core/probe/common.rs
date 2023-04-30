@@ -29,7 +29,3 @@ pub(crate) fn get_ebpf_debug() -> bool {
         *EBPF_DEBUG.get_or_init(|| false)
     }
 }
-
-pub(crate) enum ProbeOption {
-    StackTrace,
-}
