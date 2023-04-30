@@ -91,12 +91,12 @@ impl ProbeManager {
     ///
     /// ```
     /// let symbol = kernel::Symbol::from_name("kfree_skb_reason").unwrap();
-    /// mgr.add_probe(Probe::kprobe(symbol).unwrap()).unwrap();
+    /// mgr.register_probe(Probe::kprobe(symbol).unwrap()).unwrap();
     ///
     /// let symbol = kernel::Symbol::from_name("skb:kfree_skb").unwrap();
-    /// mgr.add_probe(Probe::raw_tracepoint(symbol).unwrap()).unwrap();
+    /// mgr.register_probe(Probe::raw_tracepoint(symbol).unwrap()).unwrap();
     /// ```
-    pub(crate) fn add_probe(&mut self, mut probe: Probe) -> Result<()> {
+    pub(crate) fn register_probe(&mut self, mut probe: Probe) -> Result<()> {
         let key = probe.key();
 
         let len = probe.hooks_len();
@@ -339,15 +339,15 @@ mod tests {
     }
 
     #[test]
-    fn add_probe() {
+    fn register_probe() {
         let mut mgr = ProbeManager::new().unwrap();
 
-        assert!(mgr.add_probe(kprobe!("kfree_skb_reason")).is_ok());
-        assert!(mgr.add_probe(kprobe!("consume_skb")).is_ok());
-        assert!(mgr.add_probe(kprobe!("consume_skb")).is_ok());
+        assert!(mgr.register_probe(kprobe!("kfree_skb_reason")).is_ok());
+        assert!(mgr.register_probe(kprobe!("consume_skb")).is_ok());
+        assert!(mgr.register_probe(kprobe!("consume_skb")).is_ok());
 
-        assert!(mgr.add_probe(raw_tp!("skb:kfree_skb")).is_ok());
-        assert!(mgr.add_probe(raw_tp!("skb:kfree_skb")).is_ok());
+        assert!(mgr.register_probe(raw_tp!("skb:kfree_skb")).is_ok());
+        assert!(mgr.register_probe(raw_tp!("skb:kfree_skb")).is_ok());
     }
 
     #[test]
@@ -359,15 +359,15 @@ mod tests {
 
         let mut probe = kprobe!("kfree_skb_reason");
         probe.add_hook(Hook::from(HOOK)).unwrap();
-        assert!(mgr.add_probe(kprobe!("kfree_skb_reason")).is_ok());
-        assert!(mgr.add_probe(probe).is_ok());
-        assert!(mgr.add_probe(kprobe!("kfree_skb_reason")).is_ok());
+        assert!(mgr.register_probe(kprobe!("kfree_skb_reason")).is_ok());
+        assert!(mgr.register_probe(probe).is_ok());
+        assert!(mgr.register_probe(kprobe!("kfree_skb_reason")).is_ok());
 
-        assert!(mgr.add_probe(raw_tp!("skb:kfree_skb")).is_ok());
+        assert!(mgr.register_probe(raw_tp!("skb:kfree_skb")).is_ok());
         let mut probe = raw_tp!("skb:kfree_skb");
         probe.add_hook(Hook::from(HOOK)).unwrap();
         probe.add_hook(Hook::from(HOOK)).unwrap();
-        assert!(mgr.add_probe(probe).is_ok());
+        assert!(mgr.register_probe(probe).is_ok());
 
         for _ in 0..HOOK_MAX - 4 {
             assert!(mgr.register_kernel_hook(Hook::from(HOOK)).is_ok());
@@ -378,16 +378,16 @@ mod tests {
 
         let mut probe = kprobe!("kfree_skb_reason");
         probe.add_hook(Hook::from(HOOK)).unwrap();
-        assert!(mgr.add_probe(probe).is_ok());
+        assert!(mgr.register_probe(probe).is_ok());
 
         // We should hit the hook limit here as well.
         let mut probe = kprobe!("kfree_skb_reason");
         probe.add_hook(Hook::from(HOOK)).unwrap();
-        assert!(mgr.add_probe(probe).is_err());
+        assert!(mgr.register_probe(probe).is_err());
 
         let mut probe = raw_tp!("skb:kfree_skb");
         probe.add_hook(Hook::from(HOOK)).unwrap();
-        assert!(mgr.add_probe(probe).is_err());
+        assert!(mgr.register_probe(probe).is_err());
     }
 
     #[test]

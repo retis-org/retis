@@ -190,14 +190,14 @@ impl OvsCollector {
         kernel_upcall_tp_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
         let mut probe = Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_dp_upcall")?)?;
         probe.add_hook(kernel_upcall_tp_hook)?;
-        probes.add_probe(probe)?;
+        probes.register_probe(probe)?;
 
         // Upcall return probe.
         let mut kernel_upcall_ret_hook = Hook::from(hooks::kernel_upcall_ret::DATA);
         kernel_upcall_ret_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
         let mut probe = Probe::kretprobe(Symbol::from_name("ovs_dp_upcall")?)?;
         probe.add_hook(kernel_upcall_ret_hook)?;
-        probes.add_probe(probe)?;
+        probes.register_probe(probe)?;
 
         if self.track {
             // Upcall enqueue.
@@ -205,7 +205,7 @@ impl OvsCollector {
             kernel_enqueue_hook.reuse_map("inflight_upcalls", inflight_upcalls_map)?;
             let mut probe = Probe::kretprobe(Symbol::from_name("queue_userspace_packet")?)?;
             probe.add_hook(kernel_enqueue_hook)?;
-            probes.add_probe(probe)?;
+            probes.register_probe(probe)?;
         }
 
         Ok(())
@@ -225,13 +225,13 @@ impl OvsCollector {
             exec_cmd_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
             let mut probe = Probe::kprobe(cmd_execute_sym.clone())?;
             probe.add_hook(exec_cmd_hook)?;
-            probes.add_probe(probe)?;
+            probes.register_probe(probe)?;
 
             let mut exec_cmd_ret_hook = Hook::from(hooks::kernel_exec_cmd_ret::DATA);
             exec_cmd_ret_hook.reuse_map("inflight_exec_cmd", inflight_map.fd())?;
             let mut probe = Probe::kretprobe(cmd_execute_sym)?;
             probe.add_hook(exec_cmd_ret_hook)?;
-            probes.add_probe(probe)?;
+            probes.register_probe(probe)?;
 
             self.inflight_exec_cmd_map = Some(inflight_map);
         }
@@ -240,7 +240,7 @@ impl OvsCollector {
         let mut probe =
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?;
         probe.add_hook(exec_action_hook)?;
-        probes.add_probe(probe)?;
+        probes.register_probe(probe)?;
 
         Ok(())
     }
@@ -287,7 +287,7 @@ impl OvsCollector {
             hook.reuse_map("upcall_batches", upcall_batches_fd)?
                 .reuse_map("pid_to_batch", pid_to_batch_fd)?;
             probe.add_hook(hook)?;
-            probes.add_probe(probe)?;
+            probes.register_probe(probe)?;
         }
 
         Ok(())

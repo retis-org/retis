@@ -13,7 +13,7 @@
 //! 1. Hooks can be attached to all probes, using the generic register_hook()
 //!    API. Those hooks will be attached to all running probes in the kernel.
 //!    Note: for the hook to actually run, at least one probe must be added,
-//!    with the add_probe() API.
+//!    with the register_probe() API.
 //!
 //! 2. Targeted hooks, attached to a specific probe, using the Probe API.
 

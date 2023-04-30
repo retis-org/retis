@@ -170,7 +170,7 @@ impl Collectors {
             })?;
         probes
             .drain(..)
-            .try_for_each(|p| self.probes.add_probe(p))?;
+            .try_for_each(|p| self.probes.register_probe(p))?;
 
         Ok(())
     }
