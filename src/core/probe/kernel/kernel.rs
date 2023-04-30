@@ -36,6 +36,7 @@ impl KernelProbe {
             ProbeOption::StackTrace => {
                 config.stack_trace = 1;
             }
+            _ => (),
         });
 
         Ok(config)
