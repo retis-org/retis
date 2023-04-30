@@ -96,7 +96,7 @@ impl ProbeManager {
     /// let symbol = kernel::Symbol::from_name("skb:kfree_skb").unwrap();
     /// mgr.add_probe(Probe::raw_tracepoint(symbol).unwrap()).unwrap();
     /// ```
-    pub(crate) fn add_probe(&mut self, probe: Probe) -> Result<()> {
+    pub(crate) fn add_probe(&mut self, mut probe: Probe) -> Result<()> {
         let key = probe.key();
 
         let len = probe.hooks_len();
@@ -110,7 +110,7 @@ impl ProbeManager {
                 bail!("Hook list is already full");
             }
 
-            prev.merge(&probe)?;
+            prev.merge(&mut probe)?;
             return Ok(());
         }
 
@@ -188,15 +188,19 @@ impl ProbeManager {
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
         // Prepare all hooks:
-        // - Reuse global maps in all hooks.
+        // - Reuse global maps.
+        // - Set global options.
         self.generic_hooks
             .iter_mut()
             .for_each(|h| h.maps.extend(self.maps.clone()));
-        self.probes.iter_mut().for_each(|(_, p)| {
+        self.probes.iter_mut().try_for_each(|(_, p)| {
             p.hooks
                 .iter_mut()
-                .for_each(|h| h.maps.extend(self.maps.clone()))
-        });
+                .for_each(|h| h.maps.extend(self.maps.clone()));
+            self.global_probes_options
+                .iter()
+                .try_for_each(|o| p.set_option(o.clone()))
+        })?;
 
         // Handle generic probes.
         self.builders.extend(Self::attach_probes(
@@ -208,8 +212,6 @@ impl ProbeManager {
             &self.generic_hooks,
             &self.filters,
             self.maps.clone(),
-            #[cfg(not(test))]
-            &self.global_probes_options,
             #[cfg(not(test))]
             &mut self.config_map,
         )?);
@@ -230,8 +232,6 @@ impl ProbeManager {
                     &self.filters,
                     self.maps.clone(),
                     #[cfg(not(test))]
-                    &self.global_probes_options,
-                    #[cfg(not(test))]
                     &mut self.config_map,
                 )?);
                 Ok(())
@@ -250,7 +250,6 @@ impl ProbeManager {
         hooks: &[Hook],
         filters: &[Filter],
         maps: HashMap<String, i32>,
-        #[cfg(not(test))] options: &[ProbeOption],
         #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
     ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
         let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
@@ -282,17 +281,16 @@ impl ProbeManager {
 
             // First load the probe configuration.
             #[cfg(not(test))]
+            let options = probe.options();
+            #[cfg(not(test))]
             match probe.type_mut() {
                 ProbeType::Kprobe(ref mut p)
                 | ProbeType::Kretprobe(ref mut p)
                 | ProbeType::RawTracepoint(ref mut p) => {
+                    let addr = p.symbol.addr()?.to_ne_bytes();
                     let config = p.gen_config(&options)?;
                     let config = unsafe { plain::as_bytes(&config) };
-                    config_map.update(
-                        &p.symbol.addr()?.to_ne_bytes(),
-                        config,
-                        libbpf_rs::MapFlags::ANY,
-                    )?;
+                    config_map.update(&addr, config, libbpf_rs::MapFlags::ANY)?;
                 }
                 _ => (),
             }

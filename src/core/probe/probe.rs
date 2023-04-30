@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt, mem,
+};
 
 use anyhow::{bail, Result};
 
@@ -19,6 +22,12 @@ pub(crate) enum ProbeType {
     Usdt(UsdtProbe),
 }
 
+/// Probe options, to toggle opt-in/out features.
+#[derive(Clone, Eq, Hash, PartialEq)]
+pub(crate) enum ProbeOption {
+    StackTrace,
+}
+
 /// Represents a probe we can install in a target (kernel, user space program,
 /// etc). It can be of various underlying types, which can be retrieved using
 /// `let r#type = probe.r#type();`
@@ -26,6 +35,7 @@ pub(crate) enum ProbeType {
 pub(crate) struct Probe {
     r#type: ProbeType,
     pub(super) hooks: Vec<Hook>,
+    pub(super) options: HashSet<ProbeOption>,
 }
 
 impl Probe {
@@ -33,6 +43,7 @@ impl Probe {
         Probe {
             r#type,
             hooks: Vec::new(),
+            options: HashSet::new(),
         }
     }
 
@@ -119,13 +130,32 @@ impl Probe {
         !matches!(self.r#type(), ProbeType::Usdt(_))
     }
 
-    /// Merge two probes into the current one.
-    pub(crate) fn merge(&mut self, other: &Probe) -> Result<()> {
-        if std::mem::discriminant(self.r#type()) != std::mem::discriminant(other.r#type()) {
+    /// Set a probe option.
+    pub(crate) fn set_option(&mut self, option: ProbeOption) -> Result<()> {
+        self.options.insert(option);
+        Ok(())
+    }
+
+    /// Get all probe's options.
+    #[cfg_attr(test, allow(dead_code))]
+    pub(crate) fn options(&self) -> Vec<ProbeOption> {
+        self.options.clone().into_iter().collect()
+    }
+
+    /// Merge two probes into the current one. The second probe can't be used
+    /// after this.
+    pub(crate) fn merge(&mut self, other: &mut Probe) -> Result<()> {
+        if mem::discriminant(self.r#type()) != mem::discriminant(other.r#type()) {
             bail!("Can't merge two probe with a different underlying type");
         }
 
-        self.hooks.extend(other.hooks.clone());
+        // Merge options.
+        if let Some(opt) = other.options.take(&ProbeOption::StackTrace) {
+            self.options.insert(opt);
+        }
+
+        // Merge hooks.
+        self.hooks.append(&mut other.hooks);
         Ok(())
     }
 }
