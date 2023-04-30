@@ -89,8 +89,7 @@ use crate::core::{
     kernel::Symbol,
     probe::{
         manager::{ProbeManager, PROBE_MAX},
-        Probe,
-        ProbeOption,
+        Probe, ProbeOption,
     },
     workaround::SendableMap,
 };
@@ -160,7 +159,7 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<()> {
     config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
     let mut p = Probe::kprobe(symbol)?;
     p.set_option(ProbeOption::NoGenericHook)?;
-    probes.add_probe(p)?;
+    probes.register_probe(p)?;
 
     // Then track invalidation head events.
     let symbol = Symbol::from_name("pskb_expand_head")?;
@@ -173,7 +172,7 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<()> {
     config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
     let mut p = Probe::kprobe(symbol)?;
     p.set_option(ProbeOption::NoGenericHook)?;
-    probes.add_probe(p)?;
+    probes.register_probe(p)?;
 
     // Take care of gargabe collection of tracking info. This should be done
     // in the BPF part for most if not all skbs but we might lose some
