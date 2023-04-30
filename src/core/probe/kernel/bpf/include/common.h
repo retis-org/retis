@@ -338,7 +338,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	 * available this is a no-op.
 	 */
 	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
-		track_skb(ctx);
+		track_skb_start(ctx);
 
 	pass_threshold = get_event_size(event);
 
@@ -355,6 +355,12 @@ static __always_inline int chain(struct retis_context *ctx)
 	CALL_HOOK(7)
 	CALL_HOOK(8)
 	CALL_HOOK(9)
+
+	/* Cleanup stage while tracking an skb. If no skb is available this is a
+	 * no-op.
+	 */
+	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
+		track_skb_end(ctx);
 
 	if (get_event_size(event) <= pass_threshold)
 		discard_event(event);

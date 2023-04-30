@@ -65,13 +65,12 @@ static __always_inline struct tracking_info *skb_tracking_info(struct sk_buff *s
 	return ti;
 }
 
-/* Must be called with a valid skb pointer */
-static __always_inline int track_skb(struct retis_context *ctx)
+static __always_inline int track_skb_start(struct retis_context *ctx)
 {
 	struct tracking_info *ti = NULL, new;
-	bool free = false, inv_head = false;
 	struct tracking_config *cfg;
 	u64 head, ksym = ctx->ksym;
+	bool inv_head = false;
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);
@@ -85,10 +84,8 @@ static __always_inline int track_skb(struct retis_context *ctx)
 	 * generic.
 	 */
 	cfg = bpf_map_lookup_elem(&tracking_config_map, &ksym);
-	if (cfg) {
-		free = cfg->free;
+	if (cfg)
 		inv_head = cfg->inv_head;
-	}
 
 	head = (u64)BPF_CORE_READ(skb, head);
 	if (!head)
@@ -122,9 +119,7 @@ static __always_inline int track_skb(struct retis_context *ctx)
 		/* No need to globally track it if the first time we see this
 		 * skb is when it is freed.
 		 */
-		if (!free)
-			bpf_map_update_elem(&tracking_map, &head, &new,
-					    BPF_NOEXIST);
+		bpf_map_update_elem(&tracking_map, &head, &new, BPF_NOEXIST);
 	}
 
 	/* Track when we last saw this skb, as it'll be useful to garbage
@@ -137,9 +132,34 @@ static __always_inline int track_skb(struct retis_context *ctx)
 	 */
 	if (inv_head)
 		bpf_map_update_elem(&tracking_map, (u64 *)&skb, ti, BPF_NOEXIST);
-	/* If the skb is freed, remove it from our tracking list. */
-	else if (free)
-		bpf_map_delete_elem(&tracking_map, &head);
+
+	return 0;
+}
+
+static __always_inline int track_skb_end(struct retis_context *ctx)
+{
+	struct tracking_config *cfg;
+	u64 head, ksym = ctx->ksym;
+	struct sk_buff *skb;
+
+	cfg = bpf_map_lookup_elem(&tracking_config_map, &ksym);
+	if (!cfg)
+		return 0;
+
+	/* We only supports free functions below */
+	if (!cfg->free)
+		return 0;
+
+	skb = retis_get_sk_buff(ctx);
+	if (!skb)
+		return 0;
+
+	head = (u64)BPF_CORE_READ(skb, head);
+	if (!head)
+		return 0;
+
+	/* Skb is freed, remove it from our tracking list. */
+	bpf_map_delete_elem(&tracking_map, &head);
 
 	return 0;
 }
