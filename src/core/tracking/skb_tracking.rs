@@ -210,7 +210,7 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<()> {
             for key in to_remove {
                 tracking_map.delete(&key).ok();
                 warn!(
-                    "Removed old entry from skb tracking map: {:#x}",
+                    "Removed old entry from skb tracking map: {}",
                     u64::from_ne_bytes(key[..8].try_into().unwrap())
                 );
             }
