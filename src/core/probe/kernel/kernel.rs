@@ -19,35 +19,26 @@ use crate::core::kernel::inspect;
 /// Kernel encapsulates all the information about a kernel probe (kprobe or tracepoint) needed to attach to it.
 #[derive(Clone)]
 pub(crate) struct KernelProbe {
-    /// Symbol name
     pub(crate) symbol: Symbol,
-    /// Symbol address
-    pub(crate) ksym: u64,
-    /// Number of arguments
-    pub(crate) nargs: u32,
-    /// Holds the different offsets to known parameters.
-    pub(crate) config: ProbeConfig,
 }
 
 impl KernelProbe {
     pub(crate) fn new(symbol: Symbol) -> Result<Self> {
-        let desc = inspect_symbol(&symbol)?;
-        Ok(KernelProbe {
-            symbol,
-            ksym: desc.ksym,
-            nargs: desc.nargs,
-            config: desc.probe_cfg,
-        })
+        Ok(KernelProbe { symbol })
     }
 
-    /// Set, for probes only, a single config option used to change the default probe behavior.
-    pub(crate) fn set_option(&mut self, opt: &ProbeOption) -> Result<()> {
-        match opt {
+    /// Generate the probe BPF configuration from a list of options.
+    pub(crate) fn gen_config(&self, options: &[ProbeOption]) -> Result<ProbeConfig> {
+        let mut config = inspect_symbol(&self.symbol)?;
+
+        #[allow(clippy::single_match)]
+        options.iter().for_each(|o| match o {
             ProbeOption::StackTrace => {
-                self.config.stack_trace = 1;
+                config.stack_trace = 1;
             }
-        }
-        Ok(())
+        });
+
+        Ok(config)
     }
 }
 
