@@ -26,6 +26,7 @@ pub(crate) enum ProbeType {
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub(crate) enum ProbeOption {
     StackTrace,
+    NoGenericHook,
 }
 
 /// Represents a probe we can install in a target (kernel, user space program,
@@ -128,6 +129,7 @@ impl Probe {
     /// Are generic hooks supported by the of probe?
     pub(crate) fn supports_generic_hooks(&self) -> bool {
         !matches!(self.r#type(), ProbeType::Usdt(_))
+            && !self.options.contains(&ProbeOption::NoGenericHook)
     }
 
     /// Set a probe option.
@@ -150,8 +152,15 @@ impl Probe {
         }
 
         // Merge options.
+        // - ProbeOption::StackTrace: if any of the probes has it, it should be
+        //   set in the resulting probe.
+        // - ProbeOption::NoGenericHook: has to be set in both probes to be set in the
+        //   resulting probe.
         if let Some(opt) = other.options.take(&ProbeOption::StackTrace) {
             self.options.insert(opt);
+        }
+        if !other.options.contains(&ProbeOption::NoGenericHook) {
+            self.options.remove(&ProbeOption::NoGenericHook);
         }
 
         // Merge hooks.
