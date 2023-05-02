@@ -94,8 +94,9 @@ impl EventFactory for BpfEventsFactory {
 
         // Start an event polling thread.
         thread::spawn(move || loop {
-            rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS))
-                .unwrap();
+            if let Err(e) = rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS)) {
+                error!("Unexpected error while polling ({e})");
+            }
         });
 
         Ok(())
