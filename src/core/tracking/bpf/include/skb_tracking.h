@@ -4,6 +4,8 @@
 #include <vmlinux.h>
 #include <bpf/bpf_core_read.h>
 
+#include <retis_context.h>
+
 /* Tracking configuration to provide hints about what the probed function does
  * for some special handling scenarios.
  *
