@@ -43,7 +43,7 @@ pub(crate) fn bpf_unload(fd: u32) -> Result<()> {
 
 fn btf_get_fd(id: u32) -> anyhow::Result<u32> {
     let mut attrs: bpf_gen::bpf_attr = unsafe { std::mem::zeroed() };
-    let mut btf_get_fd_attrs = unsafe { &mut attrs.__bindgen_anon_6.__bindgen_anon_1 };
+    let btf_get_fd_attrs = unsafe { &mut attrs.__bindgen_anon_6.__bindgen_anon_1 };
 
     btf_get_fd_attrs.btf_id = id;
 
