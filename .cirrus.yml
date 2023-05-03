@@ -1,7 +1,6 @@
-container:
-  image: rust:latest
-
-test_task:
+unittest_task:
+  container:
+    image: rust:latest
   registry_cache:
     folder: $CARGO_HOME/registry
     fingerprint_script: cat Cargo.lock
@@ -21,3 +20,30 @@ test_task:
     - cargo fmt --check
     - cargo clippy -- -D warnings
   before_cache_script: rm -rf $CARGO_HOME/registry/index
+
+functional_task:
+  name: Functional tests
+  trigger_type: manual
+  compute_engine_instance:
+    image_project: cirrus-images # GCP project.
+    image: family/docker-kvm # family or a full image name.
+    platform: linux
+    cpu: 4 # optional. Defaults to 2 CPUs.
+    memory: 16G # optional. Defaults to 4G.
+    #disk: 100 # optional. By default, uses the smallest disk size required by the image.
+    nested_virtualization: true # optional. Whether to enable Intel VT-x. Defaults to false.
+
+  # Initialization of the test environment
+  setup_script:
+    - grep -q vmx /proc/cpuinfo # Ensure nested virtualization is enabled
+    - apt-get -y update && apt-get -y install vagrant qemu-kvm virt-manager libvirt-daemon-system virtinst libvirt-clients bridge-utils
+
+  # Download, provision and cache test image(s).
+  vagrant_cache:
+    folders:
+      - /var/lib/libvirt/images/
+    populate_script:
+      - vagrant up --provision
+
+  # Download, provision and cache test image(s).
+  test_script: ci/functional.sh
