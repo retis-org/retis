@@ -16,8 +16,16 @@
 struct tracking_config {
 	/* Function is freeing skbs */
 	u8 free;
+	/* Function is partially freeing skbs (head isn't freed but merge into
+	 * another skb).
+	 */
+	u8 partial_free;
 	/* Function is invalidating the head of skbs */
 	u8 inv_head;
+	/* Special case where no addition tracking data should be added by this
+	 * probe. We can still read existing tracking data.
+	 */
+	u8 no_tracking;
 } __attribute__((packed));
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -69,10 +77,10 @@ static __always_inline struct tracking_info *skb_tracking_info(struct sk_buff *s
 
 static __always_inline int track_skb_start(struct retis_context *ctx)
 {
+	bool inv_head = false, no_tracking = false;
 	struct tracking_info *ti = NULL, new;
 	struct tracking_config *cfg;
 	u64 head, ksym = ctx->ksym;
-	bool inv_head = false;
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);
@@ -86,8 +94,10 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 	 * generic.
 	 */
 	cfg = bpf_map_lookup_elem(&tracking_config_map, &ksym);
-	if (cfg)
+	if (cfg) {
 		inv_head = cfg->inv_head;
+		no_tracking = cfg->no_tracking;
+	}
 
 	head = (u64)BPF_CORE_READ(skb, head);
 	if (!head)
@@ -113,6 +123,12 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 	 * tracking info.
 	 */
 	if (!ti) {
+		/* Tracking info doesn't exist and we don't want to add one,
+		 * nothing more we can do here.
+		 */
+		if (no_tracking)
+			return 0;
+
 		ti = &new;
 		ti->timestamp = ctx->timestamp;
 		ti->last_seen = ctx->timestamp;
@@ -159,6 +175,17 @@ static __always_inline int track_skb_end(struct retis_context *ctx)
 	head = (u64)BPF_CORE_READ(skb, head);
 	if (!head)
 		return 0;
+
+	if (cfg->partial_free) {
+		/* See kfree_skb_partial */
+		bool stolen = retis_get_param(ctx, 1, bool);
+
+		/* If the head wasn't stolen in a partial free, it will be freed
+		 * later and we'll catch it.
+		 */
+		if (!stolen)
+			return 0;
+	}
 
 	/* Skb is freed, remove it from our tracking list. */
 	bpf_map_delete_elem(&tracking_map, &head);

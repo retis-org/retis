@@ -147,13 +147,15 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<()> {
     probes.reuse_map("tracking_config_map", config_map.fd())?;
     probes.reuse_map("tracking_map", tracking_map.get().fd())?;
 
-    // For tracking skbs we only need the following two functions. First
+    // For tracking skbs we only need the following three functions. First
     // track free events.
     let symbol = Symbol::from_name("skb_free_head")?;
     let key = symbol.addr()?.to_ne_bytes();
     let cfg = TrackingConfig {
         free: 1,
+        partial_free: 0,
         inv_head: 0,
+        no_tracking: 0,
     };
     let cfg = unsafe { plain::as_bytes(&cfg) };
     config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
@@ -161,18 +163,49 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<()> {
     p.set_option(ProbeOption::NoGenericHook)?;
     probes.register_probe(p)?;
 
-    // Then track invalidation head events.
-    let symbol = Symbol::from_name("pskb_expand_head")?;
+    // Then track partial frees (head isn't freed but merged in another skb).
+    let symbol = Symbol::from_name("kfree_skb_partial")?;
     let key = symbol.addr()?.to_ne_bytes();
     let cfg = TrackingConfig {
-        free: 0,
-        inv_head: 1,
+        free: 1,
+        partial_free: 1,
+        inv_head: 0,
+        no_tracking: 0,
     };
     let cfg = unsafe { plain::as_bytes(&cfg) };
     config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
     let mut p = Probe::kprobe(symbol)?;
     p.set_option(ProbeOption::NoGenericHook)?;
     probes.register_probe(p)?;
+
+    // Finally track invalidation head events.
+    let symbol = Symbol::from_name("pskb_expand_head")?;
+    let key = symbol.addr()?.to_ne_bytes();
+    let cfg = TrackingConfig {
+        free: 0,
+        partial_free: 0,
+        inv_head: 1,
+        no_tracking: 0,
+    };
+    let cfg = unsafe { plain::as_bytes(&cfg) };
+    config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
+    let mut p = Probe::kprobe(symbol)?;
+    p.set_option(ProbeOption::NoGenericHook)?;
+    probes.register_probe(p)?;
+
+    // Special case for skb_release_head_state, which can be tracked as it is
+    // being called by kfree_skb_partial where we have a hook removing the
+    // tracking id.
+    let symbol = Symbol::from_name("skb_release_head_state")?;
+    let key = symbol.addr()?.to_ne_bytes();
+    let cfg = TrackingConfig {
+        free: 0,
+        partial_free: 0,
+        inv_head: 0,
+        no_tracking: 1,
+    };
+    let cfg = unsafe { plain::as_bytes(&cfg) };
+    config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
 
     // Take care of gargabe collection of tracking info. This should be done
     // in the BPF part for most if not all skbs but we might lose some
@@ -224,7 +257,9 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<()> {
 #[repr(C, packed)]
 struct TrackingConfig {
     free: u8,
+    partial_free: u8,
     inv_head: u8,
+    no_tracking: u8,
 }
 
 unsafe impl Plain for TrackingConfig {}
