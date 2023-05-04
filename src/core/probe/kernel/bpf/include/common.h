@@ -219,23 +219,29 @@ static __always_inline int chain(struct retis_context *ctx)
 
 	filter(ctx);
 
+	/* Track the skb. Note that this is done *after* filtering! If no skb is
+	 * available this is a no-op.
+	 *
+	 * Important note: we must run this as soon as possible so the tracking
+	 * logic runs even if later ops fail: we don't want to miss information
+	 * because of non-fatal errors!
+	 */
+	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
+		track_skb_start(ctx);
+
 	event = get_event();
 	if (!event)
-		return 0;
+		goto exit;
 
 	e = get_event_section(event, COMMON, 1, sizeof(*e));
-	if (!e) {
-		discard_event(event);
-		return 0;
-	}
+	if (!e)
+		goto discard_event;
 
 	e->timestamp = ctx->timestamp;
 
 	k = get_event_section(event, KERNEL, 1, sizeof(*k));
-	if (!k) {
-		discard_event(event);
-		return 0;
-	}
+	if (!k)
+		goto discard_event;
 
 	k->symbol = ctx->ksym;
 	k->type = ctx->probe_type;
@@ -243,13 +249,6 @@ static __always_inline int chain(struct retis_context *ctx)
 		k->stack_id = bpf_get_stackid(ctx->orig_ctx, &stack_map, BPF_F_FAST_STACK_CMP);
 	else
 		k->stack_id = -1;
-
-
-	/* Track the skb. Note that this is done *after* filtering! If no skb is
-	 * available this is a no-op.
-	 */
-	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
-		track_skb_start(ctx);
 
 	pass_threshold = get_event_size(event);
 
@@ -267,16 +266,18 @@ static __always_inline int chain(struct retis_context *ctx)
 	CALL_HOOK(8)
 	CALL_HOOK(9)
 
+	if (get_event_size(event) > pass_threshold)
+		send_event(event);
+	else
+discard_event:
+		discard_event(event);
+
+exit:
 	/* Cleanup stage while tracking an skb. If no skb is available this is a
 	 * no-op.
 	 */
 	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
 		track_skb_end(ctx);
-
-	if (get_event_size(event) <= pass_threshold)
-		discard_event(event);
-	else
-		send_event(event);
 
 	return 0;
 }
