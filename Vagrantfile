@@ -16,7 +16,11 @@ Vagrant.configure("2") do |config|
            elfutils-libelf-devel \
            zlib-devel \
            libpcap-devel \
-           git
+           git \
+           python3-pip \
+           openvswitch
+
+       python3 -m pip install pyroute2 pytest
     SHELL
   end
 
