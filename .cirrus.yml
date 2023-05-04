@@ -22,7 +22,7 @@ unittest_task:
   before_cache_script: rm -rf $CARGO_HOME/registry/index
 
 functional_task:
-  #trigger_type: manual
+  required_pr_labels: needs-functional-test
   env:
     DEBIAN_FRONTEND: noninteractive
     HOME: /root
