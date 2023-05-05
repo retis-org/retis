@@ -16,6 +16,7 @@ enum retis_event_owners {
 	COLLECTOR_SKB = 5,
 	COLLECTOR_SKB_DROP = 6,
 	COLLECTOR_OVS = 7,
+	COLLECTOR_NFT = 8,
 };
 
 struct retis_raw_event {

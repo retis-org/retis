@@ -37,7 +37,7 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	if (!uctx)
 		return 0;
 
-	skb = retis_get_sk_buff(ctx);
+	skb = __retis_get_sk_buff(ctx);
 	if (!skb)
 		return 0;
 

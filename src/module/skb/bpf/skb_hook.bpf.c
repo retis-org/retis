@@ -337,7 +337,7 @@ skip_netns:
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	struct sk_buff *skb;
 
-	skb = retis_get_sk_buff(ctx);
+	skb = __retis_get_sk_buff(ctx);
 	if (skb)
 		process_skb(ctx, event, skb);
 

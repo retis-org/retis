@@ -83,7 +83,7 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 	u64 head, ksym = ctx->ksym;
 	struct sk_buff *skb;
 
-	skb = retis_get_sk_buff(ctx);
+	skb = __retis_get_sk_buff(ctx);
 	if (!skb)
 		return 0;
 
@@ -168,7 +168,7 @@ static __always_inline int track_skb_end(struct retis_context *ctx)
 	if (!cfg->free)
 		return 0;
 
-	skb = retis_get_sk_buff(ctx);
+	skb = __retis_get_sk_buff(ctx);
 	if (!skb)
 		return 0;
 

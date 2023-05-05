@@ -172,7 +172,6 @@ static __always_inline void filter(struct retis_context *ctx)
 	skb = retis_get_sk_buff(ctx);
 	if (!skb)
 		return;
-
 	/* Special case the packet filtering logic if the skb is already
 	 * tracked. This helps in may ways, including:
 	 * - Performances.
