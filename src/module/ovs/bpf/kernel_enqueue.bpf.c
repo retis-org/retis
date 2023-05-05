@@ -1,4 +1,3 @@
-#include <openvswitch.h>
 #include <bpf/bpf_core_read.h>
 
 #include <common.h>
@@ -17,7 +16,7 @@ struct upcall_enqueue_event {
 static __always_inline u32 queue_id_gen(struct sk_buff *skb)
 {
 	int zero = 0;
-	struct packet_buffer *buff = bpf_map_lookup_elem(&packet_buffers, &zero);
+	struct retis_packet_buffer *buff = bpf_map_lookup_elem(&packet_buffers, &zero);
 	if (!buff)
 		return 0;
 

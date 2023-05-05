@@ -46,7 +46,7 @@ struct {
 /* Packet data to be used to for hashing.
  * Stack size is limited in ebpf programs, so we use a per-cpu array to store
  * the data we need to perform the packet hash. */
-struct packet_buffer {
+struct retis_packet_buffer {
 	unsigned char data[PACKET_HASH_SIZE];
 };
 
@@ -54,11 +54,11 @@ struct {
 	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
 	__uint(max_entries, 1);
 	__type(key, __u32);
-	__type(value, struct packet_buffer);
+	__type(value, struct retis_packet_buffer);
 } packet_buffers SEC(".maps");
 
 
-static __always_inline u32 hash_packet(struct packet_buffer *buff,
+static __always_inline u32 hash_packet(struct retis_packet_buffer *buff,
 				        void* pkt_data, u64 size)
 {
 	__builtin_memset(buff->data, 0, sizeof(buff->data));
@@ -73,7 +73,7 @@ static __always_inline u32 hash_packet(struct packet_buffer *buff,
 	return jhash(buff->data, PACKET_HASH_SIZE, 0);
 }
 
-static __always_inline u32 hash_skb(struct packet_buffer *buff,
+static __always_inline u32 hash_skb(struct retis_packet_buffer *buff,
 				     struct sk_buff *skb)
 {
 	u64 size;

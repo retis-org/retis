@@ -1,4 +1,3 @@
-#include <openvswitch.h>
 #include <bpf/bpf_core_read.h>
 
 #include <common.h>
@@ -26,7 +25,7 @@ static __always_inline s32 handle_tracking(struct retis_context *ctx,
 					   struct retis_raw_event *event)
 {
 	struct exec_track_event *track;
-	struct packet_buffer *buff;
+	struct retis_packet_buffer *buff;
 	struct sk_buff *skb;
 	int zero = 0;
 	u64 tid = bpf_get_current_pid_tgid();
