@@ -6,6 +6,7 @@
 #include <bpf/bpf_helpers.h>
 
 #include "events.h"
+#include "helpers.h"
 #include "packet-filter.h"
 
 enum kernel_probe_type {
