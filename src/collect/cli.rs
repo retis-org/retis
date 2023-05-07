@@ -61,6 +61,26 @@ Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
 Example: --filter-packet "ip dst host 10.0.0.1""#
     )]
     pub(super) packet_filter: Option<String>,
+    #[arg(
+        long,
+        default_value = "false",
+        help = r#"Allow the tool to setup all the system changes needed to make the tracing
+fully operational.
+
+Specifically, in the case the nft module is used, it creates a dummy table called "Retis_Table"
+as the following:
+
+table inet Retis_Table {
+    chain Retis_Chain {
+        meta nftrace set 1
+    }
+}
+
+The table will be removed once the program gets stopped.
+Note that the tool tries to remove "Retis_Table" before creating it.
+"#
+    )]
+    pub(crate) allow_system_changes: bool,
 }
 
 #[derive(Debug)]
