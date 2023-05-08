@@ -28,6 +28,8 @@ functional_task:
     HOME: /root
     matrix:
       - DISTRO: f36
+      - DISTRO: centos9s
+      - DISTRO: jammy
 
   name: Functional tests - ${DISTRO}
 
@@ -55,11 +57,11 @@ functional_task:
   up_script:
     - vagrant up ${DISTRO} --no-tty || vagrant up ${DISTRO} --no-tty # Retry to overcome network glitches.
     - mkdir -p -m 0700 /root/.ssh
-    - vagrant ssh-config >> /root/.ssh/config
+    - vagrant ssh-config ${DISTRO} >> /root/.ssh/config
 
   guest_info_script:
     - echo "--- Host info ---"
     - ssh ${DISTRO} 'sh -exc "uname -a"'
 
   test_script:
-    - ssh -tt ${DISTRO} "cd /vagrant/tests && cargo build && sudo pytest"
+    - ssh -tt ${DISTRO} "cd /vagrant/tests && cargo build && sudo python3 -m pytest"
