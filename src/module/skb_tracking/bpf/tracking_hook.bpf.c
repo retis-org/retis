@@ -16,7 +16,7 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	struct tracking_info *ti;
 	struct sk_buff *skb;
 
-	skb = __retis_get_sk_buff(ctx);
+	skb = retis_get_sk_buff(ctx);
 	if (!skb)
 		return 0;
 
