@@ -9,7 +9,7 @@ use crate::core::{
 #[repr(u8)]
 pub(crate) enum eBpfJmpOpExt {
     Bpf(BpfJmpOp),
-    Ne = bpf_sys::BPF_JNE,
+    Ne, // identifies bpf_sys::BPF_JNE
 }
 
 #[repr(u8)]
