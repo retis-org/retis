@@ -26,10 +26,20 @@ functional_task:
   env:
     DEBIAN_FRONTEND: noninteractive
     HOME: /root
-    matrix:
-      - DISTRO: f36
 
-  name: Functional tests - ${DISTRO}
+  matrix:
+    - name: Fedora 38
+      env:
+        DISTRO: f38
+    - name: Fedora 36
+      env:
+        DISTRO: f36
+    - name: Centos 9 Stream
+      env:
+        DISTRO: c9s
+    - name: Ubuntu Jammy
+      env:
+        DISTRO: jammy
 
   compute_engine_instance:
     image_project: cirrus-images # GCP project.
@@ -55,11 +65,11 @@ functional_task:
   up_script:
     - vagrant up ${DISTRO} --no-tty || vagrant up ${DISTRO} --no-tty # Retry to overcome network glitches.
     - mkdir -p -m 0700 /root/.ssh
-    - vagrant ssh-config >> /root/.ssh/config
+    - vagrant ssh-config ${DISTRO} >> /root/.ssh/config
 
   guest_info_script:
     - echo "--- Host info ---"
     - ssh ${DISTRO} 'sh -exc "uname -a"'
 
   test_script:
-    - ssh -tt ${DISTRO} "cd /vagrant/tests && cargo build && sudo pytest"
+    - ssh -tt ${DISTRO} "cd /vagrant/tests && cargo build && sudo python3 -m pytest"
