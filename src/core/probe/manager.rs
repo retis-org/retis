@@ -205,7 +205,7 @@ impl ProbeManager {
             &mut self
                 .probes
                 .values_mut()
-                .filter(|p| p.hooks_len() == 0 && p.supports_generic_hooks())
+                .filter(|p| p.is_generic())
                 .collect::<Vec<&mut Probe>>(),
             &self.generic_hooks,
             &self.filters,
@@ -217,7 +217,7 @@ impl ProbeManager {
         // Then targeted ones.
         self.probes
             .iter_mut()
-            .filter(|(_, p)| p.hooks_len() > 0 || !p.supports_generic_hooks())
+            .filter(|(_, p)| !p.is_generic())
             .try_for_each(|(_, p)| -> Result<()> {
                 let mut hooks = p.hooks.clone();
                 if p.supports_generic_hooks() {

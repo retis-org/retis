@@ -126,6 +126,11 @@ impl Probe {
         self.hooks.len()
     }
 
+    /// Is this probe generic (aimed at hosting generic hooks only)?
+    pub(crate) fn is_generic(&self) -> bool {
+        self.hooks.is_empty() && self.supports_generic_hooks()
+    }
+
     /// Are generic hooks supported by the of probe?
     pub(crate) fn supports_generic_hooks(&self) -> bool {
         !matches!(self.r#type(), ProbeType::Usdt(_))
