@@ -22,12 +22,14 @@ unittest_task:
   before_cache_script: rm -rf $CARGO_HOME/registry/index
 
 functional_task:
-  required_pr_labels: needs-functional-test
+  # Run for PRs with a specific label
+  required_pr_labels: run-functional-test
+  only_if: "$CIRRUS_PR != ''"
   env:
     DEBIAN_FRONTEND: noninteractive
     HOME: /root
 
-  matrix:
+  matrix: &distro_matrix
     - name: Fedora 38
       env:
         DISTRO: f38
@@ -41,17 +43,16 @@ functional_task:
       env:
         DISTRO: jammy
 
-  compute_engine_instance:
-    image_project: cirrus-images # GCP project.
-    image: family/docker-kvm # family or a full image name.
+  compute_engine_instance: &nestedvm
+    image_project: cirrus-images
+    image: family/docker-kvm
     platform: linux
-    cpu: 4 # optional. Defaults to 2 CPUs.
-    memory: 16G # optional. Defaults to 4G.
-    #disk: 100 # optional. By default, uses the smallest disk size required by the image.
-    nested_virtualization: true # optional. Whether to enable Intel VT-x. Defaults to false.
+    cpu: 4
+    memory: 16G
+    nested_virtualization: true
 
   # Initialization of the test environment
-  setup_script:
+  setup_script: &vagrant_setup
     - grep -q vmx /proc/cpuinfo # Ensure nested virtualization is enabled
       # The version of vagrant shipped with ubuntu fails to download some boxes (e.g: f38).
       # See https://bugs.launchpad.net/vagrant/+bug/2017828.
@@ -63,18 +64,30 @@ functional_task:
     - systemctl enable --now libvirtd
 
   # Download, provision and cache test image(s).
-  vagrant_cache:
+  vagrant_cache: &vagrant_cache
     fingerprint_script: uname -s ; cat Vagrantfile
     folder: /root/.vagrant.d
 
-  up_script:
+  up_script: &vagrant_up
     - vagrant up ${DISTRO} --no-tty || vagrant up ${DISTRO} --no-tty # Retry to overcome network glitches.
     - mkdir -p -m 0700 /root/.ssh
     - vagrant ssh-config ${DISTRO} >> /root/.ssh/config
 
-  guest_info_script:
+  guest_info_script: &guest_info
     - echo "--- Host info ---"
     - ssh ${DISTRO} 'sh -exc "uname -a"'
 
-  test_script:
+  test_script: &functional_test
     - ssh -tt ${DISTRO} "cd /vagrant/tests && cargo build && sudo python3 -m pytest"
+ 
+# Manual trigger for non-PR branches.
+manual_test_funtional_task:
+  trigger_type: manual
+  only_if: "$CIRRUS_BRANCH !=~ 'pull/.*'"
+  matrix: *distro_matrix
+  compute_engine_instance: *nestedvm
+  setup_script: *vagrant_setup
+  vagrant_cache: *vagrant_cache
+  up_script: &vagrant_up
+  guest_info_script: &guest_info
+  test_script: *functional_test
