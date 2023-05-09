@@ -181,18 +181,16 @@ impl Collectors {
         Self::setup_filters(&mut self.probes, collect)?;
 
         // Setup user defined probes.
-        let mut probes = Vec::new();
         collect
             .args()?
             .probes
             .iter()
             .try_for_each(|p| -> Result<()> {
-                probes.append(&mut self.parse_probe(p)?);
+                self.parse_probe(p)?
+                    .drain(..)
+                    .try_for_each(|p| self.probes.register_probe(p))?;
                 Ok(())
             })?;
-        probes
-            .drain(..)
-            .try_for_each(|p| self.probes.register_probe(p))?;
 
         Ok(())
     }
