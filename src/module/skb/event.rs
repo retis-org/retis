@@ -58,7 +58,7 @@ pub(crate) struct SkbEvent {
     pub(crate) netns: Option<u32>,
     // Dataref fields
     pub(crate) cloned: Option<bool>,
-    pub(crate) fclone: Option<bool>,
+    pub(crate) fclone: Option<u8>,
     pub(crate) users: Option<u8>,
     pub(crate) dataref: Option<u8>,
 }

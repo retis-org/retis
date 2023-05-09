@@ -39,6 +39,9 @@ impl SkbDropEventFactory {
             inspect::btf_info()?.resolve_type_by_name("skb_drop_reason")?
         {
             for member in r#enum.members.iter() {
+                if member.val() < 0 {
+                    continue;
+                }
                 reasons.insert(
                     u32::try_from(member.val())?,
                     btf.resolve_name(member)?

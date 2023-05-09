@@ -267,7 +267,7 @@ pub(super) fn unmarshal_data_ref(raw_section: &BpfRawSection, event: &mut SkbEve
     let raw = parse_raw_section::<SkbDataRefEvent>(raw_section)?;
 
     event.cloned = Some(raw.cloned == 1);
-    event.fclone = Some(raw.fclone == 1);
+    event.fclone = Some(raw.fclone);
     event.users = Some(raw.users);
     event.dataref = Some(raw.dataref);
 
