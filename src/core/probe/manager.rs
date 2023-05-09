@@ -1,5 +1,5 @@
 #![allow(dead_code)] // FIXME
-use std::collections::HashMap;
+use std::{cmp, collections::HashMap};
 
 use anyhow::{bail, Result};
 use log::{debug, info};
@@ -172,9 +172,7 @@ impl ProbeManager {
     pub(crate) fn register_kernel_hook(&mut self, hook: Hook) -> Result<()> {
         let mut max: usize = 0;
         self.probes.iter().for_each(|(_, p)| {
-            if max < p.hooks_len() {
-                max = p.hooks_len();
-            }
+            max = cmp::max(max, p.hooks_len());
         });
 
         if self.generic_hooks.len() + max >= HOOK_MAX {
