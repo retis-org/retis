@@ -149,6 +149,13 @@ impl Probe {
         self.options.clone().into_iter().collect()
     }
 
+    /// Reuse a map in all the probe's hooks.
+    pub(crate) fn reuse_map(&mut self, name: &str, fd: i32) -> Result<()> {
+        self.hooks
+            .iter_mut()
+            .try_for_each(|h| h.reuse_map(name, fd).map(|_| ()))
+    }
+
     /// Merge two probes into the current one. The second probe can't be used
     /// after this.
     pub(crate) fn merge(&mut self, other: &mut Probe) -> Result<()> {

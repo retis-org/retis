@@ -192,9 +192,9 @@ impl ProbeManager {
             .iter_mut()
             .for_each(|h| h.maps.extend(self.maps.clone()));
         self.probes.iter_mut().try_for_each(|(_, p)| {
-            p.hooks
-                .iter_mut()
-                .for_each(|h| h.maps.extend(self.maps.clone()));
+            self.maps
+                .iter()
+                .try_for_each(|(name, fd)| p.reuse_map(name, *fd))?;
             self.global_probes_options
                 .iter()
                 .try_for_each(|o| p.set_option(o.clone()))
