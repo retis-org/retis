@@ -8,7 +8,7 @@
 #include <retis_context.h>
 #include <events.h>
 #include <helpers.h>
-#include <packet-filter.h>
+#include <packet_filter.h>
 #include <skb_tracking.h>
 
 /* Kernel section of the event data. */
