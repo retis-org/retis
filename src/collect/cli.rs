@@ -37,7 +37,7 @@ not released. If exhausted, no stack trace will be included."
 follow the TYPE:TARGET pattern.
 
 Valid TYPEs:
-- kprobe: kernel probes.
+- kprobe: kernel probes. Wildcards (*) can be used, eg. \"tcp_*\".
 - kretprobe: kernel return probes.
 - tp: kernel tracepoints.
 

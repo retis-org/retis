@@ -43,7 +43,7 @@ struct retis_probe_config {
 } __attribute__((packed));
 
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
-#define PROBE_MAX	128
+#define PROBE_MAX	1024
 
 /* Probe configuration; the key is the target symbol address */
 struct {

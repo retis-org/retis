@@ -178,6 +178,23 @@ impl fmt::Display for Symbol {
     }
 }
 
+pub(crate) fn matching_functions_to_symbols(target: &str) -> Result<Vec<Symbol>> {
+    let symbols: Vec<Symbol> = inspect::matching_functions(target)?
+        .iter()
+        // We do not support <func>.isra/part for now.
+        .filter_map(|t| match t.contains('.') {
+            false => Symbol::from_name(t).ok(),
+            true => None,
+        })
+        .collect();
+
+    if symbols.is_empty() {
+        bail!("Could not get traceable symbols matching '{target}'");
+    }
+
+    Ok(symbols)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,7 +231,7 @@ mod tests {
     #[test]
     fn from_addr() {
         // From an address (is an event).
-        let symbol = Symbol::from_addr(0xffffffff983c29a0).unwrap();
+        let symbol = Symbol::from_addr(0xffffffff9b2e5480).unwrap();
         assert!(symbol.attach_name() == "kfree_skb");
         assert!(symbol.addr_name() == "__tracepoint_kfree_skb");
         assert!(symbol.typedef_name() == "btf_trace_kfree_skb");
@@ -227,7 +244,7 @@ mod tests {
             .is_none());
 
         // From an address (is a function).
-        let symbol = Symbol::from_addr(0xffffffff95612980).unwrap();
+        let symbol = Symbol::from_addr(0xffffffff99d1ddf0).unwrap();
         assert!(symbol.attach_name() == "kfree_skb_reason");
         assert!(symbol.addr_name() == "kfree_skb_reason");
         assert!(symbol.typedef_name() == "kfree_skb_reason");
@@ -240,7 +257,7 @@ mod tests {
             .is_none());
 
         // Try two invalid address.
-        assert!(Symbol::from_addr(0xffffffff983c29a0 + 1).is_err());
-        assert!(Symbol::from_addr(0xffffffff95612980 + 1).is_err());
+        assert!(Symbol::from_addr(0xffffffff9b2e5480 + 1).is_err());
+        assert!(Symbol::from_addr(0xffffffff99d1ddf0 + 1).is_err());
     }
 }

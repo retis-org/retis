@@ -18,7 +18,7 @@ use crate::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
         },
-        kernel::Symbol,
+        kernel::{symbol::matching_functions_to_symbols, Symbol},
         probe::{self, Probe, ProbeManager},
     },
     module::{get_modules, ModuleId, Modules},
@@ -158,7 +158,7 @@ impl Collectors {
             .probes
             .iter()
             .try_for_each(|p| -> Result<()> {
-                probes.push(self.parse_probe(p)?);
+                probes.append(&mut self.parse_probe(p)?);
                 Ok(())
             })?;
         probes
@@ -240,7 +240,7 @@ impl Collectors {
 
     /// Parse a user defined probe (through cli parameters) and extract its type and
     /// target.
-    fn parse_probe(&self, probe: &str) -> Result<Probe> {
+    fn parse_probe(&self, probe: &str) -> Result<Vec<Probe>> {
         let (type_str, target) = match probe.split_once(':') {
             Some((type_str, target)) => (type_str, target),
             None => {
@@ -252,29 +252,39 @@ impl Collectors {
             }
         };
 
-        let symbol = Symbol::from_name(target)?;
+        // Convert the target to a list of matching ones for probe types
+        // supporting it.
+        let mut symbols = match type_str {
+            "kprobe" => matching_functions_to_symbols(target)?,
+            _ => vec![Symbol::from_name(target)?],
+        };
 
-        // Check if the probe would be used by a collector to retrieve data.
-        let mut valid = false;
-        for r#type in self.known_kernel_types.iter() {
-            if symbol.parameter_offset(r#type)?.is_some() {
-                valid = true;
-                break;
+        let mut probes = Vec::new();
+        for symbol in symbols.drain(..) {
+            // Check if the probe would be used by a collector to retrieve data.
+            let mut valid = false;
+            for r#type in self.known_kernel_types.iter() {
+                if symbol.parameter_offset(r#type)?.is_some() {
+                    valid = true;
+                    break;
+                }
             }
-        }
-        if !valid {
-            warn!(
-                "A probe to symbol {} is attached but no collector will retrieve data from it, only generic information will be retrieved",
-                symbol
-            );
+            if !valid {
+                warn!(
+                    "A probe to symbol {} is attached but no collector will retrieve data from it, only generic information will be retrieved",
+                    symbol
+                );
+            }
+
+            probes.push(match type_str {
+                "kprobe" => Probe::kprobe(symbol)?,
+                "kretprobe" => Probe::kretprobe(symbol)?,
+                "tp" => Probe::raw_tracepoint(symbol)?,
+                x => bail!("Invalid TYPE {}. See the help.", x),
+            })
         }
 
-        match type_str {
-            "kprobe" => Ok(Probe::kprobe(symbol)?),
-            "kretprobe" => Ok(Probe::kretprobe(symbol)?),
-            "tp" => Ok(Probe::raw_tracepoint(symbol)?),
-            x => bail!("Invalid TYPE {}. See the help.", x),
-        }
+        Ok(probes)
     }
 }
 
@@ -483,6 +493,9 @@ mod tests {
         assert!(collectors.parse_probe("consume_skb").is_ok());
         assert!(collectors.parse_probe("kprobe:kfree_skb_reason").is_ok());
         assert!(collectors.parse_probe("tp:skb:kfree_skb").is_ok());
+        assert!(collectors.parse_probe("tcp_v6_*").is_ok());
+        assert!(collectors.parse_probe("kprobe:tcp_v6_*").is_ok());
+        assert!(collectors.parse_probe("kprobe:tcp_v6_*")?.len() > 0);
 
         // Invalid probe: symbol does not exist.
         assert!(collectors.parse_probe("foobar").is_err());
@@ -500,6 +513,10 @@ mod tests {
         assert!(collectors.parse_probe("tp:").is_err());
         assert!(collectors.parse_probe("tp:skb:").is_err());
         assert!(collectors.parse_probe(":kfree_skb_reason").is_err());
+
+        // Invalid probe: wildcard not supported.
+        assert!(collectors.parse_probe("kretprobe:tcp_*").is_err());
+        assert!(collectors.parse_probe("tp:kfree_*").is_err());
 
         Ok(())
     }

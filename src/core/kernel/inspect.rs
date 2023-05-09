@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Result};
 use bimap::BiBTreeMap;
 use log::warn;
 use once_cell::sync::OnceCell;
+use regex::Regex;
 
 use super::{btf::BtfInfo, Symbol};
 
@@ -216,6 +217,28 @@ pub(crate) fn get_name_offt_from_addr_near(addr: u64) -> Result<(String, u64)> {
     ))
 }
 
+/// Find functions matching a given pattern. So far only wildcards (*) are
+/// supported, e.g. "tcp_v6_*".
+pub(crate) fn matching_functions(target: &str) -> Result<Vec<String>> {
+    let set = &get_inspector!()?.traceable_funcs;
+
+    if set.is_none() {
+        bail!("Can't get matching functions, consider mounting /sys/kernel/debug");
+    }
+
+    let target = format!("^{}$", target.replace('*', ".*"));
+    let re = Regex::new(&target)?;
+
+    // Unwrap as we checked above we have a set of valid events.
+    Ok(set
+        .as_ref()
+        .unwrap()
+        .iter()
+        .filter(|f| re.is_match(f))
+        .cloned()
+        .collect())
+}
+
 /// Gets a reference to the BTF information for further inspection.
 pub(crate) fn btf_info() -> Result<&'static BtfInfo> {
     Ok(&get_inspector!()?.btf)
@@ -227,12 +250,12 @@ mod tests {
 
     #[test]
     fn symbol_name() {
-        assert!(get_symbol_name(0xffffffff95617530).unwrap() == "consume_skb");
+        assert!(get_symbol_name(0xffffffff99d1da80).unwrap() == "consume_skb");
     }
 
     #[test]
     fn symbol_addr() {
-        assert!(get_symbol_addr("consume_skb").unwrap() == 0xffffffff95617530);
+        assert!(get_symbol_addr("consume_skb").unwrap() == 0xffffffff99d1da80);
     }
 
     #[test]
@@ -255,15 +278,15 @@ mod tests {
 
     #[test]
     fn name_from_addr_near() {
-        let mut sym_info = get_name_offt_from_addr_near(0xffffffff95617530 + 1).unwrap();
+        let mut sym_info = get_name_offt_from_addr_near(0xffffffff99d1da80 + 1).unwrap();
 
         assert_eq!(sym_info.0, "consume_skb");
         assert_eq!(sym_info.1, 0x1_u64);
 
-        sym_info = get_name_offt_from_addr_near(0xffffffff95617530 - 1).unwrap();
+        sym_info = get_name_offt_from_addr_near(0xffffffff99d1da80 - 1).unwrap();
         assert_ne!(sym_info.0, "consume_skb");
 
-        sym_info = get_name_offt_from_addr_near(0xffffffff95617530).unwrap();
+        sym_info = get_name_offt_from_addr_near(0xffffffff99d1da80).unwrap();
         assert_eq!(sym_info.0, "consume_skb");
         assert_eq!(sym_info.1, 0x0_u64);
     }
