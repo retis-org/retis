@@ -1,7 +1,18 @@
-container:
-  image: rust:latest
-
 test_task:
+  matrix:
+    - name: Rust Latest
+      container:
+        image: rust:latest
+    - name: Rust 1.65
+      container:
+        image: rust:1.65-bullseye
+    - name: Rust 1.62
+      container:
+        image: rust:1.62-bullseye
+    - name: Rust 1.48
+      container:
+        image: rust:1.48-bullseye
+
   registry_cache:
     folder: $CARGO_HOME/registry
     fingerprint_script: cat Cargo.lock
