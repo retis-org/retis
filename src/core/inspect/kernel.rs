@@ -1,13 +1,15 @@
 #![allow(dead_code)] // FIXME
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs,
+    io::Read,
     ops::Bound::{Included, Unbounded},
 };
 
 use anyhow::{anyhow, bail, Result};
 use bimap::BiBTreeMap;
+use flate2::read::GzDecoder;
 use log::warn;
 use regex::Regex;
 
@@ -26,6 +28,10 @@ pub(crate) struct KernelInspector {
     traceable_funcs: Option<HashSet<String>>,
     /// Kernel version, eg. "6.2.14-300" (Fedora) or "5.10.0-22" (Debian).
     version: KernelVersion,
+    /// Map of all kernel config options and their values. Common values are
+    /// "y", "m" and "n", but options can also be set to a string and some other
+    /// types. All are stored as a String here.
+    config: Option<HashMap<String, String>>,
 }
 
 impl KernelInspector {
@@ -64,6 +70,9 @@ impl KernelInspector {
             symbols.insert(u64::from_str_radix(data[0], 16)?, String::from(symbol));
         }
 
+        let version = KernelVersion::new()?;
+        let config = Self::parse_kernel_config(&version.full)?;
+
         let inspector = KernelInspector {
             btf,
             symbols,
@@ -73,7 +82,8 @@ impl KernelInspector {
             // Not all functions we'll get from BTF/kallsyms are traceable. Use
             // the following, when available, to narrow down our checks.
             traceable_funcs: Self::file_to_hashset(funcs_file),
-            version: KernelVersion::new()?,
+            version,
+            config,
         };
 
         if inspector.traceable_funcs.is_none() || inspector.traceable_events.is_none() {
@@ -107,9 +117,82 @@ impl KernelInspector {
         None
     }
 
+    /// Parse the kernel configuration.
+    fn parse_kernel_config(release: &str) -> Result<Option<HashMap<String, String>>> {
+        let parse_kconfig = |file: &String| -> Result<HashMap<String, String>> {
+            let mut map = HashMap::new();
+
+            file.lines().try_for_each(|l| -> Result<()> {
+                if l.starts_with("CONFIG_") {
+                    let (cfg, val) = l
+                        .split_once('=')
+                        .ok_or_else(|| anyhow!("Could not parse the Kconfig option"))?;
+
+                    // Handle string values nicely.
+                    let val = val.trim_start_matches('"').trim_end_matches('"');
+
+                    map.insert(cfg.to_string(), val.to_string());
+                } else if l.starts_with("# CONFIG_") {
+                    // Unwrap as we just made sure this would succeed.
+                    let (cfg, _) = l
+                        .strip_prefix("# ")
+                        .unwrap()
+                        .split_once(' ')
+                        .ok_or_else(|| anyhow!("Could not parse the Kconfig option"))?;
+                    map.insert(cfg.to_string(), 'n'.to_string());
+                }
+                Ok(())
+            })?;
+
+            Ok(map)
+        };
+
+        if !cfg!(test) {
+            // First try the config exposed by the running kernel.
+            if let Ok(bytes) = fs::read("/proc/config.gz") {
+                let mut decoder = GzDecoder::new(&bytes[..]);
+                let mut file = String::new();
+                decoder.read_to_string(&mut file)?;
+
+                return Ok(Some(parse_kconfig(&file)?));
+            }
+
+            // If the above didn't work, try reading from /boot/config-$(uname -r).
+            let config_file = format!("/boot/config-{}", release);
+            if let Ok(file) = fs::read_to_string(&config_file) {
+                return Ok(Some(parse_kconfig(&file)?));
+            }
+
+            warn!(
+                "Could not parse kernel configuration in either /proc/config.gz nor {config_file}"
+            );
+        } else if let Ok(file) = fs::read_to_string("test_data/config-6.3.0-0.rc7.56.fc39.x86_64") {
+            return Ok(Some(parse_kconfig(&file)?));
+        }
+
+        Ok(None)
+    }
+
     /// Return the running kernel version.
     pub(crate) fn version(&self) -> &KernelVersion {
         &self.version
+    }
+
+    /// The following retrieves a kernel configuration option value, if found.
+    /// Users might want to catch the error and make silence it if their check
+    /// is non-mandatory.
+    pub(crate) fn get_config_option(&self, option: &str) -> Result<Option<&str>> {
+        if self.config.is_none() {
+            bail!("Could not query the kernel configuration");
+        }
+
+        // Unwrap as we just checked earlier this could not fail.
+        Ok(self
+            .config
+            .as_ref()
+            .unwrap()
+            .get(&option.to_string())
+            .map(|x| x.as_str()))
     }
 
     /// Return a symbol name given its address, if a relationship is found.
@@ -303,5 +386,28 @@ mod tests {
             .unwrap();
         assert_eq!(sym_info.0, "consume_skb");
         assert_eq!(sym_info.1, 0x0_u64);
+    }
+
+    #[test]
+    fn kernel_config() {
+        assert_eq!(
+            inspector().get_config_option("CONFIG_VETH").unwrap(),
+            Some("m")
+        );
+        assert_eq!(
+            inspector().get_config_option("CONFIG_OPENVSWITCH").unwrap(),
+            Some("m")
+        );
+        assert_eq!(inspector().get_config_option("CONFIG_FOO").unwrap(), None);
+        assert_eq!(
+            inspector().get_config_option("CONFIG_NETPOLL").unwrap(),
+            Some("y")
+        );
+        assert_eq!(
+            inspector()
+                .get_config_option("CONFIG_DEFAULT_HOSTNAME")
+                .unwrap(),
+            Some("(none)")
+        );
     }
 }
