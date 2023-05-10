@@ -10,7 +10,8 @@ use log::warn;
 use once_cell::sync::OnceCell;
 use regex::Regex;
 
-use super::{btf::BtfInfo, Symbol};
+use super::btf::BtfInfo;
+use crate::core::kernel::Symbol;
 
 static INSPECTOR: OnceCell<Inspector> = OnceCell::new();
 
@@ -113,7 +114,7 @@ impl Inspector {
 }
 
 /// Return a symbol name given its address, if a relationship is found.
-pub(super) fn get_symbol_name(addr: u64) -> Result<String> {
+pub(crate) fn get_symbol_name(addr: u64) -> Result<String> {
     Ok(get_inspector!()?
         .symbols
         .get_by_left(&addr)
@@ -122,7 +123,7 @@ pub(super) fn get_symbol_name(addr: u64) -> Result<String> {
 }
 
 /// Return a symbol address given its name, if a relationship is found.
-pub(super) fn get_symbol_addr(name: &str) -> Result<u64> {
+pub(crate) fn get_symbol_addr(name: &str) -> Result<u64> {
     Ok(*get_inspector!()?
         .symbols
         .get_by_right(name)
@@ -130,7 +131,7 @@ pub(super) fn get_symbol_addr(name: &str) -> Result<u64> {
 }
 
 /// Given an address, try to find the nearest symbol, if any.
-pub(super) fn find_nearest_symbol(target: u64) -> Result<u64> {
+pub(crate) fn find_nearest_symbol(target: u64) -> Result<u64> {
     let nearest = get_inspector!()?
         .symbols
         .left_range((Unbounded, Included(&target)))
@@ -143,7 +144,7 @@ pub(super) fn find_nearest_symbol(target: u64) -> Result<u64> {
 }
 
 /// Check if an event is traceable. Return Ok(None) if we can't know.
-pub(super) fn is_event_traceable(name: &str) -> Result<Option<bool>> {
+pub(crate) fn is_event_traceable(name: &str) -> Result<Option<bool>> {
     let set = &get_inspector!()?.traceable_events;
 
     // If we can't check further, we don't know if the event is traceable and we
@@ -157,7 +158,7 @@ pub(super) fn is_event_traceable(name: &str) -> Result<Option<bool>> {
 }
 
 /// Check if an event is traceable. Return Ok(None) if we can't know.
-pub(super) fn is_function_traceable(name: &str) -> Result<Option<bool>> {
+pub(crate) fn is_function_traceable(name: &str) -> Result<Option<bool>> {
     let set = &get_inspector!()?.traceable_funcs;
 
     // If we can't check further, we don't know if the function is traceable and
@@ -174,7 +175,7 @@ pub(super) fn is_function_traceable(name: &str) -> Result<Option<bool>> {
 /// event (with the group part) and return the full name.
 ///
 /// `assert!(find_matching_event("kfree_skb").unwrap() == Some("skb:kfree_skb"));`
-pub(super) fn find_matching_event(name: &str) -> Result<Option<String>> {
+pub(crate) fn find_matching_event(name: &str) -> Result<Option<String>> {
     let set = &get_inspector!()?.traceable_events;
 
     // If we can't check further, return None.

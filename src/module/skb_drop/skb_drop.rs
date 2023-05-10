@@ -6,7 +6,8 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        kernel::{inspect, Symbol},
+        inspect,
+        kernel::Symbol,
         probe::{Hook, Probe, ProbeManager},
     },
     module::ModuleId,

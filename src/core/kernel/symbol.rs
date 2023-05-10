@@ -2,7 +2,7 @@ use std::fmt;
 
 use anyhow::{bail, Result};
 
-use super::inspect;
+use crate::core::inspect;
 
 /// Kernel symbol representation. Only supports traceable symbols: events and
 /// functions.

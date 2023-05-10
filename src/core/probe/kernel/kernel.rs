@@ -14,7 +14,7 @@ use crate::{event_section, event_section_factory};
 
 // Split to exclude from tests.
 #[cfg(not(test))]
-use crate::core::kernel::inspect;
+use crate::core::inspect;
 
 /// Kernel encapsulates all the information about a kernel probe (kprobe or tracepoint) needed to attach to it.
 #[derive(Clone)]

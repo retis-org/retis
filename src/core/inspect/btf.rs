@@ -1,10 +1,9 @@
 use std::fs;
 
 use anyhow::{anyhow, bail, Result};
-
 use btf_rs::{Btf, Type};
 
-use super::Symbol;
+use crate::core::kernel::Symbol;
 
 /// Btf provides multi-module Btf lookups.
 pub(crate) struct BtfInfo {

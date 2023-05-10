@@ -11,7 +11,7 @@ use crate::{
             bpf::{parse_single_raw_section, BpfRawSection},
             *,
         },
-        kernel::inspect,
+        inspect,
     },
     event_section, event_section_factory,
     module::ModuleId,
