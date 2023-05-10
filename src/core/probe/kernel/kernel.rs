@@ -14,7 +14,7 @@ use crate::{event_section, event_section_factory};
 
 // Split to exclude from tests.
 #[cfg(not(test))]
-use crate::core::inspect;
+use crate::core::inspect::inspector;
 
 /// Kernel encapsulates all the information about a kernel probe (kprobe or tracepoint) needed to attach to it.
 #[derive(Clone)]
@@ -91,7 +91,7 @@ impl KernelEventFactory {
                         break;
                     }
 
-                    match inspect::get_name_offt_from_addr_near(*sym) {
+                    match inspector()?.get_name_offt_from_addr_near(*sym) {
                         Ok((symbol, offset)) => stack_trace.push(format!("{symbol}+{offset:#x}")),
                         Err(_) => stack_trace.push(format!("{sym:#x}")),
                     }
