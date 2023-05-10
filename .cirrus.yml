@@ -1,7 +1,6 @@
-container:
-  image: rust:latest
-
-test_task:
+unittest_task:
+  container:
+    image: rust:latest
   registry_cache:
     folder: $CARGO_HOME/registry
     fingerprint_script: cat Cargo.lock
@@ -21,3 +20,74 @@ test_task:
     - cargo fmt --check
     - cargo clippy -- -D warnings
   before_cache_script: rm -rf $CARGO_HOME/registry/index
+
+functional_task:
+  # Run for PRs with a specific label
+  required_pr_labels: run-functional-tests
+  only_if: "$CIRRUS_PR != ''"
+  env:
+    DEBIAN_FRONTEND: noninteractive
+    HOME: /root
+
+  matrix: &distro_matrix
+    - name: Fedora 38
+      env:
+        DISTRO: f38
+    - name: Fedora 36
+      env:
+        DISTRO: f36
+    - name: Centos 9 Stream
+      env:
+        DISTRO: c9s
+    - name: Ubuntu Jammy
+      env:
+        DISTRO: jammy
+
+  compute_engine_instance: &nestedvm
+    image_project: cirrus-images
+    image: family/docker-kvm
+    platform: linux
+    cpu: 4
+    memory: 16G
+    nested_virtualization: true
+
+  # Initialization of the test environment
+  setup_script: &vagrant_setup
+    - grep -q vmx /proc/cpuinfo # Ensure nested virtualization is enabled
+      # The version of vagrant shipped with ubuntu fails to download some boxes (e.g: f38).
+      # See https://bugs.launchpad.net/vagrant/+bug/2017828.
+      # Installing it from Hashicorp directly
+    - wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    - echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
+    - apt-get -y update && apt-get -y install vagrant ruby-libvirt qemu-kvm virt-manager libvirt-daemon-system virtinst libvirt-clients bridge-utils pkg-config libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev gcc make
+    - vagrant plugin install vagrant-libvirt
+    - systemctl enable --now libvirtd
+
+  # Download, provision and cache test image(s).
+  vagrant_cache: &vagrant_cache
+    fingerprint_script: uname -s ; cat Vagrantfile
+    folder: /root/.vagrant.d
+
+  up_script: &vagrant_up
+    - vagrant up ${DISTRO} --no-tty || vagrant up ${DISTRO} --no-tty # Retry to overcome network glitches.
+    - mkdir -p -m 0700 /root/.ssh
+    - vagrant ssh-config ${DISTRO} >> /root/.ssh/config
+
+  guest_info_script: &guest_info
+    - echo "--- Host info ---"
+    - ssh ${DISTRO} 'sh -exc "uname -a"'
+
+  test_script: &functional_test
+    - ssh -tt ${DISTRO} "cd /vagrant/tests && cargo build && sudo python3 -m pytest"
+ 
+# Manual trigger for non-PR branches.
+manual_test_funtional_task:
+  trigger_type: manual
+  only_if: "$CIRRUS_BRANCH !=~ 'pull/.*'"
+  matrix: *distro_matrix
+  compute_engine_instance: *nestedvm
+  setup_script: *vagrant_setup
+  vagrant_cache: *vagrant_cache
+  up_script: &vagrant_up
+  guest_info_script: &guest_info
+  test_script: *functional_test

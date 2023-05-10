@@ -95,6 +95,8 @@ pub(crate) trait EventFactory {
         &mut self,
         section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>>,
     ) -> Result<()>;
+    /// Stops the factory events collection.
+    fn stop(&mut self) -> Result<()>;
     /// Gets the next Event.
     ///
     /// Either returns EOF if the underlying source is consumed, or is a
