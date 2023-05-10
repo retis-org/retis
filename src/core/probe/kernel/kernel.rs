@@ -91,7 +91,7 @@ impl KernelEventFactory {
                         break;
                     }
 
-                    match inspector()?.get_name_offt_from_addr_near(*sym) {
+                    match inspector()?.kernel.get_name_offt_from_addr_near(*sym) {
                         Ok((symbol, offset)) => stack_trace.push(format!("{symbol}+{offset:#x}")),
                         Err(_) => stack_trace.push(format!("{sym:#x}")),
                     }

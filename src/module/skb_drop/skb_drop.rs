@@ -36,7 +36,10 @@ impl Collector for SkbDropCollector {
 
         // But we could see a kernel where skb:kfree_skb does not access a drop
         // reason, so check this and handle it nicely.
-        match inspector()?.parameter_offset(&symbol, "enum skb_drop_reason") {
+        match inspector()?
+            .kernel
+            .parameter_offset(&symbol, "enum skb_drop_reason")
+        {
             Err(_) | Ok(None) => {
                 warn!("Skb drop reasons are not retrievable on this kernel");
                 return Ok(());

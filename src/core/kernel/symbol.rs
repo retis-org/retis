@@ -19,7 +19,7 @@ impl Symbol {
         let mut debugfs = false;
 
         // First try to see if the symbol is a traceable event.
-        if let Some(traceable) = inspector()?.is_event_traceable(name) {
+        if let Some(traceable) = inspector()?.kernel.is_event_traceable(name) {
             debugfs = true;
             if traceable {
                 return Ok(Symbol::Event(name.to_string()));
@@ -27,7 +27,7 @@ impl Symbol {
         }
 
         // Then try to see if it's a traceable function.
-        if let Some(traceable) = inspector()?.is_function_traceable(name) {
+        if let Some(traceable) = inspector()?.kernel.is_function_traceable(name) {
             if traceable {
                 return Ok(Symbol::Func(name.to_string()));
             }
@@ -49,14 +49,14 @@ impl Symbol {
             // We might have an event, let's see if we can find a tracepoint
             // symbol.
             let tp_name = format!("__tracepoint_{tp_name}");
-            if inspector()?.get_symbol_addr(&tp_name).is_ok() {
+            if inspector()?.kernel.get_symbol_addr(&tp_name).is_ok() {
                 return Ok(Symbol::Event(name.to_string()));
             }
         }
 
         // Traceable functions should be in the kallsyms file. Let's see if we
         // find a match.
-        if inspector()?.get_symbol_addr(name).is_ok() {
+        if inspector()?.kernel.get_symbol_addr(name).is_ok() {
             return Ok(Symbol::Func(name.to_string()));
         }
 
@@ -70,12 +70,12 @@ impl Symbol {
         // know it's a valid kernel symbol, but that doesn't mean it will map
         // 1:1 to a traceable one. Also we can't directly use the type detection
         // as we won't have a group:name format for events for example.
-        let target = inspector()?.get_symbol_name(addr)?;
+        let target = inspector()?.kernel.get_symbol_name(addr)?;
 
         // Check if the symbol is a tracepoint.
         let name = match target.strip_prefix("__tracepoint_") {
             Some(strip) => {
-                match inspector()?.find_matching_event(strip) {
+                match inspector()?.kernel.find_matching_event(strip) {
                     Some(event) => event,
                     None => {
                         // Not much we can do, we know it's a valid one. Let's
@@ -151,19 +151,19 @@ impl Symbol {
 
     /// Get the symbol address.
     pub(crate) fn addr(&self) -> Result<u64> {
-        inspector()?.get_symbol_addr(&self.addr_name())
+        inspector()?.kernel.get_symbol_addr(&self.addr_name())
     }
 
     /// Get the symbol arguments number.
     pub(crate) fn nargs(&self) -> Result<u32> {
-        inspector()?.function_nargs(self)
+        inspector()?.kernel.function_nargs(self)
     }
 
     /// Get a parameter offset given its type, if found. Can be used to check a
     /// function has a given parameter by using:
     /// `function_parameter_offset()?.is_some()`.
     pub(crate) fn parameter_offset(&self, parameter_type: &str) -> Result<Option<u32>> {
-        inspector()?.parameter_offset(self, parameter_type)
+        inspector()?.kernel.parameter_offset(self, parameter_type)
     }
 }
 
@@ -180,6 +180,7 @@ impl fmt::Display for Symbol {
 
 pub(crate) fn matching_functions_to_symbols(target: &str) -> Result<Vec<Symbol>> {
     let symbols: Vec<Symbol> = inspector()?
+        .kernel
         .matching_functions(target)?
         .iter()
         // We do not support <func>.isra/part for now.

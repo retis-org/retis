@@ -35,8 +35,10 @@ impl SkbDropEventFactory {
     pub(crate) fn new() -> Result<Self> {
         let mut reasons = HashMap::new();
 
-        if let (btf, Type::Enum(r#enum)) =
-            inspector()?.btf.resolve_type_by_name("skb_drop_reason")?
+        if let (btf, Type::Enum(r#enum)) = inspector()?
+            .kernel
+            .btf
+            .resolve_type_by_name("skb_drop_reason")?
         {
             for member in r#enum.members.iter() {
                 if member.val() < 0 {
