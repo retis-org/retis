@@ -9,3 +9,4 @@ pub(crate) use inspect::*;
 
 mod btf;
 mod kernel;
+mod kernel_version;

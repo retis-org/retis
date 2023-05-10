@@ -1,3 +1,5 @@
+#![allow(dead_code)] // FIXME
+
 use std::{
     collections::HashSet,
     fs,
@@ -9,7 +11,7 @@ use bimap::BiBTreeMap;
 use log::warn;
 use regex::Regex;
 
-use super::btf::BtfInfo;
+use super::{btf::BtfInfo, kernel_version::KernelVersion};
 use crate::core::kernel::Symbol;
 
 /// Provides helpers to inspect probe related information in the kernel.
@@ -22,6 +24,8 @@ pub(crate) struct KernelInspector {
     traceable_events: Option<HashSet<String>>,
     /// Set of traceable functions (e.g. kprobes).
     traceable_funcs: Option<HashSet<String>>,
+    /// Kernel version, eg. "6.2.14-300" (Fedora) or "5.10.0-22" (Debian).
+    version: KernelVersion,
 }
 
 impl KernelInspector {
@@ -69,6 +73,7 @@ impl KernelInspector {
             // Not all functions we'll get from BTF/kallsyms are traceable. Use
             // the following, when available, to narrow down our checks.
             traceable_funcs: Self::file_to_hashset(funcs_file),
+            version: KernelVersion::new()?,
         };
 
         if inspector.traceable_funcs.is_none() || inspector.traceable_events.is_none() {
@@ -100,6 +105,11 @@ impl KernelInspector {
             return Some(set);
         }
         None
+    }
+
+    /// Return the running kernel version.
+    pub(crate) fn version(&self) -> &KernelVersion {
+        &self.version
     }
 
     /// Return a symbol name given its address, if a relationship is found.
