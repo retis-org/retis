@@ -32,20 +32,27 @@ pub(crate) struct KernelInspector {
     /// "y", "m" and "n", but options can also be set to a string and some other
     /// types. All are stored as a String here.
     config: Option<HashMap<String, String>>,
+    /// List of all loaded kernel modules. We do cache the result for now as
+    /// it's quite unlikely modules we are interested in tracing will get loaded
+    /// in the short time between Retis launch and collection starts. But that
+    /// can be cnahged later on if needed.
+    modules: Option<HashSet<String>>,
 }
 
 impl KernelInspector {
     pub(super) fn new() -> Result<KernelInspector> {
-        let (symbols_file, events_file, funcs_file) = match cfg!(test) {
+        let (symbols_file, events_file, funcs_file, modules_file) = match cfg!(test) {
             false => (
                 "/proc/kallsyms",
                 "/sys/kernel/debug/tracing/available_events",
                 "/sys/kernel/debug/tracing/available_filter_functions",
+                "/proc/modules",
             ),
             true => (
                 "test_data/kallsyms",
                 "test_data/available_events",
                 "test_data/available_filter_functions",
+                "test_data/modules",
             ),
         };
         let btf = BtfInfo::new()?;
@@ -84,6 +91,7 @@ impl KernelInspector {
             traceable_funcs: Self::file_to_hashset(funcs_file),
             version,
             config,
+            modules: Self::file_to_hashset(modules_file),
         };
 
         if inspector.traceable_funcs.is_none() || inspector.traceable_events.is_none() {
@@ -193,6 +201,13 @@ impl KernelInspector {
             .unwrap()
             .get(&option.to_string())
             .map(|x| x.as_str()))
+    }
+
+    /// Check if a kernel module is loaded.
+    pub(crate) fn is_module_loaded(&self, module: &str) -> Option<bool> {
+        self.modules
+            .as_ref()
+            .map(|modules| modules.contains(&module.to_string()))
     }
 
     /// Return a symbol name given its address, if a relationship is found.
@@ -409,5 +424,11 @@ mod tests {
                 .unwrap(),
             Some("(none)")
         );
+    }
+
+    #[test]
+    fn kernel_modules() {
+        assert_eq!(inspector().is_module_loaded("zram"), Some(true));
+        assert_eq!(inspector().is_module_loaded("openvswitch"), Some(false));
     }
 }
