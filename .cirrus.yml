@@ -50,7 +50,12 @@ functional_task:
   # Initialization of the test environment
   setup_script:
     - grep -q vmx /proc/cpuinfo # Ensure nested virtualization is enabled
-    - apt-get -y update && apt-get -y install vagrant qemu-kvm virt-manager libvirt-daemon-system virtinst libvirt-clients bridge-utils
+      # The version of vagrant shipped with ubuntu fails to download some boxes (e.g: f38).
+      # See https://bugs.launchpad.net/vagrant/+bug/2017828.
+      # Installing it from Hashicorp directly
+    - wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    - echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
+    - apt-get -y update && apt-get -y install vagrant ruby-libvirt qemu-kvm virt-manager libvirt-daemon-system virtinst libvirt-clients bridge-utils pkg-config libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev gcc make
     - vagrant plugin install vagrant-libvirt
     - systemctl enable --now libvirtd
 
