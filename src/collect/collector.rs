@@ -3,7 +3,6 @@ use std::{
     fs::OpenOptions,
     io::{self, BufWriter, Write},
     thread::JoinHandle,
-    time::Duration,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -28,6 +27,7 @@ use crate::{
     },
     module::{ModuleId, Modules},
     output,
+    process::{OutputAction, Processor},
 };
 
 /// Generic trait representing a collector. All collectors are required to
@@ -184,7 +184,19 @@ impl Collectors {
 
     /// Start the event retrieval for all collectors by calling
     /// their `start()` function.
-    pub(crate) fn start(&mut self) -> Result<()> {
+    /// Then, starts the processing loop and block until we get a single SIGINT
+    /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
+    /// collector cmd loop.
+    pub(crate) fn process(&mut self, cli: &mut CliConfig) -> Result<()> {
+        let collect = cli
+            .subcommand
+            .as_any()
+            .downcast_ref::<Collect>()
+            .ok_or_else(|| anyhow!("wrong subcommand"))?
+            .args()?;
+
+        // Create factories.
+        #[cfg_attr(test, allow(unused_mut))]
         let mut section_factories = self.modules.section_factories()?;
 
         #[cfg(not(test))]
@@ -205,8 +217,7 @@ impl Collectors {
             }
         }
 
-        self.factory.start(section_factories)?;
-
+        // Attach probes and start collectors.
         self.probes.attach()?;
 
         self.modules.collectors().iter_mut().for_each(|(id, c)| {
@@ -215,7 +226,13 @@ impl Collectors {
             }
         });
 
-        Ok(())
+        // Create Processor and configure outputs
+        let mut process = Processor::new(&mut self.factory)?;
+        process.add_stage("output".to_string(), Box::new(Self::get_outputs(collect)?))?;
+
+        // Start processing.
+        process.run(self.run.clone(), section_factories)?;
+        self.stop()
     }
 
     /// Stop the event retrieval for all collectors in the group by calling
@@ -241,30 +258,6 @@ impl Collectors {
         self.factory.stop()?;
 
         Ok(())
-    }
-
-    /// Starts the processing loop and block until we get a single SIGINT
-    /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
-    /// collector cmd loop.
-    pub(crate) fn process(&mut self, cli: &mut CliConfig) -> Result<()> {
-        let collect = cli
-            .subcommand
-            .as_any()
-            .downcast_ref::<Collect>()
-            .ok_or_else(|| anyhow!("wrong subcommand"))?
-            .args()?;
-
-        let mut outputs = Self::get_outputs(collect)?;
-
-        while self.run.running() {
-            match self.factory.next_event(Some(Duration::from_secs(1)))? {
-                Some(event) => outputs.iter_mut().try_for_each(|p| p.output_one(&event))?,
-                None => continue,
-            }
-        }
-
-        outputs.iter_mut().try_for_each(|p| p.flush())?;
-        self.stop()
     }
 
     /// Parse a user defined probe (through cli parameters) and extract its type and
@@ -318,7 +311,7 @@ impl Collectors {
 
     /// Given a Formatter and cli arguments, get a list of output outputs, for
     /// later event output processing.
-    fn get_outputs(args: &CollectArgs) -> Result<Vec<Box<dyn output::Output>>> {
+    fn get_outputs(args: &CollectArgs) -> Result<OutputAction> {
         let mut outputs = Vec::<Box<dyn output::Output>>::new();
 
         // Write the events to a file if asked to.
@@ -362,7 +355,7 @@ impl Collectors {
             }
         }
 
-        Ok(outputs)
+        Ok(OutputAction::from(&mut outputs))
     }
 }
 
@@ -371,7 +364,6 @@ pub(crate) fn run_collect(cli: FullCli, modules: Modules) -> Result<()> {
     let mut collectors = Collectors::new(modules)?;
     let mut cli = collectors.register_cli(cli)?;
     collectors.init(&mut cli)?;
-    collectors.start()?;
     // Starts a loop.
     collectors.process(&mut cli)?;
     Ok(())
@@ -504,23 +496,6 @@ mod tests {
         assert!(dummy_b.init(&config, &mut mgr).is_err());
 
         assert!(collectors.init(&mut config).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn start_collectors() -> Result<()> {
-        let mut group = Modules::new()?;
-        let mut dummy_a = Box::new(DummyCollectorA::new()?);
-        let mut dummy_b = Box::new(DummyCollectorB::new()?);
-
-        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
-        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
-
-        let mut collectors = Collectors::new(group)?;
-
-        assert!(dummy_a.start().is_ok());
-        assert!(dummy_b.start().is_err());
-        assert!(collectors.start().is_ok());
         Ok(())
     }
 
