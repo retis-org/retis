@@ -8,16 +8,17 @@ use clap::{arg, builder::PossibleValuesParser, Parser};
 use log::info;
 use serde_json::json;
 
-use super::{bpf::*, nft_hook};
+use super::{bpf::*, nft_hook, NftEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::{cli::Collect, Collector},
     core::{
+        events::EventSectionFactory,
         inspect,
         kernel::Symbol,
         probe::{Hook, Probe, ProbeManager},
     },
-    module::ModuleId,
+    module::{Module, ModuleId},
 };
 
 static NFT_BIN: &str = "nft";
@@ -38,11 +39,20 @@ Note that stolen verdicts might not be visible if a filter has been specified us
 }
 
 #[derive(Default)]
-pub(crate) struct NftCollector {
+pub(crate) struct NftModule {
     install_chain: bool,
 }
 
-impl NftCollector {
+impl Module for NftModule {
+    fn collector(&mut self) -> &mut dyn Collector {
+        self
+    }
+    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
+        Ok(Box::new(NftEventFactory {}))
+    }
+}
+
+impl NftModule {
     fn apply_json(&self, cmd: String) -> Result<()> {
         let status = Command::new(NFT_BIN)
             .arg("-j")
@@ -113,9 +123,9 @@ impl NftCollector {
     }
 }
 
-impl Collector for NftCollector {
-    fn new() -> Result<NftCollector> {
-        Ok(NftCollector::default())
+impl Collector for NftModule {
+    fn new() -> Result<Self> {
+        Ok(Self::default())
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {

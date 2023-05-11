@@ -80,7 +80,7 @@ pub(crate) trait Collector {
 pub(crate) struct Collectors {
     modules: Modules,
     probes: probe::ProbeManager,
-    factory: Box<dyn EventFactory>,
+    factory: BpfEventsFactory,
     known_kernel_types: HashSet<String>,
     run: Running,
     tracking_gc: Option<TrackingGC>,
@@ -96,23 +96,10 @@ impl Collectors {
         #[cfg(test)]
         let probes = probe::ProbeManager::new()?;
 
-        #[cfg(not(test))]
-        let sm = init_stack_map()?;
-        #[cfg(not(test))]
-        probes.reuse_map("stack_map", sm.fd())?;
-        #[cfg(not(test))]
-        probes.reuse_map("events_map", factory.map_fd())?;
-
-        #[cfg(not(test))]
-        match modules.get_section_factory::<KernelEventFactory>(ModuleId::Kernel)? {
-            Some(kernel_factory) => kernel_factory.stack_map = Some(sm),
-            None => bail!("Can't get kernel section factory"),
-        }
-
         Ok(Collectors {
             modules,
             probes,
-            factory: Box::new(factory),
+            factory,
             known_kernel_types: HashSet::new(),
             run: Running::new(),
             tracking_gc: None,
@@ -230,10 +217,25 @@ impl Collectors {
     /// Start the event retrieval for all collectors by calling
     /// their `start()` function.
     pub(crate) fn start(&mut self) -> Result<()> {
-        let section_factories = match self.modules.section_factories.take() {
-            Some(factories) => factories,
-            None => bail!("No section factory found, aborting"),
-        };
+        let mut section_factories = self.modules.section_factories()?;
+
+        #[cfg(not(test))]
+        {
+            let sm = init_stack_map()?;
+            self.probes.reuse_map("stack_map", sm.fd())?;
+            self.probes.reuse_map("events_map", self.factory.map_fd())?;
+            match section_factories.get_mut(&ModuleId::Kernel) {
+                Some(kernel_factory) => {
+                    kernel_factory
+                        .as_any_mut()
+                        .downcast_mut::<KernelEventFactory>()
+                        .ok_or_else(|| anyhow!("Failed to downcast KernelEventFactory"))?
+                        .stack_map = Some(sm)
+                }
+
+                None => bail!("Can't get kernel section factory"),
+            }
+        }
 
         if let Some(gc) = &mut self.tracking_gc {
             gc.start(self.run.clone())?;
@@ -394,6 +396,7 @@ mod tests {
     use crate::{
         core::events::{bpf::BpfRawSection, *},
         event_section, event_section_factory,
+        module::Module,
     };
 
     struct DummyCollectorA;
@@ -417,6 +420,15 @@ mod tests {
         }
     }
 
+    impl Module for DummyCollectorA {
+        fn collector(&mut self) -> &mut dyn Collector {
+            self
+        }
+        fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
+            Ok(Box::new(TestEvent {}))
+        }
+    }
+
     impl Collector for DummyCollectorB {
         fn new() -> Result<DummyCollectorB> {
             Ok(DummyCollectorB)
@@ -432,6 +444,15 @@ mod tests {
         }
         fn start(&mut self) -> Result<()> {
             bail!("Could not start");
+        }
+    }
+
+    impl Module for DummyCollectorB {
+        fn collector(&mut self) -> &mut dyn Collector {
+            self
+        }
+        fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
+            Ok(Box::new(TestEvent {}))
         }
     }
 
@@ -453,18 +474,10 @@ mod tests {
     fn register_collectors() -> Result<()> {
         let mut group = Modules::new()?;
         assert!(group
-            .register(
-                ModuleId::Skb,
-                Box::new(DummyCollectorA::new()?),
-                Box::<TestEvent>::default(),
-            )
+            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
             .is_ok());
         assert!(group
-            .register(
-                ModuleId::Ovs,
-                Box::new(DummyCollectorB::new()?),
-                Box::<TestEvent>::default(),
-            )
+            .register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?),)
             .is_ok());
         Ok(())
     }
@@ -473,18 +486,10 @@ mod tests {
     fn register_uniqueness() -> Result<()> {
         let mut group = Modules::new()?;
         assert!(group
-            .register(
-                ModuleId::Skb,
-                Box::new(DummyCollectorA::new()?),
-                Box::<TestEvent>::default(),
-            )
+            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
             .is_ok());
         assert!(group
-            .register(
-                ModuleId::Skb,
-                Box::new(DummyCollectorA::new()?),
-                Box::<TestEvent>::default(),
-            )
+            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
             .is_err());
         Ok(())
     }
@@ -495,16 +500,8 @@ mod tests {
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
-        group.register(
-            ModuleId::Skb,
-            Box::new(DummyCollectorA::new()?),
-            Box::<TestEvent>::default(),
-        )?;
-        group.register(
-            ModuleId::Ovs,
-            Box::new(DummyCollectorB::new()?),
-            Box::<TestEvent>::default(),
-        )?;
+        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         let mut collectors = Collectors::new(group)?;
         let mut mgr = probe::ProbeManager::new()?;
@@ -523,16 +520,8 @@ mod tests {
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
-        group.register(
-            ModuleId::Skb,
-            Box::new(DummyCollectorA::new()?),
-            Box::<TestEvent>::default(),
-        )?;
-        group.register(
-            ModuleId::Ovs,
-            Box::new(DummyCollectorB::new()?),
-            Box::<TestEvent>::default(),
-        )?;
+        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         let mut collectors = Collectors::new(group)?;
 
@@ -545,16 +534,8 @@ mod tests {
     #[test]
     fn parse_probe() -> Result<()> {
         let mut group = Modules::new()?;
-        group.register(
-            ModuleId::Skb,
-            Box::new(DummyCollectorA::new()?),
-            Box::<TestEvent>::default(),
-        )?;
-        group.register(
-            ModuleId::Ovs,
-            Box::new(DummyCollectorB::new()?),
-            Box::<TestEvent>::default(),
-        )?;
+        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         let collectors = Collectors::new(group)?;
 

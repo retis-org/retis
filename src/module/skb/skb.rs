@@ -3,12 +3,15 @@ use std::mem;
 use anyhow::{bail, Result};
 use clap::{arg, builder::PossibleValuesParser, Parser};
 
-use super::{bpf::*, skb_hook};
+use super::{bpf::*, skb_hook, SkbEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::probe::{Hook, ProbeManager},
-    module::ModuleId,
+    core::{
+        events::EventSectionFactory,
+        probe::{Hook, ProbeManager},
+    },
+    module::{Module, ModuleId},
 };
 
 #[derive(Parser, Default)]
@@ -23,11 +26,11 @@ pub(crate) struct SkbCollectorArgs {
     skb_sections: Vec<String>,
 }
 
-pub(crate) struct SkbCollector {}
+pub(crate) struct SkbModule {}
 
-impl Collector for SkbCollector {
-    fn new() -> Result<SkbCollector> {
-        Ok(SkbCollector {})
+impl Collector for SkbModule {
+    fn new() -> Result<Self> {
+        Ok(Self {})
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
@@ -78,7 +81,16 @@ impl Collector for SkbCollector {
     }
 }
 
-impl SkbCollector {
+impl Module for SkbModule {
+    fn collector(&mut self) -> &mut dyn Collector {
+        self
+    }
+    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
+        Ok(Box::new(SkbEventFactory {}))
+    }
+}
+
+impl SkbModule {
     fn config_map() -> Result<libbpf_rs::Map> {
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
