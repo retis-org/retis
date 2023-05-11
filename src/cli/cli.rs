@@ -51,7 +51,7 @@ pub(crate) trait SubCommand {
         Self: Sized;
 
     /// Returns the unique name of the subcommand.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> String;
 
     /// Returns self as a std::any::Any trait.
     ///
@@ -94,6 +94,46 @@ impl Debug for dyn SubCommand {
     }
 }
 
+// Default implementation of SubCommand for all clap::Parser that also implement SubCommandRunner.
+// This makes it much easier to implement small and easy subcommands without much boilerplate.
+impl<F> SubCommand for F
+where
+    F: SubCommandRunner + clap::Parser + Default + 'static,
+{
+    fn new() -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(Self::default())
+    }
+
+    fn name(&self) -> String {
+        <Self as clap::CommandFactory>::command()
+            .get_name()
+            .to_string()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn thin(&self) -> Result<Command> {
+        Ok(<Self as clap::CommandFactory>::command())
+    }
+
+    fn full(&self) -> Result<Command> {
+        Ok(<Self as clap::CommandFactory>::command())
+    }
+
+    fn update_from_arg_matches(&mut self, args: &ArgMatches) -> Result<(), ClapError> {
+        <Self as clap::FromArgMatches>::update_from_arg_matches(self, args)
+    }
+
+    fn runner(&self) -> Result<Box<dyn SubCommandRunner>> {
+        Ok(Box::new(Self::new()?))
+    }
+}
+
 /// Trace packets on the Linux kernel
 ///
 /// retis is a tool for capturing networking-related events from the system using ebpf and analyzing them.
@@ -128,7 +168,7 @@ impl ThinCli {
 
     /// Add a subcommand to the ThinCli object.
     pub(crate) fn add_subcommand(&mut self, sub: Box<dyn SubCommand>) -> Result<&mut Self> {
-        let name = sub.name().to_string();
+        let name = sub.name();
         if self.subcommands.get(&name).is_some() {
             bail!("Subcommand already registered")
         }
@@ -232,7 +272,7 @@ impl FullCli {
         let (subcommand, matches) = matches
             .subcommand()
             .expect("full parsing did not find subcommand");
-        if !subcommand.to_string().eq(self.subcommand.as_ref().name()) {
+        if !subcommand.to_string().eq(&self.subcommand.as_ref().name()) {
             // thin and full cli parsing should yield the same subcommand. There is no way to
             // recover from this error, so let's just panic.
             panic!("Thin and full parsing did not yield the same subcommand");
@@ -308,8 +348,8 @@ mod tests {
         fn new() -> Result<Self> {
             Ok(Sub1 { someopt: None })
         }
-        fn name(&self) -> &'static str {
-            "sub1"
+        fn name(&self) -> String {
+            "sub1".to_string()
         }
         fn as_any(&self) -> &dyn Any {
             self
@@ -342,8 +382,8 @@ mod tests {
         fn new() -> Result<Self> {
             Ok(Sub2 { flag: Some(false) })
         }
-        fn name(&self) -> &'static str {
-            "sub2"
+        fn name(&self) -> String {
+            "sub2".to_string()
         }
         fn as_any(&self) -> &dyn Any {
             self

@@ -98,8 +98,8 @@ impl SubCommand for Collect {
         Ok(Command::new("collect").about("Collect network events"))
     }
 
-    fn name(&self) -> &'static str {
-        "collect"
+    fn name(&self) -> String {
+        "collect".to_string()
     }
 
     fn dynamic(&self) -> Option<&DynamicCommand> {
