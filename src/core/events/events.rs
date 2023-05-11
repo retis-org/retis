@@ -97,6 +97,7 @@ impl EventFormat for Event {
     }
 }
 
+/// Type alias to refer to the commonly used EventSectionFactory HashMap.
 pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
 
 /// Implemented by objects generating events from a given source (BPF, file,

@@ -163,10 +163,8 @@ impl Modules {
     }
 
     /// Return the registered EventSectionFactories in a HashMap.
-    pub(crate) fn section_factories(
-        &self,
-    ) -> Result<HashMap<ModuleId, Box<dyn EventSectionFactory>>> {
-        let mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
+    pub(crate) fn section_factories(&self) -> Result<SectionFactories> {
+        let mut section_factories: SectionFactories = HashMap::new();
 
         // Register core event sections.
         section_factories.insert(ModuleId::Common, Box::<CommonEventFactory>::default());

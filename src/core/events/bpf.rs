@@ -68,10 +68,7 @@ impl BpfEventsFactory {
 impl EventFactory for BpfEventsFactory {
     /// This starts the event polling mechanism. A dedicated thread is started
     /// for events to be retrieved and processed.
-    fn start(
-        &mut self,
-        mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>>,
-    ) -> Result<()> {
+    fn start(&mut self, mut section_factories: SectionFactories) -> Result<()> {
         if section_factories.is_empty() {
             bail!("No section factory, can't parse events, aborting");
         }
@@ -166,10 +163,7 @@ impl EventFactory for BpfEventsFactory {
     }
 }
 
-fn parse_raw_event<'a>(
-    data: &'a [u8],
-    factories: &'a mut HashMap<ModuleId, Box<dyn EventSectionFactory>>,
-) -> Result<Event> {
+fn parse_raw_event<'a>(data: &'a [u8], factories: &'a mut SectionFactories) -> Result<Event> {
     // First retrieve the buffer length.
     let data_size = data.len();
     if data_size < 2 {
@@ -337,7 +331,7 @@ impl BpfEventsFactory {
 }
 #[cfg(test)]
 impl EventFactory for BpfEventsFactory {
-    fn start(&mut self, _: HashMap<ModuleId, Box<dyn EventSectionFactory>>) -> Result<()> {
+    fn start(&mut self, _: SectionFactories) -> Result<()> {
         Ok(())
     }
     fn next_event(&mut self, _: Option<Duration>) -> Result<Option<Event>> {
@@ -442,7 +436,7 @@ mod tests {
 
     #[test]
     fn parse_raw_event() {
-        let mut factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
+        let mut factories: SectionFactories = HashMap::new();
         factories.insert(ModuleId::Common, Box::<TestEvent>::default());
 
         // Empty event.
