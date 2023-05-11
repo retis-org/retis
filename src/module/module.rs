@@ -3,10 +3,7 @@ use std::{collections::HashMap, fmt};
 use anyhow::{bail, Result};
 
 use super::{
-    ovs::{OvsCollector, OvsEventFactory},
-    skb::{SkbCollector, SkbEventFactory},
-    skb_drop::{SkbDropCollector, SkbDropEventFactory},
-    skb_tracking::{SkbTrackingCollector, SkbTrackingEventFactory},
+    ovs::OvsModule, skb::SkbModule, skb_drop::SkbDropModule, skb_tracking::SkbTrackingModule,
 };
 use crate::{
     collect::Collector,
@@ -107,17 +104,12 @@ impl fmt::Display for ModuleId {
     }
 }
 
+/// Trait that must be implemented by Modules
 pub(crate) trait Module {
-    fn to_collector(&mut self) -> &mut dyn Collector;
-}
-
-impl<T> Module for T
-where
-    T: Collector,
-{
-    fn to_collector(&mut self) -> &mut dyn Collector {
-        self
-    }
+    /// Return a Collector used for collect command
+    fn collector(&mut self) -> &mut dyn Collector;
+    /// Return an EventSectionFactory
+    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>>;
 }
 
 /// All modules are registered there. The following is the main API and object
@@ -125,57 +117,32 @@ where
 pub(crate) struct Modules {
     /// Set of registered modules we can use.
     modules: HashMap<ModuleId, Box<dyn Module>>,
-    /// Event section factories to parse sections into an event. Section
-    /// factories come from modules. They are under an Option to allow ownership
-    /// change so they can be consumed by the event factory (and moved to a
-    /// processing thread).
-    pub(crate) section_factories: Option<HashMap<ModuleId, Box<dyn EventSectionFactory>>>,
 }
 
 impl Modules {
     pub(crate) fn new() -> Result<Modules> {
-        let mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
-
-        // Register core event sections.
-        section_factories.insert(ModuleId::Common, Box::<CommonEventFactory>::default());
-        section_factories.insert(ModuleId::Kernel, Box::<KernelEventFactory>::default());
-        section_factories.insert(ModuleId::Userspace, Box::<UserEventFactory>::default());
-
         Ok(Modules {
             modules: HashMap::new(),
-            section_factories: Some(section_factories),
         })
     }
 
-    /// Register a module and its event section factory.
+    /// Register a module
     ///
     /// ```
     /// modules
     ///     .register(
     ///         Box::new(FirstModule::new()?,
-    ///         Box::<FirstEvent>::default()))?,
     ///     )?
     ///     .register(
     ///         Box::new(SecondModule::new()?,
-    ///         Box::<SecondEvent>::default()))?,
     ///     )?;
     /// ```
-    pub(crate) fn register(
-        &mut self,
-        id: ModuleId,
-        module: Box<dyn Module>,
-        section_factory: Box<dyn EventSectionFactory>,
-    ) -> Result<&mut Self> {
+    pub(crate) fn register(&mut self, id: ModuleId, module: Box<dyn Module>) -> Result<&mut Self> {
         // Ensure uniqueness of the module name. This is important as their
         // name is used as a key.
         if self.modules.get(&id).is_some() {
             bail!("Could not insert module '{}'; name already registered", id,);
         }
-
-        match &mut self.section_factories {
-            Some(factories) => factories.insert(id, section_factory),
-            None => bail!("Section factories map no found"),
-        };
 
         self.modules.insert(id, module);
         Ok(self)
@@ -186,32 +153,30 @@ impl Modules {
     pub(crate) fn collectors(&mut self) -> HashMap<&ModuleId, &mut dyn Collector> {
         self.modules
             .iter_mut()
-            .map(|(id, m)| (id, m.to_collector()))
+            .map(|(id, m)| (id, m.collector()))
             .collect()
     }
 
     /// Get a specific collector, if found in the registered modules.
     pub(crate) fn get_collector(&mut self, id: &ModuleId) -> Option<&mut dyn Collector> {
-        self.modules.get_mut(id).map(|m| m.to_collector())
+        self.modules.get_mut(id).map(|m| m.collector())
     }
 
-    /// Sometimes we need to perform actions on factories at a higher level.
-    /// It's a bit of an hack for now, it would be good to remove it. One option
-    /// would be to move the core EventSection and their factories into modules
-    /// directly (using mandatory modules). This should not affect the module
-    /// API though, so it should be fine as-is for now.
-    #[cfg(not(test))]
-    pub(crate) fn get_section_factory<T: EventSectionFactory + 'static>(
-        &mut self,
-        id: ModuleId,
-    ) -> Result<Option<&mut T>> {
-        match self.section_factories.as_mut() {
-            Some(section_factories) => Ok(match section_factories.get_mut(&id) {
-                Some(module) => module.as_any_mut().downcast_mut::<T>(),
-                None => None,
-            }),
-            None => bail!("Section factories were already consumed"),
+    /// Return the registered EventSectionFactories in a HashMap.
+    pub(crate) fn section_factories(
+        &self,
+    ) -> Result<HashMap<ModuleId, Box<dyn EventSectionFactory>>> {
+        let mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
+
+        // Register core event sections.
+        section_factories.insert(ModuleId::Common, Box::<CommonEventFactory>::default());
+        section_factories.insert(ModuleId::Kernel, Box::<KernelEventFactory>::default());
+        section_factories.insert(ModuleId::Userspace, Box::<UserEventFactory>::default());
+
+        for (id, module) in self.modules.iter() {
+            section_factories.insert(*id, module.section_factory()?);
         }
+        Ok(section_factories)
     }
 }
 
@@ -220,26 +185,10 @@ pub(crate) fn get_modules() -> Result<Modules> {
 
     // Register all collectors here.
     group
-        .register(
-            ModuleId::SkbTracking,
-            Box::new(SkbTrackingCollector::new()?),
-            Box::<SkbTrackingEventFactory>::default(),
-        )?
-        .register(
-            ModuleId::Skb,
-            Box::new(SkbCollector::new()?),
-            Box::<SkbEventFactory>::default(),
-        )?
-        .register(
-            ModuleId::SkbDrop,
-            Box::new(SkbDropCollector::new()?),
-            Box::new(SkbDropEventFactory::new()?),
-        )?
-        .register(
-            ModuleId::Ovs,
-            Box::new(OvsCollector::new()?),
-            Box::<OvsEventFactory>::default(),
-        )?;
+        .register(ModuleId::SkbTracking, Box::new(SkbTrackingModule::new()?))?
+        .register(ModuleId::Skb, Box::new(SkbModule::new()?))?
+        .register(ModuleId::SkbDrop, Box::new(SkbDropModule::new()?))?
+        .register(ModuleId::Ovs, Box::new(OvsModule::new()?))?;
 
     Ok(group)
 }

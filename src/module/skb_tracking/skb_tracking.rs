@@ -1,19 +1,22 @@
 use anyhow::Result;
 
-use super::tracking_hook;
+use super::{tracking_hook, SkbTrackingEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::probe::{manager::ProbeManager, Hook},
-    module::ModuleId,
+    core::{
+        events::EventSectionFactory,
+        probe::{manager::ProbeManager, Hook},
+    },
+    module::{Module, ModuleId},
 };
 
 #[derive(Default)]
-pub(crate) struct SkbTrackingCollector {}
+pub(crate) struct SkbTrackingModule {}
 
-impl Collector for SkbTrackingCollector {
-    fn new() -> Result<SkbTrackingCollector> {
-        Ok(SkbTrackingCollector::default())
+impl Collector for SkbTrackingModule {
+    fn new() -> Result<Self> {
+        Ok(Self::default())
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
@@ -26,5 +29,14 @@ impl Collector for SkbTrackingCollector {
 
     fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         probes.register_kernel_hook(Hook::from(tracking_hook::DATA))
+    }
+}
+
+impl Module for SkbTrackingModule {
+    fn collector(&mut self) -> &mut dyn Collector {
+        self
+    }
+    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
+        Ok(Box::new(SkbTrackingEventFactory {}))
     }
 }

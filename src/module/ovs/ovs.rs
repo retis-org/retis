@@ -3,16 +3,17 @@ use std::mem;
 use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
 
-use super::hooks;
+use super::{hooks, OvsEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
+        events::EventSectionFactory,
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
         user::proc::{Process, ThreadInfo},
     },
-    module::ModuleId,
+    module::{Module, ModuleId},
 };
 
 #[derive(Parser, Default)]
@@ -27,7 +28,7 @@ See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions.
 }
 
 #[derive(Default)]
-pub(crate) struct OvsCollector {
+pub(crate) struct OvsModule {
     track: bool,
     inflight_upcalls_map: Option<libbpf_rs::Map>,
     inflight_exec_cmd_map: Option<libbpf_rs::Map>,
@@ -36,9 +37,9 @@ pub(crate) struct OvsCollector {
     pid_to_batch: Option<libbpf_rs::Map>,
 }
 
-impl Collector for OvsCollector {
-    fn new() -> Result<OvsCollector> {
-        Ok(OvsCollector::default())
+impl Collector for OvsModule {
+    fn new() -> Result<Self> {
+        Ok(Self::default())
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
@@ -66,7 +67,16 @@ impl Collector for OvsCollector {
     }
 }
 
-impl OvsCollector {
+impl Module for OvsModule {
+    fn collector(&mut self) -> &mut dyn Collector {
+        self
+    }
+    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
+        Ok(Box::new(OvsEventFactory {}))
+    }
+}
+
+impl OvsModule {
     fn create_inflight_exec_cmd_map() -> Result<libbpf_rs::Map> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         let opts = libbpf_sys::bpf_map_create_opts {
