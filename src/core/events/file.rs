@@ -11,14 +11,14 @@ use std::{
 use anyhow::{anyhow, Result};
 use log::debug;
 
-use super::{Event, EventFactory, EventSectionFactory};
+use super::{Event, EventFactory, EventSectionFactory, SectionFactories};
 use crate::module::ModuleId;
 
 /// File events factory retrieving and unmarshaling events
 /// parts.
 pub(crate) struct FileEventsFactory {
     reader: BufReader<File>,
-    factories: HashMap<ModuleId, Box<dyn EventSectionFactory>>,
+    factories: SectionFactories,
 }
 
 impl FileEventsFactory {
@@ -35,10 +35,7 @@ impl FileEventsFactory {
 }
 
 impl EventFactory for FileEventsFactory {
-    fn start(
-        &mut self,
-        section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>>,
-    ) -> Result<()> {
+    fn start(&mut self, section_factories: SectionFactories) -> Result<()> {
         self.factories = section_factories;
         Ok(())
     }
