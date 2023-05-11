@@ -1,20 +1,21 @@
 use anyhow::{bail, Result};
 
-use super::skb_drop_hook;
+use super::{skb_drop_hook, SkbDropEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
+        events::EventSectionFactory,
         inspect::inspector,
         kernel::Symbol,
         probe::{Hook, Probe, ProbeManager},
     },
-    module::ModuleId,
+    module::{Module, ModuleId},
 };
 
-pub(crate) struct SkbDropCollector {}
+pub(crate) struct SkbDropModule {}
 
-impl Collector for SkbDropCollector {
+impl Collector for SkbDropModule {
     fn new() -> Result<Self> {
         Ok(Self {})
     }
@@ -54,5 +55,14 @@ impl Collector for SkbDropCollector {
         }
 
         probes.register_kernel_hook(Hook::from(skb_drop_hook::DATA))
+    }
+}
+
+impl Module for SkbDropModule {
+    fn collector(&mut self) -> &mut dyn Collector {
+        self
+    }
+    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
+        Ok(Box::new(SkbDropEventFactory::new()?))
     }
 }

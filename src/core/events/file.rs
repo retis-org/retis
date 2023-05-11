@@ -89,7 +89,7 @@ mod tests {
     fn read_from_file() {
         let modules = get_modules().unwrap();
         let mut fact = FileEventsFactory::new("test_data/test_events.json").unwrap();
-        let factories = modules.section_factories.unwrap();
+        let factories = modules.section_factories().unwrap();
         fact.start(factories).unwrap();
 
         let mut events = Vec::new();
