@@ -1,5 +1,7 @@
 use std::{
     collections::HashSet,
+    fs::OpenOptions,
+    io::{self, BufWriter, Write},
     process::{Command, Stdio},
     time::Duration,
 };
@@ -7,16 +9,14 @@ use std::{
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
 
-use super::{
-    cli::Collect,
-    output::{get_processors, JsonFormat},
-};
+use super::cli::Collect;
+
 #[cfg(not(test))]
 use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
     core::{
-        events::{bpf::BpfEventsFactory, EventFactory},
+        events::{bpf::BpfEventsFactory, format, EventFactory},
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
@@ -217,6 +217,8 @@ impl Collectors {
     /// Start the event retrieval for all collectors by calling
     /// their `start()` function.
     pub(crate) fn start(&mut self) -> Result<()> {
+        // Create factories.
+        #[cfg_attr(test, allow(unused_mut))]
         let mut section_factories = self.modules.section_factories()?;
 
         #[cfg(not(test))]
@@ -241,8 +243,10 @@ impl Collectors {
             gc.start(self.run.clone())?;
         }
 
+        // Start factory
         self.factory.start(section_factories)?;
 
+        // Attach probes and start collectors.
         self.probes.attach()?;
 
         self.modules.collectors().iter_mut().for_each(|(id, c)| {
@@ -287,13 +291,34 @@ impl Collectors {
             .subcommand
             .as_any()
             .downcast_ref::<Collect>()
-            .ok_or_else(|| anyhow!("wrong subcommand"))?;
+            .ok_or_else(|| anyhow!("wrong subcommand"))?
+            .args()?;
 
         // We use JSON format output for all events for now.
-        let mut json = JsonFormat::default();
-        let mut processors = get_processors(&mut json, collect.args()?)?;
+        let mut json = format::JsonFormat::default();
+        let mut writers: Vec<Box<dyn Write>> = Vec::new();
 
-        if let Some(cmd) = collect.args()?.cmd.to_owned() {
+        // Write the events to a file if asked to.
+        if let Some(out) = collect.out.as_ref() {
+            writers.push(Box::new(BufWriter::new(
+                OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(out)
+                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+            )));
+        }
+
+        // Write events to stdout if we don't write to a file (--out) or if
+        // explicitly asked to (--print).
+        if collect.out.is_none() || collect.print {
+            writers.push(Box::new(io::stdout()));
+        }
+
+        let mut output = format::FormatAndWrite::new(&mut json, writers);
+
+        if let Some(cmd) = collect.cmd.to_owned() {
             let mut run = self.run.clone();
             std::thread::spawn(move || {
                 match Command::new("sh")
@@ -315,14 +340,12 @@ impl Collectors {
 
         while self.run.running() {
             match self.factory.next_event(Some(Duration::from_secs(1)))? {
-                Some(event) => processors
-                    .iter_mut()
-                    .try_for_each(|p| p.process_one(&event))?,
+                Some(event) => output.process_one(&event)?,
                 None => continue,
             }
         }
 
-        processors.iter_mut().try_for_each(|p| p.flush())?;
+        output.flush()?;
         self.stop()
     }
 
