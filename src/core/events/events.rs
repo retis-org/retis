@@ -85,16 +85,14 @@ impl Event {
     }
 }
 
+/// Type alias to refer to the commonly used EventSectionFactory HashMap.
 pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
 
 /// Implemented by objects generating events from a given source (BPF, file,
 /// etc).
 pub(crate) trait EventFactory {
     /// Starts the factory events collection.
-    fn start(
-        &mut self,
-        section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>>,
-    ) -> Result<()>;
+    fn start(&mut self, section_factories: SectionFactories) -> Result<()>;
     /// Stops the factory events collection.
     fn stop(&mut self) -> Result<()>;
     /// Gets the next Event.
