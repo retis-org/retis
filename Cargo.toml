@@ -13,6 +13,7 @@ anyhow = "1.0"
 bimap = "0.6"
 btf-rs = "0.1"
 byteorder = "1.4"
+caps = "0.5"
 clap = { version = "4.0", features = ["derive", "string"] }
 elf = "0.7"
 flate2 = "1.0"

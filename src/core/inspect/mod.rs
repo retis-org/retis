@@ -8,5 +8,6 @@ pub(crate) mod inspect;
 pub(crate) use inspect::*;
 
 mod btf;
+pub(crate) mod check;
 mod kernel;
 mod kernel_version;
