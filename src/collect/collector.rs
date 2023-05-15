@@ -40,8 +40,16 @@ pub(crate) trait Collector {
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
         None
     }
-    ///Register command line arguments on the provided DynamicCommand object
+    /// Register command line arguments on the provided DynamicCommand object
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()>;
+    /// Check if the collector can run (eg. all prerequisites are matched). This
+    /// is a separate step from init to allow skipping collectors when they are
+    /// not explicitly selected by the user.
+    ///
+    /// The function should return an explanation when a collector can't run.
+    fn can_run(&self, _: &CliConfig) -> Result<()> {
+        Ok(())
+    }
     /// Initialize the collector, likely to be used to pass configuration data
     /// such as filters or command line arguments. We need to split the new &
     /// the init phase for collectors, to allow giving information to the core
@@ -152,6 +160,18 @@ impl Collectors {
                 .modules
                 .get_collector(&id)
                 .ok_or_else(|| anyhow!("unknown collector {}", name))?;
+
+            // Check if the collector can run (prerequisites are met).
+            if let Err(e) = c.can_run(&self.cli) {
+                // Do not issue an error if the list of collectors was set by
+                // default, aka. auto-detect mode.
+                if collect.default_collectors_list {
+                    debug!("Can't run collector {id}: {e}");
+                    continue;
+                } else {
+                    bail!("Can't run collector {id}: {e}");
+                }
+            }
 
             if let Err(e) = c.init(&self.cli, &mut self.probes) {
                 bail!("Could not initialize the {} collector: {}", id, e);

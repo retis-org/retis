@@ -85,7 +85,7 @@ impl SubCommand for Collect {
                         .long("collectors")
                         .short('c')
                         .value_delimiter(',')
-                        .help("comma-separated list of collectors to enable"),
+                        .help("Comma-separated list of collectors to enable. When not specified default to auto-mode (all collectors are enabled unless a prerequisite is missing)."),
                 ),
                 "collector",
             )?,
