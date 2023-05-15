@@ -8,5 +8,6 @@ pub(crate) mod events;
 pub(crate) mod filters;
 pub(crate) mod kernel;
 pub(crate) mod probe;
+pub(crate) mod tracking;
 pub(crate) mod user;
 pub(crate) mod workaround;

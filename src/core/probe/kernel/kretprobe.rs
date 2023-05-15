@@ -67,8 +67,8 @@ impl ProbeBuilder for KretprobeBuilder {
             _ => bail!("Kretprobe builder is uninitialized"),
         };
 
-        let probe = match probe {
-            Probe::Kretprobe(probe) => probe,
+        let probe = match probe.r#type() {
+            ProbeType::Kretprobe(probe) => probe,
             _ => bail!("Wrong probe type {}", probe),
         };
 

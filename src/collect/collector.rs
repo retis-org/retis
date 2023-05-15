@@ -20,6 +20,7 @@ use crate::{
         },
         kernel::{symbol::matching_functions_to_symbols, Symbol},
         probe::{self, Probe, ProbeManager},
+        tracking::skb_tracking::init_tracking,
     },
     module::{get_modules, ModuleId, Modules},
 };
@@ -127,7 +128,7 @@ impl Collectors {
 
         probe::common::set_ebpf_debug(collect.args()?.ebpf_debug)?;
         if collect.args()?.stack {
-            self.probes.add_probe_opt(probe::ProbeOption::StackTrace);
+            self.probes.set_probe_opt(probe::ProbeOption::StackTrace)?;
         }
 
         // Try initializing all collectors.
@@ -151,6 +152,12 @@ impl Collectors {
             }
         }
 
+        // Initialize tracking & filters.
+        if self.known_kernel_types.contains("struct sk_buff *") {
+            init_tracking(&mut self.probes)?;
+        }
+        Self::setup_filters(&mut self.probes, collect)?;
+
         // Setup user defined probes.
         let mut probes = Vec::new();
         collect
@@ -163,9 +170,8 @@ impl Collectors {
             })?;
         probes
             .drain(..)
-            .try_for_each(|p| self.probes.add_probe(p))?;
+            .try_for_each(|p| self.probes.register_probe(p))?;
 
-        Self::setup_filters(&mut self.probes, collect)?;
         Ok(())
     }
 

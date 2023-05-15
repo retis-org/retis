@@ -43,7 +43,7 @@ impl Collector for SkbDropCollector {
             _ => (),
         }
 
-        if let Err(e) = probes.add_probe(Probe::raw_tracepoint(symbol)?) {
+        if let Err(e) = probes.register_probe(Probe::raw_tracepoint(symbol)?) {
             bail!("Could not attach to skb:kfree_skb: {}", e);
         }
 
