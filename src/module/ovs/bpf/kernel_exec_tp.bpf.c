@@ -9,7 +9,7 @@
 struct exec_event {
 	u8 action;
 	u32 recirc_id;
-} __attribute__((packed));
+};
 
 /* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 struct exec_track_event {

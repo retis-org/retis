@@ -25,7 +25,7 @@ enum trace_ovs_data_type {
 struct upcall_context {
 	u64 ts;
 	u32 cpu;
-} __attribute__((packed));
+};
 
 #define MAX_INFLIGHT_UPCALLS 50
 struct {
@@ -51,7 +51,7 @@ struct {
 struct execute_actions_ctx {
 	struct sk_buff *skb;
 	bool command;
-} __attribute__((packed));
+};
 
 /* Map used to store context between the begining and end of
  * ovs_execute_actions calls. Indexed by pid_tgid. */

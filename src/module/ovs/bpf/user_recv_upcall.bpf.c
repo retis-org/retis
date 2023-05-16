@@ -13,7 +13,7 @@ struct recv_upcall_event {
 	u32 queue_id;
 	u64 batch_ts;
 	u8 batch_idx;
-} __attribute__((packed));
+};
 
 static __always_inline u32 queue_id_gen_data(void *data, u32 len)
 {

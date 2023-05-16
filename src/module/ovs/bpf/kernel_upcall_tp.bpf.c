@@ -9,7 +9,7 @@ struct upcall_event {
 	u8 cmd;
 	u32 port;
 	u32 cpu;
-} __attribute__((packed));
+};
 
 /* Hook for raw_tracepoint:openvswitch:ovs_dp_upcall. */
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,

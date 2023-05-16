@@ -12,7 +12,7 @@ struct upcall_enqueue_event {
 	u64 upcall_ts;
 	u32 upcall_cpu;
 	u32 queue_id;
-} __attribute__((packed));
+};
 
 static __always_inline u8 update_upcall_tracking(u32 queue_id, u64 ts)
 {
