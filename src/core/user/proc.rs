@@ -572,13 +572,22 @@ pub(crate) struct ThreadInfo {
 fn get_thread_info(pid: i32) -> Result<Vec<ThreadInfo>> {
     let mut threads = Vec::new();
 
-    for entry in Path::new("/proc/")
-        .join(pid.to_string())
-        .join("task")
-        .read_dir()?
-    {
+    let dir = Path::new("/proc/").join(pid.to_string()).join("task");
+    if !dir.is_dir() {
+        bail!(
+            "Can't get thread information: can't read /proc/{}/task",
+            pid
+        );
+    }
+
+    for entry in dir.read_dir()? {
         let entry = entry?;
-        let comm = fs::read_to_string(entry.path().join("comm"))?;
+        let comm = entry.path().join("comm");
+        if !comm.exists() {
+            continue;
+        }
+
+        let comm = fs::read_to_string(comm)?;
         threads.push(ThreadInfo {
             pid: entry
                 .file_name()
