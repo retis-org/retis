@@ -16,7 +16,7 @@ struct ovs_operation_event {
 	u32 queue_id;
 	u64 batch_ts;
 	u8 batch_idx;
-} __attribute__((packed));
+};
 
 /* Upcall Batching.
  *
@@ -48,7 +48,7 @@ struct user_upcall_info {
 	/* It indicates that the upcall event was filtered out so no events
 	 * related to this upcall should be generated. */
 	bool skip_event;
-} __attribute__((packed));
+};
 
 #define UPCALL_MAX_BATCH 64
 
@@ -62,7 +62,7 @@ struct upcall_batch {
 	u8 current_upcall; /* Current upcall being processed */
 	u8 total;		  /* Number of upcalls of the batch */
 	struct user_upcall_info upcalls[UPCALL_MAX_BATCH]; /* Upcalls in batch */
-} __attribute__((packed));
+};
 
 
 /* Array of batches. This is a placeholder as this array must be created
@@ -128,7 +128,7 @@ static __always_inline struct user_upcall_info *batch_current(struct upcall_batc
 	 */
 	barrier_var(batch->current_upcall);
 	if (!batch ||
-	    batch->current_upcall >= UPCALL_MAX_BATCH)
+	    batch->current_upcall >= (UPCALL_MAX_BATCH -1))
 		return NULL;
 
 	return &batch->upcalls[batch->current_upcall];

@@ -158,7 +158,7 @@ impl OvsCollector {
 
     fn create_inflight_exec_map() -> Result<libbpf_rs::Map> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
-        #[repr(C, packed)]
+        #[repr(C)]
         struct ExecuteActionsContext {
             skb: u64,
             command: bool,
@@ -181,7 +181,7 @@ impl OvsCollector {
 
     fn create_inflight_upcalls_map() -> Result<libbpf_rs::Map> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
-        #[repr(C, packed)]
+        #[repr(C)]
         struct UpcallContext {
             ts: u64,
             cpu: u32,
@@ -212,13 +212,13 @@ impl OvsCollector {
         let nhandlers = handlers.len();
 
         // Please keep in sync with its C counterpart in bpf/ovs_operation.h
-        #[repr(C, packed)]
+        #[repr(C)]
         struct UserUpcallInfo {
             queue_id: u32,
             process_ops: u8,
-            skip_event: u8,
+            skip_event: bool,
         }
-        #[repr(C, packed)]
+        #[repr(C)]
         struct UpcallBatch {
             leater_ts: u64,
             processing: bool,

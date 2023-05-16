@@ -84,7 +84,7 @@ pub(crate) enum OvsEventType {
 // "bpf/kernel_upcall_tp.bpf.c".
 /// OVS upcall event
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
-#[repr(C, packed)]
+#[repr(C)]
 pub(crate) struct UpcallEvent {
     /// Upcall command. Holds OVS_PACKET_CMD:
     ///   OVS_PACKET_CMD_UNSPEC   = 0
@@ -104,7 +104,7 @@ unsafe impl Plain for UpcallEvent {}
 // "bpf/kernel_enqueue.bpf.c".
 /// Upcall enqueue event.
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
-#[repr(C, packed)]
+#[repr(C)]
 pub(crate) struct UpcallEnqueueEvent {
     /// Return code. Any value different from zero indicates the upcall enqueue
     /// failed probably indicating a packet drop.
@@ -127,7 +127,7 @@ unsafe impl Plain for UpcallEnqueueEvent {}
 // "bpf/kernel_upcall_ret.bpf.c".
 /// Upcall return event
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
-#[repr(C, packed)]
+#[repr(C)]
 pub(crate) struct UpcallReturnEvent {
     pub(crate) upcall_ts: u64,
     pub(crate) upcall_cpu: u32,
@@ -140,7 +140,7 @@ unsafe impl Plain for UpcallReturnEvent {}
 // "bpf/include/ovs_operation.h".
 /// Operation event.
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
-#[repr(C, packed)]
+#[repr(C)]
 pub(crate) struct OperationEvent {
     /// Operation type ("put" or "exec")
     #[serde(
@@ -193,7 +193,7 @@ impl OperationEvent {
 // "bpf/user_recv_upcall.bpf.c".
 /// OVS Receive Event
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
-#[repr(C, packed)]
+#[repr(C)]
 pub(crate) struct RecvUpcallEvent {
     /// Type of upcall
     pub(crate) r#type: u32,
