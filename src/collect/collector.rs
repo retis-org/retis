@@ -1,8 +1,8 @@
-use std::{collections::HashSet, sync::mpsc, thread, time::Duration};
+use std::{collections::HashSet, thread::JoinHandle, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
-use log::{error, info, warn};
-use signal_hook::{consts::SIGINT, iterator::Signals};
+use log::{debug, info, warn};
+use signal_hook::low_level::signal_name;
 
 use super::{
     cli::Collect,
@@ -20,6 +20,7 @@ use crate::{
         },
         kernel::{symbol::matching_functions_to_symbols, Symbol},
         probe::{self, Probe, ProbeManager},
+        signals::Running,
         tracking::skb_tracking::init_tracking,
     },
     module::{get_modules, ModuleId, Modules},
@@ -53,8 +54,12 @@ pub(crate) trait Collector {
     /// hard to run in various setups, see the `crate::collector` top
     /// documentation for more information.
     fn init(&mut self, cli: &CliConfig, probes: &mut probe::ProbeManager) -> Result<()>;
-    /// Start the group of events (non-probes).
+    /// Start the collector.
     fn start(&mut self) -> Result<()> {
+        Ok(())
+    }
+    /// Stop the collector.
+    fn stop(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -66,6 +71,8 @@ pub(crate) struct Collectors {
     cli: CliConfig,
     factory: Box<dyn EventFactory>,
     known_kernel_types: HashSet<String>,
+    gc_handle: Option<JoinHandle<()>>,
+    run: Running,
 }
 
 impl Collectors {
@@ -104,6 +111,8 @@ impl Collectors {
             known_kernel_types: HashSet::new(),
             cli,
             factory,
+            gc_handle: None,
+            run: Running::new(),
         })
     }
 
@@ -119,6 +128,11 @@ impl Collectors {
 
     /// Initialize all collectors by calling their `init()` function.
     pub(crate) fn init(&mut self) -> Result<()> {
+        for sig in signal_hook::consts::TERM_SIGNALS {
+            debug!("Registering {}", signal_name(*sig).unwrap());
+            self.run.register_signal(*sig)?;
+        }
+
         let collect = self
             .cli
             .subcommand
@@ -154,7 +168,7 @@ impl Collectors {
 
         // Initialize tracking & filters.
         if self.known_kernel_types.contains("struct sk_buff *") {
-            init_tracking(&mut self.probes)?;
+            self.gc_handle = init_tracking(&mut self.probes, self.run.clone())?;
         }
         Self::setup_filters(&mut self.probes, collect)?;
 
@@ -195,6 +209,31 @@ impl Collectors {
         Ok(())
     }
 
+    /// Stop the event retrieval for all collectors in the group by calling
+    /// their `stop()` function. All the collectors are in charge to clean-up
+    /// their temporary side effects and exit gracefully.
+    fn stop(&mut self) -> Result<()> {
+        self.modules.collectors().iter_mut().for_each(|(id, c)| {
+            debug!("Stopping {}", id.to_str());
+            if c.stop().is_err() {
+                warn!("Could not stop '{}'", id.to_str());
+            }
+        });
+
+        // We're not actually stopping but just joining. The actual
+        // termination got performed implicitly by the signal handler.
+        // The print-out is just for consistency.
+        debug!("Stopping tracking gc");
+        if let Some(gc) = self.gc_handle.take() {
+            gc.join().or_else(|_| bail!("failed to stop tracking gc"))?;
+        }
+
+        debug!("Stopping events");
+        self.factory.stop()?;
+
+        Ok(())
+    }
+
     /// Starts the processing loop and block until we get a single SIGINT
     /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
     /// collector cmd loop.
@@ -210,38 +249,17 @@ impl Collectors {
         let mut json = JsonFormat::default();
         let mut processors = get_processors(&mut json, collect.args()?)?;
 
-        let mut sigint = Signals::new([SIGINT])?;
-        let (txc, rxc) = mpsc::channel();
-
-        thread::spawn(move || {
-            // Only wait for a single SIGINT to let the user really interrupt us
-            // in case it's needed.
-            sigint.wait();
-            info!("Received SIGINT, terminating...");
-
-            if let Err(e) = txc.send(()) {
-                error!(
-                    "Failed to send message after receiving ctrl+c signal: {}",
-                    e
-                );
-            }
-        });
-
-        loop {
+        while self.run.running() {
             match self.factory.next_event(Some(Duration::from_secs(1)))? {
                 Some(event) => processors
                     .iter_mut()
                     .try_for_each(|p| p.process_one(&event))?,
                 None => continue,
             }
-
-            // If we're interrupted, break the loop to allow nicely exiting.
-            if rxc.try_recv().is_ok() {
-                break;
-            }
         }
 
-        processors.iter_mut().try_for_each(|p| p.flush())
+        processors.iter_mut().try_for_each(|p| p.flush())?;
+        self.stop()
     }
 
     /// Parse a user defined probe (through cli parameters) and extract its type and

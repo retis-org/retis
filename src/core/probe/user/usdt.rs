@@ -1,3 +1,5 @@
+use std::mem::ManuallyDrop;
+
 use anyhow::{anyhow, bail, Result};
 
 use crate::core::filters::Filter;
@@ -11,7 +13,10 @@ use usdt_bpf::UsdtSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct UsdtBuilder {
-    links: Vec<libbpf_rs::Link>,
+    // FIXME: Marked as manually dropped because the process
+    // segfaults apparently in libbpf when the drop in place
+    // happens.
+    links: ManuallyDrop<Vec<libbpf_rs::Link>>,
     map_fds: Vec<(String, i32)>,
     hooks: Vec<Hook>,
 }

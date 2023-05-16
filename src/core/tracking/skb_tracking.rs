@@ -91,6 +91,7 @@ use crate::core::{
         manager::{ProbeManager, PROBE_MAX},
         Probe, ProbeOption,
     },
+    signals::Running,
     workaround::SendableMap,
 };
 
@@ -140,7 +141,10 @@ fn tracking_map() -> Result<libbpf_rs::Map> {
     .or_else(|e| bail!("Could not create the tracking map: {}", e))
 }
 
-pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<()> {
+pub(crate) fn init_tracking(
+    probes: &mut ProbeManager,
+    run_state: Running,
+) -> Result<Option<thread::JoinHandle<()>>> {
     let config_map = config_map()?;
     let mut tracking_map = SendableMap::from(tracking_map()?);
 
@@ -211,10 +215,10 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<()> {
     // in the BPF part for most if not all skbs but we might lose some
     // information (and tracked functions might fail resulting in incorrect
     // information).
-    thread::spawn(move || {
+    let gc = thread::spawn(move || {
         let tracking_map = tracking_map.get_mut();
 
-        loop {
+        while run_state.running() {
             // Let's run every SKB_TRACKING_GC_INTERVAL seconds.
             thread::sleep(Duration::from_secs(SKB_TRACKING_GC_INTERVAL));
             let now = Duration::from(time::clock_gettime(time::ClockId::CLOCK_MONOTONIC).unwrap());
@@ -250,7 +254,7 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<()> {
         }
     });
 
-    Ok(())
+    Ok(Some(gc))
 }
 
 // Please keep in sync with its BPF counterpart.
