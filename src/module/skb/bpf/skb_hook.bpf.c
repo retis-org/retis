@@ -10,7 +10,7 @@
  *
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
-#define COLLECT_L2		0
+#define COLLECT_ETH		0
 #define COLLECT_IPV4		1
 #define COLLECT_IPV6		2
 #define COLLECT_TCP		3
@@ -37,7 +37,7 @@ struct {
 /* Please keep the following structs in sync with its Rust counterpart in
  * module::skb::bpf.
  */
-struct skb_l2_event {
+struct skb_eth_event {
 	u8 dst[6];
 	u8 src[6];
 	u16 etype;
@@ -110,9 +110,9 @@ static __always_inline int process_skb_l2_l4(struct retis_context *ctx,
 	if (etype == 0)
 		return 0;
 
-	if (cfg->sections & BIT(COLLECT_L2)) {
-		struct skb_l2_event *e =
-			get_event_zsection(event, COLLECTOR_SKB, COLLECT_L2,
+	if (cfg->sections & BIT(COLLECT_ETH)) {
+		struct skb_eth_event *e =
+			get_event_zsection(event, COLLECTOR_SKB, COLLECT_ETH,
 					   sizeof(*e));
 		if (!e)
 			return 0;
