@@ -23,6 +23,8 @@ pub(crate) struct SkbEvent {
     pub(crate) dev: Option<SkbDevEvent>,
     /// Net namespace data, if any.
     pub(crate) ns: Option<SkbNsEvent>,
+    /// Skb metadata, if any.
+    pub(crate) meta: Option<SkbMetaEvent>,
     /// Skb data-related and refcnt information, if any.
     pub(crate) data_ref: Option<SkbDataRefEvent>,
 }
@@ -105,12 +107,33 @@ pub(crate) struct SkbNsEvent {
     pub(crate) netns: u32,
 }
 
+/// Skb metadata & releated fields.
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub(crate) struct SkbMetaEvent {
+    /// Total number of bytes in the packet.
+    pub(crate) len: u32,
+    /// Total number of bytes in the page buffer area.
+    pub(crate) data_len: u32,
+    /// Packet hash (!= hash of the packet data).
+    pub(crate) hash: u32,
+    /// Packet checksum.
+    pub(crate) csum: u32,
+    /// QoS priority.
+    pub(crate) priority: u32,
+}
+
 /// Skb data & refcnt fields.
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct SkbDataRefEvent {
+    /// Payload reference only.
+    pub(crate) nohdr: bool,
+    /// Is the skb a clone?
     pub(crate) cloned: bool,
+    /// Skb fast clone information.
     pub(crate) fclone: u8,
+    /// Users count.
     pub(crate) users: u8,
+    /// Data refcount.
     pub(crate) dataref: u8,
 }
 
@@ -132,6 +155,7 @@ impl RawEventSectionFactory for SkbEventFactory {
                 SECTION_ICMP => event.icmp = Some(unmarshal_icmp(section)?),
                 SECTION_DEV => event.dev = Some(unmarshal_dev(section)?),
                 SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
+                SECTION_META => event.meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
                 _ => bail!("Unknown data type"),
             }
