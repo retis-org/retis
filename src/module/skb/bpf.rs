@@ -25,7 +25,8 @@ pub(super) const SECTION_UDP: u64 = 4;
 pub(super) const SECTION_ICMP: u64 = 5;
 pub(super) const SECTION_DEV: u64 = 6;
 pub(super) const SECTION_NS: u64 = 7;
-pub(super) const SECTION_DATA_REF: u64 = 8;
+pub(super) const SECTION_META: u64 = 8;
+pub(super) const SECTION_DATA_REF: u64 = 9;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -244,10 +245,35 @@ pub(super) fn unmarshal_ns(raw_section: &BpfRawSection) -> Result<SkbNsEvent> {
     Ok(SkbNsEvent { netns: raw.netns })
 }
 
+/// Skb metadata & related.
+#[derive(Default)]
+#[repr(C, packed)]
+struct RawMetaEvent {
+    len: u32,
+    data_len: u32,
+    hash: u32,
+    csum: u32,
+    priority: u32,
+}
+unsafe impl Plain for RawMetaEvent {}
+
+pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent> {
+    let raw = parse_raw_section::<RawMetaEvent>(raw_section)?;
+
+    Ok(SkbMetaEvent {
+        len: raw.len,
+        data_len: raw.data_len,
+        hash: raw.hash,
+        csum: raw.csum,
+        priority: raw.priority,
+    })
+}
+
 /// Data & refcount information retrieved from skbs.
 #[derive(Default)]
 #[repr(C, packed)]
 struct RawDataRefEvent {
+    nohdr: u8,
     /// Is the skb a clone?
     cloned: u8,
     /// Is the skb a fast clone?
@@ -263,6 +289,7 @@ pub(super) fn unmarshal_data_ref(raw_section: &BpfRawSection) -> Result<SkbDataR
     let raw = parse_raw_section::<RawDataRefEvent>(raw_section)?;
 
     Ok(SkbDataRefEvent {
+        nohdr: raw.nohdr == 1,
         cloned: raw.cloned == 1,
         fclone: raw.fclone,
         users: raw.users,
