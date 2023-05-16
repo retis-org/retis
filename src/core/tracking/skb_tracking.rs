@@ -218,9 +218,18 @@ pub(crate) fn init_tracking(
     let gc = thread::spawn(move || {
         let tracking_map = tracking_map.get_mut();
 
-        while run_state.running() {
+        let running = || -> bool {
             // Let's run every SKB_TRACKING_GC_INTERVAL seconds.
-            thread::sleep(Duration::from_secs(SKB_TRACKING_GC_INTERVAL));
+            for _ in 0..SKB_TRACKING_GC_INTERVAL {
+                thread::sleep(Duration::from_secs(1));
+                if !run_state.running() {
+                    return false;
+                }
+            }
+            true
+        };
+
+        while running() {
             let now = Duration::from(time::clock_gettime(time::ClockId::CLOCK_MONOTONIC).unwrap());
 
             // Loop through the tracking map entries and see if we see old
