@@ -15,9 +15,9 @@ use crate::{
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
-        value_parser=PossibleValuesParser::new(["all", "l2", "l3", "tcp", "udp", "icmp", "dev", "ns", "dataref"]),
+        value_parser=PossibleValuesParser::new(["all", "eth", "ip", "tcp", "udp", "icmp", "dev", "ns", "dataref"]),
         value_delimiter=',',
-        default_value="l3,tcp,udp,icmp",
+        default_value="ip,tcp,udp,icmp",
         help = "Comma separated list of data to collect from skbs"
     )]
     skb_sections: Vec<String>,
@@ -46,8 +46,8 @@ impl Collector for SkbCollector {
         for category in args.skb_sections.iter() {
             match category.as_str() {
                 "all" => sections |= !0_u64,
-                "l2" => sections |= 1 << SECTION_L2,
-                "l3" => sections |= 1 << SECTION_IPV4 | 1 << SECTION_IPV6,
+                "eth" => sections |= 1 << SECTION_ETH,
+                "ip" => sections |= 1 << SECTION_IPV4 | 1 << SECTION_IPV6,
                 "tcp" => sections |= 1 << SECTION_TCP,
                 "udp" => sections |= 1 << SECTION_UDP,
                 "icmp" => sections |= 1 << SECTION_ICMP,
@@ -62,7 +62,7 @@ impl Collector for SkbCollector {
         let config_map = Self::config_map()?;
 
         // Set the config.
-        let cfg = SkbConfig { sections };
+        let cfg = RawConfig { sections };
         let cfg = unsafe { plain::as_bytes(&cfg) };
 
         let key = 0_u32.to_ne_bytes();
@@ -89,7 +89,7 @@ impl SkbCollector {
             libbpf_rs::MapType::Array,
             Some("skb_config_map"),
             mem::size_of::<u32>() as u32,
-            mem::size_of::<SkbConfig>() as u32,
+            mem::size_of::<RawConfig>() as u32,
             1,
             &opts,
         )
