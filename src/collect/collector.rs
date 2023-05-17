@@ -154,6 +154,7 @@ impl Collectors {
         }
 
         // Try initializing all collectors.
+        let mut loaded = Vec::new();
         for name in &collect.args()?.collectors {
             let id = ModuleId::from_str(name)?;
             let c = self
@@ -177,6 +178,8 @@ impl Collectors {
                 bail!("Could not initialize the {} collector: {}", id, e);
             }
 
+            loaded.push(id);
+
             // If the collector provides known kernel types, meaning we have a
             // dynamic collector, retrieve and store them for later processing.
             if let Some(kt) = c.known_kernel_types() {
@@ -184,6 +187,18 @@ impl Collectors {
                     self.known_kernel_types.insert(x.to_string());
                 });
             }
+        }
+
+        //  If auto-mode is used, print the list of module that were started.
+        if collect.default_collectors_list {
+            info!(
+                "Module(s) started: {}",
+                loaded
+                    .iter()
+                    .map(|id| id.to_str())
+                    .collect::<Vec<&str>>()
+                    .join(", ")
+            );
         }
 
         // Initialize tracking & filters.
