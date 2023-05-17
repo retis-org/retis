@@ -16,12 +16,13 @@ class Retis:
     events for verification.
     """
 
-    def __init__(self):
+    def __init__(self, target="debug"):
         self.binary = join(
-            dirname(dirname(abspath(__file__))), "target", "debug", "retis"
+            dirname(dirname(abspath(__file__))), "target", target, "retis"
         )
         self.tempdir = mkdtemp()
         self._events = []
+        self.target = target
 
     def _event_file(self):
         return join(self.tempdir, "events.json")
@@ -36,7 +37,10 @@ class Retis:
         self.proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
-        time.sleep(5)
+
+        if self.target == "debug":
+            # Debug builds take a long time to startup.
+            time.sleep(7)
 
     def stop(self):
         """Stop the running retis instance."""
