@@ -11,10 +11,11 @@ from pyroute2 import netns as ipnetns, NetNS
 
 
 class Retis:
-    """ Wrapper around retis command that allows tests to start collecting,
+    """Wrapper around retis command that allows tests to start collecting,
     execute whatever test, and finally stop the collector and retrieve the
     events for verification.
     """
+
     def __init__(self):
         self.binary = join(
             dirname(dirname(abspath(__file__))), "target", "debug", "retis"
@@ -26,13 +27,11 @@ class Retis:
         return join(self.tempdir, "events.json")
 
     def collect(self, *args):
-        """ Run retis collect {ARGS}.
+        """Run retis collect {ARGS}.
         Note that "--output" argument is automatically added so that events can
         then be parsed.
         """
-        cmd = (
-            [self.binary, "collect"] + list(args) + ["-o", self._event_file()]
-        )
+        cmd = [self.binary, "collect"] + list(args) + ["-o", self._event_file()]
         print(f"running command: {cmd}")
         self.proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -40,7 +39,7 @@ class Retis:
         time.sleep(5)
 
     def stop(self):
-        """ Stop the running retis instance. """
+        """Stop the running retis instance."""
         time.sleep(2)
         self.proc.send_signal(signal.SIGINT)
         try:
@@ -50,9 +49,7 @@ class Retis:
             outs, errs = self.proc.communicate()
 
         print(
-            "Command: '{}'. stdtout {}, stderr = {}".format(
-                self.proc.args, outs, errs
-            )
+            "Command: '{}'. stdtout {}, stderr = {}".format(self.proc.args, outs, errs)
         )
 
         if exists(self._event_file()) and getsize(self._event_file()) > 0:
@@ -65,15 +62,16 @@ class Retis:
         return (outs.decode("utf8"), errs.decode("utf8"))
 
     def events(self):
-        """ Return the events in a list of dictionaries. """
+        """Return the events in a list of dictionaries."""
         return self._events
 
 
 class NetworkNamespaces:
-    """ Helper class that allows adding and removing network namespaces. """
+    """Helper class that allows adding and removing network namespaces."""
 
     class Context:
-        """ Context class that enters a namespace. """
+        """Context class that enters a namespace."""
+
         def __init__(self, ns, handler):
             self.ns = ns
             self.handler = handler
@@ -89,53 +87,56 @@ class NetworkNamespaces:
         self.ns = {}
 
     def add(self, name):
-        """ Create a network namespace with a given name. """
+        """Create a network namespace with a given name."""
         self.ns[name] = NetNS(name)
         return self.ns[name]
 
     def get(self, name):
-        """ Return the network namespace IPRoute2 handler. """
+        """Return the network namespace IPRoute2 handler."""
         return self.ns.get(name)
 
     def delete(self, name):
-        """ Delete a namespace by name. """
+        """Delete a namespace by name."""
         ns = self.ns.get(name)
         if ns:
             ns.close()
 
     def clear(self):
-        """ Delete all namesaces. """
+        """Delete all namesaces."""
         for name in list(self.ns.keys()):
             ipnetns.remove(name)
             del self.ns[name]
 
     def run(self, name, *cmd):
-        """ Run a command inside a namespace """
+        """Run a command inside a namespace"""
         with self.enter(name) as _:
             ret = run(cmd)
         return ret
 
     def enter(self, name):
-        """ Enter a namepsace. Returns a context object to be used as:
+        """Enter a namepsace. Returns a context object to be used as:
 
-            with Namespaces.enter("myns") as ipr:
-                subprocess.run(["command", "run", "in", "namespace"])
-                ipr.link() # IPRoute2 handler of the namespace
+        with Namespaces.enter("myns") as ipr:
+            subprocess.run(["command", "run", "in", "namespace"])
+            ipr.link() # IPRoute2 handler of the namespace
         """
         return NetworkNamespaces.Context(name, self.get(name))
+
 
 @pytest.fixture
 def netns():
     """Fixture that provides a NetworkNamespaces handler and clears it after
-    execution of the test. """
+    execution of the test."""
     nsman = NetworkNamespaces()
     yield nsman
     nsman.clear()
 
+
 class OVS:
-    """ OVS handler class that is able to start a OVS instance, run multiple
+    """OVS handler class that is able to start a OVS instance, run multiple
     commands on it, and stop it.
     """
+
     def __init__(self, prefix="/usr"):
         self.ovs_vsctl = prefix + "/bin/ovs-vsctl"
         self.ovs_ofctl = prefix + "/bin/ovs-ofctl"
@@ -143,30 +144,30 @@ class OVS:
         self.ovs_ctl = prefix + "/share/openvswitch/scripts/ovs-ctl"
 
     def start(self):
-        """ Start openvswitch. """
+        """Start openvswitch."""
         run([self.ovs_ctl, "--delete-bridges", "--system-id=random", "start"])
 
     def stop(self):
-        """ Stop openvswitch. """
+        """Stop openvswitch."""
         for br in self.vsctl("list-br").split():
             self.vsctl("del-br", br)
 
         run([self.ovs_ctl, "stop"])
 
     def vsctl(self, *args):
-        """ Run ovs-vsctl {args} """
+        """Run ovs-vsctl {args}"""
         cmd = [self.ovs_vsctl] + list(args)
         ret = run(cmd)
         return ret.stdout.decode("utf8")
 
     def ofctl(self, *args):
-        """ Run ovs-ofctl {args} """
+        """Run ovs-ofctl {args}"""
         cmd = [self.ovs_ofctl] + list(args)
         ret = run(cmd)
         return ret.stdout.decode("utf8")
 
     def appctl(self, *args):
-        """ Run ovs-appctl {args} """
+        """Run ovs-appctl {args}"""
         cmd = [self.ovs_appctl] + list(args)
         ret = run(cmd)
         return ret.stdout.decode("utf8")
@@ -175,11 +176,12 @@ class OVS:
 @pytest.fixture
 def ovs():
     """Fixture that provides starts OVS, provides a OVS handler and stops it
-    after execution of the test. """
+    after execution of the test."""
     ovs = OVS()
     ovs.start()
     yield ovs
     ovs.stop()
+
 
 def run(cmd):
     ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -197,10 +199,11 @@ def run(cmd):
 
 def assert_events_present(events, expected):
     """Asserts a list of expected events are present in the event list in the
-    same order. The expected events can be specified as a subset of the event."""
+    same order. The expected events can be specified as a subset of the event.
+    """
     idx = 0
     aliases = {}
-    for (ex_idx, ex) in enumerate(expected):
+    for ex_idx, ex in enumerate(expected):
         found = False
         # Find an event that matches
         for i in range(idx, len(events)):
@@ -261,8 +264,7 @@ def is_subset(superset, subset, aliases):
         if key not in superset:
             return (
                 False,
-                f"{subset} is not a subset of {superset}."
-                f" key {key} is not present",
+                f"{subset} is not a subset of {superset}." f" key {key} is not present",
             )
 
         # Handle aliases

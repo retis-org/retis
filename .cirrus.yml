@@ -11,7 +11,7 @@ unittest_task:
       - cat Cargo.lock
   setup_script:
     - apt-get update
-    - apt-get -y install llvm clang libelf-dev libpcap-dev
+    - apt-get -y install llvm clang libelf-dev libpcap-dev python3-pip
     - rustup component add rustfmt
     - rustup component add clippy
   build_script: cargo build --verbose
@@ -20,6 +20,17 @@ unittest_task:
     - cargo fmt --check
     - cargo clippy -- -D warnings
   before_cache_script: rm -rf $CARGO_HOME/registry/index
+
+python_task:
+  name: Python lint & format
+  container:
+    image: python:3.11-slim
+  lint_script:
+    - python3 -m pip install flake8
+    - cd tests && python3 -m flake8
+  format_script:
+    - python3 -m pip install black
+    - python3 -m black --check --diff tests/*.py
 
 functional_task:
   # Run for PRs with a specific label
