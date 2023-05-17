@@ -194,3 +194,104 @@ def run(cmd):
         )
     return ret
 
+
+def assert_events_present(events, expected):
+    """Asserts a list of expected events are present in the event list in the
+    same order. The expected events can be specified as a subset of the event."""
+    idx = 0
+    aliases = {}
+    for (ex_idx, ex) in enumerate(expected):
+        found = False
+        # Find an event that matches
+        for i in range(idx, len(events)):
+            (is_sub, reason) = is_subset(events[i], ex, aliases)
+            if is_sub:
+                print(
+                    f"HIT: Event at index {i}\n"
+                    f"   Event: {events[i]}\n"
+                    f" matches expected at index {ex_idx}: \n"
+                    f"   {ex}\n"
+                    f"   Aliases: {aliases}"
+                )
+                found = True
+                idx = i + 1
+                break
+            else:
+                # Print the reason so it's easier to debug (if test fails)
+                print(
+                    f"MISS: Event at index {i}\n"
+                    f"   Event {events[i]} \n"
+                    f" did not match expected:"
+                    f"   {ex}\n."
+                    f"   Reason: {reason}."
+                    f"   Aliases: {aliases}"
+                )
+        if not found:
+            pytest.fail(
+                f"Failed to find expected event at index >= {idx}:"
+                f"   Expected: {ex}\n"
+                f"   Aliases: {aliases}\n"
+                f"   Event list {json.dumps(events, indent=4)}"
+            )
+
+
+def is_subset(superset, subset, aliases):
+    """Recursively check if a dictionary is a subset of another one.
+
+    Aliases are supported, if a value starts with '&' followed by an alias
+    name, the value is stored in the provided hash table indexed by the alias
+    name (no verification is made). If a value starts with '*' followed
+    by an alias name, the value is retrieved from the aliases hash table
+    and is checked.
+
+    E.g:
+        > aliases = {}
+        > is_subset(
+            {"foo": {"bar": "helloWorld"}, "baz": 42},
+            {"foo": {"bar": "&myalias"}, "baz": 42},
+            aliases)
+        >> True, None
+        > is_subset(
+            {"baz": "helloWorld"},
+            {"baz": "*myalias"},
+            aliases)
+        >> True, None
+    """
+    for key, value in subset.items():
+        if key not in superset:
+            return (
+                False,
+                f"{subset} is not a subset of {superset}."
+                f" key {key} is not present",
+            )
+
+        # Handle aliases
+        if isinstance(value, str) and len(value) > 1 and value[0] == "&":
+            # Store alias
+            print(f"Saving value to aliases {value} -> {superset[key]}")
+            aliases[value[1:]] = superset[key]
+            continue
+        if isinstance(value, str) and len(value) > 1 and value[0] == "*":
+            # Load alias
+            new_value = aliases.get(value[1:], None)
+            print(f"Restoring value from aliases {value} -> {new_value}")
+            value = new_value
+
+        # Recursively assert nested dictionaries
+        if isinstance(value, dict):
+            (is_sub, reason) = is_subset(superset[key], value, aliases)
+            if not is_sub:
+                return (
+                    False,
+                    f"nested dictionary {value} is not a subset"
+                    f" of {superset[key]}: {reason}",
+                )
+        # Allow substring matching
+        elif isinstance(value, str):
+            if value not in superset[key]:
+                return (False, f"{value} is not contained in {superset[key]}")
+        # Default to equality comparison
+        else:
+            if not value == superset[key]:
+                return (False, f"{value} is not equal to {superset[key]}")
+    return (True, None)
