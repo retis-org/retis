@@ -9,8 +9,10 @@ DEFINE_USDT_HOOK (
 	batch_process_op(OVS_OP_EXEC, event, &op);
 
 	if (op) {
-		if (bpf_map_update_elem(&flow_exec_tracking, &op->queue_id,
-					&ctx->timestamp, BPF_NOEXIST)) {
+		u32 queue_id = op->queue_id;
+		u64 timestamp = ctx->timestamp;
+		if (bpf_map_update_elem(&flow_exec_tracking, &queue_id,
+					&timestamp, BPF_NOEXIST)) {
 			/* The entry already existed. This means an exec operation
 			 * was enqueued with the same queue_id and it was not
 			 * unqueued from the kernel yet.
