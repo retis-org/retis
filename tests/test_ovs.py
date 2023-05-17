@@ -238,8 +238,7 @@ def test_ovs_tracking_filtered(two_port_ovs):
     ovs.appctl("dpctl/del-flows")
 
     # Not warming up ARP here so we expect some ARP traffic to flow but it
-    # should be filtered out
-    # Start collection and test
+    # should be filtered out.
     retis.collect(
         "-c",
         "ovs,skb,skb-tracking",
@@ -272,3 +271,30 @@ def test_ovs_tracking_filtered(two_port_ovs):
 
     arps = filter(lambda e: e.get("skb", {}).get("etype", None) == 0x0806, events)
     assert len(list(arps)) == 0
+
+
+@pytest.mark.ovs_track
+def test_ovs_filtered_userspace(two_port_ovs):
+    (ovs, ns) = two_port_ovs
+
+    retis = Retis()
+
+    # Clean stale flows if any
+    ovs.appctl("dpctl/del-flows")
+
+    # Setting a filter that should not match any traffic.
+    retis.collect(
+        "-c",
+        "ovs,skb,skb-tracking",
+        "-f",
+        "udp port 9999",
+        "--ovs-track",
+    )
+    ns.run("ns0", "ping", "-c", "1", "192.168.1.2")
+    retis.stop()
+
+    events = retis.events()
+
+    # Ensure we didn't pick up userspace events, i.e: all got filtered out.
+    userspace = filter(lambda e: "userspace" in e, events)
+    assert len(list(userspace)) == 0
