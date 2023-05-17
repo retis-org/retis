@@ -33,9 +33,11 @@ functional_task:
     - name: Fedora 38
       env:
         DISTRO: f38
+        TEST_EXTRA_ARGS: "--ovs-track"
     - name: Centos 9 Stream
       env:
         DISTRO: c9s
+        TEST_EXTRA_ARGS: "--ovs-track"
     - name: Ubuntu Jammy
       env:
         DISTRO: jammy
@@ -75,7 +77,8 @@ functional_task:
     - ssh ${DISTRO} 'sh -exc "uname -a"'
 
   test_script: &functional_test
-    - ssh -tt ${DISTRO} "cd /vagrant/tests && cargo build && sudo python3 -m pytest"
+    - ssh -tt ${DISTRO} "cd /vagrant/tests && cargo build"
+    - ssh -tt ${DISTRO} "cd /vagrant/tests && sudo python3 -m pytest ${TEST_EXTRA_ARGS}"
 
 # Manual trigger for non-PR branches.
 manual_test_funtional_task:

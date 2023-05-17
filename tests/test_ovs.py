@@ -190,6 +190,7 @@ def gen_expected_events(skb):
         },
     ]
 
+@pytest.mark.ovs_track
 def test_ovs_tracking(two_port_ovs):
     (ovs, ns) = two_port_ovs
 
@@ -227,6 +228,7 @@ def test_ovs_tracking(two_port_ovs):
 
     assert_events_present(events, expected_events)
 
+@pytest.mark.ovs_track
 def test_ovs_tracking_filtered(two_port_ovs):
     (ovs, ns) = two_port_ovs
 
