@@ -1,5 +1,4 @@
 import pytest
-import time
 
 from pyroute2 import IPRoute
 
@@ -205,7 +204,6 @@ def test_ovs_tracking(two_port_ovs):
 
     # Start collection and test
     retis.collect("-c", "ovs,skb,skb-tracking", "-f", "ip", "--ovs-track")
-    time.sleep(5)
     ns.run("ns0", "ping", "-c", "1", "192.168.1.2")
     retis.stop()
 
@@ -255,7 +253,6 @@ def test_ovs_tracking_filtered(two_port_ovs):
         "eth,ip,icmp",
         "--ovs-track",
     )
-    time.sleep(7)
     ns.run("ns0", "ping", "-c", "1", "192.168.1.2")
     retis.stop()
 
