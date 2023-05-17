@@ -2,10 +2,34 @@
 
 import pytest
 
+from testlib import NetworkNamespaces, OVS
+
+
+@pytest.fixture
+def netns():
+    """Fixture that provides a NetworkNamespaces handler and clears it after
+    execution of the test."""
+    nsman = NetworkNamespaces()
+    yield nsman
+    nsman.clear()
+
+
+@pytest.fixture
+def ovs():
+    """Fixture that provides starts OVS, provides a OVS handler and stops it
+    after execution of the test."""
+    ovs = OVS()
+    ovs.start()
+    yield ovs
+    ovs.stop()
+
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--ovs-track", action="store_true", default=False, help="run ovs userspace tracking tests "
+        "--ovs-track",
+        action="store_true",
+        default=False,
+        help="run ovs userspace tracking tests ",
     )
 
 

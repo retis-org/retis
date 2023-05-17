@@ -3,12 +3,12 @@ import time
 
 from pyroute2 import IPRoute
 
-from testlib import ovs, netns, Retis, assert_events_present
+from testlib import Retis, assert_events_present
 
 
 @pytest.fixture
 def two_port_ovs(ovs, netns):
-    """ Fixture that creates two netns connected together through OVS. """
+    """Fixture that creates two netns connected together through OVS."""
     ipr = IPRoute()
     ovs.start()
     ovs.vsctl("add-br", "test")
@@ -74,10 +74,16 @@ def test_ovs_sanity(two_port_ovs):
 
     events = retis.events()
     print(events)
-    execs = list(filter(lambda e: e.get("kernel", {}).get("symbol") == "openvswitch:ovs_do_execute_action",
-                      events))
+    execs = list(
+        filter(
+            lambda e: e.get("kernel", {}).get("symbol")
+            == "openvswitch:ovs_do_execute_action",
+            events,
+        )
+    )
 
     assert len(execs) == 2
+
 
 # Expected OVS upcall events.
 def gen_expected_events(skb):
@@ -90,9 +96,7 @@ def gen_expected_events(skb):
             },
             "ovs": {"event_type": "upcall"},
             "skb": skb,
-            "skb-tracking": {
-                "orig_head": "&orig_head"  # Store orig_head in aliases
-            },
+            "skb-tracking": {"orig_head": "&orig_head"},  # Store orig_head in aliases
         },
         # Packet is enqueued for upcall (only 1, i.e: no fragmentation
         # expected).
@@ -106,9 +110,7 @@ def gen_expected_events(skb):
                 "queue_id": "&queue_id",  # Store queue_id
             },
             "skb": skb,
-            "skb-tracking": {
-                "orig_head": "*orig_head"  # Check same orig_head
-            },
+            "skb-tracking": {"orig_head": "*orig_head"},  # Check same orig_head
         },
         # Upcall ends.
         {
@@ -120,9 +122,7 @@ def gen_expected_events(skb):
                 "event_type": "upcall_return",
             },
             "skb": skb,
-            "skb-tracking": {
-                "orig_head": "*orig_head"  # Check same orig_head
-            },
+            "skb-tracking": {"orig_head": "*orig_head"},  # Check same orig_head
         },
         # Upcall is received by userspace.
         {
@@ -190,6 +190,7 @@ def gen_expected_events(skb):
         },
     ]
 
+
 @pytest.mark.ovs_track
 def test_ovs_tracking(two_port_ovs):
     (ovs, ns) = two_port_ovs
@@ -232,6 +233,7 @@ def test_ovs_tracking(two_port_ovs):
 
     assert_events_present(events, expected_events)
 
+
 @pytest.mark.ovs_track
 def test_ovs_tracking_filtered(two_port_ovs):
     (ovs, ns) = two_port_ovs
@@ -244,10 +246,15 @@ def test_ovs_tracking_filtered(two_port_ovs):
     # Not warming up ARP here so we expect some ARP traffic to flow but it
     # should be filtered out
     # Start collection and test
-    retis.collect("-c", "ovs,skb,skb-tracking",
-                  "-f", "ip src 192.168.1.1 and icmp",
-                  "--skb-sections", "eth,ip,icmp",
-                  "--ovs-track")
+    retis.collect(
+        "-c",
+        "ovs,skb,skb-tracking",
+        "-f",
+        "ip src 192.168.1.1 and icmp",
+        "--skb-sections",
+        "eth,ip,icmp",
+        "--ovs-track",
+    )
     time.sleep(7)
     ns.run("ns0", "ping", "-c", "1", "192.168.1.2")
     retis.stop()
@@ -269,10 +276,12 @@ def test_ovs_tracking_filtered(two_port_ovs):
     # Ensure we didn't pick up any ARP or return traffic
     return_events = filter(
         lambda e: e.get("skb", {}).get("ip", {}).get("saddr", None) == "192.168.1.2",
-        events)
+        events,
+    )
     assert len(list(return_events)) == 0
 
     arps = filter(
         lambda e: e.get("skb", {}).get("eth", {}).get("etype", None) == 0x0806,
-        events)
+        events,
+    )
     assert len(list(arps)) == 0
