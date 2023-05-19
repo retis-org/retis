@@ -11,7 +11,7 @@ use std::{
 use anyhow::{anyhow, Result};
 use log::debug;
 
-use super::{Event, EventFactory, SectionFactories};
+use super::{Event, EventFactory, EventResult, SectionFactories};
 use crate::module::ModuleId;
 
 /// File events factory retrieving and unmarshaling events
@@ -46,13 +46,13 @@ impl EventFactory for FileEventsFactory {
     }
 
     /// Retrieve the next event. This is a blocking call and never returns EOF.
-    fn next_event(&mut self, _timeout: Option<Duration>) -> Result<Option<Event>> {
+    fn next_event(&mut self, _timeout: Option<Duration>) -> Result<EventResult> {
         let mut event = Event::new();
         let mut line = String::new();
 
         match self.reader.read_line(&mut line) {
             Err(e) => return Err(e.into()),
-            Ok(0) => return Ok(None),
+            Ok(0) => return Ok(EventResult::Eof),
             Ok(_) => (),
         }
 
@@ -74,7 +74,7 @@ impl EventFactory for FileEventsFactory {
                 })?,
             )?;
         }
-        Ok(Some(event))
+        Ok(EventResult::Event(event))
     }
 }
 
@@ -90,7 +90,7 @@ mod tests {
         fact.start(factories).unwrap();
 
         let mut events = Vec::new();
-        while let Some(event) = fact.next_event(None).unwrap() {
+        while let EventResult::Event(event) = fact.next_event(None).unwrap() {
             println!("event: {:#?}", event.to_json());
             events.push(event)
         }

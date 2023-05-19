@@ -16,7 +16,7 @@ use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFact
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
     core::{
-        events::{bpf::BpfEventsFactory, format, EventFactory},
+        events::{bpf::BpfEventsFactory, format, EventFactory, EventResult},
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
@@ -338,10 +338,12 @@ impl Collectors {
             });
         }
 
+        use EventResult::*;
         while self.run.running() {
             match self.factory.next_event(Some(Duration::from_secs(1)))? {
-                Some(event) => output.process_one(&event)?,
-                None => continue,
+                Event(event) => output.process_one(&event)?,
+                Eof => break,
+                Timeout => continue,
             }
         }
 
