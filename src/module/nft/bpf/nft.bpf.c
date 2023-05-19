@@ -3,7 +3,23 @@
 
 #include <common.h>
 
+#define VERD_SCALE (NFT_RETURN * -1)
+#define ALLOWED_VERDICTS(verd, mask) (1 << (verd + VERD_SCALE) & mask)
 #define NFT_NAME_SIZE 128
+
+/* Nft hook configuration.
+ *
+ * Please keep in sync with its Rust counterpart in module::nft::bpf.
+ */
+struct nft_config {
+	u64 verdicts;
+} __attribute__((packed));
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, u32);
+	__type(value, struct nft_config);
+} nft_config_map SEC(".maps");
 
 /* Please keep in sync with its Rust counterpart */
 struct nft_event {
@@ -31,14 +47,30 @@ static __always_inline s64 nft_get_rule_handle(const struct nft_traceinfo *info,
 	return (u64)BPF_CORE_READ_BITFIELD_PROBED(rule, handle);
 }
 
-static __always_inline int nft_trace(struct nft_event *e,
+static __always_inline int nft_trace(struct retis_raw_event *event,
 				     const struct nft_traceinfo *info,
 				     const struct nft_chain *chain,
 				     const struct nft_verdict *verdict,
 				     const struct nft_rule_dp *rule)
 {
+	struct nft_config *cfg;
+	u32 zero = 0, code;
+	struct nft_event *e;
 	char *name;
 
+	cfg = bpf_map_lookup_elem(&nft_config_map, &zero);
+	if (!cfg)
+		return 0;
+
+	code = (u32)BPF_CORE_READ(verdict, code);
+	if (!ALLOWED_VERDICTS(code, cfg->verdicts))
+		return 0;
+
+	e = get_event_zsection(event, COLLECTOR_NFT, 1, sizeof(*e));
+	if (!e)
+		return 0;
+
+	e->verdict = code;
 	/* Table info */
 	name = BPF_CORE_READ(chain, table, name);
 	bpf_probe_read_kernel_str(e->table_name, sizeof(e->table_name), name);
@@ -47,8 +79,6 @@ static __always_inline int nft_trace(struct nft_event *e,
 	name = BPF_CORE_READ(chain, name);
 	bpf_probe_read_kernel_str(e->chain_name, sizeof(e->chain_name), name);
 
-	/* remaining info */
-	e->verdict = (u32)BPF_CORE_READ(verdict, code);
 	name = BPF_CORE_READ(verdict, chain, name);
 	bpf_probe_read_kernel_str(e->verdict_chain_name,
 				  sizeof(e->verdict_chain_name), name);
@@ -149,7 +179,6 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	const struct nft_rule_dp *rule;
 	const struct nft_chain *chain;
 	struct nft_traceinfo *info;
-	struct nft_event *e;
 
 	/* nft_traceinfo pointer must be present. */
 	info = retis_get_nft_traceinfo(ctx);
@@ -163,11 +192,7 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 
 	verdict = nft_get_verdict(ctx, info);
 
-	e = get_event_zsection(event, COLLECTOR_NFT, 1, sizeof(*e));
-	if (!e)
-		return 0;
-
-	return nft_trace(e, info, chain, verdict, rule);
+	return nft_trace(event, info, chain, verdict, rule);
 )
 
 char __license[] SEC("license") = "GPL";

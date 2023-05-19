@@ -1,10 +1,14 @@
-use std::process::{Command, Stdio};
+use std::{
+    mem,
+    process::{Command, Stdio},
+};
 
 use anyhow::{anyhow, bail, Result};
+use clap::{arg, builder::PossibleValuesParser, Parser};
 use log::info;
 use serde_json::json;
 
-use super::nft_hook;
+use super::{bpf::*, nft_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::{cli::Collect, Collector},
@@ -19,6 +23,19 @@ use crate::{
 static NFT_BIN: &str = "nft";
 const NFT_TRACE_TABLE: &str = "Retis_Table";
 const NFT_TRACE_CHAIN: &str = "Retis_Chain";
+
+#[derive(Parser, Default)]
+pub(crate) struct NftCollectorArgs {
+    #[arg(
+        long,
+        value_parser=PossibleValuesParser::new(["all", "continue", "break", "jump", "goto", "return", "drop", "accept", "stolen", "queue", "repeat"]),
+        value_delimiter=',',
+        default_value="drop,accept",
+        help = "Comma separated list of verdicts whose events will be collected.
+Note that stolen verdicts might not be visible if a filter has been specified using the -f option."
+    )]
+    nft_verdicts: Vec<String>,
+}
 
 #[derive(Default)]
 pub(crate) struct NftCollector {
@@ -76,6 +93,24 @@ impl NftCollector {
         self.apply_json(json.to_string())
             .map_err(|e| anyhow!("Unable to delete {table}: {e}. To remove the table, please run: {NFT_BIN} delete table inet {table}"))
     }
+
+    fn config_map() -> Result<libbpf_rs::Map> {
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+
+        // Please keep in sync with its BPF counterpart in bpf/nft.bpf.c
+        libbpf_rs::Map::create(
+            libbpf_rs::MapType::Array,
+            Some("nft_config_map"),
+            mem::size_of::<u32>() as u32,
+            mem::size_of::<NftConfig>() as u32,
+            1,
+            &opts,
+        )
+        .or_else(|e| bail!("Could not create the nft config map: {}", e))
+    }
 }
 
 impl Collector for NftCollector {
@@ -84,7 +119,7 @@ impl Collector for NftCollector {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(ModuleId::Nft)
+        cmd.register_module::<NftCollectorArgs>(ModuleId::Nft)
     }
 
     fn can_run(&mut self, cli: &CliConfig) -> Result<()> {
@@ -118,15 +153,46 @@ impl Collector for NftCollector {
         Ok(())
     }
 
-    fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         if self.install_chain {
             // Ignore if delete fails here as the table might not exist
             let _ = self.delete_table(NFT_TRACE_TABLE.to_owned());
             self.create_table()?;
         }
 
+        let args = cli.get_section::<NftCollectorArgs>(ModuleId::Nft)?;
+        let mut verdicts: u64 = 0;
+        for verdict in args.nft_verdicts.iter() {
+            verdicts |= match verdict.as_str() {
+                "all" => (1 << (VERD_MAX + 1)) - 1,
+                "continue" => 1 << VERD_CONTINUE,
+                "break" => 1 << VERD_BREAK,
+                "jump" => 1 << VERD_JUMP,
+                "goto" => 1 << VERD_GOTO,
+                "return" => 1 << VERD_RETURN,
+                "drop" => 1 << VERD_DROP,
+                "accept" => 1 << VERD_ACCEPT,
+                "stolen" => 1 << VERD_STOLEN,
+                "queue" => 1 << VERD_QUEUE,
+                "repeat" => 1 << VERD_REPEAT,
+                x => bail!("Unknown verdict value ({})", x),
+            };
+        }
+
+        let config_map = Self::config_map()?;
+
+        let cfg = NftConfig { verdicts };
+        let cfg = unsafe { plain::as_bytes(&cfg) };
+
+        let key = 0_u32.to_ne_bytes();
+        config_map.update(&key, cfg, libbpf_rs::MapFlags::empty())?;
+
         let mut nft_probe = Probe::kprobe(Symbol::from_name("__nft_trace_packet")?)?;
-        nft_probe.add_hook(Hook::from(nft_hook::DATA))?;
+        nft_probe.add_hook(
+            Hook::from(nft_hook::DATA)
+                .reuse_map("nft_config_map", config_map.fd())?
+                .to_owned(),
+        )?;
         probes.register_probe(nft_probe)?;
 
         Ok(())
