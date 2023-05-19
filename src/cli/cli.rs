@@ -16,6 +16,7 @@ use super::dynamic::DynamicCommand;
 use crate::{
     collect::cli::Collect,
     module::{ModuleId, Modules},
+    process::cli::Print,
 };
 
 /// A SubCommandRunner defines the common interface to run SubCommands.
@@ -330,6 +331,7 @@ impl CliConfig {
 pub(crate) fn get_cli() -> Result<ThinCli> {
     let mut cli = ThinCli::new()?;
     cli.add_subcommand(Box::new(Collect::new()?))?;
+    cli.add_subcommand(Box::new(Print::new()?))?;
     Ok(cli)
 }
 
