@@ -6,7 +6,7 @@ use log::debug;
 
 use crate::{
     core::{
-        events::{Event, EventFactory, SectionFactories},
+        events::{Event, EventFactory, EventResult, SectionFactories},
         signals::Running,
     },
     output::Output,
@@ -173,12 +173,15 @@ where
             .head
             .as_mut()
             .ok_or_else(|| anyhow!("No stages have been added"))?;
+
+        use EventResult::*;
         while state.running() {
             match self.source.next_event(Some(self.duration))? {
-                Some(event) => {
+                Event(event) => {
                     head.process_one(event)?;
                 }
-                None => continue,
+                Eof => break,
+                Timeout => continue,
             }
         }
         head.stop(Vec::new())?;
