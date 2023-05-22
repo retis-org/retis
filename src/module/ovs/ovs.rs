@@ -10,7 +10,7 @@ use crate::{
     core::{
         inspect,
         kernel::Symbol,
-        probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
+        probe::{user::UsdtProbe, Hook, Probe, ProbeManager, ProbeOption},
         signals::Running,
         tracking::gc::TrackingGC,
         user::proc::{Process, ThreadInfo},
@@ -322,6 +322,7 @@ impl OvsCollector {
             exec_actions_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
             exec_actions_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
             let mut probe = Probe::kprobe(ovs_execute_actions_sym.clone())?;
+            probe.set_option(ProbeOption::NoGenericHook)?;
             probe.add_hook(exec_actions_hook)?;
             probes.register_probe(probe)?;
 
@@ -329,6 +330,7 @@ impl OvsCollector {
             exec_actions_ret_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
             exec_actions_ret_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
             let mut probe = Probe::kretprobe(ovs_execute_actions_sym)?;
+            probe.set_option(ProbeOption::NoGenericHook)?;
             probe.add_hook(exec_actions_ret_hook)?;
             probes.register_probe(probe)?;
 
