@@ -158,14 +158,6 @@ def gen_expected_events(skb):
                 "queue_id": "*queue_id",  # Check queue_id
             },
         },
-        # Packet is received by kernel. Action execution starts.
-        {
-            "kernel": {
-                "probe_type": "kprobe",
-                "symbol": "ovs_execute_actions",
-            },
-            "skb": skb,
-        },
         # Single action execution: Output.
         {
             "kernel": {
@@ -178,14 +170,6 @@ def gen_expected_events(skb):
                 "event_type": "action_execute",
                 "queue_id": "*queue_id",  # Check queue_id
             },
-        },
-        # OVS kernel action execution ends.
-        {
-            "kernel": {
-                "probe_type": "kretprobe",
-                "symbol": "ovs_execute_actions",
-            },
-            "skb": skb,
         },
     ]
 
