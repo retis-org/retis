@@ -9,7 +9,7 @@ struct skb_tracking_event {
 	u64 orig_head;
 	u64 timestamp;
 	u64 skb;
-} __attribute__((packed));
+};
 
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	struct skb_tracking_event *e;

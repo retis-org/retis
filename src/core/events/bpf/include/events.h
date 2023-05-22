@@ -102,6 +102,6 @@ static __always_inline u16 get_event_size(struct retis_raw_event *event)
 
 struct common_event {
 	u64 timestamp;
-} __attribute__((packed));
+};
 
 #endif /* __CORE_PROBE_KERNEL_BPF_EVENTS__ */
