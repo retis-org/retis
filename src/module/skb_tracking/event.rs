@@ -17,8 +17,9 @@ use crate::{
 ///
 /// Tl;dr; the tracking unique id is `(timestamp, orig_head)` and `skb` can be
 /// used to distinguished between clones.
+#[derive(Clone, Debug, PartialEq)]
 #[event_section]
-#[repr(C, packed)]
+#[repr(C)]
 pub(crate) struct SkbTrackingEvent {
     /// Head of buffer (`skb->head`) when the packet was first seen by the
     /// tracking logic.

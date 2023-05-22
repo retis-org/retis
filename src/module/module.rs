@@ -11,6 +11,7 @@ use crate::{
         events::{bpf::CommonEventFactory, *},
         probe::{kernel::KernelEventFactory, user::UserEventFactory},
     },
+    process::tracking::TrackingInfoEventFactory,
 };
 
 /// List of unique event sections owners.
@@ -23,6 +24,7 @@ pub(crate) enum ModuleId {
     Skb = 5,
     SkbDrop = 6,
     Ovs = 7,
+    Tracking = 8,
 }
 
 impl ModuleId {
@@ -38,6 +40,7 @@ impl ModuleId {
             5 => Skb,
             6 => SkbDrop,
             7 => Ovs,
+            8 => Tracking,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -55,6 +58,7 @@ impl ModuleId {
             Skb => 5,
             SkbDrop => 6,
             Ovs => 7,
+            Tracking => 8,
         }
     }
 
@@ -69,6 +73,7 @@ impl ModuleId {
             "skb" => Skb,
             "skb-drop" => SkbDrop,
             "ovs" => Ovs,
+            "tracking" => Tracking,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -84,6 +89,7 @@ impl ModuleId {
             Skb => "skb",
             SkbDrop => "skb-drop",
             Ovs => "ovs",
+            Tracking => "tracking",
         }
     }
 }
@@ -161,6 +167,10 @@ impl Modules {
         section_factories.insert(ModuleId::Common, Box::<CommonEventFactory>::default());
         section_factories.insert(ModuleId::Kernel, Box::<KernelEventFactory>::default());
         section_factories.insert(ModuleId::Userspace, Box::<UserEventFactory>::default());
+        section_factories.insert(
+            ModuleId::Tracking,
+            Box::<TrackingInfoEventFactory>::default(),
+        );
 
         for (id, module) in self.modules.iter() {
             section_factories.insert(*id, module.section_factory()?);
