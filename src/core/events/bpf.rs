@@ -291,7 +291,7 @@ where
 }
 
 #[event_section]
-#[repr(C, packed)]
+#[repr(C)]
 pub(crate) struct CommonEvent {
     /// Timestamp of when the event was generated.
     pub(crate) timestamp: u64,
