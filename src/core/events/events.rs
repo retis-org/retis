@@ -34,7 +34,7 @@
 #![allow(dead_code)] // FIXME
 #![allow(clippy::wrong_self_convention)]
 
-use std::{any::Any, collections::HashMap, time::Duration};
+use std::{any::Any, collections::HashMap, fmt, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
 
@@ -122,6 +122,14 @@ impl Event {
     }
 }
 
+impl fmt::Display for Event {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0
+            .iter()
+            .try_for_each(|(_, section)| write!(f, "{}", section))
+    }
+}
+
 pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
 
 /// Implemented by objects generating events from a given source (BPF, file,
@@ -155,8 +163,8 @@ pub(crate) trait EventFactory {
 /// having a proper structure is encouraged as it allows easier consumption at
 /// post-processing. Those objects can also define their own specialized
 /// helpers.
-pub(crate) trait EventSection: EventSectionInternal {}
-impl<T> EventSection for T where T: EventSectionInternal {}
+pub(crate) trait EventSection: EventSectionInternal + fmt::Display {}
+impl<T> EventSection for T where T: EventSectionInternal + fmt::Display {}
 
 /// EventSection helpers defined in the core for all events. Common definition
 /// needs Sized but that is a requirement for all EventSection.

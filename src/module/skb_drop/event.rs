@@ -13,13 +13,14 @@ use crate::{
         },
         kernel::inspect,
     },
-    event_section, event_section_factory,
+    event_section, event_section_factory, EventSectionDisplay,
     module::ModuleId,
 };
 
 // Skb drop event section. Same as the event from BPF, please keep in sync with
 // its BPF counterpart.
 #[event_section]
+#[derive(EventSectionDisplay)]
 pub(crate) struct SkbDropEvent {
     /// Reason why a packet was freed/dropped. Only reported from specific
     /// functions. See `enum skb_drop_reason` in the kernel.

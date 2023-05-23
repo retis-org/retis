@@ -8,7 +8,7 @@ use crate::core::{
     events::{bpf::BpfRawSection, *},
     user::proc::Process,
 };
-use crate::{event_section, event_section_factory};
+use crate::{event_section, event_section_factory, EventSectionDisplay};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct UsdtProbe {
@@ -54,6 +54,7 @@ impl fmt::Display for UsdtProbe {
 }
 
 #[event_section]
+#[derive(EventSectionDisplay)]
 pub(crate) struct UserEvent {
     /// Probe type: for now only "usdt" is supported.
     pub(crate) probe_type: String,

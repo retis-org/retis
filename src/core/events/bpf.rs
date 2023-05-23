@@ -11,7 +11,7 @@ use plain::Plain;
 
 use super::Event;
 use crate::{
-    core::events::*, core::signals::Running, event_section, event_section_factory, module::ModuleId,
+    core::events::*, core::signals::Running, event_section, event_section_factory, module::ModuleId, EventSectionDisplay,
 };
 
 /// Timeout when polling for new events from BPF.
@@ -291,6 +291,7 @@ where
 }
 
 #[event_section]
+#[derive(EventSectionDisplay)]
 #[repr(C)]
 pub(crate) struct CommonEvent {
     /// Timestamp of when the event was generated.

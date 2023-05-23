@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::{bail, Result};
 use plain::Plain;
 use serde::{
@@ -7,11 +9,11 @@ use serde::{
 use super::bpf::*;
 use crate::{
     core::events::{bpf::BpfRawSection, *},
-    event_section, event_section_factory,
+    event_section, event_section_factory, EventSectionDisplay,
 };
 
 ///The OVS Event
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, EventSectionDisplay)]
 #[event_section]
 pub(crate) struct OvsEvent {
     /// Event data
@@ -77,6 +79,13 @@ pub(crate) enum OvsEventType {
     #[serde(rename = "undefined")]
     #[default]
     Undefined,
+}
+
+impl fmt::Display for OvsEventType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // FIXME
+        write!(f, "")
+    }
 }
 
 // This struct is also used for ebpf decoding.

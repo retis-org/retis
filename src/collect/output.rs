@@ -77,11 +77,12 @@ where
     F: Formatter,
 {
     fn process_one(&mut self, e: &Event) -> Result<()> {
-        let bytes = self.formatter.format_one(e)?;
-        for w in &mut self.writers {
-            w.write_all(&bytes)?;
-            w.write_all(b"\n")?;
-        }
+        //let bytes = self.formatter.format_one(e)?;
+        //for w in &mut self.writers {
+        //    w.write_all(&bytes)?;
+        //    w.write_all(b"\n")?;
+        //}
+        println!("{e}");
         Ok(())
     }
 

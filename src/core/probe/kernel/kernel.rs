@@ -10,7 +10,7 @@ use crate::core::{
     kernel::Symbol,
     probe::ProbeOption,
 };
-use crate::{event_section, event_section_factory};
+use crate::{event_section, event_section_factory, EventSectionDisplay};
 
 // Split to exclude from tests.
 #[cfg(not(test))]
@@ -49,14 +49,24 @@ impl fmt::Display for KernelProbe {
     }
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
+pub(crate) struct StackTrace(Vec<String>);
+
+impl fmt::Display for StackTrace {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.iter().try_for_each(|x| write!(f, "{}", x))
+    }
+}
+
 #[event_section]
+#[derive(EventSectionDisplay)]
 pub(crate) struct KernelEvent {
     /// Kernel symbol name associated with the event (i.e. which probe generated
     /// the event).
     pub(crate) symbol: String,
     /// Probe type: one of "kprobe", "kretprobe" or "raw_tracepoint".
     pub(crate) probe_type: String,
-    pub(crate) stack_trace: Option<Vec<String>>,
+    pub(crate) stack_trace: Option<StackTrace>,
 }
 
 #[derive(Default)]
@@ -98,7 +108,7 @@ impl KernelEventFactory {
                 }
             }
 
-            event.stack_trace = Some(stack_trace);
+            event.stack_trace = Some(StackTrace(stack_trace));
         }
         Ok(())
     }

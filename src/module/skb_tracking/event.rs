@@ -6,7 +6,7 @@ use crate::{
         bpf::{parse_single_raw_section, BpfRawSection},
         *,
     },
-    event_section, event_section_factory,
+    event_section, event_section_factory, EventSectionDisplay,
     module::ModuleId,
 };
 
@@ -18,6 +18,7 @@ use crate::{
 /// Tl;dr; the tracking unique id is `(timestamp, orig_head)` and `skb` can be
 /// used to distinguished between clones.
 #[event_section]
+#[derive(EventSectionDisplay)]
 #[repr(C)]
 pub(crate) struct SkbTrackingEvent {
     /// Head of buffer (`skb->head`) when the packet was first seen by the
