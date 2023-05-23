@@ -36,7 +36,7 @@
 
 use std::{any::Any, collections::HashMap, time::Duration};
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 
 use super::bpf::BpfRawSection;
 use crate::module::ModuleId;
@@ -82,6 +82,43 @@ impl Event {
         }
 
         serde_json::Value::Object(event)
+    }
+
+    /// Get a field as a String.
+    ///
+    /// E.g. event.get_field("skb.tcp.flags")?;
+    pub(crate) fn get_field(&self, key: &str) -> Result<Option<String>> {
+        if self.0.is_empty() {
+            bail!("Can't get {key}: event is empty");
+        }
+
+        let keys = key.split('.').into_iter().collect::<Vec<&str>>();
+        if keys.is_empty() {
+            bail!("Can't get event field: no key given");
+        }
+
+        // Unwrap as we know the event root is a serde_json::Value::Object (and
+        // not NULL).
+        let json = self.to_json();
+        let mut obj = json.as_object().unwrap();
+
+        let len = keys.len();
+        for key in &keys[0..len - 1] {
+            obj = match obj.get(&key.to_string()) {
+                Some(obj) => obj
+                    .as_object()
+                    .ok_or_else(|| anyhow!("Non-leaf key {key} is not an object"))?,
+                None => return Ok(None),
+            };
+        }
+
+        // Unwrap as we got the index from the len.
+        let key = keys.get(len - 1).unwrap();
+
+        Ok(match obj.get(&key.to_string()) {
+            Some(val) => Some(format!("{}", val)),
+            None => None,
+        })
     }
 }
 
