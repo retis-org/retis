@@ -142,6 +142,7 @@ mod tests {
     use std::{ptr, str};
 
     use super::*;
+    use crate::core::filters::packets::{bpf_common::*, ebpf::*, ebpfinsn::*};
 
     const LOG_SIZE: usize = 64 * 1024;
     const INSN_SIZE: usize = 8;
@@ -152,7 +153,7 @@ mod tests {
         let log_buff: [u8; LOG_SIZE] = [0; LOG_SIZE];
 
         // The bytecode below was generated from the following:
-        // int xdp_prog_simple(struct xdp_md *ctx)
+        // int xdp_prog(struct xdp_md *ctx)
         // {
         //     if (!ctx)
         //         return XDP_PASS;
@@ -161,30 +162,92 @@ mod tests {
         //         return XDP_PASS;
         //
         //     __u16 *data = (void *)(long)ctx->data;
-        //     if (bpf_ntohs(*data) == 0xeB9F) {
+        //     if (*data == 0xaaaa) {
         //         *data = 0xffff;
         //     }
         //
         //     return XDP_PASS;
         // }
-        // explicitly skip rustfmt checks as we want to format the
-        // array per-instruction. Ideally, this should be generated.
-        #[rustfmt::skip]
-        let prog: [u8; 12 * INSN_SIZE] = [
-              0x15, 0x01, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00,
-              0x61, 0x12, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
-              0x61, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-              0xbf, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-              0x07, 0x03, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-              0x2d, 0x23, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
-              0x69, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-              0x55, 0x02, 0x02, 0x00, 0xeb, 0x9f, 0x00, 0x00,
-              0xb7, 0x02, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00,
-              0x6b, 0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-              0xb7, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-              0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ];
+        let mut ebpf = eBpfProg::new();
 
+        ebpf.add(eBpfInsn::jmp(
+            eBpfJmpOpExt::Bpf(BpfJmpOp::Eq),
+            JmpInfo::Imm {
+                dst: BpfReg::R1,
+                off: 9,
+                imm: 0,
+            },
+        ));
+        ebpf.add(eBpfInsn::ld(
+            LdInfo::Reg {
+                src: BpfReg::R1,
+                dst: BpfReg::R2,
+                off: 4,
+            },
+            BpfSize::Word,
+        ));
+        ebpf.add(eBpfInsn::ld(
+            LdInfo::Reg {
+                src: BpfReg::R1,
+                dst: BpfReg::R1,
+                off: 0,
+            },
+            BpfSize::Word,
+        ));
+        ebpf.add(eBpfInsn::mov(MovInfo::Reg {
+            src: BpfReg::R1,
+            dst: BpfReg::R3,
+        }));
+        ebpf.add(eBpfInsn::alu(
+            BpfAluOp::Add,
+            AluInfo::Imm {
+                dst: BpfReg::R3,
+                imm: 2,
+            },
+        ));
+        ebpf.add(eBpfInsn::jmp(
+            eBpfJmpOpExt::Bpf(BpfJmpOp::Gt),
+            JmpInfo::Reg {
+                src: BpfReg::R2,
+                dst: BpfReg::R3,
+                off: 4,
+            },
+        ));
+        ebpf.add(eBpfInsn::ld(
+            LdInfo::Reg {
+                src: BpfReg::R1,
+                dst: BpfReg::R2,
+                off: 0,
+            },
+            BpfSize::Half,
+        ));
+        ebpf.add(eBpfInsn::jmp(
+            eBpfJmpOpExt::Ne,
+            JmpInfo::Imm {
+                dst: BpfReg::R2,
+                off: 2,
+                imm: 0xaaaa,
+            },
+        ));
+        ebpf.add(eBpfInsn::mov(MovInfo::Imm {
+            dst: BpfReg::R2,
+            imm: 0xffff,
+        }));
+        ebpf.add(eBpfInsn::st(
+            StInfo::Reg {
+                src: BpfReg::R2,
+                dst: BpfReg::R1,
+                off: 0,
+            },
+            BpfSize::Half,
+        ));
+        ebpf.add(eBpfInsn::mov(MovInfo::Imm {
+            dst: BpfReg::R0,
+            imm: 2,
+        }));
+        ebpf.add(eBpfInsn::exit());
+
+        let prog = ebpf.to_bytes();
         let mut attrs: bpf_gen::bpf_attr = unsafe { std::mem::zeroed() };
         let load_attrs = unsafe { &mut attrs.__bindgen_anon_3 };
 
@@ -214,7 +277,7 @@ mod tests {
         let fd = res.unwrap();
         const DATA_SZ: usize = 2;
 
-        let data_in: [u8; DATA_SZ] = [0xeB, 0x9F];
+        let data_in: [u8; DATA_SZ] = [0xaa, 0xaa];
         let data_out: [u8; DATA_SZ] = [0; 2];
 
         attrs = unsafe { std::mem::zeroed() };
