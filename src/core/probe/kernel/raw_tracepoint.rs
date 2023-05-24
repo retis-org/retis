@@ -18,7 +18,6 @@ use raw_tracepoint_bpf::RawTracepointSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct RawTracepointBuilder {
-    links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, i32)>,
     hooks: Vec<Hook>,
     filters: Vec<Filter>,
@@ -34,14 +33,14 @@ impl ProbeBuilder for RawTracepointBuilder {
         map_fds: Vec<(String, i32)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
-    ) -> Result<()> {
+    ) -> Result<Vec<libbpf_rs::Link>> {
         self.map_fds = map_fds;
         self.hooks = hooks;
         self.filters = filters;
-        Ok(())
+        Ok(Vec::new())
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
+    fn attach(&mut self, probe: &Probe) -> Result<Vec<libbpf_rs::Link>> {
         let mut skel = RawTracepointSkelBuilder::default();
         skel.obj_builder.debug(get_ebpf_debug());
         let mut skel = skel.open()?;
@@ -65,11 +64,9 @@ impl ProbeBuilder for RawTracepointBuilder {
 
         replace_filters(prog.fd(), &self.filters)?;
         let mut links = replace_hooks(prog.fd(), &self.hooks)?;
-        self.links.append(&mut links);
+        links.push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
 
-        self.links
-            .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
-        Ok(())
+        Ok(links)
     }
 }
 

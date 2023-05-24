@@ -41,11 +41,10 @@ pub(crate) struct ProbeManager {
     #[cfg(not(test))]
     config_map: libbpf_rs::Map,
 
-    /// Internal vec to store "used" probe builders, so we can keep a reference
-    /// on them and keep probes loaded & installed.
-    // TODO: should we change the builders to return the libbpf_rs::Link
-    // directly?
-    builders: Vec<Box<dyn ProbeBuilder>>,
+    /// Internal vec to store attached BPF programs, so we can keep the
+    /// reference (program is detached by libbpf_rs once the reference is
+    /// dropped).
+    links: Vec<libbpf_rs::Link>,
 }
 
 impl ProbeManager {
@@ -61,7 +60,7 @@ impl ProbeManager {
             maps: HashMap::new(),
             #[cfg(not(test))]
             config_map: init_config_map()?,
-            builders: Vec::new(),
+            links: Vec::new(),
         };
 
         #[cfg(not(test))]
@@ -201,7 +200,7 @@ impl ProbeManager {
         })?;
 
         // Handle generic probes.
-        self.builders.extend(Self::attach_probes(
+        self.links.extend(Self::attach_probes(
             &mut self
                 .probes
                 .values_mut()
@@ -224,7 +223,7 @@ impl ProbeManager {
                     hooks.extend(self.generic_hooks.clone());
                 }
 
-                self.builders.extend(Self::attach_probes(
+                self.links.extend(Self::attach_probes(
                     &mut [p],
                     &hooks,
                     &self.filters,
@@ -252,11 +251,12 @@ impl ProbeManager {
         filters: &[Filter],
         maps: HashMap<String, i32>,
         #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
-    ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
+    ) -> Result<Vec<libbpf_rs::Link>> {
         let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
         let map_fds: Vec<(String, i32)> = maps.into_iter().collect();
 
-        probes.iter_mut().try_for_each(|probe| {
+        let mut links = Vec::new();
+        probes.iter_mut().try_for_each(|probe| -> Result<()> {
             // Make a new builder if none if found for the current type. Builder
             // are shared for all probes of the same type within this set.
             match builders.contains_key(&probe.type_key()) {
@@ -271,7 +271,11 @@ impl ProbeManager {
                     };
 
                     // Initialize the probe builder, only once for all targets.
-                    builder.init(map_fds.clone(), hooks.to_vec(), filters.to_owned())?;
+                    links.append(&mut builder.init(
+                        map_fds.clone(),
+                        hooks.to_vec(),
+                        filters.to_owned(),
+                    )?);
 
                     builders.insert(probe.type_key(), builder);
                 }
@@ -298,10 +302,11 @@ impl ProbeManager {
 
             // Finally attach a probe to the target.
             debug!("Attaching probe to {}", probe);
-            builder.attach(probe)
+            links.append(&mut builder.attach(probe)?);
+            Ok(())
         })?;
 
-        Ok(builders.drain().map(|(_, v)| v).collect())
+        Ok(links)
     }
 
     fn check_probe_max(&self) -> Result<()> {

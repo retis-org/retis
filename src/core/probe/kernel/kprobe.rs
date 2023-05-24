@@ -18,7 +18,6 @@ use kprobe_bpf::KprobeSkelBuilder;
 #[derive(Default)]
 pub(crate) struct KprobeBuilder {
     obj: Option<libbpf_rs::Object>,
-    links: Vec<libbpf_rs::Link>,
 }
 
 impl ProbeBuilder for KprobeBuilder {
@@ -31,7 +30,7 @@ impl ProbeBuilder for KprobeBuilder {
         map_fds: Vec<(String, i32)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
-    ) -> Result<()> {
+    ) -> Result<Vec<libbpf_rs::Link>> {
         if self.obj.is_some() {
             bail!("Kprobe builder already initialized");
         }
@@ -50,14 +49,13 @@ impl ProbeBuilder for KprobeBuilder {
             .ok_or_else(|| anyhow!("Couldn't get program"))?
             .fd();
         replace_filters(fd, &filters)?;
-        let mut links = replace_hooks(fd, &hooks)?;
-        self.links.append(&mut links);
+        let links = replace_hooks(fd, &hooks)?;
 
         self.obj = Some(obj);
-        Ok(())
+        Ok(links)
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
+    fn attach(&mut self, probe: &Probe) -> Result<Vec<libbpf_rs::Link>> {
         let obj = match &mut self.obj {
             Some(obj) => obj,
             _ => bail!("Kprobe builder is uninitialized"),
@@ -67,12 +65,10 @@ impl ProbeBuilder for KprobeBuilder {
             _ => bail!("Wrong probe type {}", probe),
         };
 
-        self.links.push(
-            obj.prog_mut("probe_kprobe")
-                .ok_or_else(|| anyhow!("Couldn't get program"))?
-                .attach_kprobe(false, probe.symbol.attach_name())?,
-        );
-        Ok(())
+        Ok(vec![obj
+            .prog_mut("probe_kprobe")
+            .ok_or_else(|| anyhow!("Couldn't get program"))?
+            .attach_kprobe(false, probe.symbol.attach_name())?])
     }
 }
 

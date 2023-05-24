@@ -1,5 +1,3 @@
-use std::mem::ManuallyDrop;
-
 use anyhow::{anyhow, bail, Result};
 
 use crate::core::filters::Filter;
@@ -13,10 +11,6 @@ use usdt_bpf::UsdtSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct UsdtBuilder {
-    // FIXME: Marked as manually dropped because the process
-    // segfaults apparently in libbpf when the drop in place
-    // happens.
-    links: ManuallyDrop<Vec<libbpf_rs::Link>>,
     map_fds: Vec<(String, i32)>,
     hooks: Vec<Hook>,
 }
@@ -31,16 +25,16 @@ impl ProbeBuilder for UsdtBuilder {
         map_fds: Vec<(String, i32)>,
         hooks: Vec<Hook>,
         _filters: Vec<Filter>,
-    ) -> Result<()> {
+    ) -> Result<Vec<libbpf_rs::Link>> {
         self.map_fds = map_fds;
         if hooks.len() > 1 {
             bail!("USDT Probes only support a single hook");
         }
         self.hooks = hooks;
-        Ok(())
+        Ok(Vec::new())
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
+    fn attach(&mut self, probe: &Probe) -> Result<Vec<libbpf_rs::Link>> {
         let probe = match probe.r#type() {
             ProbeType::Usdt(usdt) => usdt,
             _ => bail!("Wrong probe type"),
@@ -57,12 +51,10 @@ impl ProbeBuilder for UsdtBuilder {
         let prog = obj
             .prog_mut("probe_usdt")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
-        let mut links = replace_hooks(prog.fd(), &self.hooks)?;
-        self.links.append(&mut links);
 
-        self.links
-            .push(prog.attach_usdt(probe.pid, &probe.path, &probe.provider, &probe.name)?);
-        Ok(())
+        let mut links = replace_hooks(prog.fd(), &self.hooks)?;
+        links.push(prog.attach_usdt(probe.pid, &probe.path, &probe.provider, &probe.name)?);
+        Ok(links)
     }
 }
 

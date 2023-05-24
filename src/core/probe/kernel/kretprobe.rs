@@ -22,7 +22,6 @@ use kretprobe_bpf::KretprobeSkelBuilder;
 #[derive(Default)]
 pub(crate) struct KretprobeBuilder {
     obj: Option<libbpf_rs::Object>,
-    links: Vec<libbpf_rs::Link>,
 }
 
 impl ProbeBuilder for KretprobeBuilder {
@@ -35,7 +34,7 @@ impl ProbeBuilder for KretprobeBuilder {
         map_fds: Vec<(String, i32)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
-    ) -> Result<()> {
+    ) -> Result<Vec<libbpf_rs::Link>> {
         if self.obj.is_some() {
             bail!("Kretprobe builder already initialized");
         }
@@ -54,14 +53,13 @@ impl ProbeBuilder for KretprobeBuilder {
             .ok_or_else(|| anyhow!("Couldn't get program"))?
             .fd();
         replace_filters(fd, &filters)?;
-        let mut links = replace_hooks(fd, &hooks)?;
-        self.links.append(&mut links);
+        let links = replace_hooks(fd, &hooks)?;
 
         self.obj = Some(obj);
-        Ok(())
+        Ok(links)
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
+    fn attach(&mut self, probe: &Probe) -> Result<Vec<libbpf_rs::Link>> {
         let obj = match &mut self.obj {
             Some(obj) => obj,
             _ => bail!("Kretprobe builder is uninitialized"),
@@ -73,19 +71,18 @@ impl ProbeBuilder for KretprobeBuilder {
         };
 
         // Attach the kretprobe
-        self.links.push(
-            obj.prog_mut("probe_kretprobe")
-                .ok_or_else(|| anyhow!("Couldn't get kretprobe program"))?
-                .attach_kprobe(true, probe.symbol.attach_name())?,
-        );
+        let ret_link = obj
+            .prog_mut("probe_kretprobe")
+            .ok_or_else(|| anyhow!("Couldn't get kretprobe program"))?
+            .attach_kprobe(true, probe.symbol.attach_name())?;
 
         // Attach the kprobe
-        self.links.push(
+        Ok(vec![
             obj.prog_mut("probe_kprobe")
                 .ok_or_else(|| anyhow!("Couldn't get kprobe program"))?
                 .attach_kprobe(false, probe.symbol.attach_name())?,
-        );
-        Ok(())
+            ret_link,
+        ])
     }
 }
 
