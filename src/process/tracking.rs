@@ -9,6 +9,7 @@
 use anyhow::{anyhow, bail, Result};
 
 use std::{
+    cmp::{Eq, Ord, Ordering, PartialEq},
     collections::HashMap,
     sync::{Arc, Mutex},
 };
@@ -26,13 +27,35 @@ use crate::{
     },
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 #[event_section]
 pub(crate) struct TrackingInfo {
     /// Tracking information of the original packet.
     pub(crate) skb: SkbTrackingEvent,
     /// The index in the event series.
     pub(crate) idx: u32,
+}
+
+impl Eq for TrackingInfo {}
+
+impl PartialEq for TrackingInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.skb.tracking_id().eq(&other.skb.tracking_id())
+    }
+}
+
+impl PartialOrd for TrackingInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for TrackingInfo {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.skb
+            .timestamp
+            .cmp(&other.skb.timestamp)
+            .then_with(|| self.skb.orig_head.cmp(&other.skb.orig_head))
+    }
 }
 
 #[derive(Default)]
