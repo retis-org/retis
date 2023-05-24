@@ -2,7 +2,6 @@ use std::{collections::HashSet, thread::JoinHandle, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
-use signal_hook::low_level::signal_name;
 
 use super::{
     cli::Collect,
@@ -128,10 +127,7 @@ impl Collectors {
 
     /// Initialize all collectors by calling their `init()` function.
     pub(crate) fn init(&mut self) -> Result<()> {
-        for sig in signal_hook::consts::TERM_SIGNALS {
-            debug!("Registering {}", signal_name(*sig).unwrap());
-            self.run.register_signal(*sig)?;
-        }
+        self.run.register_term_signals()?;
 
         let collect = self
             .cli

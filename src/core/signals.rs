@@ -2,12 +2,17 @@
 ///
 /// Provides a simple way for both registering signal handlers or
 /// simply notify terminations to the threads.
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
 };
 
 use anyhow::Result;
+use log::info;
+use signal_hook::iterator::Signals;
 
 #[derive(Clone)]
 pub(crate) struct Running(Arc<AtomicBool>);
@@ -17,8 +22,19 @@ impl Running {
         Running(Arc::new(AtomicBool::new(false)))
     }
 
-    pub(crate) fn register_signal(&mut self, signal: libc::c_int) -> Result<()> {
-        signal_hook::flag::register(signal, self.0.clone())?;
+    /// Register termination signals so the current Running instance will stop
+    /// upon receiving one of those signals (SIGTERM, etc). This can only work
+    /// from the main thread.
+    pub(crate) fn register_term_signals(&mut self) -> Result<()> {
+        let mut sigs = Signals::new(signal_hook::consts::TERM_SIGNALS)?;
+        let mut myself = self.clone();
+
+        thread::spawn(move || {
+            sigs.wait();
+            myself.terminate();
+            info!("Received signal, terminating...");
+        });
+
         Ok(())
     }
 
@@ -26,7 +42,6 @@ impl Running {
         !self.0.load(Ordering::Relaxed)
     }
 
-    #[cfg(not(test))]
     pub(crate) fn terminate(&mut self) {
         self.0.store(true, Ordering::Relaxed);
     }
