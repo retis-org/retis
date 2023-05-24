@@ -382,11 +382,12 @@ impl Collectors {
                     break;
                 }
             }
+            // Skip probes which won't generate events from the collectors.
             if !valid {
-                warn!(
-                    "A probe to symbol {} is attached but no collector will retrieve data from it, only generic information will be retrieved",
-                    symbol
+                info!(
+                    "No probe was attached to {symbol} as no collector could retrieve data from it"
                 );
+                continue;
             }
 
             probes.push(match type_str {
