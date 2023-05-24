@@ -4,4 +4,5 @@
 
 pub(crate) mod cli;
 
+pub(crate) mod series;
 pub(crate) mod tracking;
