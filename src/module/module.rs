@@ -25,6 +25,8 @@ pub(crate) enum ModuleId {
     SkbDrop = 6,
     Ovs = 7,
     Tracking = 8,
+    // TODO: use std::mem::variant_count once in stable.
+    _MAX = 9,
 }
 
 impl ModuleId {
@@ -59,6 +61,7 @@ impl ModuleId {
             SkbDrop => 6,
             Ovs => 7,
             Tracking => 8,
+            _MAX => 9,
         }
     }
 
@@ -90,7 +93,15 @@ impl ModuleId {
             SkbDrop => "skb-drop",
             Ovs => "ovs",
             Tracking => "tracking",
+            _MAX => "_max",
         }
+    }
+
+    /// Returns a vec of all valid variants of ModuleId.
+    pub(crate) fn variants() -> Vec<ModuleId> {
+        (1..ModuleId::_MAX.to_u8())
+            .map(|id| Self::from_u8(id).unwrap())
+            .collect()
     }
 }
 
