@@ -103,7 +103,7 @@ impl eBpfProg {
         disassemble(&self.to_bytes());
     }
 
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Default::default()
     }
 
