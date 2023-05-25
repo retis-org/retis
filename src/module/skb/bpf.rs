@@ -155,6 +155,7 @@ pub(super) fn unmarshal_tcp(raw_section: &BpfRawSection) -> Result<SkbTcpEvent> 
         seq: u32::from_be(raw.seq),
         ack_seq: u32::from_be(raw.ack_seq),
         window: u16::from_be(raw.window),
+        doff: raw.doff,
         flags: raw.flags,
     })
 }
