@@ -33,7 +33,156 @@ pub(crate) struct SkbEvent {
 
 impl EventFmt for SkbEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " {:?}", self)
+        let mut len = 0;
+
+        if let Some(ns) = &self.ns {
+            write!(f, " ns {}", ns.netns)?;
+        }
+
+        if let Some(dev) = &self.dev {
+            if dev.ifindex > 0 {
+                write!(f, " if {}", dev.ifindex)?;
+                if !dev.name.is_empty() {
+                    write!(f, " ({})", dev.name)?;
+                }
+            }
+            if let Some(rx_ifindex) = dev.rx_ifindex {
+                write!(f, " rxif {}", rx_ifindex)?;
+            }
+        }
+
+        if let Some(eth) = &self.eth {
+            // FIXME.
+            let ethertype = match eth.etype {
+                0x0800 => " IPv4",
+                0x0806 => " ARP",
+                0x86dd => " IPv6",
+                0x88e5 => " MACsec",
+                0x88f7 => " PTP",
+                _ => "",
+            };
+            write!(
+                f,
+                " {} > {} ethertype{} ({:#06x})",
+                eth.src, eth.dst, ethertype, eth.etype
+            )?;
+        }
+
+        if let Some(ip) = &self.ip {
+            len = ip.len;
+
+            if let Some(tcp) = &self.tcp {
+                write!(
+                    f,
+                    " {}.{} > {}.{}",
+                    ip.saddr, tcp.sport, ip.daddr, tcp.dport
+                )?;
+            } else if let Some(udp) = &self.udp {
+                write!(
+                    f,
+                    " {}.{} > {}.{}",
+                    ip.saddr, udp.sport, ip.daddr, udp.dport
+                )?;
+            } else {
+                write!(f, " {} > {}", ip.saddr, ip.daddr)?;
+            }
+
+            // FIXME.
+            let protocol = match ip.protocol {
+                1 => " ICMP",
+                2 => " IGMP",
+                6 => " TCP",
+                17 => " UDP",
+                41 => " IPv6",
+                47 => " GRE",
+                50 => " ESP",
+                58 => " ICMPv6",
+                94 => " IPIP",
+                _ => "",
+            };
+
+            write!(f, " len {} proto{} ({})", ip.len, protocol, ip.protocol)?;
+        }
+
+        if let Some(tcp) = &self.tcp {
+            let mut flags = Vec::new();
+            if tcp.flags & 1 << 0 != 0 {
+                flags.push('F');
+            }
+            if tcp.flags & 1 << 1 != 0 {
+                flags.push('S');
+            }
+            if tcp.flags & 1 << 2 != 0 {
+                flags.push('R');
+            }
+            if tcp.flags & 1 << 3 != 0 {
+                flags.push('P');
+            }
+            if tcp.flags & 1 << 4 != 0 {
+                flags.push('.');
+            }
+            if tcp.flags & 1 << 5 != 0 {
+                flags.push('U');
+            }
+            write!(f, " flags [{}]", flags.into_iter().collect::<String>())?;
+
+            let len = len - tcp.doff as u16;
+            if len > 0 {
+                write!(f, " seq {}:{}", tcp.seq, tcp.seq + len as u32)?;
+            } else {
+                write!(f, " seq {}", tcp.seq)?;
+            }
+
+            if tcp.flags & 1 << 4 != 0 {
+                write!(f, " ack {}", tcp.ack_seq)?;
+            }
+
+            write!(f, " win {}", tcp.window)?;
+        }
+
+        if let Some(udp) = &self.udp {
+            write!(f, " len {}", udp.len)?;
+        }
+
+        if let Some(icmp) = &self.icmp {
+            // TODO: text version
+            write!(f, " type {} code {}", icmp.r#type, icmp.code)?;
+        }
+
+        if self.meta.is_some() || self.data_ref.is_some() {
+            write!(f, " skb [")?;
+
+            if let Some(meta) = &self.meta {
+                if meta.csum != 0 {
+                    write!(f, "csum {:#x} ", meta.csum)?;
+                }
+                if meta.hash != 0 {
+                    write!(f, "hash {:#x} ", meta.hash)?;
+                }
+                write!(f, "len {} ", meta.len,)?;
+                if meta.data_len != 0 {
+                    write!(f, "data_len {} ", meta.data_len)?;
+                }
+                write!(f, "priority {} ", meta.priority)?;
+            }
+
+            if let Some(dataref) = &self.data_ref {
+                if dataref.nohdr {
+                    write!(f, "nohdr ")?;
+                }
+                if dataref.cloned {
+                    write!(f, "cloned ")?;
+                }
+                if dataref.fclone > 0 {
+                    write!(f, "fclone {} ", dataref.fclone)?;
+                }
+                write!(f, "users {} dataref {}", dataref.users, dataref.dataref)?;
+            }
+
+            write!(f, "]")?;
+        }
+
+        Ok(())
     }
 }
 
