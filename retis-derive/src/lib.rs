@@ -9,7 +9,7 @@ pub fn event_section(
 ) -> proc_macro::TokenStream {
     let output = format!(r#"
         #[serde_with::skip_serializing_none]
-        #[derive(Default, serde::Serialize, serde::Deserialize, crate::EventSection)]
+        #[derive(Debug, Default, serde::Serialize, serde::Deserialize, crate::EventSection)]
         {item}
     "#);
     output.parse().expect("Invalid tokens from event_section macro")
