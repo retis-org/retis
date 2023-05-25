@@ -2,7 +2,7 @@ use std::fmt;
 
 use anyhow::{bail, Result};
 
-use super::bpf::*;
+use super::{bpf::*, helpers};
 use crate::{
     core::events::{bpf::BpfRawSection, *},
     event_section, event_section_factory,
@@ -33,7 +33,166 @@ pub(crate) struct SkbEvent {
 
 impl EventFmt for SkbEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        write!(f, " {:?}", self)
+        let mut len = 0;
+
+        let mut first = true;
+        let space = |f: &mut fmt::Formatter, first: &mut bool| {
+            if !*first {
+                write!(f, " ")?;
+            }
+            *first = false;
+            Ok(())
+        };
+
+        if let Some(ns) = &self.ns {
+            space(f, &mut first)?;
+            write!(f, "ns {}", ns.netns)?;
+        }
+
+        if let Some(dev) = &self.dev {
+            space(f, &mut first)?;
+
+            if dev.ifindex > 0 {
+                write!(f, "if {}", dev.ifindex)?;
+                if !dev.name.is_empty() {
+                    write!(f, " ({})", dev.name)?;
+                }
+            }
+            if let Some(rx_ifindex) = dev.rx_ifindex {
+                write!(f, "rxif {}", rx_ifindex)?;
+            }
+        }
+
+        if let Some(eth) = &self.eth {
+            space(f, &mut first)?;
+
+            let ethertype = match helpers::etype_str(eth.etype) {
+                Some(s) => format!(" {}", s),
+                None => String::new(),
+            };
+
+            write!(
+                f,
+                "{} > {} ethertype{} ({:#06x})",
+                eth.src, eth.dst, ethertype, eth.etype
+            )?;
+        }
+
+        if let Some(ip) = &self.ip {
+            space(f, &mut first)?;
+
+            // The below is not 100% correct:
+            // - IPv4: we use the fixed 20 bytes size as options are rarely used.
+            // - IPv6: we do not support extension headers.
+            len = match ip.version {
+                4 => ip.len - 20,
+                _ => ip.len,
+            };
+
+            if let Some(tcp) = &self.tcp {
+                write!(f, "{}.{} > {}.{}", ip.saddr, tcp.sport, ip.daddr, tcp.dport)?;
+            } else if let Some(udp) = &self.udp {
+                write!(f, "{}.{} > {}.{}", ip.saddr, udp.sport, ip.daddr, udp.dport)?;
+            } else {
+                write!(f, "{} > {}", ip.saddr, ip.daddr)?;
+            }
+
+            let protocol = match helpers::protocol_str(ip.protocol) {
+                Some(s) => format!(" {}", s),
+                None => String::new(),
+            };
+
+            write!(f, " len {} proto{} ({})", ip.len, protocol, ip.protocol)?;
+        }
+
+        if let Some(tcp) = &self.tcp {
+            space(f, &mut first)?;
+
+            let mut flags = Vec::new();
+            if tcp.flags & 1 << 0 != 0 {
+                flags.push('F');
+            }
+            if tcp.flags & 1 << 1 != 0 {
+                flags.push('S');
+            }
+            if tcp.flags & 1 << 2 != 0 {
+                flags.push('R');
+            }
+            if tcp.flags & 1 << 3 != 0 {
+                flags.push('P');
+            }
+            if tcp.flags & 1 << 4 != 0 {
+                flags.push('.');
+            }
+            if tcp.flags & 1 << 5 != 0 {
+                flags.push('U');
+            }
+            write!(f, "flags [{}]", flags.into_iter().collect::<String>())?;
+
+            let len = len - (tcp.doff as u16 * 4);
+            if len > 0 {
+                write!(f, " seq {}:{}", tcp.seq, tcp.seq + len as u32)?;
+            } else {
+                write!(f, " seq {}", tcp.seq)?;
+            }
+
+            if tcp.flags & 1 << 4 != 0 {
+                write!(f, " ack {}", tcp.ack_seq)?;
+            }
+
+            write!(f, " win {}", tcp.window)?;
+        }
+
+        if let Some(udp) = &self.udp {
+            space(f, &mut first)?;
+            write!(f, "len {}", udp.len)?;
+        }
+
+        if let Some(icmp) = &self.icmp {
+            space(f, &mut first)?;
+            // TODO: text version
+            write!(f, "type {} code {}", icmp.r#type, icmp.code)?;
+        }
+
+        if self.meta.is_some() || self.data_ref.is_some() {
+            space(f, &mut first)?;
+            write!(f, "skb [")?;
+
+            if let Some(meta) = &self.meta {
+                if meta.csum != 0 {
+                    write!(f, "csum {:#x} ", meta.csum)?;
+                }
+                if meta.hash != 0 {
+                    write!(f, "hash {:#x} ", meta.hash)?;
+                }
+                write!(f, "len {} ", meta.len,)?;
+                if meta.data_len != 0 {
+                    write!(f, "data_len {} ", meta.data_len)?;
+                }
+                write!(f, "priority {}", meta.priority)?;
+            }
+
+            if self.meta.is_some() {
+                write!(f, " ")?;
+            }
+
+            if let Some(dataref) = &self.data_ref {
+                if dataref.nohdr {
+                    write!(f, "nohdr ")?;
+                }
+                if dataref.cloned {
+                    write!(f, "cloned ")?;
+                }
+                if dataref.fclone > 0 {
+                    write!(f, "fclone {} ", dataref.fclone)?;
+                }
+                write!(f, "users {} dataref {}", dataref.users, dataref.dataref)?;
+            }
+
+            write!(f, "]")?;
+        }
+
+        Ok(())
     }
 }
 
