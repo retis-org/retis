@@ -72,7 +72,11 @@ pub(crate) struct UserEvent {
 
 impl EventFmt for UserEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " {:?}", self)
+        write!(f, " [u] {}/{}", self.pid, self.tid)?;
+        if let Some((_, bin)) = self.path.rsplit_once('/') {
+            write!(f, " ({})", bin)?;
+        }
+        write!(f, " {}", self.symbol)
     }
 }
 
