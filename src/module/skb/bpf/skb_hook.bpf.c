@@ -10,7 +10,7 @@
  *
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
-#define COLLECT_L2		0
+#define COLLECT_ETH		0
 #define COLLECT_IPV4		1
 #define COLLECT_IPV6		2
 #define COLLECT_TCP		3
@@ -18,7 +18,8 @@
 #define COLLECT_ICMP		5
 #define COLLECT_DEV		6
 #define COLLECT_NS		7
-#define COLLECT_DATA_REF	8
+#define COLLECT_META		8
+#define COLLECT_DATA_REF	9
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -37,7 +38,7 @@ struct {
 /* Please keep the following structs in sync with its Rust counterpart in
  * module::skb::bpf.
  */
-struct skb_l2_event {
+struct skb_eth_event {
 	u8 dst[6];
 	u8 src[6];
 	u16 etype;
@@ -82,7 +83,15 @@ struct skb_netdev_event {
 struct skb_netns_event {
 	u32 netns;
 } __attribute__((packed));
+struct skb_meta_event {
+	u32 len;
+	u32 data_len;
+	u32 hash;
+	u32 csum;
+	u32 priority;
+} __attribute__((packed));
 struct skb_data_ref_event {
+	u8 nohdr;
 	u8 cloned;
 	u8 fclone;
 	u8 users;
@@ -110,9 +119,9 @@ static __always_inline int process_skb_l2_l4(struct retis_context *ctx,
 	if (etype == 0)
 		return 0;
 
-	if (cfg->sections & BIT(COLLECT_L2)) {
-		struct skb_l2_event *e =
-			get_event_zsection(event, COLLECTOR_SKB, COLLECT_L2,
+	if (cfg->sections & BIT(COLLECT_ETH)) {
+		struct skb_eth_event *e =
+			get_event_zsection(event, COLLECTOR_SKB, COLLECT_ETH,
 					   sizeof(*e));
 		if (!e)
 			return 0;
@@ -290,6 +299,20 @@ static __always_inline int process_skb(struct retis_context *ctx,
 	}
 
 skip_netns:
+	if (cfg->sections & BIT(COLLECT_META)) {
+		struct skb_meta_event *e =
+			get_event_section(event, COLLECTOR_SKB,
+					  COLLECT_META, sizeof(*e));
+		if (!e)
+			return 0;
+
+		e->len = BPF_CORE_READ(skb, len);
+		e->data_len = BPF_CORE_READ(skb, data_len);
+		e->hash = BPF_CORE_READ(skb, hash);
+		e->csum = BPF_CORE_READ(skb, csum);
+		e->priority = BPF_CORE_READ(skb, priority);
+	}
+
 	if (cfg->sections & BIT(COLLECT_DATA_REF)) {
 		unsigned char *head;
 		struct skb_data_ref_event *e =
@@ -298,6 +321,7 @@ skip_netns:
 		if (!e)
 			return 0;
 
+		e->nohdr = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, nohdr);
 		e->cloned = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, cloned);
 		e->fclone = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, fclone);
 		e->users = (u8)BPF_CORE_READ(skb, users.refs.counter);
