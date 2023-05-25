@@ -73,6 +73,8 @@ pub(crate) struct SkbTcpEvent {
     pub(crate) seq: u32,
     pub(crate) ack_seq: u32,
     pub(crate) window: u16,
+    /// Data offset.
+    pub(crate) doff: u8,
     /// Bitfield of TCP flags as defined in `struct tcphdr` in the kernel.
     pub(crate) flags: u8,
 }
