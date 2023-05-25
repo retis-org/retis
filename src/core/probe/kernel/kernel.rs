@@ -61,7 +61,17 @@ pub(crate) struct KernelEvent {
 
 impl EventFmt for KernelEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, " {:?}", self)
+        write!(
+            f,
+            " [{}] {}",
+            match self.probe_type.as_str() {
+                "raw_tracepoint" => "tp",
+                "kprobe" => "k",
+                "kretprobe" => "kr",
+                _ => "invalid",
+            },
+            self.symbol,
+        )
     }
 }
 
