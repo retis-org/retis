@@ -11,7 +11,7 @@ use crate::{
 };
 
 ///The OVS Event
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 #[event_section]
 pub(crate) struct OvsEvent {
     /// Event data

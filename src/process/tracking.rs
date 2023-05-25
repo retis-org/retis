@@ -27,7 +27,7 @@ use crate::{
     },
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 #[event_section]
 pub(crate) struct TrackingInfo {
     /// Tracking information of the original packet.
