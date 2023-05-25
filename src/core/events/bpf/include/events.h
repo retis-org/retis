@@ -12,11 +12,12 @@ enum retis_event_owners {
 	COMMON = 1,
 	KERNEL = 2,
 	USERSPACE = 3,
-	COLLECTOR_SKB_TRACKING = 4,
-	COLLECTOR_SKB = 5,
+	/* TRACKING = 4, */
+	COLLECTOR_SKB_TRACKING = 5,
 	COLLECTOR_SKB_DROP = 6,
-	COLLECTOR_OVS = 7,
-	COLLECTOR_NFT = 8,
+	COLLECTOR_SKB = 7,
+	COLLECTOR_OVS = 8,
+	COLLECTOR_NFT = 9,
 };
 
 struct retis_raw_event {
