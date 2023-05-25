@@ -38,7 +38,7 @@ use std::{any::Any, collections::HashMap, time::Duration};
 
 use anyhow::{bail, Result};
 
-use super::bpf::BpfRawSection;
+use super::{bpf::BpfRawSection, EventDisplay, EventFmt};
 use crate::module::ModuleId;
 
 /// Full event. Internal representation. The first key is the collector from
@@ -85,6 +85,15 @@ impl Event {
     }
 }
 
+impl EventFmt for Event {
+    fn event_fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        ModuleId::variants()
+            .iter()
+            .filter_map(|id| self.0.get(id))
+            .try_for_each(|section| section.event_fmt(f))
+    }
+}
+
 /// Type alias to refer to the commonly used EventSectionFactory HashMap.
 pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
 
@@ -126,8 +135,8 @@ pub(crate) trait EventFactory {
 /// having a proper structure is encouraged as it allows easier consumption at
 /// post-processing. Those objects can also define their own specialized
 /// helpers.
-pub(crate) trait EventSection: EventSectionInternal {}
-impl<T> EventSection for T where T: EventSectionInternal {}
+pub(crate) trait EventSection: EventSectionInternal + for<'a> EventDisplay<'a> {}
+impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<'a> {}
 
 /// EventSection helpers defined in the core for all events. Common definition
 /// needs Sized but that is a requirement for all EventSection.

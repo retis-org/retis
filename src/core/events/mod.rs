@@ -15,6 +15,9 @@
 pub(crate) mod events;
 pub(crate) use events::*;
 
+pub(crate) mod display;
+pub(crate) use display::*;
+
 pub(crate) mod bpf;
 pub(crate) mod file;
 pub(crate) mod format;

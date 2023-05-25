@@ -3,7 +3,7 @@
 #![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 
-use std::{collections::HashMap, mem, sync::mpsc, thread, time::Duration};
+use std::{collections::HashMap, fmt, mem, sync::mpsc, thread, time::Duration};
 
 use anyhow::{anyhow, bail, Result};
 use log::error;
@@ -293,6 +293,14 @@ pub(crate) struct CommonEvent {
 
 unsafe impl Plain for CommonEvent {}
 
+impl EventFmt for CommonEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Don't put an extra space at the beginning as this section is 1)
+        // always displayed and 2) always first.
+        write!(f, "{}", self.timestamp)
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(CommonEvent)]
 pub(crate) struct CommonEventFactory {}
@@ -385,6 +393,16 @@ mod tests {
         field0: Option<u64>,
         field1: Option<u64>,
         field2: Option<u64>,
+    }
+
+    impl EventFmt for TestEvent {
+        fn event_fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(
+                f,
+                "field0: {:?} field1: {:?} field2: {:?}",
+                self.field0, self.field1, self.field2
+            )
+        }
     }
 
     impl RawEventSectionFactory for TestEvent {

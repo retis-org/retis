@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::{bail, Result};
 
 use super::bpf::*;
@@ -27,6 +29,12 @@ pub(crate) struct SkbEvent {
     pub(crate) meta: Option<SkbMetaEvent>,
     /// Skb data-related and refcnt information, if any.
     pub(crate) data_ref: Option<SkbDataRefEvent>,
+}
+
+impl EventFmt for SkbEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " {:?}", self)
+    }
 }
 
 /// Ethernet fields.

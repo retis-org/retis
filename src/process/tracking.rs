@@ -6,13 +6,14 @@
 //! The tracking processor is a Processor keeps track of the events' tracking ids and
 //! inserts a new EventSection with information that identifies each event with its series.
 
-use anyhow::{anyhow, bail, Result};
-
 use std::{
     cmp::{Eq, Ord, Ordering, PartialEq},
     collections::HashMap,
+    fmt,
     sync::{Arc, Mutex},
 };
+
+use anyhow::{anyhow, bail, Result};
 
 use crate::{
     core::events::{
@@ -34,6 +35,12 @@ pub(crate) struct TrackingInfo {
     pub(crate) skb: SkbTrackingEvent,
     /// The index in the event series.
     pub(crate) idx: u32,
+}
+
+impl EventFmt for TrackingInfo {
+    fn event_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " {:?}", self)
+    }
 }
 
 impl Eq for TrackingInfo {}

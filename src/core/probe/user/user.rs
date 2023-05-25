@@ -70,6 +70,12 @@ pub(crate) struct UserEvent {
     pub(crate) tid: i32,
 }
 
+impl EventFmt for UserEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " {:?}", self)
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(UserEvent)]
 pub(crate) struct UserEventFactory {

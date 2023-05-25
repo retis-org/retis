@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::{bail, Result};
 use plain::Plain;
 use serde::{
@@ -17,6 +19,12 @@ pub(crate) struct OvsEvent {
     /// Event data
     #[serde(flatten)]
     pub(crate) event: OvsEventType,
+}
+
+impl EventFmt for OvsEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, " {:?}", self)
+    }
 }
 
 #[derive(Default)]
