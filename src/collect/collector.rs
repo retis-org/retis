@@ -486,6 +486,12 @@ mod tests {
     #[event_section_factory(Self)]
     struct TestEvent {}
 
+    impl EventFmt for TestEvent {
+        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: DisplayFormat) -> std::fmt::Result {
+            write!(f, "test event section")
+        }
+    }
+
     impl RawEventSectionFactory for TestEvent {
         fn from_raw(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
             Ok(Box::new(TestEvent::default()))

@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::Result;
 use plain::Plain;
 
@@ -48,6 +50,12 @@ impl SkbTrackingEvent {
     /// Check if two tracking event sections are from the exact same skb.
     pub(crate) fn strict_match(&self, other: &SkbTrackingEvent) -> bool {
         self.r#match(other) && self.skb == other.skb
+    }
+}
+
+impl EventFmt for SkbTrackingEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(f, "#{:x} (skb {})", self.tracking_id(), self.skb)
     }
 }
 

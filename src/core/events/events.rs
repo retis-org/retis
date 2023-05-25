@@ -38,8 +38,8 @@ use std::{any::Any, collections::HashMap, time::Duration};
 
 use anyhow::{bail, Result};
 
-use super::bpf::BpfRawSection;
-use crate::module::ModuleId;
+use super::{bpf::BpfRawSection, DisplayFormat, EventDisplay, EventFmt};
+use crate::{core::probe::kernel::KernelEvent, module::ModuleId};
 
 /// Full event. Internal representation. The first key is the collector from
 /// which the event sections originate. The second one is the field name of a
@@ -85,6 +85,58 @@ impl Event {
     }
 }
 
+impl EventFmt for Event {
+    fn event_fmt(&self, f: &mut std::fmt::Formatter, format: DisplayFormat) -> std::fmt::Result {
+        // First format the first event line starting with the always-there
+        // {common} section, followed by the {kernel} or {user} one.
+        write!(
+            f,
+            "{}",
+            self.0.get(&ModuleId::Common).unwrap().display(format)
+        )?;
+        if let Some(kernel) = self.0.get(&ModuleId::Kernel) {
+            write!(f, " {}", kernel.display(format))?;
+        } else if let Some(user) = self.0.get(&ModuleId::Userspace) {
+            write!(f, " {}", user.display(format))?;
+        }
+
+        // If we do have tracking and/or drop sections, put them there too.
+        // Special case the global tracking information from here for now.
+        if let Some(tracking) = self.0.get(&ModuleId::Tracking) {
+            write!(f, " {}", tracking.display(format))?;
+        } else if let Some(skb_tracking) = self.0.get(&ModuleId::SkbTracking) {
+            write!(f, " {}", skb_tracking.display(format))?;
+        }
+        if let Some(skb_drop) = self.0.get(&ModuleId::SkbDrop) {
+            write!(f, " {}", skb_drop.display(format))?;
+        }
+
+        // If we have a stack trace, show it.
+        if let Some(kernel) = self.get_section::<KernelEvent>(ModuleId::Kernel) {
+            if let Some(stack) = &kernel.stack_trace {
+                match format {
+                    DisplayFormat::SingleLine => write!(f, " {}", stack.display(format))?,
+                    DisplayFormat::MultiLine => write!(f, "\n{}", stack.display(format))?,
+                }
+            }
+        }
+
+        let sep = match format {
+            DisplayFormat::SingleLine => " ",
+            DisplayFormat::MultiLine => "\n  ",
+        };
+
+        // Finally show all sections.
+        (ModuleId::Skb.to_u8()..ModuleId::_MAX.to_u8())
+            .collect::<Vec<u8>>()
+            .iter()
+            .filter_map(|id| self.0.get(&ModuleId::from_u8(*id).unwrap()))
+            .try_for_each(|section| write!(f, "{sep}{}", section.display(format)))?;
+
+        Ok(())
+    }
+}
+
 /// Type alias to refer to the commonly used EventSectionFactory HashMap.
 pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
 
@@ -126,8 +178,8 @@ pub(crate) trait EventFactory {
 /// having a proper structure is encouraged as it allows easier consumption at
 /// post-processing. Those objects can also define their own specialized
 /// helpers.
-pub(crate) trait EventSection: EventSectionInternal {}
-impl<T> EventSection for T where T: EventSectionInternal {}
+pub(crate) trait EventSection: EventSectionInternal + for<'a> EventDisplay<'a> {}
+impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<'a> {}
 
 /// EventSection helpers defined in the core for all events. Common definition
 /// needs Sized but that is a requirement for all EventSection.

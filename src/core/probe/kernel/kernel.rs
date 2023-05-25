@@ -59,6 +59,12 @@ pub(crate) struct KernelEvent {
     pub(crate) stack_trace: Option<Vec<String>>,
 }
 
+impl EventFmt for KernelEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(f, " {:?}", self)
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(KernelEvent)]
 pub(crate) struct KernelEventFactory {
