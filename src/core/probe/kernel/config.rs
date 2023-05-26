@@ -15,9 +15,6 @@ pub(super) struct ProbeOffsets {
     pub(super) net: i8,
     pub(super) nft_pktinfo: i8,
     pub(super) nft_traceinfo: i8,
-    pub(super) nft_chain: i8,
-    pub(super) nft_rule: i8,
-    pub(super) nft_verdict: i8,
 }
 
 impl Default for ProbeOffsets {
@@ -30,9 +27,6 @@ impl Default for ProbeOffsets {
             net: -1,
             nft_pktinfo: -1,
             nft_traceinfo: -1,
-            nft_chain: -1,
-            nft_rule: -1,
-            nft_verdict: -1,
         }
     }
 }

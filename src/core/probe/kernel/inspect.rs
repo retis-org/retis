@@ -26,15 +26,6 @@ pub(super) fn inspect_symbol(symbol: &Symbol) -> Result<ProbeConfig> {
     if let Some(offset) = symbol.parameter_offset("struct nft_traceinfo *")? {
         cfg.offsets.nft_traceinfo = offset as i8;
     }
-    if let Some(offset) = symbol.parameter_offset("struct nft_chain *")? {
-        cfg.offsets.nft_chain = offset as i8;
-    }
-    if let Some(offset) = symbol.parameter_offset("struct nft_rule_dp *")? {
-        cfg.offsets.nft_rule = offset as i8;
-    }
-    if let Some(offset) = symbol.parameter_offset("struct nft_verdict *")? {
-        cfg.offsets.nft_verdict = offset as i8;
-    }
 
     Ok(cfg)
 }

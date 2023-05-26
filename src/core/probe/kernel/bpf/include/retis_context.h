@@ -20,9 +20,6 @@ struct retis_probe_offsets {
 	s8 net;	 /* netns */
 	s8 nft_pktinfo;
 	s8 nft_traceinfo;
-	s8 nft_chain;
-	s8 nft_rule;
-	s8 nft_verdict;
 } __attribute__((packed));
 
 /* Common representation of the register values provided to the probes, as this
@@ -74,16 +71,23 @@ struct retis_context {
 	(type)(((offset) >= 0 && (offset) < REG_MAX && (offset) < ctx->regs.num) ?	\
        ctx->regs.reg[offset] : 0)
 
+/* Check if a given offset is valid. */
+#define retis_offset_valid(offset)	\
+	(offset >= 0)
 /* Check if a given argument is valid */
 #define retis_arg_valid(ctx, name)	\
-	(ctx->offsets.name >= 0)
+	retis_offset_valid(ctx->offsets.name)
 
 /* Argument specific helpers for use in generic hooks (and easier use in
  * targeted ones.
  */
 #define RETIS_GET(ctx, name, type)		\
-	(retis_arg_valid(ctx, name) ?		\
+	(retis_arg_valid(ctx, name) ?	\
 	 retis_get_param(ctx, ctx->offsets.name, type) : 0)
+/* Same as RETIS_GET() but local to hooks only. */
+#define RETIS_HOOK_GET(ctx, offsets, name, type)	\
+	(retis_offset_valid(offsets.name) ?	\
+	 retis_get_param(ctx, offsets.name, type) : 0)
 
 #define __retis_get_sk_buff(ctx)	\
 	RETIS_GET(ctx, sk_buff, struct sk_buff *)
@@ -97,12 +101,6 @@ struct retis_context {
 	RETIS_GET(ctx, nft_pktinfo, struct nft_pktinfo *)
 #define retis_get_nft_traceinfo(ctx)	\
 	RETIS_GET(ctx, nft_traceinfo, struct nft_traceinfo *)
-#define retis_get_nft_chain(ctx)	\
-	RETIS_GET(ctx, nft_chain, struct nft_chain *)
-#define retis_get_nft_rule(ctx)	\
-	RETIS_GET(ctx, nft_rule, struct nft_rule_dp *)
-#define retis_get_nft_verdict(ctx)	\
-	RETIS_GET(ctx, nft_verdict, struct nft_verdict *)
 
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define PROBE_MAX	1024
