@@ -67,6 +67,9 @@ Example: --filter-packet "ip dst host 10.0.0.1""#
 pub(crate) struct Collect {
     args: CollectArgs,
     collectors: DynamicCommand,
+    /// Was the collector list set from the default value (aka did the user not
+    /// request any specific set of collectors)?
+    pub(super) default_collectors_list: bool,
 }
 
 impl SubCommand for Collect {
@@ -82,10 +85,11 @@ impl SubCommand for Collect {
                         .long("collectors")
                         .short('c')
                         .value_delimiter(',')
-                        .help("comma-separated list of collectors to enable"),
+                        .help("Comma-separated list of collectors to enable. When not specified default to auto-mode (all collectors are enabled unless a prerequisite is missing)."),
                 ),
                 "collector",
             )?,
+            default_collectors_list: true,
         })
     }
 
@@ -141,6 +145,10 @@ impl SubCommand for Collect {
             .map_err(|_| ClapError::new(ErrorKind::InvalidValue))?;
 
         // Manually set collectors argument.
+        self.default_collectors_list = args
+            .value_source("collectors")
+            .ok_or_else(|| ClapError::new(ErrorKind::MissingRequiredArgument))?
+            == clap::parser::ValueSource::DefaultValue;
         self.args.collectors = args
             .get_many("collectors")
             .ok_or_else(|| ClapError::new(ErrorKind::MissingRequiredArgument))?

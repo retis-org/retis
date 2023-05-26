@@ -8,6 +8,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
+        inspect,
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeManager},
         user::proc::{Process, ThreadInfo},
@@ -43,6 +44,23 @@ impl Collector for OvsCollector {
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
         cmd.register_module::<OvsCollectorArgs>(ModuleId::Ovs)
+    }
+
+    // Check if the OvS collector can run. Some potential errors are silenced,
+    // to avoid returning an error if we can't inspect a given area for some
+    // reasons.
+    fn can_run(&self, _: &CliConfig) -> Result<()> {
+        let inspector = inspect::inspector()?;
+
+        // Check if the OvS kernel module is available. We also check for loaded
+        // module in case CONFIG_OPENVSWITCH=n because if might be out of tree.
+        if inspector.kernel.get_config_option("CONFIG_OPENVSWITCH")? != Some("=y")
+            && inspector.kernel.is_module_loaded("openvswitch") == Some(false)
+        {
+            bail!("Kernel module 'openvswitch' is not loaded")
+        }
+
+        Ok(())
     }
 
     fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {

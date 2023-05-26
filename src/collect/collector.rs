@@ -39,8 +39,16 @@ pub(crate) trait Collector {
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
         None
     }
-    ///Register command line arguments on the provided DynamicCommand object
+    /// Register command line arguments on the provided DynamicCommand object
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()>;
+    /// Check if the collector can run (eg. all prerequisites are matched). This
+    /// is a separate step from init to allow skipping collectors when they are
+    /// not explicitly selected by the user.
+    ///
+    /// The function should return an explanation when a collector can't run.
+    fn can_run(&self, _: &CliConfig) -> Result<()> {
+        Ok(())
+    }
     /// Initialize the collector, likely to be used to pass configuration data
     /// such as filters or command line arguments. We need to split the new &
     /// the init phase for collectors, to allow giving information to the core
@@ -142,6 +150,7 @@ impl Collectors {
         }
 
         // Try initializing all collectors.
+        let mut loaded = Vec::new();
         for name in &collect.args()?.collectors {
             let id = ModuleId::from_str(name)?;
             let c = self
@@ -149,9 +158,23 @@ impl Collectors {
                 .get_collector(&id)
                 .ok_or_else(|| anyhow!("unknown collector {}", name))?;
 
+            // Check if the collector can run (prerequisites are met).
+            if let Err(e) = c.can_run(&self.cli) {
+                // Do not issue an error if the list of collectors was set by
+                // default, aka. auto-detect mode.
+                if collect.default_collectors_list {
+                    debug!("Can't run collector {id}: {e}");
+                    continue;
+                } else {
+                    bail!("Can't run collector {id}: {e}");
+                }
+            }
+
             if let Err(e) = c.init(&self.cli, &mut self.probes) {
                 bail!("Could not initialize the {} collector: {}", id, e);
             }
+
+            loaded.push(id);
 
             // If the collector provides known kernel types, meaning we have a
             // dynamic collector, retrieve and store them for later processing.
@@ -160,6 +183,18 @@ impl Collectors {
                     self.known_kernel_types.insert(x.to_string());
                 });
             }
+        }
+
+        //  If auto-mode is used, print the list of module that were started.
+        if collect.default_collectors_list {
+            info!(
+                "Module(s) started: {}",
+                loaded
+                    .iter()
+                    .map(|id| id.to_str())
+                    .collect::<Vec<&str>>()
+                    .join(", ")
+            );
         }
 
         // Initialize tracking & filters.

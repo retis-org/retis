@@ -32,8 +32,10 @@ fn main() -> Result<()> {
     let command = cli.get_subcommand_mut()?;
     match command.name() {
         "collect" => {
-            let mut collectors = get_collectors(cli)?;
+            // Check if we can run the following.
+            core::inspect::check::collection_prerequisites()?;
 
+            let mut collectors = get_collectors(cli)?;
             collectors.init()?;
             collectors.start()?;
 

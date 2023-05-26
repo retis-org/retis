@@ -11,7 +11,7 @@ use crate::{
             bpf::{parse_single_raw_section, BpfRawSection},
             *,
         },
-        kernel::inspect,
+        inspect::inspector,
     },
     event_section, event_section_factory,
     module::ModuleId,
@@ -35,8 +35,10 @@ impl SkbDropEventFactory {
     pub(crate) fn new() -> Result<Self> {
         let mut reasons = HashMap::new();
 
-        if let (btf, Type::Enum(r#enum)) =
-            inspect::btf_info()?.resolve_type_by_name("skb_drop_reason")?
+        if let (btf, Type::Enum(r#enum)) = inspector()?
+            .kernel
+            .btf
+            .resolve_type_by_name("skb_drop_reason")?
         {
             for member in r#enum.members.iter() {
                 if member.val() < 0 {
