@@ -49,7 +49,7 @@ impl Collector for OvsCollector {
     // Check if the OvS collector can run. Some potential errors are silenced,
     // to avoid returning an error if we can't inspect a given area for some
     // reasons.
-    fn can_run(&self, _: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &CliConfig) -> Result<()> {
         let inspector = inspect::inspector()?;
 
         // Check if the OvS kernel module is available. We also check for loaded
