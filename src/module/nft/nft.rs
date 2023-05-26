@@ -1,6 +1,7 @@
 use std::process::{Command, Stdio};
 
 use anyhow::{anyhow, bail, Result};
+use log::info;
 use serde_json::json;
 
 use super::nft_hook;
@@ -8,6 +9,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::{cli::Collect, Collector},
     core::{
+        inspect,
         kernel::Symbol,
         probe::{Hook, Probe, ProbeManager},
     },
@@ -85,7 +87,15 @@ impl Collector for NftCollector {
         cmd.register_module_noargs(ModuleId::Nft)
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn can_run(&mut self, cli: &CliConfig) -> Result<()> {
+        let inspector = inspect::inspector()?;
+
+        if inspector.kernel.get_config_option("CONFIG_NF_TABLES")? != Some("=y")
+            && inspector.kernel.is_module_loaded("nf_tables") == Some(false)
+        {
+            bail!("Kernel module 'nf_tables' is not loaded")
+        }
+
         self.install_chain = cli
             .subcommand
             .as_any()
@@ -93,6 +103,22 @@ impl Collector for NftCollector {
             .ok_or_else(|| anyhow!("wrong subcommand"))?
             .args()?
             .allow_system_changes;
+
+        if self.install_chain {
+            Command::new(NFT_BIN)
+                .arg("-v")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(|e| anyhow!("{NFT_BIN} binary not available: {e}"))?;
+        } else {
+            info!("No system changes allowed. If no trace rule gets added, no nft events will be reported.");
+        }
+
+        Ok(())
+    }
+
+    fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         if self.install_chain {
             // Ignore if delete fails here as the table might not exist
             let _ = self.delete_table(NFT_TRACE_TABLE.to_owned());
