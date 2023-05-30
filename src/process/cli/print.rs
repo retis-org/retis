@@ -61,7 +61,10 @@ impl SubCommandRunner for Print {
         use EventResult::*;
         while run.running() {
             match factory.next_event(Some(Duration::from_secs(1)))? {
-                Event(event) => output.process_one(&event)?,
+                Event(event) => {
+                    use crate::core::events::EventDisplay;
+                    println!("{}\n", event.display());
+                },
                 Eof => break,
                 Timeout => continue,
             }

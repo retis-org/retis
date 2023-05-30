@@ -52,7 +52,14 @@ impl Sort {
     // adapted.
     // For now, print a
     fn print_series(series: EventSeries) -> Result<()> {
-        println!("{}", serde_json::to_string_pretty(&series.to_json())?);
+        //println!("{}", serde_json::to_string_pretty(&series.to_json())?);
+        use crate::core::events::EventDisplay;
+        if series.events.len() >= 1 {
+            println!("* {}\n", series.events.get(0).unwrap().display());
+            for e in series.events.iter().skip(0) {
+                println!("    \\_ {}\n", e.display());
+            }
+        }
         Ok(())
     }
 }

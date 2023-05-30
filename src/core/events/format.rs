@@ -38,6 +38,8 @@ where
             w.write_all(&bytes)?;
             w.write_all(b"\n")?;
         }
+        use crate::core::events::EventDisplay;
+        println!("{}\n", e.display());
         Ok(())
     }
 
