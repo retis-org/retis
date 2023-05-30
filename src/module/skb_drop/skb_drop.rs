@@ -27,7 +27,7 @@ impl Collector for SkbDropCollector {
         cmd.register_module_noargs(ModuleId::SkbDrop)
     }
 
-    fn can_run(&self, _: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &CliConfig) -> Result<()> {
         // It makes no sense to use Retis on a kernel older enough not to have
         // the skb:kfree_skb tracepoint (it was introduced in 2009), we might
         // fail earlier anyway. So do not handle the error case nicely.

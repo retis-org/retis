@@ -8,6 +8,7 @@
 pub(crate) mod module;
 pub(crate) use module::*;
 
+pub(crate) mod nft;
 pub(crate) mod ovs;
 pub(crate) mod skb;
 pub(crate) mod skb_drop;

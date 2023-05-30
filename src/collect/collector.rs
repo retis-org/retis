@@ -51,7 +51,7 @@ pub(crate) trait Collector {
     /// not explicitly selected by the user.
     ///
     /// The function should return an explanation when a collector can't run.
-    fn can_run(&self, _: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &CliConfig) -> Result<()> {
         Ok(())
     }
     /// Initialize the collector, likely to be used to pass configuration data

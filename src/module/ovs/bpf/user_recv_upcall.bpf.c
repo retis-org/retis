@@ -18,7 +18,7 @@ struct recv_upcall_event {
 static __always_inline u32 queue_id_gen(void *data, u32 len)
 {
 	int zero = 0;
-	struct packet_buffer *buff =
+	struct retis_packet_buffer *buff =
 		bpf_map_lookup_elem(&packet_buffers, &zero);
 	/* This should always succeed but checks are still needed to keep the
 	* verifier happy. */

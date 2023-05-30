@@ -20,6 +20,12 @@ pub(super) fn inspect_symbol(symbol: &Symbol) -> Result<ProbeConfig> {
     if let Some(offset) = symbol.parameter_offset("struct net *")? {
         cfg.offsets.net = offset as i8;
     }
+    if let Some(offset) = symbol.parameter_offset("struct nft_pktinfo *")? {
+        cfg.offsets.nft_pktinfo = offset as i8;
+    }
+    if let Some(offset) = symbol.parameter_offset("struct nft_traceinfo *")? {
+        cfg.offsets.nft_traceinfo = offset as i8;
+    }
 
     Ok(cfg)
 }

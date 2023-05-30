@@ -18,6 +18,8 @@ struct retis_probe_offsets {
 	s8 skb_drop_reason;
 	s8 net_device;
 	s8 net;	 /* netns */
+	s8 nft_pktinfo;
+	s8 nft_traceinfo;
 } __attribute__((packed));
 
 /* Common representation of the register values provided to the probes, as this
@@ -69,18 +71,25 @@ struct retis_context {
 	(type)(((offset) >= 0 && (offset) < REG_MAX && (offset) < ctx->regs.num) ?	\
        ctx->regs.reg[offset] : 0)
 
+/* Check if a given offset is valid. */
+#define retis_offset_valid(offset)	\
+	(offset >= 0)
 /* Check if a given argument is valid */
 #define retis_arg_valid(ctx, name)	\
-	(ctx->offsets.name >= 0)
+	retis_offset_valid(ctx->offsets.name)
 
 /* Argument specific helpers for use in generic hooks (and easier use in
  * targeted ones.
  */
 #define RETIS_GET(ctx, name, type)		\
-	(retis_arg_valid(ctx, name) ?		\
+	(retis_arg_valid(ctx, name) ?	\
 	 retis_get_param(ctx, ctx->offsets.name, type) : 0)
+/* Same as RETIS_GET() but local to hooks only. */
+#define RETIS_HOOK_GET(ctx, offsets, name, type)	\
+	(retis_offset_valid(offsets.name) ?	\
+	 retis_get_param(ctx, offsets.name, type) : 0)
 
-#define retis_get_sk_buff(ctx)		\
+#define __retis_get_sk_buff(ctx)	\
 	RETIS_GET(ctx, sk_buff, struct sk_buff *)
 #define retis_get_skb_drop_reason(ctx)	\
 	RETIS_GET(ctx, skb_drop_reason, enum skb_drop_reason)
@@ -88,8 +97,40 @@ struct retis_context {
 	RETIS_GET(ctx, net_device, struct net_device *)
 #define retis_get_net(ctx)		\
 	RETIS_GET(ctx, net, struct net *)
+#define retis_get_nft_pktinfo(ctx)	\
+	RETIS_GET(ctx, nft_pktinfo, struct nft_pktinfo *)
+#define retis_get_nft_traceinfo(ctx)	\
+	RETIS_GET(ctx, nft_traceinfo, struct nft_traceinfo *)
 
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define PROBE_MAX	1024
+
+/* Returns the skb trying to get it first from the arguments (common case)
+ * and if not found from the nft_pktinfo (useful for nft).
+ */
+static __always_inline struct sk_buff *retis_get_sk_buff(struct retis_context *ctx)
+{
+	const struct nft_pktinfo *pkt;
+	struct sk_buff *skb = NULL;
+	struct nft_traceinfo *info;
+
+	skb = __retis_get_sk_buff(ctx);
+	if (!skb) {
+		info = retis_get_nft_traceinfo(ctx);
+		if (!info)
+			goto out;
+
+		if (bpf_core_field_exists(info->pkt))
+			pkt = BPF_CORE_READ(info, pkt);
+		else
+			pkt = retis_get_nft_pktinfo(ctx);
+
+		if (pkt)
+			skb = (struct sk_buff *)BPF_CORE_READ(pkt, skb);
+	}
+
+out:
+	return skb;
+}
 
 #endif /* __CORE_PROBE_KERNEL_BPF_RETIS_CONTEXT__ */

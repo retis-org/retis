@@ -204,7 +204,7 @@ fn main() {
     );
     build_hook("src/module/ovs/bpf/user_op_exec.bpf.c", Some(OVS_INCLUDES));
     build_hook("src/module/ovs/bpf/user_op_put.bpf.c", Some(OVS_INCLUDES));
-
+    build_hook("src/module/nft/bpf/nft.bpf.c", None);
     build_extract_stub("src/core/filters/packets/bpf/stub.bpf.c");
 
     for inc in INCLUDE_PATHS.iter() {

@@ -3,6 +3,7 @@ use std::{collections::HashMap, fmt};
 use anyhow::{bail, Result};
 
 use super::{
+    nft::{NftCollector, NftEventFactory},
     ovs::{OvsCollector, OvsEventFactory},
     skb::{SkbCollector, SkbEventFactory},
     skb_drop::{SkbDropCollector, SkbDropEventFactory},
@@ -26,6 +27,7 @@ pub(crate) enum ModuleId {
     Skb = 5,
     SkbDrop = 6,
     Ovs = 7,
+    Nft = 8,
 }
 
 impl ModuleId {
@@ -41,6 +43,7 @@ impl ModuleId {
             5 => Skb,
             6 => SkbDrop,
             7 => Ovs,
+            8 => Nft,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -58,6 +61,7 @@ impl ModuleId {
             Skb => 5,
             SkbDrop => 6,
             Ovs => 7,
+            Nft => 8,
         }
     }
 
@@ -72,6 +76,7 @@ impl ModuleId {
             "skb" => Skb,
             "skb-drop" => SkbDrop,
             "ovs" => Ovs,
+            "nft" => Nft,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -87,6 +92,7 @@ impl ModuleId {
             Skb => "skb",
             SkbDrop => "skb-drop",
             Ovs => "ovs",
+            Nft => "nft",
         }
     }
 }
@@ -230,6 +236,11 @@ pub(crate) fn get_modules() -> Result<Modules> {
             ModuleId::Ovs,
             Box::new(OvsCollector::new()?),
             Box::<OvsEventFactory>::default(),
+        )?
+        .register(
+            ModuleId::Nft,
+            Box::new(NftCollector::new()?),
+            Box::<NftEventFactory>::default(),
         )?;
 
     Ok(group)
