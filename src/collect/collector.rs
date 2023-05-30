@@ -1,4 +1,9 @@
-use std::{collections::HashSet, thread::JoinHandle, time::Duration};
+use std::{
+    collections::HashSet,
+    process::{Command, Stdio},
+    thread::JoinHandle,
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
@@ -279,6 +284,26 @@ impl Collectors {
         // We use JSON format output for all events for now.
         let mut json = JsonFormat::default();
         let mut processors = get_processors(&mut json, collect.args()?)?;
+
+        if let Some(cmd) = collect.args()?.cmd.to_owned() {
+            let mut run = self.run.clone();
+            std::thread::spawn(move || {
+                match Command::new("sh")
+                    .arg("-c")
+                    .arg(&cmd)
+                    .stderr(Stdio::null())
+                    .stdout(Stdio::null())
+                    .status()
+                {
+                    Err(e) => warn!("Failed to execute command {e}"),
+                    Ok(status) => {
+                        info!("Command returned ({status}), terminating ...");
+                    }
+                }
+
+                run.terminate();
+            });
+        }
 
         while self.run.running() {
             match self.factory.next_event(Some(Duration::from_secs(1)))? {

@@ -23,6 +23,11 @@ pub(crate) struct CollectArgs {
 not released. If exhausted, no stack trace will be included."
     )]
     pub(super) stack: bool,
+    #[arg(
+        long,
+        help = "Execute a command and terminate the collection once done."
+    )]
+    pub(super) cmd: Option<String>,
     // Some of the options that we want for this arg are not available in clap's derive interface
     // so both the argument definition and the field population will be done manually.
     #[arg(skip)]
