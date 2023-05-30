@@ -35,9 +35,12 @@ impl SubCommandParserRunner for ProfileCmd {
                         let entry = entry?;
                         match Profile::load(entry.path()) {
                             Ok(mut profiles) => {
+                                if !profiles.is_empty() {
+                                    println!("{}:", entry.path().to_str().unwrap_or("unknown"));
+                                }
                                 for profile in profiles.drain(..) {
                                     println!(
-                                        "{}: {}",
+                                        "  {: <20} {}",
                                         profile.name,
                                         profile.about.unwrap_or(String::new()),
                                     );
