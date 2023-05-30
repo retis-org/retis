@@ -1,4 +1,3 @@
-#![allow(dead_code)] // FIXME
 use std::{collections::BTreeMap, env, ffi::OsString, fs::read_to_string, path::PathBuf};
 
 use anyhow::{bail, Result};
@@ -114,6 +113,7 @@ fn default_name() -> String {
 pub(crate) struct Profile {
     /// Name of the profile.
     pub(crate) name: String,
+    #[allow(dead_code)]
     /// Version of the Profile API that is being used.
     pub(crate) version: String,
     /// Information about the profile in human readable format.
@@ -159,6 +159,7 @@ impl Profile {
     }
 
     /// Load a profile from a string.
+    #[cfg(test)]
     pub fn from_str(contents: &str) -> Result<Profile> {
         Ok(serde_yaml::from_str(contents)?)
     }
