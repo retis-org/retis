@@ -17,6 +17,43 @@ use crate::{
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
 
+/// Macro that define Default-able fixed size sequence of bytes aimed
+/// to contain zero-terminated strings. Useful for unmarshaling array
+/// of characters bigger than 32 elements.
+#[macro_export]
+macro_rules! event_byte_array {
+    ($name:ident, $size:expr) => {
+        struct $name([u8; $size]);
+
+        impl Default for $name {
+            fn default() -> Self {
+                // Safety is respected as the type is well defined and
+                // controlled.
+                unsafe { std::mem::zeroed() }
+            }
+        }
+
+        #[allow(dead_code)]
+        impl $name {
+            fn to_string(&self) -> Result<String> {
+                Ok(std::str::from_utf8(&self.0)?
+                    .trim_end_matches(char::from(0))
+                    .into())
+            }
+
+            fn to_string_opt(&self) -> Result<Option<String>> {
+                let res = self.to_string()?;
+
+                if res.is_empty() {
+                    return Ok(None);
+                }
+
+                Ok(Some(res))
+            }
+        }
+    };
+}
+
 /// BPF events factory retrieving and unmarshaling events coming from the BPF
 /// parts.
 #[cfg(not(test))]
