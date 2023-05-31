@@ -16,7 +16,7 @@ struct ovs_operation_event {
 	u32 queue_id;
 	u64 batch_ts;
 	u8 batch_idx;
-} __attribute__((packed));
+};
 
 /* Upcall Batching.
  *
@@ -44,7 +44,11 @@ struct user_upcall_info {
 	/* Bitmask of processed operations. Bit order corresponds to
 	 * enum ovs_operation_type values.*/
 	u8 processed_ops;
-} __attribute__((packed));
+
+	/* It indicates that the upcall event was filtered out so no events
+	 * related to this upcall should be generated. */
+	bool skip_event;
+};
 
 #define UPCALL_MAX_BATCH 64
 
@@ -58,7 +62,7 @@ struct upcall_batch {
 	u8 current_upcall; /* Current upcall being processed */
 	u8 total;		  /* Number of upcalls of the batch */
 	struct user_upcall_info upcalls[UPCALL_MAX_BATCH]; /* Upcalls in batch */
-} __attribute__((packed));
+};
 
 
 /* Array of batches. This is a placeholder as this array must be created
@@ -124,7 +128,7 @@ static __always_inline struct user_upcall_info *batch_current(struct upcall_batc
 	 */
 	barrier_var(batch->current_upcall);
 	if (!batch ||
-	    batch->current_upcall >= UPCALL_MAX_BATCH)
+	    batch->current_upcall >= (UPCALL_MAX_BATCH -1))
 		return NULL;
 
 	return &batch->upcalls[batch->current_upcall];
@@ -162,7 +166,8 @@ static __always_inline struct user_upcall_info *batch_put(struct upcall_batch *b
 
 /* Process an upcall receive event. */
 static __always_inline struct upcall_batch *batch_process_recv(u64 timestamp,
-							       u32 queue_id)
+							       u32 queue_id,
+							       bool skip)
 {
 	struct upcall_batch *batch = batch_get();
 	struct user_upcall_info *info;
@@ -179,6 +184,7 @@ static __always_inline struct upcall_batch *batch_process_recv(u64 timestamp,
 		return NULL;
 
 	info->queue_id = queue_id;
+	info->skip_event = skip;
 
 	if (batch->total == 1) {
 		/* First of the batch. */
@@ -189,13 +195,18 @@ static __always_inline struct upcall_batch *batch_process_recv(u64 timestamp,
 }
 
 /* Process an operation event and populate the event with the batch
- * information. */
+ * information.
+ * If an event is generated, it's returned in *op. */
 static __always_inline int batch_process_op(enum ovs_operation_type type,
-						struct ovs_operation_event *event)
+					    struct retis_raw_event *event,
+					    struct ovs_operation_event **op)
 {
 	struct upcall_batch *batch;
 	struct user_upcall_info *info;
 	u8 op_flag = 0x1 << type;
+
+	if (op)
+		*op = NULL;
 
 	batch = batch_get();
 	if (!batch)
@@ -218,9 +229,22 @@ static __always_inline int batch_process_op(enum ovs_operation_type type,
 	}
 	info->processed_ops |= op_flag;
 
-	event->queue_id = info->queue_id;
-	event->batch_ts = batch->leader_ts;
-	event->batch_idx = batch->current_upcall;
+	if (info->skip_event)
+		return 0;
+
+	struct ovs_operation_event *op_event =
+		get_event_zsection(event, COLLECTOR_OVS, OVS_OPERATION,
+				   sizeof(*op_event));
+	if (!op_event)
+		return 0;
+
+	op_event->type = type;
+	op_event->queue_id = info->queue_id;
+	op_event->batch_ts = batch->leader_ts;
+	op_event->batch_idx = batch->current_upcall;
+
+	if (op)
+		*op = op_event;
 
 	return 0;
 }

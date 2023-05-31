@@ -6,7 +6,7 @@ struct upcall_ret_event {
 	u64 upcall_ts;
 	u32 upcall_cpu;
 	int ret;
-} __attribute__((packed));
+};
 
 /* Hook for kretprobe:ovs_dp_upcall */
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,

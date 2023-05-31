@@ -69,7 +69,7 @@ pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection, event: &mut OvsEven
 
 /// OVS action event data.
 #[derive(Default)]
-#[repr(C, packed)]
+#[repr(C)]
 struct BpfActionEvent {
     /// Action to be executed.
     action: u8,
@@ -141,7 +141,7 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
 
 /// OVS action tracking event data.
 #[derive(Default)]
-#[repr(C, packed)]
+#[repr(C)]
 struct BpfActionTrackEvent {
     /// Queue id.
     queue_id: u32,
@@ -181,7 +181,7 @@ pub(super) fn unmarshall_exec_track(
 
 /// OVS output action data.
 #[derive(Default)]
-#[repr(C, packed)]
+#[repr(C)]
 struct BpfOvsActionOutput {
     /// Output port.
     port: u32,

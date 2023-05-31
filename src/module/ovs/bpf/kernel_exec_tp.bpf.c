@@ -8,7 +8,7 @@
 struct exec_event {
 	u8 action;
 	u32 recirc_id;
-} __attribute__((packed));
+};
 
 /* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 struct exec_track_event {
@@ -21,43 +21,38 @@ struct exec_output {
 } __attribute__((packed));
 
 
-static __always_inline s32 handle_tracking(struct retis_context *ctx,
+static __always_inline void handle_tracking(struct retis_context *ctx,
 					   struct retis_raw_event *event)
 {
 	struct exec_track_event *track;
 	struct retis_packet_buffer *buff;
 	struct sk_buff *skb;
 	int zero = 0;
-	u64 tid = bpf_get_current_pid_tgid();
-
-	if (!bpf_map_lookup_elem(&inflight_exec_cmd, &tid)) {
-		/* This call to ovs_do_execute_action does not come from a
-		* userspace command. */
-		return 0;
-	}
 
 	skb = __retis_get_sk_buff(ctx);
 	if (!skb)
-		return -1;
+		return;
 
 	buff = bpf_map_lookup_elem(&packet_buffers, &zero);
 	if (!buff)
-		return -1;
+		return;
 
 	track = get_event_section(event, COLLECTOR_OVS, OVS_DP_ACTION_TRACK,
 				  sizeof(*track));
 	if (!track)
-		return -1;
+		return;
 
 	track->queue_id = hash_skb(buff, skb);
-	return 1;
+	return;
 }
 
 /* Hook for ovs_do_execute_action tracepoint. */
-DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+DEFINE_HOOK_RAW(
 	struct nlattr *attr;
 	struct sw_flow_key *key;
 	struct exec_event *exec;
+	struct execute_actions_ctx *ectx;
+	u64 tid = bpf_get_current_pid_tgid();
 
 	key = (struct sw_flow_key *) ctx->regs.reg[2];
 	if (!key)
@@ -67,6 +62,11 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	if (!attr)
 		return 0;
 
+	ectx = bpf_map_lookup_elem(&inflight_exec, &tid);
+	/* Filtering is done at the ovs_execute_actions kprobe. */
+	if (!ectx)
+		return 0;
+
 	exec = get_event_section(event, COLLECTOR_OVS, OVS_DP_ACTION,
 				 sizeof(*exec));
 	if (!exec)
@@ -74,11 +74,11 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 
 	exec->action = nla_type(attr);
 	exec->recirc_id = BPF_CORE_READ(key, recirc_id);
-	/* Discard events for unmatching packets not coming from
-	 * userspace. */
-	if (!handle_tracking(ctx, event) &&
-	    !(ctx->filters_ret & RETIS_F_PACKET_PASS))
-		return 0;
+	/* Do not calculate tracking information if it's not a flow_exec action
+	 * upcall. */
+	if (ectx->command) {
+		handle_tracking(ctx, event);
+	}
 
 	// Add action-specific data for some actions.
 	switch (exec->action) {

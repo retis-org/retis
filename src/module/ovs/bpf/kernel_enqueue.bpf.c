@@ -11,20 +11,23 @@ struct upcall_enqueue_event {
 	u64 upcall_ts;
 	u32 upcall_cpu;
 	u32 queue_id;
-} __attribute__((packed));
+};
 
-static __always_inline u32 queue_id_gen(struct sk_buff *skb)
+static __always_inline u8 update_upcall_tracking(u32 queue_id, u64 ts)
 {
-	int zero = 0;
-	struct retis_packet_buffer *buff = bpf_map_lookup_elem(&packet_buffers, &zero);
-	if (!buff)
-		return 0;
-
-	return hash_skb(buff, skb);
+	if (bpf_map_update_elem(&upcall_tracking, &queue_id, &ts,
+				BPF_NOEXIST)) {
+		/* The entry already exists. This means an upcall was enqueued
+		 * with the same queue_id and it has not been received (i.e
+		 * dequeued) yet. It is likely we will have problems correlating
+		 * events. TODO: report the error.*/
+		return 1;
+	}
+	return 0;
 }
 
 /* Hook for kretprobe:queue_userspace_packet. */
-DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+DEFINE_HOOK_RAW(
 	struct dp_upcall_info *upcall;
 	struct sk_buff *skb;
 	struct upcall_context *uctx;
@@ -32,7 +35,9 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	u64 tid = bpf_get_current_pid_tgid();
 
 	/* Retrieve upcall context and store add it to the event so we can
-	* group enqueue events to their upcall event. */
+	* group enqueue events to their upcall event.
+	* If there is no upcall in flight (it may have been filtered out) ignore
+	* this event as well. */
 	uctx = bpf_map_lookup_elem(&inflight_upcalls, &tid);
 	if (!uctx)
 		return 0;
@@ -55,7 +60,9 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	enqueue->port = BPF_CORE_READ(upcall, portid);
 	enqueue->cmd = BPF_CORE_READ(upcall, cmd);
 	enqueue->ret = (int) ctx->regs.ret;
-	enqueue->queue_id = queue_id_gen(skb);
+	enqueue->queue_id = queue_id_gen_skb(skb);
+
+	update_upcall_tracking(enqueue->queue_id, ctx->timestamp);
 
 	return 0;
 )

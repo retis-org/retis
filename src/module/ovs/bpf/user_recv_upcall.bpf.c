@@ -13,9 +13,9 @@ struct recv_upcall_event {
 	u32 queue_id;
 	u64 batch_ts;
 	u8 batch_idx;
-} __attribute__((packed));
+};
 
-static __always_inline u32 queue_id_gen(void *data, u32 len)
+static __always_inline u32 queue_id_gen_data(void *data, u32 len)
 {
 	int zero = 0;
 	struct retis_packet_buffer *buff =
@@ -33,11 +33,22 @@ DEFINE_USDT_HOOK (
 	struct upcall_batch *batch;
 	struct recv_upcall_event *recv_event;
 	u32 size = (u32) ctx->args[3];
-	u32 queue_id = queue_id_gen((void *) ctx->args[2], size);
+	u32 queue_id = queue_id_gen_data((void *) ctx->args[2], size);
+	bool skip_event = false;
 
-	batch = batch_process_recv(ctx->timestamp, queue_id);
+	if (!bpf_map_lookup_elem(&upcall_tracking, &queue_id)) {
+	    /* The upcall enqueue event was missed or filtered. */
+	    skip_event = true;
+	}
+	bpf_map_delete_elem(&upcall_tracking, &queue_id);
+
+
+	batch = batch_process_recv(ctx->timestamp, queue_id, skip_event);
 	if (!batch)
 		return -1;
+
+	if (skip_event)
+		return 0;
 
 	recv_event = get_event_zsection(event, COLLECTOR_OVS, OVS_RECV_UPCALL,
 					sizeof(*recv_event));
