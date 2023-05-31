@@ -2,11 +2,14 @@
 //!
 //! Sort rearranges the events so they are grouped by skb tracking id (or OVS queue_id if present)
 
-use std::path::PathBuf;
+use std::{
+    fs::{File, OpenOptions},
+    io::{BufWriter, Write},
+    path::PathBuf,
+};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Parser;
-use log::debug;
 
 use crate::{
     cli::*,
@@ -35,6 +38,7 @@ pub(crate) struct Sort {
     /// File from which to read events.
     #[arg()]
     pub(super) input: PathBuf,
+
     /// Maximum number of events to buffer
     ///
     /// Sorting events requires storing events in a buffer while we wait to see if there is any
@@ -44,6 +48,18 @@ pub(crate) struct Sort {
     /// A value of zero means the buffer can grow endlessly.
     #[arg(long, default_value_t = DEFAULT_BUFFER)]
     pub(super) max_buffer: usize,
+
+    /// Write event series to a file rather than to stdout.
+    #[arg(short, long)]
+    pub(super) out: Option<PathBuf>,
+
+    /// Write events to stdout even if --out is used.
+    #[arg(long, default_value = "false")]
+    pub(super) print: bool,
+
+    /// Json file writer if any.
+    #[arg(skip)]
+    file_writer: Option<BufWriter<File>>,
 }
 
 impl Sort {
@@ -51,8 +67,27 @@ impl Sort {
     // FIXME: It's still unclear how the formatting API will look like. When it is, this should be
     // adapted.
     // For now, print a
-    fn print_series(series: EventSeries) -> Result<()> {
-        println!("{}", serde_json::to_string_pretty(&series.to_json())?);
+    fn print_series(series: &EventSeries) -> Result<()> {
+        println!("{}", &series.to_json());
+        Ok(())
+    }
+
+    fn write_json_series(&mut self, series: &EventSeries) -> Result<()> {
+        if let Some(writer) = self.file_writer.as_mut() {
+            let bytes = series.to_json().to_string().as_bytes().to_vec();
+            writer.write_all(&bytes)?;
+            writer.write_all(b"\n")?;
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn output(&mut self, series: EventSeries) -> Result<()> {
+        self.write_json_series(&series)?;
+        if self.file_writer.is_none() || self.print {
+            Self::print_series(&series)?;
+        }
         Ok(())
     }
 }
@@ -69,15 +104,22 @@ impl SubCommandParserRunner for Sort {
 
         let mut series = EventSorter::new();
         let mut tracker = AddTracking::new();
+        if let Some(out) = &self.out {
+            self.file_writer = Some(BufWriter::new(
+                OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(out)
+                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+            ));
+        }
 
-        use EventResult::*;
         while run.running() {
             match factory.next_event(None)? {
-                Event(mut event) => {
+                EventResult::Event(mut event) => {
                     // Add tracking information
-                    if let Err(err) = tracker.process_one(&mut event) {
-                        debug!("Failed to add tracking information to event: {err}");
-                    }
+                    tracker.process_one(&mut event)?;
 
                     // Add to sorter
                     series.add(event);
@@ -87,22 +129,27 @@ impl SubCommandParserRunner for Sort {
                         while series.len() >= self.max_buffer {
                             // Flush the oldest series
                             match series.pop_oldest()? {
-                                Some(series) => Self::print_series(series)?,
+                                Some(series) => self.output(series)?,
                                 None => break,
                             };
                         }
                     }
                 }
-                Eof => break,
-                Timeout => continue,
+                EventResult::Eof => break,
+                EventResult::Timeout => continue,
             }
         }
         // Flush remaining events
         while series.len() > 0 {
             match series.pop_oldest()? {
-                Some(series) => Self::print_series(series)?,
+                Some(series) => self.output(series)?,
                 None => break,
             };
+        }
+
+        // Flush writers
+        if let Some(writer) = self.file_writer.as_mut() {
+            writer.flush()?;
         }
         Ok(())
     }
