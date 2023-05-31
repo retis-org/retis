@@ -1,6 +1,6 @@
 unittest_task:
   container:
-    image: rust:latest
+    image: rust:bookworm
   registry_cache:
     folder: $CARGO_HOME/registry
     fingerprint_script: cat Cargo.lock
