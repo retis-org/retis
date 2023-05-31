@@ -22,10 +22,17 @@ class Retis:
         )
         self.tempdir = mkdtemp()
         self._events = []
+        self._series = []
         self.target = target
+
+    def __del__(self):
+        rmtree(self.tempdir)
 
     def _event_file(self):
         return join(self.tempdir, "events.json")
+
+    def _series_file(self):
+        return join(self.tempdir, "series.json")
 
     def collect(self, *args):
         """Run retis collect {ARGS}.
@@ -61,13 +68,30 @@ class Retis:
                 for event in f.readlines():
                     self._events.append(json.loads(event))
 
-        rmtree(self.tempdir)
-
         return (outs.decode("utf8"), errs.decode("utf8"))
 
     def events(self):
         """Return the events in a list of dictionaries."""
         return self._events
+
+    def sort(self):
+        """Run retis sort on the events and return the sorted events in a
+        list."""
+        result = []
+        cmd = [self.binary, "sort"] + ["-o", self._series_file(), self._event_file()]
+        print(f"running command: {cmd}")
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        outs, errs = proc.communicate(timeout=15)
+
+        print("Command: '{}'. stdtout {}, stderr = {}".format(proc, outs, errs))
+
+        if exists(self._series_file()) and getsize(self._series_file()) > 0:
+            with open(self._series_file()) as f:
+                for series in f.readlines():
+                    result.append(json.loads(series))
+
+        return result
 
 
 class NetworkNamespaces:

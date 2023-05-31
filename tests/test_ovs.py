@@ -215,6 +215,13 @@ def test_ovs_tracking(two_port_ovs):
 
     assert_events_present(events, expected_events)
 
+    series = retis.sort()
+    # All events from the same direction must belong to the same packet (same
+    # global tracking id).
+    assert len(series) == 2
+    assert len(series[0]) == len(expected_events) / 2
+    assert len(series[1]) == len(expected_events) / 2
+
 
 @pytest.mark.ovs_track
 def test_ovs_tracking_filtered(two_port_ovs):
