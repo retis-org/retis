@@ -116,6 +116,11 @@ static __always_inline struct sk_buff *retis_get_sk_buff(struct retis_context *c
 
 	skb = __retis_get_sk_buff(ctx);
 	if (!skb) {
+		if (!bpf_core_type_exists(struct nft_traceinfo) ||
+		    !bpf_core_type_exists(struct nft_pktinfo)) {
+			goto out;
+		}
+
 		info = retis_get_nft_traceinfo(ctx);
 		if (!info)
 			goto out;
