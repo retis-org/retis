@@ -1,13 +1,13 @@
 use anyhow::{bail, Result};
-use log::error;
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
 mod cli;
 mod collect;
 mod core;
 mod module;
-use cli::get_cli;
-use collect::get_collectors;
+mod process;
+
+use crate::{cli::get_cli, module::get_modules};
 
 // Re-export derive macros.
 use retis_derive::*;
@@ -29,22 +29,12 @@ fn main() -> Result<()> {
         ColorChoice::Auto,
     )?;
 
+    // Step 3: get the modules.
+    let modules = get_modules()?;
+
+    // Step 4: dispatch the command.
     let command = cli.get_subcommand_mut()?;
-    match command.name() {
-        "collect" => {
-            // Check if we can run the following.
-            core::inspect::check::collection_prerequisites()?;
-
-            let mut collectors = get_collectors(cli)?;
-            collectors.init()?;
-            collectors.start()?;
-
-            // Starts a loop.
-            collectors.process()?;
-        }
-        _ => {
-            error!("not implemented");
-        }
-    }
+    let mut runner = command.runner()?;
+    runner.run(cli, modules)?;
     Ok(())
 }

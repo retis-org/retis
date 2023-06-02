@@ -9,7 +9,7 @@ use anyhow::{anyhow, bail, Result};
 use log::error;
 use plain::Plain;
 
-use super::Event;
+use super::{Event, EventResult};
 use crate::{
     core::events::*, core::signals::Running, event_section, event_section_factory, module::ModuleId,
 };
@@ -65,10 +65,7 @@ impl BpfEventsFactory {
 impl EventFactory for BpfEventsFactory {
     /// This starts the event polling mechanism. A dedicated thread is started
     /// for events to be retrieved and processed.
-    fn start(
-        &mut self,
-        mut section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>>,
-    ) -> Result<()> {
+    fn start(&mut self, mut section_factories: SectionFactories) -> Result<()> {
         if section_factories.is_empty() {
             bail!("No section factory, can't parse events, aborting");
         }
@@ -146,7 +143,7 @@ impl EventFactory for BpfEventsFactory {
     }
 
     /// Retrieve the next event. This is a blocking call and never returns EOF.
-    fn next_event(&mut self, timeout: Option<Duration>) -> Result<Option<Event>> {
+    fn next_event(&mut self, timeout: Option<Duration>) -> Result<EventResult> {
         let rxc = match &self.rxc {
             Some(rxc) => rxc,
             None => bail!("Can't get event, no rx channel found."),
@@ -154,19 +151,16 @@ impl EventFactory for BpfEventsFactory {
 
         Ok(match timeout {
             Some(timeout) => match rxc.recv_timeout(timeout) {
-                Ok(event) => Some(event),
-                Err(mpsc::RecvTimeoutError::Timeout) => None,
+                Ok(event) => EventResult::Event(event),
+                Err(mpsc::RecvTimeoutError::Timeout) => EventResult::Timeout,
                 Err(e) => return Err(anyhow!(e)),
             },
-            None => Some(rxc.recv()?),
+            None => EventResult::Event(rxc.recv()?),
         })
     }
 }
 
-fn parse_raw_event<'a>(
-    data: &'a [u8],
-    factories: &'a mut HashMap<ModuleId, Box<dyn EventSectionFactory>>,
-) -> Result<Event> {
+fn parse_raw_event<'a>(data: &'a [u8], factories: &'a mut SectionFactories) -> Result<Event> {
     // First retrieve the buffer length.
     let data_size = data.len();
     if data_size < 2 {
@@ -327,11 +321,11 @@ impl BpfEventsFactory {
 }
 #[cfg(test)]
 impl EventFactory for BpfEventsFactory {
-    fn start(&mut self, _: HashMap<ModuleId, Box<dyn EventSectionFactory>>) -> Result<()> {
+    fn start(&mut self, _: SectionFactories) -> Result<()> {
         Ok(())
     }
-    fn next_event(&mut self, _: Option<Duration>) -> Result<Option<Event>> {
-        Ok(Some(Event::new()))
+    fn next_event(&mut self, _: Option<Duration>) -> Result<EventResult> {
+        Ok(EventResult::Event(Event::new()))
     }
     fn stop(&mut self) -> Result<()> {
         Ok(())
@@ -426,7 +420,7 @@ mod tests {
 
     #[test]
     fn parse_raw_event() {
-        let mut factories: HashMap<ModuleId, Box<dyn EventSectionFactory>> = HashMap::new();
+        let mut factories: SectionFactories = HashMap::new();
         factories.insert(ModuleId::Common, Box::<TestEvent>::default());
 
         // Empty event.

@@ -49,7 +49,7 @@ struct tracking_info {
 	u64 last_seen;
 	/* Original head address; useful when the head is invalidated */
 	u64 orig_head;
-} __attribute__((packed));
+};
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);

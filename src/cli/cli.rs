@@ -13,7 +13,44 @@ use clap::{
 };
 
 use super::dynamic::DynamicCommand;
-use crate::{collect::cli::Collect, module::ModuleId};
+use crate::{
+    collect::cli::Collect,
+    module::{ModuleId, Modules},
+    process::cli::Print,
+    process::cli::Sort,
+};
+
+/// SubCommandRunner defines the common interface to run SubCommands.
+pub(crate) trait SubCommandRunner {
+    /// Run the subcommand with a given set of modules and cli configuration
+    fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()>;
+}
+
+/// SubCommandRunnerFunc is a wrapper for functions that implements SubCommandRunner
+pub(crate) struct SubCommandRunnerFunc<F>
+where
+    F: Fn(FullCli, Modules) -> Result<()>,
+{
+    func: F,
+}
+
+impl<F> SubCommandRunnerFunc<F>
+where
+    F: Fn(FullCli, Modules) -> Result<()>,
+{
+    pub(crate) fn new(func: F) -> Self {
+        Self { func }
+    }
+}
+
+impl<F> SubCommandRunner for SubCommandRunnerFunc<F>
+where
+    F: Fn(FullCli, Modules) -> Result<()>,
+{
+    fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
+        (self.func)(cli, modules)
+    }
+}
 
 /// SubCommand defines the way to handle SubCommands.
 /// SubCommands arguments are parsed in two rounds, the "thin" and the "full" round.
@@ -32,13 +69,19 @@ pub(crate) trait SubCommand {
         Self: Sized;
 
     /// Returns the unique name of the subcommand.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> String;
 
     /// Returns self as a std::any::Any trait.
     ///
     /// This is useful for dynamically downcast the SubCommand into it's specific type to access
     /// subcommand-specific functionality.
     fn as_any(&self) -> &dyn Any;
+
+    /// Returns self as a mutable std::any::Any trait.
+    ///
+    /// This is useful for dynamically downcast the SubCommand into it's specific type to access
+    /// subcommand-specific functionality.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 
     /// Generate the clap Command to be used for "thin" parsing.
     fn thin(&self) -> Result<Command>;
@@ -64,11 +107,73 @@ pub(crate) trait SubCommand {
     fn dynamic_mut(&mut self) -> Option<&mut DynamicCommand> {
         None
     }
+
+    /// Return a SubCommandRunner capable of running this command.
+    fn runner(&self) -> Result<Box<dyn SubCommandRunner>>;
 }
 
 impl Debug for dyn SubCommand {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "SubCommand ({})", self.name())
+    }
+}
+
+/// Trait to convert a clap::Parser into a SubCommandRunner.
+pub(crate) trait SubCommandParserRunner: clap::Parser + Default {
+    fn run(&mut self, modules: Modules) -> Result<()>;
+}
+
+// Default implementation of SubCommand for all SubCommandParserRunner.
+// This makes it much easier to implement small and easy subcommands without much boilerplate.
+impl<F> SubCommand for F
+where
+    F: SubCommandParserRunner + 'static,
+{
+    fn new() -> Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(Self::default())
+    }
+
+    fn name(&self) -> String {
+        <Self as clap::CommandFactory>::command()
+            .get_name()
+            .to_string()
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn thin(&self) -> Result<Command> {
+        Ok(<Self as clap::CommandFactory>::command())
+    }
+
+    fn full(&self) -> Result<Command> {
+        Ok(<Self as clap::CommandFactory>::command())
+    }
+
+    fn update_from_arg_matches(&mut self, args: &ArgMatches) -> Result<(), ClapError> {
+        <Self as clap::FromArgMatches>::update_from_arg_matches(self, args)
+    }
+
+    fn runner(&self) -> Result<Box<dyn SubCommandRunner>> {
+        Ok(Box::new(SubCommandRunnerFunc::new(
+            |cli: FullCli, modules: Modules| -> Result<()> {
+                let mut cli = cli.run()?;
+                let cmd: &mut Self = cli
+                    .subcommand
+                    .as_any_mut()
+                    .downcast_mut::<Self>()
+                    .ok_or_else(|| anyhow!("wrong subcommand"))?;
+                cmd.run(modules)
+            },
+        )))
     }
 }
 
@@ -106,7 +211,7 @@ impl ThinCli {
 
     /// Add a subcommand to the ThinCli object.
     pub(crate) fn add_subcommand(&mut self, sub: Box<dyn SubCommand>) -> Result<&mut Self> {
-        let name = sub.name().to_string();
+        let name = sub.name();
         if self.subcommands.get(&name).is_some() {
             bail!("Subcommand already registered")
         }
@@ -210,7 +315,7 @@ impl FullCli {
         let (subcommand, matches) = matches
             .subcommand()
             .expect("full parsing did not find subcommand");
-        if !subcommand.to_string().eq(self.subcommand.as_ref().name()) {
+        if !subcommand.to_string().eq(&self.subcommand.as_ref().name()) {
             // thin and full cli parsing should yield the same subcommand. There is no way to
             // recover from this error, so let's just panic.
             panic!("Thin and full parsing did not yield the same subcommand");
@@ -268,6 +373,8 @@ impl CliConfig {
 pub(crate) fn get_cli() -> Result<ThinCli> {
     let mut cli = ThinCli::new()?;
     cli.add_subcommand(Box::new(Collect::new()?))?;
+    cli.add_subcommand(Box::new(Print::new()?))?;
+    cli.add_subcommand(Box::new(Sort::new()?))?;
     Ok(cli)
 }
 
@@ -286,10 +393,13 @@ mod tests {
         fn new() -> Result<Self> {
             Ok(Sub1 { someopt: None })
         }
-        fn name(&self) -> &'static str {
-            "sub1"
+        fn name(&self) -> String {
+            "sub1".to_string()
         }
         fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
             self
         }
         fn thin(&self) -> Result<Command> {
@@ -305,36 +415,23 @@ mod tests {
         fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), ClapError> {
             <Self as FromArgMatches>::update_from_arg_matches(self, matches)
         }
+        fn runner(&self) -> Result<Box<dyn SubCommandRunner>> {
+            Ok(Box::new(SubCommandRunnerFunc::new(
+                |_: FullCli, _: Modules| Ok(()),
+            )))
+        }
     }
 
-    #[derive(Debug, Default, Args)]
+    #[derive(Debug, Default, clap::Parser)]
+    #[command(name = "sub2", about = "sub2 help")]
     struct Sub2 {
         #[arg(id = "sub2-flag", long)]
         flag: Option<bool>,
     }
 
-    impl SubCommand for Sub2 {
-        fn new() -> Result<Self> {
-            Ok(Sub2 { flag: Some(false) })
-        }
-        fn name(&self) -> &'static str {
-            "sub2"
-        }
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
-        fn thin(&self) -> Result<Command> {
-            Ok(Command::new("sub2").about("does some things"))
-        }
-        fn full(&self) -> Result<Command> {
-            Ok(Sub2::augment_args(
-                Command::new("sub2")
-                    .about("does some things")
-                    .long_about("this is a longer description"),
-            ))
-        }
-        fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), ClapError> {
-            <Self as FromArgMatches>::update_from_arg_matches(self, matches)
+    impl SubCommandParserRunner for Sub2 {
+        fn run(&mut self, _: Modules) -> Result<()> {
+            Ok(())
         }
     }
 
@@ -342,7 +439,7 @@ mod tests {
     fn cli_register_subcommands() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
+        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_err());
         Ok(())
     }
@@ -351,7 +448,7 @@ mod tests {
     fn cli_build() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
+        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
 
         let err = cli.build_from(vec!["retis", "--help"]);
         assert!(err.is_err() && err.unwrap_err().kind() == ErrorKind::DisplayHelp);
@@ -363,7 +460,7 @@ mod tests {
     fn cli_full_help() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
+        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
 
         let cli = cli.build_from(vec!["retis", "sub1", "--help"]);
         assert!(cli.is_ok());
@@ -378,7 +475,7 @@ mod tests {
     fn cli_sub_args() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
+        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
 
         let cli = cli.build_from(vec!["retis", "sub1", "--sub1-arg", "foo"]);
         assert!(cli.is_ok());
@@ -400,7 +497,7 @@ mod tests {
     fn cli_sub_args_err() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::new()?)).is_ok());
+        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
 
         let cli = cli.build_from(vec!["retis", "sub1", "--noexists", "foo"]);
         assert!(cli.is_ok());

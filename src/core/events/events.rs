@@ -85,16 +85,24 @@ impl Event {
     }
 }
 
+/// Type alias to refer to the commonly used EventSectionFactory HashMap.
 pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
+
+/// The return value of EventFactory::next_event()
+pub(crate) enum EventResult {
+    /// The Factory was able to create a new event.
+    Event(Event),
+    /// The source has been consumed.
+    Eof,
+    /// The timeout went off but a new attempt to retrieve an event might succeed.
+    Timeout,
+}
 
 /// Implemented by objects generating events from a given source (BPF, file,
 /// etc).
 pub(crate) trait EventFactory {
     /// Starts the factory events collection.
-    fn start(
-        &mut self,
-        section_factories: HashMap<ModuleId, Box<dyn EventSectionFactory>>,
-    ) -> Result<()>;
+    fn start(&mut self, section_factories: SectionFactories) -> Result<()>;
     /// Stops the factory events collection.
     fn stop(&mut self) -> Result<()>;
     /// Gets the next Event.
@@ -103,7 +111,7 @@ pub(crate) trait EventFactory {
     /// blocking call and waits for more data. Optionally a timeout can be
     /// given, in such case None can be returned. Specific factories should
     /// document those behaviors.
-    fn next_event(&mut self, timeout: Option<Duration>) -> Result<Option<Event>>;
+    fn next_event(&mut self, timeout: Option<Duration>) -> Result<EventResult>;
 }
 
 /// Per-module event section, should map 1:1 with a ModuleId. Requiring specific
