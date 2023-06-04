@@ -11,3 +11,4 @@ pub(crate) mod profiles;
 pub(crate) use profiles::*;
 
 pub(crate) mod cli;
+pub(crate) mod version;

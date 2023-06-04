@@ -4,6 +4,8 @@ use anyhow::{bail, Result};
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 
+use super::version::{ApiVersion, ApiVersionSupport};
+
 use crate::core::{
     inspect::{
         inspector,
@@ -11,6 +13,8 @@ use crate::core::{
     },
     kernel::symbol::Symbol,
 };
+
+const API_VERSION_STR: &str = "1.0";
 
 /// Specifies a condition on the kernel version.
 #[derive(Deserialize, Debug)]
@@ -115,7 +119,7 @@ pub(crate) struct Profile {
     pub(crate) name: String,
     #[allow(dead_code)]
     /// Version of the Profile API that is being used.
-    pub(crate) version: String,
+    pub(crate) version: ApiVersion,
     /// Information about the profile in human readable format.
     pub(crate) about: Option<String>,
     /// Collect Profiles
@@ -124,6 +128,10 @@ pub(crate) struct Profile {
 }
 
 impl Profile {
+    /// Supported api version
+    pub fn api_version() -> Result<ApiVersion> {
+        ApiVersion::parse(API_VERSION_STR)
+    }
     /// Find a profile
     pub fn find(name: &str) -> Result<Profile> {
         for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {
@@ -151,9 +159,28 @@ impl Profile {
     /// A file can contain multiple yaml objects so we return a list of objects.
     pub fn load(path: PathBuf) -> Result<Vec<Profile>> {
         let mut result = Vec::new();
-        let contents = read_to_string(path)?;
+        let contents = read_to_string(path.clone())?;
         for document in serde_yaml::Deserializer::from_str(&contents) {
-            result.push(Profile::deserialize(document)?);
+            let profile = Profile::deserialize(document)?;
+            let retis_version = Self::api_version()?;
+            match retis_version.supports(&profile.version)? {
+                ApiVersionSupport::Full => (),
+                ApiVersionSupport::Partial => warn!(
+                    "({:?}) {}: retis' profile engine ({retis_version}) \
+                    only supports profile version ({}) partially. \
+                    Some bits of configuration might not be applied.",
+                    path, profile.name, profile.version
+                ),
+                ApiVersionSupport::NotSupported => {
+                    warn!(
+                        "({:?}) {}: retis' profile engine ({retis_version}) \
+                    does not support profile version ({}). Skipping.",
+                        path, profile.name, profile.version
+                    );
+                    continue;
+                }
+            }
+            result.push(profile);
         }
         Ok(result)
     }
@@ -242,7 +269,7 @@ mod tests {
     fn load_file() {
         let p = &Profile::load(PathBuf::from("test_data/profiles/example.yaml")).unwrap()[0];
         assert_eq!(p.name, "example-profile");
-        assert_eq!(p.version, "1.0");
+        assert_eq!(p.version, ApiVersion::parse("1.0").unwrap());
     }
 
     #[test]
@@ -264,7 +291,7 @@ mod tests {
 
         let w = version_cond(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - when:
@@ -278,7 +305,7 @@ collect:
 
         let w = version_cond(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - when:
@@ -292,7 +319,7 @@ collect:
 
         let w = version_cond(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - when:
@@ -311,7 +338,7 @@ collect:
     fn collect_when_symbol() {
         assert!(!&Profile::from_str(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - when:
@@ -328,7 +355,7 @@ collect:
 
         assert!(&Profile::from_str(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - when:
@@ -346,7 +373,7 @@ collect:
 
         assert!(&Profile::from_str(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - when:
@@ -363,7 +390,7 @@ collect:
 
         assert!(!&Profile::from_str(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - when:
@@ -384,7 +411,7 @@ collect:
     fn collect_match() {
         assert!(&Profile::from_str(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - name: Too old
@@ -421,7 +448,7 @@ collect:
 
         assert!(&Profile::from_str(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - name: First
@@ -445,7 +472,7 @@ collect:
     fn collect_args() {
         assert!(&Profile::from_str(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - name: Default
@@ -484,7 +511,7 @@ collect:
 
         assert!(&Profile::from_str(
             r#"
-version: 1.0.0
+version: 1.0
 name: test
 collect:
   - name: Default
