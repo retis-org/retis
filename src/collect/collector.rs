@@ -194,7 +194,7 @@ impl Collectors {
         }
 
         // Initialize tracking & filters.
-        if self.known_kernel_types.contains("struct sk_buff *") {
+        if !cfg!(test) && self.known_kernel_types.contains("struct sk_buff *") {
             self.tracking_gc = Some(init_tracking(&mut self.probes)?);
         }
         Self::setup_filters(&mut self.probes, collect)?;
@@ -382,11 +382,12 @@ impl Collectors {
                     break;
                 }
             }
+            // Skip probes which won't generate events from the collectors.
             if !valid {
-                warn!(
-                    "A probe to symbol {} is attached but no collector will retrieve data from it, only generic information will be retrieved",
-                    symbol
+                info!(
+                    "No probe was attached to {symbol} as no collector could retrieve data from it"
                 );
+                continue;
             }
 
             probes.push(match type_str {
@@ -560,9 +561,10 @@ mod tests {
     fn parse_probe() -> Result<()> {
         let mut group = Modules::new()?;
         group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
-        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
-        let collectors = Collectors::new(group)?;
+        let mut collectors = Collectors::new(group)?;
+        let mut config = collectors.register_cli(get_cli()?)?;
+        collectors.init(&mut config)?;
 
         // Valid probes.
         assert!(collectors.parse_probe("consume_skb").is_ok());

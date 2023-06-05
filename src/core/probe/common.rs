@@ -1,7 +1,7 @@
 //! # Common
 //!
 //! Module providing infrastructure shared by all probes
-use anyhow::{bail, Result};
+use anyhow::Result;
 
 use once_cell::sync::OnceCell;
 
@@ -11,10 +11,13 @@ static EBPF_DEBUG: OnceCell<bool> = OnceCell::new();
 ///
 /// It must only be set once.
 /// It will return Ok if it's the first time the it's been set or Err if it was already set.
-pub(crate) fn set_ebpf_debug(debug: bool) -> Result<()> {
+pub(crate) fn set_ebpf_debug(_debug: bool) -> Result<()> {
+    // No need to set it either way in test envs as we're returning true
+    // regardless below.
+    #[cfg(not(test))]
     EBPF_DEBUG
-        .set(debug)
-        .or_else(|_| bail!("ebpf_debug was already set"))?;
+        .set(_debug)
+        .or_else(|_| anyhow::bail!("ebpf_debug was already set"))?;
     Ok(())
 }
 
