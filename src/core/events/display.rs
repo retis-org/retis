@@ -1,7 +1,6 @@
 use std::fmt;
 
-#[allow(dead_code)] // FIXME
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, clap::ValueEnum)]
 pub(crate) enum DisplayFormat {
     SingleLine,
     #[default]

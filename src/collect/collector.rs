@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     fs::OpenOptions,
-    io::{self, BufWriter, Write},
+    io::{self, BufWriter},
     process::{Command, Stdio},
     time::Duration,
 };
@@ -10,13 +10,14 @@ use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
 
 use super::cli::Collect;
+use crate::process::display::PrintSingle;
 
 #[cfg(not(test))]
 use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
     core::{
-        events::{bpf::BpfEventsFactory, format, EventFactory, EventResult},
+        events::{bpf::BpfEventsFactory, EventFactory, EventResult},
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
@@ -294,29 +295,25 @@ impl Collectors {
             .ok_or_else(|| anyhow!("wrong subcommand"))?
             .args()?;
 
-        // We use JSON format output for all events for now.
-        let mut json = format::JsonFormat::default();
-        let mut writers: Vec<Box<dyn Write>> = Vec::new();
+        let mut printers = Vec::new();
+
+        // Write events to stdout if we don't write to a file (--out) or if
+        // explicitly asked to (--print).
+        if collect.out.is_none() || collect.print {
+            printers.push(PrintSingle::text(Box::new(io::stdout()), collect.format));
+        }
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            writers.push(Box::new(BufWriter::new(
+            printers.push(PrintSingle::json(Box::new(BufWriter::new(
                 OpenOptions::new()
                     .create(true)
                     .write(true)
                     .truncate(true)
                     .open(out)
                     .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-            )));
+            ))));
         }
-
-        // Write events to stdout if we don't write to a file (--out) or if
-        // explicitly asked to (--print).
-        if collect.out.is_none() || collect.print {
-            writers.push(Box::new(io::stdout()));
-        }
-
-        let mut output = format::FormatAndWrite::new(&mut json, writers);
 
         if let Some(cmd) = collect.cmd.to_owned() {
             let mut run = self.run.clone();
@@ -341,13 +338,15 @@ impl Collectors {
         use EventResult::*;
         while self.run.running() {
             match self.factory.next_event(Some(Duration::from_secs(1)))? {
-                Event(event) => output.process_one(&event)?,
+                Event(event) => printers
+                    .iter_mut()
+                    .try_for_each(|p| p.process_one(&event))?,
                 Eof => break,
                 Timeout => continue,
             }
         }
 
-        output.flush()?;
+        printers.iter_mut().try_for_each(|p| p.flush())?;
         self.stop()
     }
 
