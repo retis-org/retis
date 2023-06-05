@@ -14,6 +14,10 @@ use crate::{
     core::events::*, core::signals::Running, event_section, event_section_factory, module::ModuleId,
 };
 
+/// Raw event sections for common.
+pub(super) const COMMON_SECTION_CORE: u64 = 0;
+pub(super) const COMMON_SECTION_TASK: u64 = 1;
+
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
 
@@ -321,18 +325,36 @@ where
     parse_raw_section::<T>(&raw_sections.pop().unwrap())
 }
 
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+pub(crate) struct TaskEvent {
+    /// Process id.
+    pub(crate) pid: i32,
+    /// Thread group id.
+    pub(crate) tgid: i32,
+    /// Name of the current task.
+    pub(crate) comm: String,
+}
+
 #[event_section]
-#[repr(C)]
 pub(crate) struct CommonEvent {
     /// Timestamp of when the event was generated.
     pub(crate) timestamp: u64,
+    pub(crate) task: Option<TaskEvent>,
 }
-
-unsafe impl Plain for CommonEvent {}
 
 impl EventFmt for CommonEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        write!(f, "{}", self.timestamp)
+        write!(f, "{}", self.timestamp)?;
+
+        if let Some(current) = &self.task {
+            write!(f, " [{}] ", current.comm)?;
+            if current.tgid != current.pid {
+                write!(f, "{}/", current.pid)?;
+            }
+            write!(f, "{}", current.tgid)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -342,11 +364,41 @@ pub(crate) struct CommonEventFactory {}
 
 impl RawEventSectionFactory for CommonEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        Ok(Box::new(parse_single_raw_section::<CommonEvent>(
-            ModuleId::Common,
-            raw_sections,
-        )?))
+        let mut common = CommonEvent::default();
+
+        for section in raw_sections.iter() {
+            match section.header.data_type as u64 {
+                COMMON_SECTION_CORE => common.timestamp = parse_raw_section::<u64>(section)?,
+                COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
+                _ => bail!("Unknown data type"),
+            }
+        }
+
+        Ok(Box::new(common))
     }
+}
+
+event_byte_array!(TaskName, 64);
+
+/// Task information retrieved in common probes.
+#[derive(Default)]
+#[repr(C)]
+struct RawTaskEvent {
+    /// pid/tgid.
+    pid: u64,
+    /// Current task name.
+    comm: TaskName,
+}
+unsafe impl Plain for RawTaskEvent {}
+
+pub(super) fn unmarshal_task(raw_section: &BpfRawSection) -> Result<TaskEvent> {
+    let mut task_event = TaskEvent::default();
+    let raw = parse_raw_section::<RawTaskEvent>(raw_section)?;
+
+    (task_event.pid, task_event.tgid) = ((raw.pid & 0xFFFFFFFF) as i32, (raw.pid >> 32) as i32);
+    task_event.comm = raw.comm.to_string()?;
+
+    Ok(task_event)
 }
 
 // We use a dummy implementation of BpfEventsFactory to allow unit tests to pass.

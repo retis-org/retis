@@ -6,6 +6,7 @@
 /* Please keep both synced with its Rust counterpart. */
 #define EVENTS_MAX		512
 #define RAW_EVENT_DATA_SIZE	1024 - 2 /* Remove the size field */
+#define RETIS_MAX_COMM		64
 
 /* Please keep in sync with its Rust counterpart in crate::core::events::raw. */
 enum retis_event_owners {
@@ -102,6 +103,11 @@ static __always_inline u16 get_event_size(struct retis_raw_event *event)
 
 struct common_event {
 	u64 timestamp;
+};
+
+struct common_task_event {
+	u64 pid;
+	char comm[RETIS_MAX_COMM];
 };
 
 #endif /* __CORE_PROBE_KERNEL_BPF_EVENTS__ */

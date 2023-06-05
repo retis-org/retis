@@ -207,6 +207,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	/* volatile needed here to prevent from optimizing the
 	 * event usage length read before and after the hook chain.
 	 */
+	struct common_task_event *ti;
 	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct kernel_event *k;
@@ -238,6 +239,13 @@ static __always_inline int chain(struct retis_context *ctx)
 		goto discard_event;
 
 	e->timestamp = ctx->timestamp;
+
+	ti = get_event_zsection(event, COMMON, COMMON_SECTION_TASK, sizeof(*ti));
+	if (!ti)
+		goto discard_event;
+
+	ti->pid = bpf_get_current_pid_tgid();
+	bpf_get_current_comm(ti->comm, sizeof(ti->comm));
 
 	k = get_event_section(event, KERNEL, 1, sizeof(*k));
 	if (!k)

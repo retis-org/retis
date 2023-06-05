@@ -53,6 +53,7 @@ int probe_usdt(struct pt_regs *ctx)
 {
 	struct pt_regs ctx_fp = *ctx;
 	volatile u16 pass_threshold;
+	struct common_task_event *ti;
 	struct common_event *e;
 	struct retis_raw_event *event;
 	struct user_event *u;
@@ -74,13 +75,22 @@ int probe_usdt(struct pt_regs *ctx)
 	uctx.timestamp = bpf_ktime_get_ns();
 	e->timestamp = uctx.timestamp;
 
+	ti = get_event_zsection(event, COMMON, COMMON_SECTION_TASK, sizeof(*ti));
+	if (!ti) {
+		discard_event(event);
+		return 0;
+	}
+
+	ti->pid = bpf_get_current_pid_tgid();
+	bpf_get_current_comm(ti->comm, sizeof(ti->comm));
+
 	u = get_event_section(event, USERSPACE, 1, sizeof(*u));
 	if (!u) {
 		discard_event(event);
 		return 0;
 	}
 	u->symbol = PT_REGS_IP(ctx);
-	u->pid = bpf_get_current_pid_tgid();
+	u->pid = ti->pid;
 	u->event_type = USDT;
 
 	pass_threshold = get_event_size(event);
