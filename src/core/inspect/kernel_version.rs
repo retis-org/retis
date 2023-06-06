@@ -37,7 +37,7 @@ impl KernelVersion {
     }
 
     /// Parse a version string of the `$(uname -r)` form into a KernelVersion.
-    fn parse(version: &str) -> Result<Self> {
+    pub(crate) fn parse(version: &str) -> Result<Self> {
         let mut parts = version.split('.');
 
         let major: u32 = parts

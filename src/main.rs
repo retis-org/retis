@@ -6,6 +6,7 @@ mod collect;
 mod core;
 mod module;
 mod process;
+mod profiles;
 
 use crate::{cli::get_cli, module::get_modules};
 

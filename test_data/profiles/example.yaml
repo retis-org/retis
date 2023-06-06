@@ -1,0 +1,62 @@
+#
+# Profile example
+#
+
+# Profile API version
+version: 1.0
+# kebab-case is recommended for better integration with the cli.
+name: example-profile
+# An arbitrary string to help understand what the profile does.
+about: Collects information from a certain area of the networking stack
+# Specification of the collect profile.
+collect:
+# Profiles are evaluated in order. The first one whose conditions are satisfied
+# will be applied
+# The profile section name helps troubleshooting as retis will display which
+# profile was applied.
+  - name: A minimum kernel version that has a symbol
+# Conditions that must be satisfied (simultaneously) for this profile to apply.
+    when:
+      - type: version
+# Minimum required version
+        version: ">4.6.1"
+# The existance of a symbol can be specified.
+      - type: symbol
+        name: some_kprobe
+    args:
+# Add arguments to CLI key: value
+      collectors: skb
+# Use yaml null value to add flags
+      ovs-track: ~
+  - name: The specific kernel without a symbol
+    when:
+      - type: version
+# An exact kernel version
+        version: "=4.6.1"
+      - type: symbol
+        name: some_tracepoint
+# The non-existance of a symbol can also be specified.
+        exists: false
+    args:
+      collectors: skb
+  - name: Most of old kernels
+    when:
+# A version range can be specified.
+      - type: version
+        version: ">=3.5.5, <6"
+    args:
+      collectors: skb
+      skb-sections: l3
+  - name: Recent kernels with a tracepoins
+    when:
+      - type: version
+        version: ">6.1.2"
+      - type: symbol
+        name: sometracepoint
+    args:
+      collectors: skb
+      probe: sometracepoint
+      skb-sections: l3
+  - name: Default
+    args:
+      collectors: skb

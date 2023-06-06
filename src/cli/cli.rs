@@ -9,8 +9,10 @@ use anyhow::{anyhow, bail, Result};
 use clap::{
     builder::PossibleValuesParser,
     error::Error as ClapError,
+    error::ErrorKind,
     {ArgMatches, Args, Command, FromArgMatches},
 };
+use log::debug;
 
 use super::dynamic::DynamicCommand;
 use crate::{
@@ -18,6 +20,7 @@ use crate::{
     module::{ModuleId, Modules},
     process::cli::Print,
     process::cli::Sort,
+    profiles::{cli::ProfileCmd, Profile},
 };
 
 /// SubCommandRunner defines the common interface to run SubCommands.
@@ -189,6 +192,13 @@ pub(crate) struct MainConfig {
         help = "Log level",
     )]
     pub(crate) log_level: String,
+    #[arg(
+        long,
+        short,
+        value_delimiter = ',',
+        help = "Comma separated list of profile names to apply"
+    )]
+    pub(crate) profile: Vec<String>,
 }
 
 /// ThinCli handles the first (a.k.a "thin") round of Command Line Interface parsing.
@@ -296,8 +306,35 @@ pub(crate) struct FullCli {
 }
 
 impl FullCli {
+    /// Enhance arguments with provided profile.
+    fn enhance_profile(&mut self) -> Result<()> {
+        if self.main_config.profile.is_empty() {
+            return Ok(());
+        }
+
+        for name in self.main_config.profile.iter() {
+            let profile = Profile::find(name.as_str())?;
+            let mut extra_args = profile.cli_args(self.subcommand.name().as_str())?;
+            self.args.append(&mut extra_args);
+        }
+        Ok(())
+    }
     /// Perform full CLI parsing and validation
     pub(crate) fn run(mut self) -> Result<CliConfig, ClapError> {
+        self.enhance_profile().map_err(|err| {
+            self.command
+                .error(ErrorKind::InvalidValue, format!("{err}"))
+        })?;
+
+        debug!(
+            "Resulting CLI arguments: {}",
+            self.args
+                .iter()
+                .map(|o| o.as_os_str().to_str().unwrap_or("<encoding error>"))
+                .collect::<Vec<&str>>()
+                .join(" ")
+        );
+
         // Replace the ran subcommand with the full subcommand.
         self.command = self
             .command
@@ -375,6 +412,7 @@ pub(crate) fn get_cli() -> Result<ThinCli> {
     cli.add_subcommand(Box::new(Collect::new()?))?;
     cli.add_subcommand(Box::new(Print::new()?))?;
     cli.add_subcommand(Box::new(Sort::new()?))?;
+    cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
     Ok(cli)
 }
 
