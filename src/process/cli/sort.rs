@@ -75,6 +75,12 @@ impl SubCommandParserRunner for Sort {
         let mut printers = Vec::new();
 
         if let Some(out) = &self.out {
+            // Make sure we don't use the same file as the result will be the deletion of the
+            // original files.
+            if out.canonicalize()?.eq(&self.input.canonicalize()?) {
+                bail!("Cannot sort a file in-place. Please specify an output file that's different to the input one.");
+            }
+
             printers.push(PrintSeries::json(Box::new(BufWriter::new(
                 OpenOptions::new()
                     .create(true)
