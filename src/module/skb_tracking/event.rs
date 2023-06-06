@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::Result;
 use plain::Plain;
 
@@ -17,7 +19,7 @@ use crate::{
 ///
 /// Tl;dr; the tracking unique id is `(timestamp, orig_head)` and `skb` can be
 /// used to distinguished between clones.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 #[event_section]
 #[repr(C)]
 pub(crate) struct SkbTrackingEvent {
@@ -48,6 +50,12 @@ impl SkbTrackingEvent {
     /// Check if two tracking event sections are from the exact same skb.
     pub(crate) fn strict_match(&self, other: &SkbTrackingEvent) -> bool {
         self.r#match(other) && self.skb == other.skb
+    }
+}
+
+impl EventFmt for SkbTrackingEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(f, "#{:x} (skb {})", self.tracking_id(), self.skb)
     }
 }
 

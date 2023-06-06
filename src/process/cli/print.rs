@@ -3,11 +3,7 @@
 //! Print is a simple post-processing command that just parses events and prints them back to
 //! stdout
 
-use std::{
-    io::{stdout, Write},
-    path::PathBuf,
-    time::Duration,
-};
+use std::{io::stdout, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use clap::Parser;
@@ -15,14 +11,11 @@ use clap::Parser;
 use crate::{
     cli::*,
     core::{
-        events::{
-            file::FileEventsFactory,
-            format::{FormatAndWrite, JsonFormat},
-            EventFactory, EventResult,
-        },
+        events::{file::FileEventsFactory, *},
         signals::Running,
     },
     module::Modules,
+    process::display::PrintSingle,
 };
 
 /// Print events to stdout
@@ -32,6 +25,9 @@ pub(crate) struct Print {
     /// File from which to read events.
     #[arg()]
     pub(super) input: PathBuf,
+    #[arg(long, help = "Format used when printing an event.")]
+    #[clap(value_enum, default_value_t=DisplayFormat::MultiLine)]
+    pub(super) format: DisplayFormat,
 }
 
 impl SubCommandParserRunner for Print {
@@ -40,15 +36,12 @@ impl SubCommandParserRunner for Print {
         let mut run = Running::new();
         run.register_term_signals()?;
 
-        // Create output formatter.
-        // For now, we only support printing events back in json format.
-        let mut json = JsonFormat::default();
-        let writer: Box<dyn Write> = Box::new(stdout());
-        let mut output = FormatAndWrite::new(&mut json, vec![writer]);
-
         // Create event factory.
         let mut factory = FileEventsFactory::new(self.input.as_path())?;
         factory.start(modules.section_factories()?)?;
+
+        // Formatter & printer for events.
+        let mut output = PrintSingle::text(Box::new(stdout()), self.format);
 
         use EventResult::*;
         while run.running() {

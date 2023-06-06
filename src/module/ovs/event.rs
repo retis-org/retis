@@ -1,3 +1,5 @@
+use std::fmt;
+
 use anyhow::{bail, Result};
 use plain::Plain;
 use serde::{
@@ -11,12 +13,18 @@ use crate::{
 };
 
 ///The OVS Event
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 #[event_section]
 pub(crate) struct OvsEvent {
     /// Event data
     #[serde(flatten)]
     pub(crate) event: OvsEventType,
+}
+
+impl EventFmt for OvsEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
+        self.event.event_fmt(f, format)
+    }
 }
 
 #[derive(Default)]
@@ -79,6 +87,33 @@ pub(crate) enum OvsEventType {
     Undefined,
 }
 
+impl EventFmt for OvsEventType {
+    fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
+        use OvsEventType::*;
+        let disp: &dyn EventFmt = match self {
+            Upcall(e) => e,
+            UpcallEnqueue(e) => e,
+            UpcallReturn(e) => e,
+            RecvUpcall(e) => e,
+            Operation(e) => e,
+            Action(e) => e,
+            Undefined => return write!(f, "?"),
+        };
+
+        disp.event_fmt(f, format)
+    }
+}
+
+fn fmt_upcall_cmd(cmd: u8) -> &'static str {
+    match cmd {
+        0 => " (unspec)",
+        1 => " (miss)",
+        2 => " (action)",
+        3 => " (exec)",
+        _ => "",
+    }
+}
+
 // This struct is also used for ebpf decoding.
 // Please keep it sync with its ebpf counterpart in
 // "bpf/kernel_upcall_tp.bpf.c".
@@ -98,6 +133,18 @@ pub(crate) struct UpcallEvent {
     pub(crate) cpu: u32,
 }
 unsafe impl Plain for UpcallEvent {}
+
+impl EventFmt for UpcallEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(
+            f,
+            "upcall{} port {} cpu {}",
+            fmt_upcall_cmd(self.cmd),
+            self.port,
+            self.cpu
+        )
+    }
+}
 
 // This struct is also used for ebpf decoding.
 // Please keep it sync with its ebpf counterpart in
@@ -122,6 +169,20 @@ pub(crate) struct UpcallEnqueueEvent {
 }
 unsafe impl Plain for UpcallEnqueueEvent {}
 
+impl EventFmt for UpcallEnqueueEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(
+            f,
+            "upcall_enqueue{} ({}/{}) q {} ret {}",
+            fmt_upcall_cmd(self.cmd),
+            self.upcall_cpu,
+            self.upcall_ts,
+            self.queue_id,
+            self.ret
+        )
+    }
+}
+
 // This struct is also used for ebpf decoding.
 // Please keep it sync with its ebpf counterpart in
 // "bpf/kernel_upcall_ret.bpf.c".
@@ -134,6 +195,16 @@ pub(crate) struct UpcallReturnEvent {
     pub(crate) ret: i32,
 }
 unsafe impl Plain for UpcallReturnEvent {}
+
+impl EventFmt for UpcallReturnEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(
+            f,
+            "upcall_ret ({}/{}) ret {}",
+            self.upcall_cpu, self.upcall_ts, self.ret
+        )
+    }
+}
 
 // This struct is also used for ebpf decoding.
 // Please keep it sync with its ebpf counterpart in
@@ -188,6 +259,19 @@ impl OperationEvent {
     }
 }
 
+impl EventFmt for OperationEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(
+            f,
+            "flow_{} q {} ts {} ({})",
+            OperationEvent::operation_str(self.op_type).unwrap_or("?"),
+            self.queue_id,
+            self.batch_ts,
+            self.batch_idx
+        )
+    }
+}
+
 // This struct is also used for ebpf decoding.
 // Please keep it sync with its ebpf counterpart in
 // "bpf/user_recv_upcall.bpf.c".
@@ -210,6 +294,17 @@ pub(crate) struct RecvUpcallEvent {
 }
 unsafe impl Plain for RecvUpcallEvent {}
 
+impl EventFmt for RecvUpcallEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        // FIXME: there are more fields.
+        write!(
+            f,
+            "upcall_recv q {} pkt_size {}",
+            self.queue_id, self.pkt_size
+        )
+    }
+}
+
 /// OVS output action data.
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
 pub(crate) struct ActionEvent {
@@ -222,6 +317,27 @@ pub(crate) struct ActionEvent {
     /// an upcall.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) queue_id: Option<u32>,
+}
+
+impl EventFmt for ActionEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(f, "exec")?;
+
+        match self.action {
+            OvsAction::Output(a) => write!(f, " oport {}", a.port)?,
+            other => write!(f, " {:?}", other)?,
+        }
+
+        if self.recirc_id != 0 {
+            write!(f, " recirc_id {}", self.recirc_id)?;
+        }
+
+        if let Some(p) = self.queue_id {
+            write!(f, " q {}", p)?;
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 use anyhow::Result;
 use btf_rs::Type;
@@ -24,6 +24,12 @@ pub(crate) struct SkbDropEvent {
     /// Reason why a packet was freed/dropped. Only reported from specific
     /// functions. See `enum skb_drop_reason` in the kernel.
     pub(crate) drop_reason: String,
+}
+
+impl EventFmt for SkbDropEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(f, "drop ({})", self.drop_reason)
+    }
 }
 
 #[event_section_factory(SkbDropEvent)]

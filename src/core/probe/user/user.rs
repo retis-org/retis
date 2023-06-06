@@ -70,6 +70,16 @@ pub(crate) struct UserEvent {
     pub(crate) tid: i32,
 }
 
+impl EventFmt for UserEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(f, "[u] {}/{}", self.pid, self.tid)?;
+        if let Some((_, bin)) = self.path.rsplit_once('/') {
+            write!(f, " ({})", bin)?;
+        }
+        write!(f, " {}", self.symbol)
+    }
+}
+
 #[derive(Default)]
 #[event_section_factory(UserEvent)]
 pub(crate) struct UserEventFactory {

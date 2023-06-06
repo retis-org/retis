@@ -11,6 +11,7 @@ pub(crate) mod event;
 pub(crate) use event::*;
 
 mod bpf;
+mod helpers;
 mod skb_hook {
     include!("bpf/.out/skb_hook.rs");
 }

@@ -21,12 +21,14 @@ pub(crate) enum ModuleId {
     Common = 1,
     Kernel = 2,
     Userspace = 3,
-    SkbTracking = 4,
-    Skb = 5,
+    Tracking = 4,
+    SkbTracking = 5,
     SkbDrop = 6,
-    Ovs = 7,
-    Nft = 8,
-    Tracking = 9,
+    Skb = 7,
+    Ovs = 8,
+    Nft = 9,
+    // TODO: use std::mem::variant_count once in stable.
+    _MAX = 10,
 }
 
 impl ModuleId {
@@ -38,12 +40,12 @@ impl ModuleId {
             1 => Common,
             2 => Kernel,
             3 => Userspace,
-            4 => SkbTracking,
-            5 => Skb,
+            4 => Tracking,
+            5 => SkbTracking,
             6 => SkbDrop,
-            7 => Ovs,
-            8 => Nft,
-            9 => Tracking,
+            7 => Skb,
+            8 => Ovs,
+            9 => Nft,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -57,12 +59,13 @@ impl ModuleId {
             Common => 1,
             Kernel => 2,
             Userspace => 3,
-            SkbTracking => 4,
-            Skb => 5,
+            Tracking => 4,
+            SkbTracking => 5,
             SkbDrop => 6,
-            Ovs => 7,
-            Nft => 8,
-            Tracking => 9,
+            Skb => 7,
+            Ovs => 8,
+            Nft => 9,
+            _MAX => 10,
         }
     }
 
@@ -73,12 +76,12 @@ impl ModuleId {
             "common" => Common,
             "kernel" => Kernel,
             "userspace" => Userspace,
+            "tracking" => Tracking,
             "skb-tracking" => SkbTracking,
-            "skb" => Skb,
             "skb-drop" => SkbDrop,
+            "skb" => Skb,
             "ovs" => Ovs,
             "nft" => Nft,
-            "tracking" => Tracking,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -90,12 +93,13 @@ impl ModuleId {
             Common => "common",
             Kernel => "kernel",
             Userspace => "userspace",
+            Tracking => "tracking",
             SkbTracking => "skb-tracking",
-            Skb => "skb",
             SkbDrop => "skb-drop",
+            Skb => "skb",
             Ovs => "ovs",
             Nft => "nft",
-            Tracking => "tracking",
+            _MAX => "_max",
         }
     }
 }

@@ -11,7 +11,10 @@ use clap::{
 };
 
 use super::run_collect;
-use crate::cli::{dynamic::DynamicCommand, SubCommand, *};
+use crate::{
+    cli::{dynamic::DynamicCommand, SubCommand, *},
+    core::events::DisplayFormat,
+};
 
 #[derive(Args, Debug, Default)]
 pub(crate) struct CollectArgs {
@@ -58,6 +61,9 @@ Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
         default_value = "false"
     )]
     pub(super) print: bool,
+    #[arg(long, help = "Format used when printing an event.")]
+    #[clap(value_enum, default_value_t=DisplayFormat::MultiLine)]
+    pub(super) format: DisplayFormat,
     #[arg(
         id = "filter-packet",
         short,

@@ -1,4 +1,4 @@
-use std::str;
+use std::{fmt, str};
 
 use anyhow::Result;
 use plain::Plain;
@@ -52,6 +52,27 @@ pub(crate) struct NftEvent {
     table_handle: i64,
     chain_handle: i64,
     rule_handle: Option<i64>,
+}
+
+impl EventFmt for NftEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(
+            f,
+            "table {} ({}) chain {} ({})",
+            self.table_name, self.table_handle, self.chain_name, self.chain_handle,
+        )?;
+
+        if let Some(rule) = self.rule_handle {
+            write!(f, " handle {rule}")?;
+        }
+
+        write!(f, " {}", self.verdict)?;
+        if let Some(name) = &self.verdict_chain_name {
+            write!(f, " chain {name}")?;
+        }
+
+        Ok(())
+    }
 }
 
 // Please keep in sync with its bpf counterpart under

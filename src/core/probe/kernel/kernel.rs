@@ -56,7 +56,46 @@ pub(crate) struct KernelEvent {
     pub(crate) symbol: String,
     /// Probe type: one of "kprobe", "kretprobe" or "raw_tracepoint".
     pub(crate) probe_type: String,
-    pub(crate) stack_trace: Option<Vec<String>>,
+    pub(crate) stack_trace: Option<StackTrace>,
+}
+
+impl EventFmt for KernelEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(
+            f,
+            "[{}] {}",
+            match self.probe_type.as_str() {
+                "raw_tracepoint" => "tp",
+                "kprobe" => "k",
+                "kretprobe" => "kr",
+                _ => "invalid",
+            },
+            self.symbol,
+        )?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+pub(crate) struct StackTrace(Vec<String>);
+
+impl EventFmt for StackTrace {
+    fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
+        let last = self.0.len() - 1;
+        match format {
+            DisplayFormat::SingleLine => {
+                write!(f, "[{}]", self.0.join(", "))
+            }
+            DisplayFormat::MultiLine => self.0.iter().enumerate().try_for_each(|(i, sym)| {
+                write!(f, "    {sym}")?;
+                if i != last {
+                    writeln!(f)?;
+                }
+                Ok(())
+            }),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -98,7 +137,7 @@ impl KernelEventFactory {
                 }
             }
 
-            event.stack_trace = Some(stack_trace);
+            event.stack_trace = Some(StackTrace(stack_trace));
         }
         Ok(())
     }
