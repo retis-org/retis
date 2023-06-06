@@ -185,7 +185,7 @@ impl Collectors {
         //  If auto-mode is used, print the list of module that were started.
         if collect.default_collectors_list {
             info!(
-                "Module(s) started: {}",
+                "Collector(s) started: {}",
                 loaded
                     .iter()
                     .map(|id| id.to_str())
