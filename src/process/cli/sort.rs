@@ -3,8 +3,8 @@
 //! Sort rearranges the events so they are grouped by skb tracking id (or OVS queue_id if present)
 
 use std::{
-    fs::{File, OpenOptions},
-    io::{BufWriter, Write},
+    fs::OpenOptions,
+    io::{stdout, BufWriter},
     path::PathBuf,
 };
 
@@ -14,14 +14,11 @@ use clap::Parser;
 use crate::{
     cli::*,
     core::{
-        events::{file::FileEventsFactory, EventFactory, EventResult},
+        events::{file::FileEventsFactory, *},
         signals::Running,
     },
     module::Modules,
-    process::{
-        series::{EventSeries, EventSorter},
-        tracking::AddTracking,
-    },
+    process::{display::PrintSeries, series::EventSorter, tracking::AddTracking},
 };
 
 /// The default size of the sorting buffer
@@ -57,39 +54,10 @@ pub(crate) struct Sort {
     #[arg(long, default_value = "false")]
     pub(super) print: bool,
 
-    /// Json file writer if any.
-    #[arg(skip)]
-    file_writer: Option<BufWriter<File>>,
-}
-
-impl Sort {
-    // Print a series. For now we only support json format which is not very useful.
-    // FIXME: It's still unclear how the formatting API will look like. When it is, this should be
-    // adapted.
-    // For now, print a
-    fn print_series(series: &EventSeries) -> Result<()> {
-        println!("{}", &series.to_json());
-        Ok(())
-    }
-
-    fn write_json_series(&mut self, series: &EventSeries) -> Result<()> {
-        if let Some(writer) = self.file_writer.as_mut() {
-            let bytes = series.to_json().to_string().as_bytes().to_vec();
-            writer.write_all(&bytes)?;
-            writer.write_all(b"\n")?;
-            Ok(())
-        } else {
-            Ok(())
-        }
-    }
-
-    fn output(&mut self, series: EventSeries) -> Result<()> {
-        self.write_json_series(&series)?;
-        if self.file_writer.is_none() || self.print {
-            Self::print_series(&series)?;
-        }
-        Ok(())
-    }
+    /// Format used when printing and event.
+    #[arg(long)]
+    #[clap(value_enum, default_value_t=DisplayFormat::MultiLine)]
+    pub(super) format: DisplayFormat,
 }
 
 impl SubCommandParserRunner for Sort {
@@ -104,15 +72,27 @@ impl SubCommandParserRunner for Sort {
 
         let mut series = EventSorter::new();
         let mut tracker = AddTracking::new();
+        let mut printers = Vec::new();
+
         if let Some(out) = &self.out {
-            self.file_writer = Some(BufWriter::new(
+            // Make sure we don't use the same file as the result will be the deletion of the
+            // original files.
+            if out.canonicalize()?.eq(&self.input.canonicalize()?) {
+                bail!("Cannot sort a file in-place. Please specify an output file that's different to the input one.");
+            }
+
+            printers.push(PrintSeries::json(Box::new(BufWriter::new(
                 OpenOptions::new()
                     .create(true)
                     .write(true)
                     .truncate(true)
                     .open(out)
                     .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-            ));
+            ))));
+        }
+
+        if self.out.is_none() || self.print {
+            printers.push(PrintSeries::text(Box::new(stdout()), self.format));
         }
 
         while run.running() {
@@ -129,7 +109,9 @@ impl SubCommandParserRunner for Sort {
                         while series.len() >= self.max_buffer {
                             // Flush the oldest series
                             match series.pop_oldest()? {
-                                Some(series) => self.output(series)?,
+                                Some(series) => printers
+                                    .iter_mut()
+                                    .try_for_each(|p| p.process_one(&series))?,
                                 None => break,
                             };
                         }
@@ -142,15 +124,15 @@ impl SubCommandParserRunner for Sort {
         // Flush remaining events
         while series.len() > 0 {
             match series.pop_oldest()? {
-                Some(series) => self.output(series)?,
+                Some(series) => printers
+                    .iter_mut()
+                    .try_for_each(|p| p.process_one(&series))?,
                 None => break,
             };
         }
 
         // Flush writers
-        if let Some(writer) = self.file_writer.as_mut() {
-            writer.flush()?;
-        }
+        printers.iter_mut().try_for_each(|p| p.flush())?;
         Ok(())
     }
 }
