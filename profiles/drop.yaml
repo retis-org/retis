@@ -1,0 +1,16 @@
+version: 1.0
+name: dropmon
+about: Drop monitor-like
+collect:
+  - args:
+      collectors: skb-drop,skb
+      stack: ~
+---
+version: 1.0
+name: nft-dropmon
+about: Drop monitor-like for netfilter (needs `--allow-system-changes` or compatible configuration; see `retis collect --help`)
+collect:
+  - args:
+      collectors: nft,skb
+      nft_verdicts: drop
+      stack: ~
