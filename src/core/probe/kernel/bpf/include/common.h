@@ -251,9 +251,21 @@ static __always_inline int chain(struct retis_context *ctx)
 
 	pass_threshold = get_event_size(event);
 
-#define CALL_HOOK(x)		\
-	if (x < nhooks)		\
-		hook##x(ctx, event);
+/* Defines the logic to call hooks one by one.
+ *
+ * As a temporary quirk we do handle -ENOMSG and drop the event in this case.
+ * This should not be used too much and a proper long term solution should be
+ * found. The use case is to let hooks do some filtering otherwise we can end up
+ * being flooded with events in some cases as w/o this hooks can only filter
+ * themselves.
+ */
+#define ENOMSG	42
+#define CALL_HOOK(x)				\
+	if (x < nhooks) {			\
+		int ret = hook##x(ctx, event);	\
+		if (ret == -ENOMSG)		\
+			goto discard_event;	\
+	}
 	CALL_HOOK(0)
 	CALL_HOOK(1)
 	CALL_HOOK(2)

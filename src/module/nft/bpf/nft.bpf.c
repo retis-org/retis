@@ -73,7 +73,7 @@ static __always_inline int nft_trace(struct nft_config *cfg,
 
 	code = (u32)BPF_CORE_READ(verdict, code);
 	if (!ALLOWED_VERDICTS(code, cfg->verdicts))
-		return 0;
+		return -ENOMSG;
 
 	e = get_event_zsection(event, COLLECTOR_NFT, 1, sizeof(*e));
 	if (!e)
