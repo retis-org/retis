@@ -1,0 +1,6 @@
+#ifndef __CORE_PROBE_COMMON_DEFS__
+#define __CORE_PROBE_COMMON_DEFS__
+
+#define COMMON_SECTION_CORE	1
+
+#endif /* __CORE_PROBE_COMMON_DEFS__ */

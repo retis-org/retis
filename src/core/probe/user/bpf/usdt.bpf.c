@@ -2,6 +2,7 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/usdt.bpf.h>
 
+#include <common_defs.h>
 #include <user_common.h>
 
 /* Hook placeholder */
@@ -64,7 +65,7 @@ int probe_usdt(struct pt_regs *ctx)
 	if (!event)
 		return 0;
 
-	e = get_event_section(event, COMMON, 1, sizeof(*e));
+	e = get_event_section(event, COMMON, COMMON_SECTION_CORE, sizeof(*e));
 	if (!e) {
 		discard_event(event);
 		return 0;

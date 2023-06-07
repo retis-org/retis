@@ -5,6 +5,7 @@
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 
+#include <common_defs.h>
 #include <retis_context.h>
 #include <events.h>
 #include <helpers.h>
@@ -232,7 +233,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	if (!event)
 		goto exit;
 
-	e = get_event_section(event, COMMON, 1, sizeof(*e));
+	e = get_event_section(event, COMMON, COMMON_SECTION_CORE, sizeof(*e));
 	if (!e)
 		goto discard_event;
 
