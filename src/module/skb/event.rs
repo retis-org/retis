@@ -59,7 +59,7 @@ impl EventFmt for SkbEvent {
                 }
             }
             if let Some(rx_ifindex) = dev.rx_ifindex {
-                write!(f, "rxif {}", rx_ifindex)?;
+                write!(f, " rxif {}", rx_ifindex)?;
             }
         }
 
