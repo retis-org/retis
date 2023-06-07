@@ -24,6 +24,7 @@ log = "0.4"
 memoffset = "0.7"
 nix = "0.25"
 once_cell = "1.15"
+path-clean = "1.0"
 pcap = "1.0"
 plain = "0.2"
 rbpf = {git = "https://github.com/qmonnet/rbpf", optional = true}

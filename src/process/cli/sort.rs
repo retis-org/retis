@@ -3,6 +3,7 @@
 //! Sort rearranges the events so they are grouped by skb tracking id (or OVS queue_id if present)
 
 use std::{
+    env,
     fs::OpenOptions,
     io::{stdout, BufWriter},
     path::PathBuf,
@@ -10,6 +11,7 @@ use std::{
 
 use anyhow::{bail, Result};
 use clap::Parser;
+use path_clean::PathClean;
 
 use crate::{
     cli::*,
@@ -75,9 +77,22 @@ impl SubCommandParserRunner for Sort {
         let mut printers = Vec::new();
 
         if let Some(out) = &self.out {
+            let out = match out.canonicalize() {
+                Ok(out) => out,
+                // If the file doesn't exist we can't use fs::canonicalize() and
+                // need to clean it another way.
+                Err(_) => {
+                    let mut canonicalized = env::current_dir()?;
+                    // If out is an absolute directory, push() will replace the
+                    // current value.
+                    canonicalized.push(out.clean());
+                    canonicalized
+                }
+            };
+
             // Make sure we don't use the same file as the result will be the deletion of the
             // original files.
-            if out.canonicalize()?.eq(&self.input.canonicalize()?) {
+            if out.eq(&self.input.canonicalize()?) {
                 bail!("Cannot sort a file in-place. Please specify an output file that's different to the input one.");
             }
 
@@ -86,7 +101,7 @@ impl SubCommandParserRunner for Sort {
                     .create(true)
                     .write(true)
                     .truncate(true)
-                    .open(out)
+                    .open(&out)
                     .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
             ))));
         }
