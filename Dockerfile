@@ -37,4 +37,5 @@ RUN dnf install -y \
     libpcap
 
 COPY --from=builder /retis/target/release/retis /usr/bin/retis
+COPY --from=builder /retis/profiles /etc/retis/profiles
 ENTRYPOINT ["/usr/bin/retis"]
