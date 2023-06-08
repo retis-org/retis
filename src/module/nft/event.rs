@@ -8,7 +8,7 @@ use crate::{
         bpf::{parse_single_raw_section, BpfRawSection},
         *,
     },
-    event_section, event_section_factory,
+    event_byte_array, event_section, event_section_factory,
     module::ModuleId,
 };
 
@@ -16,31 +16,7 @@ use crate::{
 // src/modules/nft/bpf/nft.bpf.c
 const NFT_NAME_SIZE: usize = 128;
 
-struct NftName([u8; NFT_NAME_SIZE]);
-
-impl Default for NftName {
-    fn default() -> Self {
-        NftName([0; NFT_NAME_SIZE])
-    }
-}
-
-impl NftName {
-    fn to_string(&self) -> Result<String> {
-        Ok(str::from_utf8(&self.0)?
-            .trim_end_matches(char::from(0))
-            .into())
-    }
-
-    fn to_string_opt(&self) -> Result<Option<String>> {
-        let res = self.to_string()?;
-
-        if res.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(res))
-    }
-}
+event_byte_array!(NftName, NFT_NAME_SIZE);
 
 /// Nft event section
 #[event_section]

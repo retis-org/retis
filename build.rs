@@ -12,6 +12,7 @@ use memmap2::Mmap;
 const FILTER_INCLUDE_PATH: &str = "src/core/filters/packets/bpf/include";
 const BINDGEN_HEADER: &str = "src/core/bpf_sys/include/bpf-sys.h";
 const INCLUDE_PATHS: &[&str] = &[
+    "src/core/probe/bpf/include",
     "src/core/probe/kernel/bpf/include",
     "src/core/probe/user/bpf/include",
     "src/core/events/bpf/include",
