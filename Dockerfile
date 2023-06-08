@@ -11,8 +11,10 @@ RUN dnf install -y \
     elfutils-libelf-devel \
     zlib-devel 
 
-# Only download the dependencies for now so these steps can be cached.
+RUN cargo install rustfmt
 RUN cargo init
+
+# Only download the dependencies for now so these steps can be cached.
 COPY retis-derive retis-derive
 # `cargo -C <path>` is unstable for now.
 RUN cd retis-derive && cargo fetch --locked
@@ -21,8 +23,9 @@ COPY Cargo.toml .
 RUN cargo fetch --locked
 
 # Now copy the rest of the source and build.
-COPY . .
-RUN cargo install rustfmt
+COPY build.rs .
+COPY src src
+COPY profiles profiles
 RUN cargo build --release
 
 # Final image
