@@ -109,7 +109,6 @@ impl RawEventSectionFactory for NftEventFactory {
 
         event.table_name = raw.tn.to_string()?;
         event.chain_name = raw.cn.to_string()?;
-        event.verdict_chain_name = raw.vcn.to_string_opt()?;
         event.table_handle = raw.th;
         event.chain_handle = raw.ch;
         event.rule_handle = match raw.rh {
@@ -132,6 +131,11 @@ impl RawEventSectionFactory for NftEventFactory {
             _ => "unknown",
         }
         .to_owned();
+
+        // Destination chain is only valid for NFT_JUMP/NFT_GOTO.
+        if raw.v == -3 || raw.v == -4 {
+            event.verdict_chain_name = raw.vcn.to_string_opt()?;
+        }
 
         Ok(Box::new(event))
     }
