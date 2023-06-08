@@ -129,7 +129,7 @@ impl EventFmt for SkbEvent {
             }
             write!(f, "flags [{}]", flags.into_iter().collect::<String>())?;
 
-            let len = len - (tcp.doff as u16 * 4);
+            let len = len.saturating_sub(tcp.doff as u16 * 4);
             if len > 0 {
                 write!(f, " seq {}:{}", tcp.seq, tcp.seq + len as u32)?;
             } else {
