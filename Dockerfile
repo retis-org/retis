@@ -13,6 +13,9 @@ RUN dnf install -y \
 
 # Only download the dependencies for now so these steps can be cached.
 RUN cargo init
+COPY retis-derive retis-derive
+# `cargo -C <path>` is unstable for now.
+RUN cd retis-derive && cargo fetch --locked
 COPY Cargo.lock .
 COPY Cargo.toml .
 RUN cargo fetch --locked
