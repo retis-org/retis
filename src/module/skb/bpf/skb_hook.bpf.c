@@ -47,13 +47,22 @@ struct skb_ipv4_event {
 	u32 src;
 	u32 dst;
 	u16 len;
+	u16 id;
 	u8 protocol;
+	u8 ttl;
+	u8 tos;
+	u8 ecn;
+	u16 offset;
+	u8 flags;
 } __attribute__((packed));
 struct skb_ipv6_event {
 	u128 src;
 	u128 dst;
+	u32 flow_lbl;
 	u16 len;
 	u8 protocol;
+	u8 ttl;
+	u8 ecn;
 } __attribute__((packed));
 struct skb_tcp_event {
 	u16 sport;
@@ -155,6 +164,8 @@ static __always_inline int process_skb_l2_l4(struct retis_context *ctx,
 		bpf_probe_read_kernel(&protocol, sizeof(protocol), &ip4->protocol);
 
 		if (cfg->sections & BIT(COLLECT_IPV4)) {
+			u16 frag_off, offset;
+			u8 tos;
 			struct skb_ipv4_event *e =
 				get_event_section(event, COLLECTOR_SKB,
 						  COLLECT_IPV4, sizeof(*e));
@@ -165,6 +176,24 @@ static __always_inline int process_skb_l2_l4(struct retis_context *ctx,
 			bpf_probe_read_kernel(&e->src, sizeof(e->src), &ip4->saddr);
 			bpf_probe_read_kernel(&e->dst, sizeof(e->dst), &ip4->daddr);
 			bpf_probe_read_kernel(&e->len, sizeof(e->len), &ip4->tot_len);
+			bpf_probe_read_kernel(&e->id, sizeof(e->id), &ip4->id);
+			bpf_probe_read_kernel(&e->ttl, sizeof(e->ttl), &ip4->ttl);
+
+			bpf_probe_read_kernel(&tos, sizeof(tos), &ip4->tos);
+			e->ecn = tos & 0x3;
+			e->tos = tos;
+
+/* Keep in sync with Linux's include/net/ip.h */
+#define IP_CE		0x8000
+#define IP_DF		0x4000
+#define IP_MF		0x2000
+#define IP_OFFSET	0x1fff
+			bpf_probe_read_kernel(&frag_off, sizeof(frag_off), &ip4->frag_off);
+			e->flags = !!(frag_off & bpf_htons(IP_CE));
+			e->flags |= !!(frag_off & bpf_htons(IP_DF)) << 1;
+			e->flags |= !!(frag_off & bpf_htons(IP_MF)) << 2;
+
+			e->offset = frag_off & bpf_htons(IP_OFFSET);
 		}
 	} else if (ip_version == 6) {
 		struct ipv6hdr *ip6 = (struct ipv6hdr *)(head + network);
@@ -172,6 +201,8 @@ static __always_inline int process_skb_l2_l4(struct retis_context *ctx,
 		bpf_probe_read_kernel(&protocol, sizeof(protocol), &ip6->nexthdr);
 
 		if (cfg->sections & BIT(COLLECT_IPV6)) {
+			u8 flow_lbl[3];
+			u16 ecn;
 			struct skb_ipv6_event *e =
 				get_event_section(event, COLLECTOR_SKB,
 						  COLLECT_IPV6, sizeof(*e));
@@ -182,6 +213,15 @@ static __always_inline int process_skb_l2_l4(struct retis_context *ctx,
 			bpf_probe_read_kernel(&e->src, sizeof(e->src), &ip6->saddr);
 			bpf_probe_read_kernel(&e->dst, sizeof(e->dst), &ip6->daddr);
 			bpf_probe_read_kernel(&e->len, sizeof(e->len), &ip6->payload_len);
+			bpf_probe_read_kernel(&e->ttl, sizeof(e->ttl), &ip6->hop_limit);
+
+			bpf_probe_read_kernel(&flow_lbl, sizeof(flow_lbl), &ip6->flow_lbl);
+			e->flow_lbl = (flow_lbl[0] & 0xf) << 16 |
+				      flow_lbl[1] << 8 | flow_lbl[2];
+			e->flow_lbl &= 0xfffff;
+
+			bpf_probe_read_kernel(&ecn, sizeof(ecn), &ip6);
+			e->ecn = (bpf_ntohs(ecn) >> 4) & 0x3;
 		}
 	} else {
 		return 0;

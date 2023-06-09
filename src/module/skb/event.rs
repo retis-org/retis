@@ -85,7 +85,7 @@ impl EventFmt for SkbEvent {
             // - IPv4: we use the fixed 20 bytes size as options are rarely used.
             // - IPv6: we do not support extension headers.
             len = match ip.version {
-                4 => ip.len - 20,
+                SkbIpVersion::V4(_) => ip.len - 20,
                 _ => ip.len,
             };
 
@@ -95,6 +95,46 @@ impl EventFmt for SkbEvent {
                 write!(f, "{}.{} > {}.{}", ip.saddr, udp.sport, ip.daddr, udp.dport)?;
             } else {
                 write!(f, "{} > {}", ip.saddr, ip.daddr)?;
+            }
+
+            write!(
+                f,
+                "{}",
+                match ip.ecn {
+                    1 => " ECT(1)",
+                    2 => " ECT(0)",
+                    3 => " CE",
+                    _ => "",
+                }
+            )?;
+
+            write!(f, " ttl {}", ip.ttl)?;
+
+            match &ip.version {
+                SkbIpVersion::V4(v4) => {
+                    write!(f, " tos {:#x} id {} off {}", v4.tos, v4.id, v4.offset)?;
+
+                    let mut flags = Vec::new();
+                    // Same order as tcpdump.
+                    if v4.flags & 1 << 2 != 0 {
+                        flags.push("+");
+                    }
+                    if v4.flags & 1 << 1 != 0 {
+                        flags.push("DF");
+                    }
+                    if v4.flags & 1 << 0 != 0 {
+                        flags.push("rsvd");
+                    }
+
+                    if !flags.is_empty() {
+                        write!(f, " [{}]", flags.join(","))?;
+                    }
+                }
+                SkbIpVersion::V6(v6) => {
+                    if v6.flow_label != 0 {
+                        write!(f, " label {:#x}", v6.flow_label)?;
+                    }
+                }
             }
 
             let protocol = match helpers::protocol_str(ip.protocol) {
@@ -215,11 +255,45 @@ pub(crate) struct SkbIpEvent {
     /// Destination IP address.
     pub(crate) daddr: String,
     /// IP version: 4 or 6.
-    pub(crate) version: u8,
+    #[serde(flatten)]
+    pub(crate) version: SkbIpVersion,
     /// L4 protocol, from IPv4 "protocol" field or IPv6 "next header" one.
     pub(crate) protocol: u8,
     /// "total len" from the IPv4 header or "payload length" from the IPv6 one.
     pub(crate) len: u16,
+    /// TTL in the IPv4 header and hop limit in the IPv6 one.
+    pub(crate) ttl: u8,
+    /// ECN.
+    pub(crate) ecn: u8,
+}
+
+/// IP version and specific fields.
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub(crate) enum SkbIpVersion {
+    #[serde(rename = "v4")]
+    V4(SkbIpv4Event),
+    #[serde(rename = "v6")]
+    V6(SkbIpv6Event),
+}
+
+/// IPv4 specific fields.
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct SkbIpv4Event {
+    /// Type of service.
+    pub(crate) tos: u8,
+    /// Identification.
+    pub(crate) id: u16,
+    /// Flags (CE, DF, MF).
+    pub(crate) flags: u8,
+    /// Fragment offset.
+    pub(crate) offset: u16,
+}
+
+/// IPv6 specific fields.
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct SkbIpv6Event {
+    /// Flow label.
+    pub(crate) flow_label: u32,
 }
 
 /// TCP fields.
