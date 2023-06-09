@@ -87,6 +87,11 @@ impl ProbeBuilder for KretprobeBuilder {
         );
         Ok(())
     }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
+        Ok(())
+    }
 }
 
 #[cfg(test)]

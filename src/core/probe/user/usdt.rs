@@ -62,6 +62,11 @@ impl ProbeBuilder for UsdtBuilder {
 
         Ok(())
     }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
+        Ok(())
+    }
 }
 
 #[cfg(test)]

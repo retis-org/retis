@@ -74,6 +74,11 @@ impl ProbeBuilder for KprobeBuilder {
         );
         Ok(())
     }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
+        Ok(())
+    }
 }
 
 #[cfg(test)]

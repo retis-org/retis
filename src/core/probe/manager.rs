@@ -241,6 +241,13 @@ impl ProbeManager {
         Ok(())
     }
 
+    /// Detach all probes.
+    pub(crate) fn detach(&mut self) -> Result<()> {
+        self.builders
+            .iter_mut()
+            .try_for_each(|builder| builder.detach())
+    }
+
     // Behind the scene logic to attach a set of probes using a common context
     // (hooks, filters, etc).
     //
