@@ -2,7 +2,6 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/usdt.bpf.h>
 
-#include <common_defs.h>
 #include <user_common.h>
 
 /* Hook placeholder */
@@ -51,6 +50,8 @@ static __always_inline int get_args(struct user_ctx *uctx,
 SEC("usdt")
 int probe_usdt(struct pt_regs *ctx)
 {
+	u64 pid = bpf_get_current_pid_tgid();
+	u64 sym_addr = PT_REGS_IP(ctx);
 	struct pt_regs ctx_fp = *ctx;
 	volatile u16 pass_threshold;
 	struct common_task_event *ti;
@@ -63,34 +64,31 @@ int probe_usdt(struct pt_regs *ctx)
 		return -1;
 
 	event = get_event();
-	if (!event)
-		return 0;
-
-	e = get_event_section(event, COMMON, COMMON_SECTION_CORE, sizeof(*e));
-	if (!e) {
-		discard_event(event);
+	if (!event) {
+		err_report(sym_addr, pid >> 32);
 		return 0;
 	}
+
+	e = get_event_section(event, COMMON, COMMON_SECTION_CORE, sizeof(*e));
+	if (!e)
+		goto discard_event;
 
 	uctx.timestamp = bpf_ktime_get_ns();
 	e->timestamp = uctx.timestamp;
 
 	ti = get_event_zsection(event, COMMON, COMMON_SECTION_TASK, sizeof(*ti));
-	if (!ti) {
-		discard_event(event);
-		return 0;
-	}
+	if (!ti)
+		goto discard_event;
 
-	ti->pid = bpf_get_current_pid_tgid();
+	ti->pid = pid;
 	bpf_get_current_comm(ti->comm, sizeof(ti->comm));
 
 	u = get_event_section(event, USERSPACE, 1, sizeof(*u));
-	if (!u) {
-		discard_event(event);
-		return 0;
-	}
-	u->symbol = PT_REGS_IP(ctx);
-	u->pid = ti->pid;
+	if (!u)
+		goto discard_event;
+
+	u->symbol = sym_addr;
+	u->pid = pid;
 	u->event_type = USDT;
 
 	pass_threshold = get_event_size(event);
@@ -98,10 +96,13 @@ int probe_usdt(struct pt_regs *ctx)
 	/* UST only supports a single hook. */
 	hook0(&uctx, event);
 
-	if (get_event_size(event) <= pass_threshold)
-		discard_event(event);
-	else
+	if (get_event_size(event) > pass_threshold) {
 		send_event(event);
+		return 0;
+	}
+
+discard_event:
+	discard_event(event);
 
 	return 0;
 }

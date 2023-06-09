@@ -1,18 +1,21 @@
 #![allow(dead_code)] // FIXME
+#![cfg_attr(test, allow(unused_imports))]
 use std::{cmp, collections::HashMap};
 
-use anyhow::{bail, Result};
-use log::{debug, info};
+use anyhow::{anyhow, bail, Result};
+use log::{debug, info, warn};
+use plain::Plain;
 
-#[cfg(not(test))]
-use super::kernel::config::init_config_map;
+use super::common::{Counters, CountersKey};
 use super::*;
 use super::{
     builder::ProbeBuilder,
     kernel::{kprobe, kretprobe, raw_tracepoint},
     user::usdt,
 };
-use crate::core::filters::Filter;
+
+use super::{common::init_counters_map, kernel::config::init_config_map};
+use crate::core::{filters::Filter, kernel::Symbol, user::proc::Process};
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
 pub(crate) const PROBE_MAX: usize = 1024;
@@ -41,6 +44,10 @@ pub(crate) struct ProbeManager {
     #[cfg(not(test))]
     config_map: libbpf_rs::Map,
 
+    /// Global per-probe map used to report counters.
+    #[cfg(not(test))]
+    counters_map: libbpf_rs::Map,
+
     /// Internal vec to store "used" probe builders, so we can keep a reference
     /// on them and keep probes loaded & installed.
     // TODO: should we change the builders to return the libbpf_rs::Link
@@ -61,12 +68,18 @@ impl ProbeManager {
             maps: HashMap::new(),
             #[cfg(not(test))]
             config_map: init_config_map()?,
+            #[cfg(not(test))]
+            counters_map: init_counters_map()?,
             builders: Vec::new(),
         };
 
         #[cfg(not(test))]
         mgr.maps
             .insert("config_map".to_string(), mgr.config_map.fd());
+
+        #[cfg(not(test))]
+        mgr.maps
+            .insert("counters_map".to_string(), mgr.counters_map.fd());
 
         Ok(mgr)
     }
@@ -212,6 +225,8 @@ impl ProbeManager {
             self.maps.clone(),
             #[cfg(not(test))]
             &mut self.config_map,
+            #[cfg(not(test))]
+            &mut self.counters_map,
         )?);
 
         // Then targeted ones.
@@ -231,6 +246,8 @@ impl ProbeManager {
                     self.maps.clone(),
                     #[cfg(not(test))]
                     &mut self.config_map,
+                    #[cfg(not(test))]
+                    &mut self.counters_map,
                 )?);
                 Ok(())
             })?;
@@ -259,6 +276,7 @@ impl ProbeManager {
         filters: &[Filter],
         maps: HashMap<String, i32>,
         #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
+        #[cfg(not(test))] counters_map: &mut libbpf_rs::Map,
     ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
         let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
         let map_fds: Vec<(String, i32)> = maps.into_iter().collect();
@@ -287,21 +305,32 @@ impl ProbeManager {
             // Unwrap as we just made sure the probe builder would be available.
             let builder = builders.get_mut(&probe.type_key()).unwrap();
 
+            #[cfg(not(test))]
+            let (counters_key, counters);
             // First load the probe configuration.
             #[cfg(not(test))]
             let options = probe.options();
             #[cfg(not(test))]
             match probe.type_mut() {
-                ProbeType::Kprobe(ref mut p)
-                | ProbeType::Kretprobe(ref mut p)
-                | ProbeType::RawTracepoint(ref mut p) => {
-                    let addr = p.symbol.addr()?.to_ne_bytes();
-                    let config = p.gen_config(&options)?;
+                ProbeType::Kprobe(ref mut kp)
+                | ProbeType::Kretprobe(ref mut kp)
+                | ProbeType::RawTracepoint(ref mut kp) => {
+                    let addr = kp.symbol.addr()?.to_ne_bytes();
+                    let config = kp.gen_config(&options)?;
                     let config = unsafe { plain::as_bytes(&config) };
                     config_map.update(&addr, config, libbpf_rs::MapFlags::ANY)?;
+                    (counters_key, counters) = kp.gen_counters()?;
                 }
-                _ => (),
+                ProbeType::Usdt(ref mut up) => {
+                    (counters_key, counters) = up.gen_counters()?;
+                }
             }
+            #[cfg(not(test))]
+            counters_map.update(
+                unsafe { plain::as_bytes(&counters_key) },
+                unsafe { plain::as_bytes(&counters) },
+                libbpf_rs::MapFlags::ANY,
+            )?;
 
             // Finally attach a probe to the target.
             debug!("Attaching probe to {}", probe);
@@ -309,6 +338,62 @@ impl ProbeManager {
         })?;
 
         Ok(builders.drain().map(|(_, v)| v).collect())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn report_counters(&self) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(not(test))]
+    pub(crate) fn report_counters(&self) -> Result<()> {
+        let mut counters_key = CountersKey::default();
+        let mut counters = Counters::default();
+        let mut total_lost = 0;
+        let mut proc_cache: HashMap<u64, String> = HashMap::new();
+
+        for k in self.counters_map.keys() {
+            counters_key
+                .copy_from_bytes(&k)
+                .or_else(|_| bail!("Cannot retrieve the counters map key"))?;
+            if let Some(counters_val) = self.counters_map.lookup(&k, libbpf_rs::MapFlags::ANY)? {
+                counters
+                    .copy_from_bytes(&counters_val)
+                    .or_else(|_| bail!("Cannot retrieve the counters map value"))?;
+                if counters.dropped_events == 0 {
+                    continue;
+                }
+
+                /* kernel symbols */
+                if counters_key.pid == 0 {
+                    let ksym = Symbol::from_addr(counters_key.sym_addr)?;
+                    warn!("lost {} event(s) from {ksym}", counters.dropped_events);
+                } else {
+                    let usdt_info;
+
+                    if let Some(path) = proc_cache.get(&counters_key.pid) {
+                        usdt_info = path.to_string();
+                    } else {
+                        let proc = Process::from_pid(counters_key.pid as i32)?;
+                        let note = proc
+                            .get_note_from_symbol(counters_key.sym_addr)?
+                            .ok_or_else(|| anyhow!("Failed to get symbol information"))?;
+                        usdt_info = format!("{}:{note}", proc.path().display());
+                        proc_cache.insert(counters_key.pid, usdt_info.to_string());
+                    }
+
+                    warn!("lost {} event(s) from {usdt_info}", counters.dropped_events);
+                }
+
+                total_lost += counters.dropped_events;
+            }
+        }
+
+        if total_lost > 0 {
+            warn!("total events lost: {total_lost}");
+        }
+
+        Ok(())
     }
 
     fn check_probe_max(&self) -> Result<()> {

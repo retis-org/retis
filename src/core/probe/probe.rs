@@ -40,7 +40,7 @@ pub(crate) struct Probe {
 }
 
 impl Probe {
-    fn from(r#type: ProbeType) -> Probe {
+    pub(super) fn from(r#type: ProbeType) -> Probe {
         Probe {
             r#type,
             hooks: Vec::new(),
