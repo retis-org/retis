@@ -1,5 +1,3 @@
-use std::mem::ManuallyDrop;
-
 use anyhow::{anyhow, bail, Result};
 
 use crate::core::filters::Filter;
@@ -13,10 +11,8 @@ use usdt_bpf::UsdtSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct UsdtBuilder {
-    // FIXME: Marked as manually dropped because the process
-    // segfaults apparently in libbpf when the drop in place
-    // happens.
-    links: ManuallyDrop<Vec<libbpf_rs::Link>>,
+    links: Vec<libbpf_rs::Link>,
+    obj: Option<libbpf_rs::Object>,
     map_fds: Vec<(String, i32)>,
     hooks: Vec<Hook>,
 }
@@ -62,6 +58,8 @@ impl ProbeBuilder for UsdtBuilder {
 
         self.links
             .push(prog.attach_usdt(probe.pid, &probe.path, &probe.provider, &probe.name)?);
+        self.obj = Some(obj);
+
         Ok(())
     }
 }
