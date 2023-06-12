@@ -194,6 +194,12 @@ static __always_inline int process_skb_l2_l4(struct retis_context *ctx,
 			e->flags |= !!(frag_off & bpf_htons(IP_MF)) << 2;
 
 			e->offset = frag_off & bpf_htons(IP_OFFSET);
+
+			/* We won't be able to parse upper layer if this is a
+			 * fragment, bail out.
+			 */
+			if (e->offset > 0)
+				return 0;
 		}
 	} else if (ip_version == 6) {
 		struct ipv6hdr *ip6 = (struct ipv6hdr *)(head + network);
