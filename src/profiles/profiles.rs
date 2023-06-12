@@ -136,19 +136,32 @@ impl Profile {
     pub fn find(name: &str) -> Result<Profile> {
         for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {
             for entry in path.read_dir()? {
+                // Profile conflict is performed per-path to allow overriding
+                // global profiles in the $HOME location.
+                let mut found = None;
                 let entry = entry?;
                 match Profile::load(entry.path()) {
                     Ok(mut profiles) => {
                         for profile in profiles.drain(..) {
                             if profile.name.eq(name) {
-                                return Ok(profile);
+                                // If we already found a profile this means we
+                                // have a name conflict.
+                                if found.is_some() {
+                                    bail!(
+                                        "Found two profiles with name '{name}' in {}",
+                                        entry.path().to_str().unwrap_or("unknown path")
+                                    );
+                                }
+                                found = Some(profile);
                             }
                         }
                     }
-
                     Err(err) => {
                         debug!("Skipping invalid file {}: {err}", entry.path().display())
                     }
+                }
+                if let Some(profile) = found {
+                    return Ok(profile);
                 }
             }
         }
