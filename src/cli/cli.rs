@@ -241,8 +241,16 @@ impl ThinCli {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
+        let version = if cfg!(debug_assertions) {
+            format!("{}-dbg", env!("CARGO_PKG_VERSION"))
+        } else {
+            env!("CARGO_PKG_VERSION").to_string()
+        };
+
         let args: Vec<OsString> = args.into_iter().map(|x| x.into()).collect();
-        let mut command = MainConfig::augment_args(Command::new("retis")).subcommand_required(true);
+        let mut command = MainConfig::augment_args(Command::new("retis"))
+            .version(version)
+            .subcommand_required(true);
         // Add thin subcommands so that the main help shows them.
         for (_, sub) in self.subcommands.iter() {
             command = command.subcommand(sub.thin().expect("thin command failed"));
