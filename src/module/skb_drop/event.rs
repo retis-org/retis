@@ -32,13 +32,18 @@ impl EventFmt for SkbDropEvent {
     }
 }
 
+#[derive(Default)]
 #[event_section_factory(SkbDropEvent)]
 pub(crate) struct SkbDropEventFactory {
-    reasons: HashMap<u32, String>,
+    /// Map of u32 to skb free reasons. It is filled lazyly to avoid executing
+    /// `parse_drop_reasons` on a machine not collecting events. A `Some` value
+    /// with an empty map means we couldn't retrieve the drop reasons from the
+    /// running kernel.
+    reasons: Option<HashMap<u32, String>>,
 }
 
 impl SkbDropEventFactory {
-    pub(crate) fn new() -> Result<Self> {
+    pub(crate) fn parse_drop_reasons(&mut self) -> Result<()> {
         let mut reasons = HashMap::new();
 
         if let (btf, Type::Enum(r#enum)) = inspector()?
@@ -62,7 +67,8 @@ impl SkbDropEventFactory {
             warn!("Can't retrieve skb drop reason definitions from the kernel. Events will contain raw data (enum int value).");
         }
 
-        Ok(Self { reasons })
+        self.reasons = Some(reasons);
+        Ok(())
     }
 }
 
@@ -70,7 +76,14 @@ impl RawEventSectionFactory for SkbDropEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let raw = parse_single_raw_section::<BpfSkbDropEvent>(ModuleId::SkbDrop, raw_sections)?;
         let drop_reason = raw.drop_reason;
-        let drop_reason = match self.reasons.get(&drop_reason) {
+
+        // Parse skb drop reasons if not already done.
+        if self.reasons.is_none() {
+            self.parse_drop_reasons()?;
+        }
+
+        // Unwrap as we just made sure it was Some(..).
+        let drop_reason = match self.reasons.as_ref().unwrap().get(&drop_reason) {
             Some(r) => r.clone(),
             None => format!("{}", drop_reason),
         };
