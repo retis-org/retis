@@ -17,8 +17,8 @@ use kprobe_bpf::KprobeSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct KprobeBuilder {
-    obj: Option<libbpf_rs::Object>,
     links: Vec<libbpf_rs::Link>,
+    obj: Option<libbpf_rs::Object>,
 }
 
 impl ProbeBuilder for KprobeBuilder {

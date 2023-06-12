@@ -21,8 +21,8 @@ use kretprobe_bpf::KretprobeSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct KretprobeBuilder {
-    obj: Option<libbpf_rs::Object>,
     links: Vec<libbpf_rs::Link>,
+    obj: Option<libbpf_rs::Object>,
 }
 
 impl ProbeBuilder for KretprobeBuilder {
