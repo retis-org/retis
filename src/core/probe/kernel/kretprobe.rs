@@ -21,8 +21,8 @@ use kretprobe_bpf::KretprobeSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct KretprobeBuilder {
-    obj: Option<libbpf_rs::Object>,
     links: Vec<libbpf_rs::Link>,
+    obj: Option<libbpf_rs::Object>,
 }
 
 impl ProbeBuilder for KretprobeBuilder {
@@ -85,6 +85,11 @@ impl ProbeBuilder for KretprobeBuilder {
                 .ok_or_else(|| anyhow!("Couldn't get kprobe program"))?
                 .attach_kprobe(false, probe.symbol.attach_name())?,
         );
+        Ok(())
+    }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
         Ok(())
     }
 }

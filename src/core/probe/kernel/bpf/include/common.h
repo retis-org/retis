@@ -231,8 +231,10 @@ static __always_inline int chain(struct retis_context *ctx)
 		track_skb_start(ctx);
 
 	event = get_event();
-	if (!event)
+	if (!event) {
+		err_report(ctx->ksym, 0);
 		goto exit;
+	}
 
 	e = get_event_section(event, COMMON, COMMON_SECTION_CORE, sizeof(*e));
 	if (!e)

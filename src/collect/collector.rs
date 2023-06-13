@@ -263,6 +263,9 @@ impl Collectors {
     /// their `stop()` function. All the collectors are in charge to clean-up
     /// their temporary side effects and exit gracefully.
     fn stop(&mut self) -> Result<()> {
+        self.probes.detach()?;
+        self.probes.report_counters()?;
+
         self.modules.collectors().iter_mut().for_each(|(id, c)| {
             debug!("Stopping {}", id.to_str());
             if c.stop().is_err() {

@@ -6,6 +6,7 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::core::{
     events::{bpf::BpfRawSection, *},
+    probe::common::{Counters, CountersKey},
     user::proc::Process,
 };
 use crate::{event_section, event_section_factory};
@@ -44,6 +45,17 @@ impl UsdtProbe {
     /// Return a printable name.
     pub(crate) fn name(&self) -> String {
         format!("usdt:{}:{}", self.provider, self.name)
+    }
+
+    /// Generate the probe BPF configuration from a list of options.
+    pub(crate) fn gen_counters(&self) -> Result<(CountersKey, Counters)> {
+        Ok((
+            CountersKey {
+                sym_addr: self.ksym,
+                pid: self.pid as u64,
+            },
+            Counters::default(),
+        ))
     }
 }
 

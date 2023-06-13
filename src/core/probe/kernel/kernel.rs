@@ -8,7 +8,10 @@ use super::{config::ProbeConfig, inspect::inspect_symbol};
 use crate::core::{
     events::{bpf::BpfRawSection, *},
     kernel::Symbol,
-    probe::ProbeOption,
+    probe::{
+        common::{Counters, CountersKey},
+        ProbeOption,
+    },
 };
 use crate::{event_section, event_section_factory};
 
@@ -40,6 +43,17 @@ impl KernelProbe {
         });
 
         Ok(config)
+    }
+
+    /// Generate the probe BPF configuration from a list of options.
+    pub(crate) fn gen_counters(&self) -> Result<(CountersKey, Counters)> {
+        Ok((
+            CountersKey {
+                sym_addr: self.symbol.addr()?,
+                ..Default::default()
+            },
+            Counters::default(),
+        ))
     }
 }
 

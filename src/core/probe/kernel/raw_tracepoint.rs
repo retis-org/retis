@@ -4,7 +4,6 @@
 //! tracepoints over tracepoints to access their arguments. The module is split
 //! in two parts, the Rust code (here) and the eBPF one
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
-
 use anyhow::{anyhow, bail, Result};
 
 use crate::core::filters::Filter;
@@ -18,9 +17,10 @@ use raw_tracepoint_bpf::RawTracepointSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct RawTracepointBuilder {
-    links: Vec<libbpf_rs::Link>,
-    map_fds: Vec<(String, i32)>,
     hooks: Vec<Hook>,
+    links: Vec<libbpf_rs::Link>,
+    obj: Option<libbpf_rs::Object>,
+    map_fds: Vec<(String, i32)>,
     filters: Vec<Filter>,
 }
 
@@ -69,6 +69,12 @@ impl ProbeBuilder for RawTracepointBuilder {
 
         self.links
             .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
+        self.obj = Some(obj);
+        Ok(())
+    }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
         Ok(())
     }
 }

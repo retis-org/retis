@@ -32,6 +32,9 @@ pub(super) trait ProbeBuilder {
     ) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
     fn attach(&mut self, probe: &Probe) -> Result<()>;
+    /// Detach all probes installed by the builder (function,
+    /// tracepoint, etc).
+    fn detach(&mut self) -> Result<()>;
 }
 
 pub(super) fn reuse_map_fds(

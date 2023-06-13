@@ -17,8 +17,8 @@ use kprobe_bpf::KprobeSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct KprobeBuilder {
-    obj: Option<libbpf_rs::Object>,
     links: Vec<libbpf_rs::Link>,
+    obj: Option<libbpf_rs::Object>,
 }
 
 impl ProbeBuilder for KprobeBuilder {
@@ -72,6 +72,11 @@ impl ProbeBuilder for KprobeBuilder {
                 .ok_or_else(|| anyhow!("Couldn't get program"))?
                 .attach_kprobe(false, probe.symbol.attach_name())?,
         );
+        Ok(())
+    }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
         Ok(())
     }
 }

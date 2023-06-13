@@ -5,7 +5,8 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/usdt.bpf.h>
 
-#include "events.h"
+#include <events.h>
+#include <common_defs.h>
 
 enum userspace_event_type {
 	USDT = 1,

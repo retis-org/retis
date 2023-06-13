@@ -102,9 +102,6 @@ struct retis_context {
 #define retis_get_nft_traceinfo(ctx)	\
 	RETIS_GET(ctx, nft_traceinfo, struct nft_traceinfo *)
 
-/* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
-#define PROBE_MAX	1024
-
 /* Returns the skb trying to get it first from the arguments (common case)
  * and if not found from the nft_pktinfo (useful for nft).
  */
