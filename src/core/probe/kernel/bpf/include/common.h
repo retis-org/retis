@@ -230,6 +230,12 @@ static __always_inline int chain(struct retis_context *ctx)
 	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
 		track_skb_start(ctx);
 
+	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
+	 * to allocate and fill an event to drop it later on.
+	 */
+	if (nhooks == 0)
+		goto exit;
+
 	event = get_event();
 	if (!event) {
 		err_report(ctx->ksym, 0);

@@ -131,7 +131,7 @@ impl EventFmt for SkbEvent {
 
             let len = len.saturating_sub(tcp.doff as u16 * 4);
             if len > 0 {
-                write!(f, " seq {}:{}", tcp.seq, tcp.seq + len as u32)?;
+                write!(f, " seq {}:{}", tcp.seq, tcp.seq as u64 + len as u64)?;
             } else {
                 write!(f, " seq {}", tcp.seq)?;
             }
