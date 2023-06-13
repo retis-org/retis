@@ -429,7 +429,7 @@ impl EventFactory for BpfEventsFactory {
 
 /// Max number of events we can store at once in the shared map. Please keep in
 /// sync with its BPF counterpart.
-pub(super) const BPF_EVENTS_MAX: u32 = 512;
+pub(super) const BPF_EVENTS_MAX: u32 = 8 * 1024;
 
 /// Size of the raw data buffer of a BPF event. Please keep synced with its BPF
 /// counterpart.
