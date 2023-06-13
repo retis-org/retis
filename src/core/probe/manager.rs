@@ -349,7 +349,7 @@ impl ProbeManager {
     pub(crate) fn report_counters(&self) -> Result<()> {
         let mut counters_key = CountersKey::default();
         let mut counters = Counters::default();
-        let mut total_lost = 0;
+        let mut total_lost: u64 = 0;
         let mut proc_cache: HashMap<u64, String> = HashMap::new();
 
         for k in self.counters_map.keys() {
@@ -385,7 +385,7 @@ impl ProbeManager {
                     warn!("lost {} event(s) from {usdt_info}", counters.dropped_events);
                 }
 
-                total_lost += counters.dropped_events;
+                total_lost = total_lost.saturating_add(counters.dropped_events);
             }
         }
 
