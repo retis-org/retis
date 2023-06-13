@@ -265,6 +265,7 @@ pub(super) fn get_profile_paths() -> Result<Vec<PathBuf>> {
     // Paths are inspected in order so keep them ordered by (descending) priority.
     let mut paths = Vec::new();
     if cfg!(debug_assertions) {
+        paths.push(PathBuf::from("profiles/"));
         paths.push(PathBuf::from("test_data/profiles/"));
     }
     if let Ok(home) = env::var("HOME") {
