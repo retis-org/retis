@@ -4,7 +4,7 @@
 #include <vmlinux.h>
 
 /* Please keep both synced with its Rust counterpart. */
-#define EVENTS_MAX		512
+#define EVENTS_MAX		8 * 1024
 #define RAW_EVENT_DATA_SIZE	1024 - 2 /* Remove the size field */
 #define RETIS_MAX_COMM		64
 
