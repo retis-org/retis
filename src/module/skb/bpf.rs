@@ -75,8 +75,20 @@ struct RawIpv4Event {
     dst: u32,
     /// IP packet length in bytes. Stored in network order.
     len: u16,
+    /// Identification. Stored in network order.
+    id: u16,
     /// L4 protocol.
     protocol: u8,
+    /// Time to live.
+    ttl: u8,
+    /// Type of service.
+    tos: u8,
+    /// ECN bits.
+    ecn: u8,
+    /// Fragment offset. Stored in network order.
+    offset: u16,
+    /// Flags (CE, DF, MF).
+    flags: u8,
 }
 unsafe impl Plain for RawIpv4Event {}
 
@@ -89,9 +101,16 @@ pub(super) fn unmarshal_ipv4(raw_section: &BpfRawSection) -> Result<SkbIpEvent> 
     Ok(SkbIpEvent {
         saddr: format!("{src}"),
         daddr: format!("{dst}"),
-        version: 4,
+        version: SkbIpVersion::V4(SkbIpv4Event {
+            tos: raw.tos,
+            flags: raw.flags,
+            id: u16::from_be(raw.id),
+            offset: u16::from_be(raw.offset),
+        }),
         protocol: raw.protocol,
         len: u16::from_be(raw.len),
+        ttl: raw.ttl,
+        ecn: raw.ecn,
     })
 }
 
@@ -103,10 +122,16 @@ struct RawIpv6Event {
     src: u128,
     /// Destination IP address. Stored in network order.
     dst: u128,
+    /// Flow label.
+    flow_label: u32,
     /// IP packet length in bytes. Stored in network order.
     len: u16,
     /// L4 protocol.
     protocol: u8,
+    /// TTL.
+    ttl: u8,
+    /// ECN bits.
+    ecn: u8,
 }
 unsafe impl Plain for RawIpv6Event {}
 
@@ -119,9 +144,13 @@ pub(super) fn unmarshal_ipv6(raw_section: &BpfRawSection) -> Result<SkbIpEvent> 
     Ok(SkbIpEvent {
         saddr: format!("{src}"),
         daddr: format!("{dst}"),
-        version: 6,
+        version: SkbIpVersion::V6(SkbIpv6Event {
+            flow_label: raw.flow_label,
+        }),
         protocol: raw.protocol,
         len: u16::from_be(raw.len),
+        ttl: raw.ttl,
+        ecn: raw.ecn,
     })
 }
 
