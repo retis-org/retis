@@ -33,7 +33,6 @@
 //!
 //! The unique identifier is thus `(original_skb_head << 64 | initial_timestamp)`.
 //!
-//!
 //! ## Clones
 //!
 //! Socket buffers can be cloned and we end up with multiple skb objects

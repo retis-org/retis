@@ -21,7 +21,8 @@ impl BtfInfo {
             true => "test_data/vmlinux",
         };
 
-        let vmlinux = Btf::from_file(vmlinux)?;
+        let vmlinux =
+            Btf::from_file(vmlinux).map_err(|e| anyhow!("Could not open {vmlinux}: {e}"))?;
 
         // Load module btf files if possible.
         let modules = match cfg!(test) {

@@ -226,7 +226,7 @@ static __always_inline int process_skb_l2_l4(struct retis_context *ctx,
 				      flow_lbl[1] << 8 | flow_lbl[2];
 			e->flow_lbl &= 0xfffff;
 
-			bpf_probe_read_kernel(&ecn, sizeof(ecn), &ip6);
+			bpf_probe_read_kernel(&ecn, sizeof(ecn), ip6);
 			e->ecn = (bpf_ntohs(ecn) >> 4) & 0x3;
 		}
 	} else {
