@@ -185,7 +185,9 @@ impl EventFmt for SkbEvent {
 
         if let Some(udp) = &self.udp {
             space(f, &mut first)?;
-            write!(f, "len {}", udp.len)?;
+            let len = udp.len;
+            // Substract the UDP header size when reporting the length.
+            write!(f, "len {}", len.saturating_sub(8))?;
         }
 
         if let Some(icmp) = &self.icmp {
