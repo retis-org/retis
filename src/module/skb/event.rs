@@ -112,7 +112,7 @@ impl EventFmt for SkbEvent {
 
             match &ip.version {
                 SkbIpVersion::V4(v4) => {
-                    write!(f, " tos {:#x} id {} off {}", v4.tos, v4.id, v4.offset)?;
+                    write!(f, " tos {:#x} id {} off {}", v4.tos, v4.id, v4.offset * 8)?;
 
                     let mut flags = Vec::new();
                     // Same order as tcpdump.
