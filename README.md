@@ -385,7 +385,7 @@ RPM packages for Fedora (currently supported releases including Rawhide), RHEL (
 8) and EPEL (>= 8) are available.
 
 ```
-$ dnf -y copr enable atenart/retis
+$ dnf -y copr enable @retis/retis
 $ dnf -y install retis
 $ retis --help
 ```
@@ -393,7 +393,7 @@ $ retis --help
 Or on older distributions,
 
 ```
-$ yum -y copr enable atenart/retis
+$ yum -y copr enable @retis/retis
 $ yum -y install retis
 $ retis --help
 ```
@@ -401,8 +401,9 @@ $ retis --help
 ### Container image
 
 ```
-$ podman run --privileged --rm -it --pid=host -v /sys/kernel/debug/:/sys/kernel/debug \
-      -v /sys/kernel/btf:/sys/kernel/btf quay.io/retis/retis:latest --help
+$ podman run --privileged --rm -it --pid=host -v /sys/kernel/debug/:/sys/kernel/debug:ro \
+      -v /sys/kernel/btf:/sys/kernel/btf:ro -v /boot:/boot:ro \
+      quay.io/retis/retis:latest --help
 ```
 
 ### From sources
