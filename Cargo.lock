@@ -88,6 +88,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
 
 [[package]]
+name = "ascii"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae7d751998c189c1d4468cf0a39bb2eae052a9c58d50ebb3b9591ee3813ad50"
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -161,12 +167,6 @@ name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
-
-[[package]]
-name = "bytes"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89b2fd2a0dcf38d7971e2194b6b6eebab45ae01067456a7fd93d5547a61b70be"
 
 [[package]]
 name = "camino"
@@ -341,12 +341,12 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "combine"
-version = "4.6.6"
+version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35ed6e9d84f0b51a7f52daf1c7d71dd136fd7a3f41a8462b8cdb8c78d920fad4"
+checksum = "1645a65a99c7c8d345761f4b75a6ffe5be3b3b27a93ee731fccc5050ba6be97c"
 dependencies = [
- "bytes",
- "memchr",
+ "ascii",
+ "byteorder",
 ]
 
 [[package]]
@@ -950,7 +950,8 @@ dependencies = [
 [[package]]
 name = "rbpf"
 version = "0.2.0"
-source = "git+https://github.com/qmonnet/rbpf#7d2b019a51d48b7c91c269e5eec3084883a14b7c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b536dc5c7e3a730d06c578a41df1fbcccd66240a7a9bd5f150a0826291f01c66"
 dependencies = [
  "byteorder",
  "combine",
