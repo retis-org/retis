@@ -21,6 +21,7 @@ use crate::{
     process::cli::Print,
     process::cli::Sort,
     profiles::{cli::ProfileCmd, Profile},
+    VERSION_NAME,
 };
 
 /// SubCommandRunner defines the common interface to run SubCommands.
@@ -242,9 +243,9 @@ impl ThinCli {
         T: Into<OsString> + Clone,
     {
         let version = if cfg!(debug_assertions) {
-            format!("{}-dbg", env!("CARGO_PKG_VERSION"))
+            format!("{}-dbg (\"{VERSION_NAME}\")", env!("CARGO_PKG_VERSION"))
         } else {
-            env!("CARGO_PKG_VERSION").to_string()
+            format!("{} (\"{VERSION_NAME}\")", env!("CARGO_PKG_VERSION"))
         };
 
         let args: Vec<OsString> = args.into_iter().map(|x| x.into()).collect();
