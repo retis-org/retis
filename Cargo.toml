@@ -29,7 +29,7 @@ pcap = "1.0"
 plain = "0.2"
 rbpf = {version = "0.2", optional = true}
 regex = "1.7"
-retis-derive = {path = "./retis-derive"}
+retis-derive = {version = "1.0", path = "./retis-derive"}
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
 serde_with = "3.0"
