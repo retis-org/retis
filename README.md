@@ -408,6 +408,8 @@ $ podman run --privileged --rm -it --pid=host -v /sys/kernel/debug/:/sys/kernel/
       quay.io/retis/retis:latest --help
 ```
 
+Or using `docker` in place of `podman` in the above.
+
 ### From sources
 
 Retis depends on the following (in addition to Git and Cargo):
