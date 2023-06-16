@@ -214,7 +214,7 @@ impl EventFmt for SkbEvent {
                 write!(f, "priority {}", meta.priority)?;
             }
 
-            if self.meta.is_some() {
+            if self.meta.is_some() && self.data_ref.is_some() {
                 write!(f, " ")?;
             }
 
