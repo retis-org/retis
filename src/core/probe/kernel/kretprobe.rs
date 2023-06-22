@@ -40,9 +40,7 @@ impl ProbeBuilder for KretprobeBuilder {
             bail!("Kretprobe builder already initialized");
         }
 
-        let mut skel = KretprobeSkelBuilder::default();
-        skel.obj_builder.debug(get_ebpf_debug());
-        let mut skel = skel.open()?;
+        let mut skel = KretprobeSkelBuilder::default().open()?;
         skel.rodata().nhooks = hooks.len() as u32;
 
         let open_obj = skel.obj;

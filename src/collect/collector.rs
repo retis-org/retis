@@ -141,7 +141,6 @@ impl Collectors {
             .downcast_ref::<Collect>()
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
-        probe::common::set_ebpf_debug(collect.args()?.ebpf_debug)?;
         if collect.args()?.stack {
             self.probes.set_probe_opt(probe::ProbeOption::StackTrace)?;
         }

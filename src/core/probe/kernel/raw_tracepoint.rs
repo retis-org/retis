@@ -42,9 +42,7 @@ impl ProbeBuilder for RawTracepointBuilder {
     }
 
     fn attach(&mut self, probe: &Probe) -> Result<()> {
-        let mut skel = RawTracepointSkelBuilder::default();
-        skel.obj_builder.debug(get_ebpf_debug());
-        let mut skel = skel.open()?;
+        let mut skel = RawTracepointSkelBuilder::default().open()?;
 
         let probe = match probe.r#type() {
             ProbeType::RawTracepoint(probe) => probe,
