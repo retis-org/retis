@@ -410,7 +410,10 @@ $ podman run --privileged --rm -it --pid=host \
       quay.io/retis/retis:latest --help
 ```
 
-Or using `docker` in place of `podman` in the above.
+- Or using `docker` in place of `podman` in the above.
+
+- When running on CoreOS, Fedora Silverblue and friends replace `-v
+  /boot:/boot:ro` with `-v /lib/modules:/lib/modules:ro` in the above.
 
 ### From sources
 
