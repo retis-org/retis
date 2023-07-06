@@ -12,17 +12,6 @@ pub(crate) fn collection_prerequisites() -> Result<()> {
     let inspector = inspect::inspector()?;
     let kver = inspector.kernel.version();
 
-    // First check if libbpf will be able to read the kernel configuration. Look
-    // for a dummy config option and see if it returns Err() instead of the
-    // expected Ok(None).
-    if inspector.kernel.get_config_option("CONFIG_DUMMY").is_err() {
-        bail!(
-            "Can't access kernel configuration:
-Retis uses libbpf and conditionals on the kernel configuration in the BPF part, \
-which requires access to the kernel configuration file."
-        );
-    }
-
     // Check we have CAP_BPF.
     if !caps::has_cap(None, CapSet::Permitted, Capability::CAP_BPF)? {
         bail!("Retis does not have CAP_BPF: can't install probes.");
