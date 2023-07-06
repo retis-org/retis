@@ -1,3 +1,5 @@
+use std::fs;
+
 use anyhow::{bail, Result};
 use caps::{self, CapSet, Capability};
 use log::warn;
@@ -12,9 +14,23 @@ pub(crate) fn collection_prerequisites() -> Result<()> {
     let inspector = inspect::inspector()?;
     let kver = inspector.kernel.version();
 
+    // Check we have CAP_SYS_ADMIN.
+    // Needed for converting BPF ids to fds and/or to iterate over BPF objects.
+    if !caps::has_cap(None, CapSet::Effective, Capability::CAP_SYS_ADMIN)? {
+        bail!("Retis does not have CAP_SYS_ADMIN: can't replace BPF programs.");
+    }
+
     // Check we have CAP_BPF.
-    if !caps::has_cap(None, CapSet::Permitted, Capability::CAP_BPF)? {
+    if !caps::has_cap(None, CapSet::Effective, Capability::CAP_BPF)? {
         bail!("Retis does not have CAP_BPF: can't install probes.");
+    }
+
+    // Check we have CAP_SYSLOG or permissive settings.
+    if !caps::has_cap(None, CapSet::Effective, Capability::CAP_SYSLOG)?
+        && (!check_sysctl("kernel.perf_event_paranoid", "0")?
+            || !check_sysctl("kernel.kptr_restrict", "0")?)
+    {
+        bail!("Retis can't read addresses in /proc/kallsyms: set CAP_SYSLOG or see kernel.perf_event_paranoid and kernel.kptr_restrict.");
     }
 
     // Check for a potential incompatibility when CONFIG_X86_KERNEL_IBT=y on
@@ -42,4 +58,13 @@ resulting on *some* probes not being able to work properly."
     }
 
     Ok(())
+}
+
+fn check_sysctl(path: &str, value: &str) -> Result<bool> {
+    let path = format!("/proc/sys/{}", path.replace('.', "/"));
+
+    match fs::read_to_string(&path) {
+        Ok(content) => Ok(content.trim() == value),
+        Err(e) => bail!("Coult not read {path}: {e}"),
+    }
 }
