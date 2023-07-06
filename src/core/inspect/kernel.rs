@@ -77,6 +77,12 @@ impl KernelInspector {
             symbols.insert(u64::from_str_radix(data[0], 16)?, String::from(symbol));
         }
 
+        // If all symbols have a 0-address, only the last one will be left in
+        // the map after the above.
+        if symbols.len() == 1 {
+            bail!("Retis likely does not have the rights to read the symbol addresses from /proc/kallsyms.");
+        }
+
         let version = KernelVersion::new()?;
         let config = Self::parse_kernel_config(&version.full)?;
 
