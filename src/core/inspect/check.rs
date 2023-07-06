@@ -11,9 +11,6 @@ use super::{inspect, kernel_version::KernelVersionReq};
 /// be used to show warning or information that do not prevent Retis from
 /// starting.
 pub(crate) fn collection_prerequisites() -> Result<()> {
-    let inspector = inspect::inspector()?;
-    let kver = inspector.kernel.version();
-
     // Check we have CAP_SYS_ADMIN.
     // Needed for converting BPF ids to fds and/or to iterate over BPF objects.
     if !caps::has_cap(None, CapSet::Effective, Capability::CAP_SYS_ADMIN)? {
@@ -32,6 +29,10 @@ pub(crate) fn collection_prerequisites() -> Result<()> {
     {
         bail!("Retis can't read addresses in /proc/kallsyms: set CAP_SYSLOG or see kernel.perf_event_paranoid and kernel.kptr_restrict.");
     }
+
+    // Only initialize the inspector after the capabilities checks.
+    let inspector = inspect::inspector()?;
+    let kver = inspector.kernel.version();
 
     // Check for a potential incompatibility when CONFIG_X86_KERNEL_IBT=y on
     // old kernels. For a full explanation see
