@@ -102,7 +102,7 @@ impl KernelInspector {
 
         if inspector.traceable_funcs.is_none() || inspector.traceable_events.is_none() {
             warn!(
-                "Consider mounting debugfs to /sys/kernel/debug to better filter available probes"
+                "Could not access files in /sys/kernel/debug/tracing: consider mounting debugfs, if not a permissions issue"
             );
         }
 
@@ -336,7 +336,7 @@ impl KernelInspector {
         let set = &self.traceable_funcs;
 
         if set.is_none() {
-            bail!("Can't get matching functions, consider mounting /sys/kernel/debug");
+            bail!("Could not get matching functions as Retis can't access files in /sys/kernel/debug/tracing");
         }
 
         let target = format!("^{}$", target.replace('*', ".*"));
