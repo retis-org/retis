@@ -5,7 +5,9 @@ Tracing packets in the [Linux](https://kernel.org) networking stack, using
 [OvS](https://www.openvswitch.org) or [Netfilter](https://netfilter.org).
 
 For bug reports, feature suggestions and contributions; please see the
-[contributing guide](CONTRIBUTING.md) guide first.
+[contributing guide](CONTRIBUTING.md) guide first. We also have a public IRC
+channel on [Libera.chat](https://libera.chat):
+[`#retis`](https://web.libera.chat/?channel=#retis).
 
 ![demo](demo.gif)
 
