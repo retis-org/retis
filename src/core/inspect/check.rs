@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, os::unix::fs::MetadataExt};
 
 use anyhow::{bail, Result};
 use caps::{self, CapSet, Capability};
@@ -11,6 +11,14 @@ use super::{inspect, kernel_version::KernelVersionReq};
 /// be used to show warning or information that do not prevent Retis from
 /// starting.
 pub(crate) fn collection_prerequisites() -> Result<()> {
+    // Check if we're running in an unprivileged userns (container) as we'll
+    // fail eventually in such case even if we have all the right capabilities
+    // and requirements, as we use some bpf(2) calls that needs system-wide
+    // capabilities. E.g. BPF_MAP_TYPE_STACK_TRACE.
+    if fs::metadata("/proc")?.uid() != 0 {
+        warn!("Retis likely runs in an unprivileged userns but need system-wide capabilities for bpf syscalls. It might fail with -EPERM (-1) later.");
+    }
+
     // Check we have CAP_SYS_ADMIN.
     // Needed for converting BPF ids to fds and/or to iterate over BPF objects.
     if !caps::has_cap(None, CapSet::Effective, Capability::CAP_SYS_ADMIN)? {
