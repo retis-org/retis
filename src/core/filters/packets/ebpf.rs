@@ -74,8 +74,9 @@ impl BpfReg {
 }
 
 const STACK_RESERVED: i16 = 8;
+const SCRATCH_MEM_SIZE: i16 = 4;
 // Start of stack memory store
-const SCRATCH_MEM_START: i16 = 16 * 4 + STACK_RESERVED;
+const SCRATCH_MEM_START: i16 = 16 * SCRATCH_MEM_SIZE + STACK_RESERVED;
 
 // This should be kept in sync with struct retis_filter_context in
 // src/core/filter/packets/bpf/include/packet_filter.h
@@ -382,7 +383,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                         } else {
                             BpfReg::X
                         },
-                        off: -SCRATCH_MEM_START + cbpf_insn.k as i16,
+                        off: -SCRATCH_MEM_START + (cbpf_insn.k as i16 * SCRATCH_MEM_SIZE),
                     },
                     BpfSize::Word,
                 )),
@@ -471,7 +472,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                     StInfo::Reg {
                         src: BpfReg::A,
                         dst: BpfReg::FP,
-                        off: -SCRATCH_MEM_START + cbpf_insn.k as i16,
+                        off: -SCRATCH_MEM_START + (cbpf_insn.k as i16 * SCRATCH_MEM_SIZE),
                     },
                     BpfSize::Word,
                 )),
@@ -479,7 +480,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                     StInfo::Reg {
                         src: BpfReg::X,
                         dst: BpfReg::FP,
-                        off: -SCRATCH_MEM_START + cbpf_insn.k as i16,
+                        off: -SCRATCH_MEM_START + (cbpf_insn.k as i16 * SCRATCH_MEM_SIZE),
                     },
                     BpfSize::Word,
                 )),
