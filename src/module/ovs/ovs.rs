@@ -73,10 +73,15 @@ impl Collector for OvsModule {
 
         // Check if the OvS kernel module is available. We also check for loaded
         // module in case CONFIG_OPENVSWITCH=n because if might be out of tree.
-        if inspector.kernel.get_config_option("CONFIG_OPENVSWITCH")? != Some("=y")
-            && inspector.kernel.is_module_loaded("openvswitch") == Some(false)
-        {
-            bail!("Kernel module 'openvswitch' is not loaded")
+        if Symbol::from_name("openvswitch:ovs_dp_upcall").is_err() {
+            if let Ok(kconf) = inspector.kernel.get_config_option("CONFIG_OPENVSWITCH") {
+                if kconf != Some("=y")
+                    && inspector.kernel.is_module_loaded("openvswitch") == Some(false)
+                {
+                    bail!("Kernel module 'openvswitch' is not loaded");
+                }
+            }
+            bail!("Could not resolve ovs kernel symbol: 'openvswitch' kernel module is likely not be built-in or loaded");
         }
 
         Ok(())
