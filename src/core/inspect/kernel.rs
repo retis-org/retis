@@ -185,7 +185,7 @@ impl KernelInspector {
                 }
             }
 
-            warn!("Could not parse kernel configuration from known paths");
+            warn!("Could not parse kernel configuration from known paths: some checks won't be performed");
         } else if let Ok(file) = fs::read_to_string("test_data/config-6.3.0-0.rc7.56.fc39.x86_64") {
             return Ok(Some(parse_kconfig(&file)?));
         }
