@@ -403,8 +403,10 @@ $ retis --help
 ### Container image
 
 ```
-$ podman run --privileged --rm -it --pid=host -v /sys/kernel/debug/:/sys/kernel/debug:ro \
-      -v /sys/kernel/btf:/sys/kernel/btf:ro -v /boot:/boot:ro \
+$ podman run --privileged --rm -it --pid=host \
+      -v /boot:/boot:ro \
+      -v /sys/kernel/btf:/sys/kernel/btf:ro \
+      -v /sys/kernel/debug:/sys/kernel/debug:ro \
       quay.io/retis/retis:latest --help
 ```
 
