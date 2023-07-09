@@ -107,9 +107,8 @@ const struct nft_chain *nft_get_chain_from_rule(struct retis_context *ctx,
 						struct nft_traceinfo *info,
 						const struct nft_rule_dp *rule)
 {
-	const struct nft_rule_dp_last___6_4_0 *last;
+	const struct nft_rule_dp_last___6_4_0 *last = NULL;
 	const struct nft_base_chain *base_chain;
-	bool last_rule;
 	u64 rule_dlen;
 	int i;
 
@@ -149,7 +148,7 @@ const struct nft_chain *nft_get_chain_from_rule(struct retis_context *ctx,
 /* Depending on the kernel:
  * - rule is under info, chain is a parameter
  * - rule is a parameter, chain is one of:
- *   - last_rule->chain
+ *   - last->chain; if rule->is_last
  *   - info->basechain->chain; if !rule
  *
  * The function deal with that and other than the rule, it also
