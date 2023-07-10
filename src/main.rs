@@ -38,6 +38,7 @@ fn main() -> Result<()> {
     // Step 4: dispatch the command.
     let command = cli.get_subcommand_mut()?;
     let mut runner = command.runner()?;
+    runner.check_prerequisites()?;
     runner.run(cli, modules)?;
     Ok(())
 }

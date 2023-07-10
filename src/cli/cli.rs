@@ -26,6 +26,8 @@ use crate::{
 
 /// SubCommandRunner defines the common interface to run SubCommands.
 pub(crate) trait SubCommandRunner {
+    /// Checks global prerequisites for the command to run successfully.
+    fn check_prerequisites(&self) -> Result<()>;
     /// Run the subcommand with a given set of modules and cli configuration
     fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()>;
 }
@@ -51,6 +53,9 @@ impl<F> SubCommandRunner for SubCommandRunnerFunc<F>
 where
     F: Fn(FullCli, Modules) -> Result<()>,
 {
+    fn check_prerequisites(&self) -> Result<()> {
+        Ok(())
+    }
     fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
         (self.func)(cli, modules)
     }
