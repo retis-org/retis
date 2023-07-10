@@ -10,7 +10,7 @@ use clap::{
     {builder::PossibleValuesParser, error::ErrorKind, Arg, ArgAction, ArgMatches, Args, Command},
 };
 
-use super::run_collect;
+use super::CollectRunner;
 use crate::{
     cli::{dynamic::DynamicCommand, SubCommand, *},
     core::events::DisplayFormat,
@@ -199,7 +199,7 @@ impl SubCommand for Collect {
     }
 
     fn runner(&self) -> Result<Box<dyn SubCommandRunner>> {
-        Ok(Box::new(SubCommandRunnerFunc::new(run_collect)))
+        Ok(Box::new(CollectRunner {}))
     }
 }
 
