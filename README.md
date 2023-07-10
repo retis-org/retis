@@ -405,16 +405,17 @@ $ retis --help
 
 ```
 $ podman run --privileged --rm -it --pid=host \
-      -v /boot:/boot:ro \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
+      -v /boot/config-$(uname -r):/kconfig:ro \
       quay.io/retis/retis:latest --help
 ```
 
 - Or using `docker` in place of `podman` in the above.
 
 - When running on CoreOS, Fedora Silverblue and friends replace `-v
-  /boot:/boot:ro` with `-v /lib/modules:/lib/modules:ro` in the above.
+  /boot/config-$(uname -r):/kconfig:ro` with `-v /lib/modules/$(uname
+  -r)/config:/kconfig:ro` in the above.
 
 ### From sources
 
