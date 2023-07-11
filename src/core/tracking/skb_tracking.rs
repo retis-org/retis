@@ -107,14 +107,14 @@ const SKB_TRACKING_GC_INTERVAL: u64 = 5;
 // shouldn't happen much — or it is a bug.
 const TRACKING_OLD_LIMIT: u64 = 60;
 
-fn config_map() -> Result<libbpf_rs::Map> {
+fn config_map() -> Result<libbpf_rs::MapHandle> {
     let opts = libbpf_sys::bpf_map_create_opts {
         sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
         ..Default::default()
     };
 
     // Please keep in sync with its BPF counterpart.
-    libbpf_rs::Map::create(
+    libbpf_rs::MapHandle::create(
         libbpf_rs::MapType::Hash,
         Some("tracking_config_map"),
         mem::size_of::<u64>() as u32,
@@ -125,14 +125,14 @@ fn config_map() -> Result<libbpf_rs::Map> {
     .or_else(|e| bail!("Could not create the tracking config map: {}", e))
 }
 
-fn tracking_map() -> Result<libbpf_rs::Map> {
+fn tracking_map() -> Result<libbpf_rs::MapHandle> {
     let opts = libbpf_sys::bpf_map_create_opts {
         sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
         ..Default::default()
     };
 
     // Please keep in sync with its BPF counterpart.
-    libbpf_rs::Map::create(
+    libbpf_rs::MapHandle::create(
         libbpf_rs::MapType::Hash,
         Some("tracking_map"),
         mem::size_of::<u64>() as u32,

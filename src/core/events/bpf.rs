@@ -69,7 +69,7 @@ macro_rules! event_byte_array {
 /// parts.
 #[cfg(not(test))]
 pub(crate) struct BpfEventsFactory {
-    map: libbpf_rs::Map,
+    map: libbpf_rs::MapHandle,
     /// Receiver channel to retrieve events from the processing loop.
     rxc: Option<mpsc::Receiver<Event>>,
     /// Polling thread handle.
@@ -85,7 +85,7 @@ impl BpfEventsFactory {
             ..Default::default()
         };
 
-        let map = libbpf_rs::Map::create(
+        let map = libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::RingBuf,
             Some("events_map"),
             0,

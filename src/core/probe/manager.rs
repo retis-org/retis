@@ -46,11 +46,11 @@ pub(crate) struct ProbeManager {
 
     /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
     #[cfg(not(test))]
-    config_map: libbpf_rs::Map,
+    config_map: libbpf_rs::MapHandle,
 
     /// Global per-probe map used to report counters.
     #[cfg(not(test))]
-    counters_map: libbpf_rs::Map,
+    counters_map: libbpf_rs::MapHandle,
 
     /// Internal vec to store "used" probe builders, so we can keep a reference
     /// on them and keep probes loaded & installed.
@@ -281,8 +281,8 @@ impl ProbeManager {
         hooks: &[Hook],
         filters: &[Filter],
         maps: HashMap<String, RawFd>,
-        #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
-        #[cfg(not(test))] counters_map: &mut libbpf_rs::Map,
+        #[cfg(not(test))] config_map: &mut libbpf_rs::MapHandle,
+        #[cfg(not(test))] counters_map: &mut libbpf_rs::MapHandle,
     ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
         let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
         let map_fds: Vec<(String, RawFd)> = maps.into_iter().collect();

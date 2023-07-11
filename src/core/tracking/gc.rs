@@ -37,7 +37,7 @@ impl TrackingGC {
 
     pub(crate) fn new<F>(
         name: &'static str,
-        mut maps: HashMap<&'static str, libbpf_rs::Map>,
+        mut maps: HashMap<&'static str, libbpf_rs::MapHandle>,
         extract_age: F,
     ) -> Self
     where
@@ -131,7 +131,7 @@ impl TrackingGC {
         }
     }
 
-    pub(crate) fn format_key(map: &libbpf_rs::Map, key: Vec<u8>) -> String {
+    pub(crate) fn format_key(map: &libbpf_rs::MapHandle, key: Vec<u8>) -> String {
         let default_format = || format!("{:#x?}", key);
 
         // Try to format the key as unsigned integers and fall back to printing the u8 vector as

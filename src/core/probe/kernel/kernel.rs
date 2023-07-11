@@ -116,7 +116,7 @@ impl EventFmt for StackTrace {
 #[event_section_factory(KernelEvent)]
 pub(crate) struct KernelEventFactory {
     #[cfg(not(test))]
-    pub(crate) stack_map: Option<libbpf_rs::Map>,
+    pub(crate) stack_map: Option<libbpf_rs::MapHandle>,
 }
 
 impl KernelEventFactory {

@@ -30,13 +30,13 @@ pub(crate) struct Counters {
 unsafe impl plain::Plain for Counters {}
 
 #[cfg_attr(test, allow(dead_code))]
-pub(crate) fn init_counters_map() -> Result<libbpf_rs::Map> {
+pub(crate) fn init_counters_map() -> Result<libbpf_rs::MapHandle> {
     let opts = libbpf_sys::bpf_map_create_opts {
         sz: std::mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
         ..Default::default()
     };
 
-    Ok(libbpf_rs::Map::create(
+    Ok(libbpf_rs::MapHandle::create(
         libbpf_rs::MapType::Hash,
         Some("counters_map"),
         std::mem::size_of::<CountersKey>() as u32,

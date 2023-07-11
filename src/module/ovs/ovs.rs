@@ -48,8 +48,8 @@ See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions.
 #[derive(Default)]
 pub(crate) struct OvsModule {
     track: bool,
-    inflight_upcalls_map: Option<libbpf_rs::Map>,
-    inflight_exec_map: Option<libbpf_rs::Map>,
+    inflight_upcalls_map: Option<libbpf_rs::MapHandle>,
+    inflight_exec_map: Option<libbpf_rs::MapHandle>,
 
     /* Tracking file descriptors (the maps are owned by the GC) */
     flow_exec_tracking_fd: i32,
@@ -57,8 +57,8 @@ pub(crate) struct OvsModule {
     gc: Option<TrackingGC>,
     running: Running,
     /* Batch tracking maps. */
-    upcall_batches: Option<libbpf_rs::Map>,
-    pid_to_batch: Option<libbpf_rs::Map>,
+    upcall_batches: Option<libbpf_rs::MapHandle>,
+    pid_to_batch: Option<libbpf_rs::MapHandle>,
 }
 
 impl Collector for OvsModule {
@@ -140,14 +140,14 @@ impl Module for OvsModule {
 }
 
 impl OvsModule {
-    fn create_flow_exec_tracking_map() -> Result<libbpf_rs::Map> {
+    fn create_flow_exec_tracking_map() -> Result<libbpf_rs::MapHandle> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
         };
 
-        libbpf_rs::Map::create(
+        libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::Hash,
             Some("flow_exec_tracking"),
             mem::size_of::<u32>() as u32,
@@ -158,14 +158,14 @@ impl OvsModule {
         .or_else(|e| bail!("Could not create the flow_exec_tracking map: {}", e))
     }
 
-    fn create_upcall_tracking_map() -> Result<libbpf_rs::Map> {
+    fn create_upcall_tracking_map() -> Result<libbpf_rs::MapHandle> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
         };
 
-        libbpf_rs::Map::create(
+        libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::Hash,
             Some("upcall_tracking"),
             mem::size_of::<u32>() as u32,
@@ -176,7 +176,7 @@ impl OvsModule {
         .or_else(|e| bail!("Could not create the upcall tracking map: {}", e))
     }
 
-    fn create_inflight_exec_map() -> Result<libbpf_rs::Map> {
+    fn create_inflight_exec_map() -> Result<libbpf_rs::MapHandle> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         #[repr(C)]
         struct ExecuteActionsContext {
@@ -188,7 +188,7 @@ impl OvsModule {
             ..Default::default()
         };
 
-        libbpf_rs::Map::create(
+        libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::Hash,
             Some("inflight_exec"),
             mem::size_of::<u64>() as u32,
@@ -199,7 +199,7 @@ impl OvsModule {
         .or_else(|e| bail!("Could not create the inflight_exec map: {}", e))
     }
 
-    fn create_inflight_upcalls_map() -> Result<libbpf_rs::Map> {
+    fn create_inflight_upcalls_map() -> Result<libbpf_rs::MapHandle> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         #[repr(C)]
         struct UpcallContext {
@@ -211,7 +211,7 @@ impl OvsModule {
             ..Default::default()
         };
 
-        libbpf_rs::Map::create(
+        libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::Hash,
             Some("inflight_upcalls"),
             mem::size_of::<u64>() as u32,
@@ -253,7 +253,7 @@ impl OvsModule {
         };
 
         self.upcall_batches = Some(
-            libbpf_rs::Map::create(
+            libbpf_rs::MapHandle::create(
                 libbpf_rs::MapType::Array,
                 Some("upcall_batches"),
                 mem::size_of::<u32>() as u32,
@@ -270,7 +270,7 @@ impl OvsModule {
         };
 
         self.pid_to_batch = Some(
-            libbpf_rs::Map::create(
+            libbpf_rs::MapHandle::create(
                 libbpf_rs::MapType::Hash,
                 Some("pid_to_batch"),
                 mem::size_of::<u32>() as u32,

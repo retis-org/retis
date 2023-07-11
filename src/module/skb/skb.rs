@@ -94,14 +94,14 @@ impl Module for SkbModule {
 }
 
 impl SkbModule {
-    fn config_map() -> Result<libbpf_rs::Map> {
+    fn config_map() -> Result<libbpf_rs::MapHandle> {
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
         };
 
         // Please keep in sync with its BPF counterpart in bpf/skb_hook.bpf.c
-        libbpf_rs::Map::create(
+        libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::Array,
             Some("skb_config_map"),
             mem::size_of::<u32>() as u32,
