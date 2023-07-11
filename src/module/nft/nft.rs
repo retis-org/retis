@@ -42,6 +42,9 @@ Note that stolen verdicts might not be visible if a filter has been specified us
 #[derive(Default)]
 pub(crate) struct NftModule {
     install_chain: bool,
+    // Used to keep a reference to our internal config map.
+    #[allow(dead_code)]
+    config_map: Option<libbpf_rs::MapHandle>,
 }
 
 impl Module for NftModule {
@@ -239,6 +242,7 @@ impl Collector for NftModule {
         )?;
         probes.register_probe(nft_probe)?;
 
+        self.config_map = Some(config_map);
         Ok(())
     }
 
