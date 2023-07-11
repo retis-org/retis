@@ -29,11 +29,16 @@ pub(crate) struct SkbCollectorArgs {
     skb_sections: Vec<String>,
 }
 
-pub(crate) struct SkbModule {}
+#[derive(Default)]
+pub(crate) struct SkbModule {
+    // Used to keep a reference to our internal config map.
+    #[allow(dead_code)]
+    config_map: Option<libbpf_rs::MapHandle>,
+}
 
 impl Collector for SkbModule {
     fn new() -> Result<Self> {
-        Ok(Self {})
+        Ok(Self::default())
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
@@ -80,7 +85,10 @@ impl Collector for SkbModule {
             Hook::from(skb_hook::DATA)
                 .reuse_map("skb_config_map", config_map.as_fd().as_raw_fd())?
                 .to_owned(),
-        )
+        )?;
+
+        self.config_map = Some(config_map);
+        Ok(())
     }
 }
 
