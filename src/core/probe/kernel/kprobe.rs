@@ -7,6 +7,7 @@
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
+use libbpf_rs::skel::SkelBuilder;
 
 use crate::core::filters::Filter;
 use crate::core::probe::builder::*;
