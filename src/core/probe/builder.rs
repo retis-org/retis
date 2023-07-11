@@ -2,7 +2,7 @@
 //!
 //! ProbeBuilder defines the ProbeBuider trait and some useful utility functions
 //!
-use std::{ffi::CString, ptr};
+use std::{ffi::CString, os::fd::RawFd, ptr};
 
 use anyhow::{anyhow, bail, Result};
 use btf_rs::{Btf, Type};
@@ -26,7 +26,7 @@ pub(super) trait ProbeBuilder {
     /// accross builders.
     fn init(
         &mut self,
-        map_fds: Vec<(String, i32)>,
+        map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
     ) -> Result<()>;
@@ -39,7 +39,7 @@ pub(super) trait ProbeBuilder {
 
 pub(super) fn reuse_map_fds(
     open_obj: &libbpf_rs::OpenObject,
-    map_fds: &[(String, i32)],
+    map_fds: &[(String, RawFd)],
 ) -> Result<()> {
     for map in map_fds.iter() {
         if let Some(open_map) = open_obj.map(map.0.clone()) {
@@ -106,7 +106,7 @@ fn replace_raw_filter(filter: &BpfFilter, target: &str, fd: u32) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn replace_filters(fd: i32, filters: &[Filter]) -> Result<()> {
+pub(super) fn replace_filters(fd: RawFd, filters: &[Filter]) -> Result<()> {
     for filter in filters.iter() {
         match filter {
             Filter::Packet(f) => replace_raw_filter(f, "packet_filter", fd as u32)?,
@@ -116,7 +116,7 @@ pub(super) fn replace_filters(fd: i32, filters: &[Filter]) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn replace_hooks(fd: i32, hooks: &[Hook]) -> Result<Vec<libbpf_rs::Link>> {
+pub(super) fn replace_hooks(fd: RawFd, hooks: &[Hook]) -> Result<Vec<libbpf_rs::Link>> {
     let mut links = Vec::new();
 
     for (i, hook) in hooks.iter().enumerate() {
@@ -127,7 +127,7 @@ pub(super) fn replace_hooks(fd: i32, hooks: &[Hook]) -> Result<Vec<libbpf_rs::Li
 
         // We have to explicitly use a Vec below to avoid having an unknown size
         // at build time.
-        let map_fds: Vec<(String, i32)> = hook.maps.clone().into_iter().collect();
+        let map_fds: Vec<(String, RawFd)> = hook.maps.clone().into_iter().collect();
         reuse_map_fds(&open_obj, &map_fds)?;
 
         let open_prog = open_obj

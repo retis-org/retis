@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt, mem,
+    os::fd::RawFd,
 };
 
 use anyhow::{bail, Result};
@@ -150,7 +151,7 @@ impl Probe {
     }
 
     /// Reuse a map in all the probe's hooks.
-    pub(crate) fn reuse_map(&mut self, name: &str, fd: i32) -> Result<()> {
+    pub(crate) fn reuse_map(&mut self, name: &str, fd: RawFd) -> Result<()> {
         self.hooks
             .iter_mut()
             .try_for_each(|h| h.reuse_map(name, fd).map(|_| ()))
@@ -199,7 +200,7 @@ pub(crate) struct Hook {
     /// Hook BPF binary data.
     pub(super) bpf_prog: &'static [u8],
     /// HashMap of maps names and their fd, for reuse by the hook.
-    pub(super) maps: HashMap<String, i32>,
+    pub(super) maps: HashMap<String, RawFd>,
 }
 
 impl Hook {
@@ -213,7 +214,7 @@ impl Hook {
 
     /// Request to reuse a map specifically in the hook. For maps being globally
     /// reused please use Kernel::reuse_map() instead.
-    pub(crate) fn reuse_map(&mut self, name: &str, fd: i32) -> Result<&mut Self> {
+    pub(crate) fn reuse_map(&mut self, name: &str, fd: RawFd) -> Result<&mut Self> {
         let name = name.to_string();
 
         if self.maps.contains_key(&name) {

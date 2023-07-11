@@ -1,4 +1,7 @@
-use std::mem;
+use std::{
+    mem,
+    os::fd::{AsFd, AsRawFd},
+};
 
 use anyhow::{bail, Result};
 use clap::{arg, builder::PossibleValuesParser, Parser};
@@ -75,7 +78,7 @@ impl Collector for SkbModule {
         // Register our generic skb hook.
         probes.register_kernel_hook(
             Hook::from(skb_hook::DATA)
-                .reuse_map("skb_config_map", config_map.fd())?
+                .reuse_map("skb_config_map", config_map.as_fd().as_raw_fd())?
                 .to_owned(),
         )
     }

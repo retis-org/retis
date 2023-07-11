@@ -1,3 +1,5 @@
+use std::os::fd::{AsFd, AsRawFd, RawFd};
+
 use anyhow::{anyhow, bail, Result};
 
 use crate::core::filters::Filter;
@@ -13,7 +15,7 @@ use usdt_bpf::UsdtSkelBuilder;
 pub(crate) struct UsdtBuilder {
     links: Vec<libbpf_rs::Link>,
     obj: Option<libbpf_rs::Object>,
-    map_fds: Vec<(String, i32)>,
+    map_fds: Vec<(String, RawFd)>,
     hooks: Vec<Hook>,
 }
 
@@ -24,7 +26,7 @@ impl ProbeBuilder for UsdtBuilder {
 
     fn init(
         &mut self,
-        map_fds: Vec<(String, i32)>,
+        map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         _filters: Vec<Filter>,
     ) -> Result<()> {
@@ -50,7 +52,7 @@ impl ProbeBuilder for UsdtBuilder {
         let prog = obj
             .prog_mut("probe_usdt")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
-        let mut links = replace_hooks(prog.fd(), &self.hooks)?;
+        let mut links = replace_hooks(prog.as_fd().as_raw_fd(), &self.hooks)?;
         self.links.append(&mut links);
 
         self.links

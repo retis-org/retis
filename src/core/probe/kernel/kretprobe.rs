@@ -8,6 +8,8 @@
 //! program into the associated kprobe that safes the context into a map which is
 //! then retrieved by the kretprobe program..
 
+use std::os::fd::{AsFd, AsRawFd, RawFd};
+
 use anyhow::{anyhow, bail, Result};
 
 use crate::core::filters::Filter;
@@ -32,7 +34,7 @@ impl ProbeBuilder for KretprobeBuilder {
 
     fn init(
         &mut self,
-        map_fds: Vec<(String, i32)>,
+        map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
     ) -> Result<()> {
@@ -50,7 +52,8 @@ impl ProbeBuilder for KretprobeBuilder {
         let fd = obj
             .prog("probe_kretprobe")
             .ok_or_else(|| anyhow!("Couldn't get program"))?
-            .fd();
+            .as_fd()
+            .as_raw_fd();
         replace_filters(fd, &filters)?;
         let mut links = replace_hooks(fd, &hooks)?;
         self.links.append(&mut links);

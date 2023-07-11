@@ -77,7 +77,12 @@
 //!    garbage collecting old events from the tracking map (such events should
 //!    be fairly rare, otherwise it's a bug).
 
-use std::{collections::HashMap, mem, time::Duration};
+use std::{
+    collections::HashMap,
+    mem,
+    os::fd::{AsFd, AsRawFd},
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
 use plain::Plain;
@@ -142,8 +147,8 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<TrackingGC> {
     let config_map = config_map()?;
     let tracking_map = tracking_map()?;
 
-    probes.reuse_map("tracking_config_map", config_map.fd())?;
-    probes.reuse_map("tracking_map", tracking_map.fd())?;
+    probes.reuse_map("tracking_config_map", config_map.as_fd().as_raw_fd())?;
+    probes.reuse_map("tracking_map", tracking_map.as_fd().as_raw_fd())?;
 
     // For tracking skbs we only need the following three functions. First
     // track free events.

@@ -1,3 +1,5 @@
+#[cfg(not(test))]
+use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::HashSet,
     fs::OpenOptions,
@@ -230,7 +232,7 @@ impl Collectors {
         #[cfg(not(test))]
         {
             let sm = init_stack_map()?;
-            self.probes.reuse_map("stack_map", sm.fd())?;
+            self.probes.reuse_map("stack_map", sm.as_fd().as_raw_fd())?;
             self.probes.reuse_map("events_map", self.factory.map_fd())?;
             match section_factories.get_mut(&ModuleId::Kernel) {
                 Some(kernel_factory) => {

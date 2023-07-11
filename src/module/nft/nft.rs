@@ -1,5 +1,6 @@
 use std::{
     mem,
+    os::fd::{AsFd, AsRawFd},
     process::{Command, Stdio},
 };
 
@@ -233,7 +234,7 @@ impl Collector for NftModule {
         let mut nft_probe = Probe::kprobe(sym)?;
         nft_probe.add_hook(
             Hook::from(nft_hook::DATA)
-                .reuse_map("nft_config_map", config_map.fd())?
+                .reuse_map("nft_config_map", config_map.as_fd().as_raw_fd())?
                 .to_owned(),
         )?;
         probes.register_probe(nft_probe)?;

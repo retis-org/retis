@@ -1,4 +1,9 @@
-use std::{collections::HashMap, mem, time::Duration};
+use std::{
+    collections::HashMap,
+    mem,
+    os::fd::{AsFd, AsRawFd},
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
@@ -293,7 +298,8 @@ impl OvsModule {
             .inflight_upcalls_map
             .as_ref()
             .ok_or_else(|| anyhow!("Inflight upcalls map not created"))?
-            .fd();
+            .as_fd()
+            .as_raw_fd();
 
         // Upcall probe.
         let mut kernel_upcall_tp_hook = Hook::from(hooks::kernel_upcall_tp::DATA);
@@ -330,11 +336,11 @@ impl OvsModule {
         if self.track {
             let inflight_exec_map = Self::create_inflight_exec_map()?;
 
-            exec_action_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
+            exec_action_hook.reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
 
             let mut exec_actions_hook = Hook::from(hooks::kernel_exec_actions::DATA);
             let ovs_execute_actions_sym = Symbol::from_name("ovs_execute_actions")?;
-            exec_actions_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
+            exec_actions_hook.reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
             exec_actions_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
             let mut probe = Probe::kprobe(ovs_execute_actions_sym.clone())?;
             probe.set_option(ProbeOption::NoGenericHook)?;
@@ -342,7 +348,8 @@ impl OvsModule {
             probes.register_probe(probe)?;
 
             let mut exec_actions_ret_hook = Hook::from(hooks::kernel_exec_actions_ret::DATA);
-            exec_actions_ret_hook.reuse_map("inflight_exec", inflight_exec_map.fd())?;
+            exec_actions_ret_hook
+                .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
             exec_actions_ret_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
             let mut probe = Probe::kretprobe(ovs_execute_actions_sym)?;
             probe.set_option(ProbeOption::NoGenericHook)?;
@@ -374,12 +381,14 @@ impl OvsModule {
             .upcall_batches
             .as_ref()
             .ok_or_else(|| anyhow!("upcall batches map not created"))?
-            .fd();
+            .as_fd()
+            .as_raw_fd();
         let pid_to_batch_fd = self
             .pid_to_batch
             .as_ref()
             .ok_or_else(|| anyhow!("pid_to_batch map not created"))?
-            .fd();
+            .as_fd()
+            .as_raw_fd();
 
         let mut user_recv_hook = Hook::from(hooks::user_recv_upcall::DATA);
         user_recv_hook.reuse_map("upcall_tracking", self.upcall_tracking_fd)?;
@@ -416,8 +425,8 @@ impl OvsModule {
     fn init_tracking_maps(&mut self) -> Result<()> {
         let upcall_tracking = Self::create_upcall_tracking_map()?;
         let flow_exec_tracking = Self::create_flow_exec_tracking_map()?;
-        self.upcall_tracking_fd = upcall_tracking.fd();
-        self.flow_exec_tracking_fd = flow_exec_tracking.fd();
+        self.upcall_tracking_fd = upcall_tracking.as_fd().as_raw_fd();
+        self.flow_exec_tracking_fd = flow_exec_tracking.as_fd().as_raw_fd();
 
         let tracking_maps = HashMap::from([
             ("enqueue_tracking", upcall_tracking),

@@ -3,7 +3,14 @@
 #![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 
-use std::{collections::HashMap, fmt, mem, sync::mpsc, thread, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt, mem,
+    os::fd::{AsFd, AsRawFd, RawFd},
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
 use log::error;
@@ -97,8 +104,8 @@ impl BpfEventsFactory {
     }
 
     /// Get the events map fd for reuse.
-    pub(crate) fn map_fd(&self) -> i32 {
-        self.map.fd()
+    pub(crate) fn map_fd(&self) -> RawFd {
+        self.map.as_fd().as_raw_fd()
     }
 }
 
