@@ -8,14 +8,15 @@
 
 use std::{collections::HashMap, ops::Fn, sync::Arc, thread, time::Duration};
 
-use crate::core::{signals::Running, workaround::SendableMap};
 use anyhow::{anyhow, Result};
 use log::{error, warn};
 use nix::time;
 
+use crate::core::signals::Running;
+
 pub(crate) struct TrackingGC {
     // Maps to track
-    maps: Option<HashMap<String, SendableMap>>,
+    maps: Option<HashMap<String, libbpf_rs::MapHandle>>,
     // Duration extraction function. Based on the value of the map, it returns
     // the duration of the entry.
     extract_age: Arc<dyn Fn(Vec<u8>) -> Result<Duration> + Send + Sync + 'static>,
@@ -44,11 +45,7 @@ impl TrackingGC {
         F: Fn(Vec<u8>) -> Result<Duration> + Send + Sync + 'static,
     {
         TrackingGC {
-            maps: Some(
-                maps.drain()
-                    .map(|(n, m)| (n.to_string(), SendableMap::from(m)))
-                    .collect(),
-            ),
+            maps: Some(maps.drain().map(|(n, m)| (n.to_string(), m)).collect()),
             extract_age: Arc::new(extract_age),
             interval: Self::DEFAULT_INTERVAL,
             limit: Self::DEFAULT_OLD_LIMIT,
@@ -90,7 +87,6 @@ impl TrackingGC {
                 // Loop through the tracking map entries and see if we see old
                 // ones we should remove manually.
                 for (name, map) in maps.iter_mut() {
-                    let map = map.get_mut();
                     let mut to_remove = Vec::new();
                     for key in map.keys() {
                         if let Ok(Some(raw)) = map.lookup(&key, libbpf_rs::MapFlags::ANY) {
