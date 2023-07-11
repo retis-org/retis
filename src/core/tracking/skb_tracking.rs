@@ -143,7 +143,9 @@ fn tracking_map() -> Result<libbpf_rs::MapHandle> {
     .or_else(|e| bail!("Could not create the tracking map: {}", e))
 }
 
-pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<TrackingGC> {
+pub(crate) fn init_tracking(
+    probes: &mut ProbeManager,
+) -> Result<(TrackingGC, libbpf_rs::MapHandle)> {
     let config_map = config_map()?;
     let tracking_map = tracking_map()?;
 
@@ -214,17 +216,20 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<TrackingGC> {
     // in the BPF part for most if not all skbs but we might lose some
     // information (and tracked functions might fail resulting in incorrect
     // information).
-    Ok(TrackingGC::new(
-        "skb-tracking-gc",
-        HashMap::from([("skb_tracking", tracking_map)]),
-        |v| {
-            let mut info = TrackingInfo::default();
-            plain::copy_from_bytes(&mut info, &v[..]).map_err(|e| anyhow!("{:?}", e))?;
-            Ok(Duration::from_nanos(info.last_seen))
-        },
-    )
-    .interval(SKB_TRACKING_GC_INTERVAL)
-    .limit(TRACKING_OLD_LIMIT))
+    Ok((
+        TrackingGC::new(
+            "skb-tracking-gc",
+            HashMap::from([("skb_tracking", tracking_map)]),
+            |v| {
+                let mut info = TrackingInfo::default();
+                plain::copy_from_bytes(&mut info, &v[..]).map_err(|e| anyhow!("{:?}", e))?;
+                Ok(Duration::from_nanos(info.last_seen))
+            },
+        )
+        .interval(SKB_TRACKING_GC_INTERVAL)
+        .limit(TRACKING_OLD_LIMIT),
+        config_map,
+    ))
 }
 
 // Please keep in sync with its BPF counterpart.

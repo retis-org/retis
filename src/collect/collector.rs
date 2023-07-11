@@ -88,6 +88,8 @@ pub(crate) struct Collectors {
     known_kernel_types: HashSet<String>,
     run: Running,
     tracking_gc: Option<TrackingGC>,
+    // Keep a reference on the tracking configuration map.
+    tracking_config_map: Option<libbpf_rs::MapHandle>,
 }
 
 impl Collectors {
@@ -107,6 +109,7 @@ impl Collectors {
             known_kernel_types: HashSet::new(),
             run: Running::new(),
             tracking_gc: None,
+            tracking_config_map: None,
         })
     }
 
@@ -203,7 +206,9 @@ impl Collectors {
 
         // Initialize tracking & filters.
         if !cfg!(test) && self.known_kernel_types.contains("struct sk_buff *") {
-            self.tracking_gc = Some(init_tracking(&mut self.probes)?);
+            let (gc, map) = init_tracking(&mut self.probes)?;
+            self.tracking_gc = Some(gc);
+            self.tracking_config_map = Some(map);
         }
         Self::setup_filters(&mut self.probes, collect)?;
 
