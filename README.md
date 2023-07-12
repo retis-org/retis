@@ -408,6 +408,7 @@ $ podman run --privileged --rm -it --pid=host \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
       -v /boot/config-$(uname -r):/kconfig:ro \
+      -v $(pwd):/data:rw \
       quay.io/retis/retis:latest --help
 ```
 
@@ -416,6 +417,9 @@ $ podman run --privileged --rm -it --pid=host \
 - When running on CoreOS, Fedora Silverblue and friends replace `-v
   /boot/config-$(uname -r):/kconfig:ro` with `-v /lib/modules/$(uname
   -r)/config:/kconfig:ro` in the above.
+
+The `/data` container mount point is used to allow storing persistent data for
+future use (e.g. logged events using the `-o` cli option).
 
 ### From sources
 

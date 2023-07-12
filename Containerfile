@@ -39,4 +39,6 @@ RUN dnf install -y \
 
 COPY --from=builder /retis/target/release/retis /usr/bin/retis
 COPY --from=builder /retis/profiles /etc/retis/profiles
+
+WORKDIR /data
 ENTRYPOINT ["/usr/bin/retis", "--kconf", "/kconfig"]
