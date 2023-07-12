@@ -5,12 +5,13 @@ use std::{
     fs,
     io::Read,
     ops::Bound::{Included, Unbounded},
-    path::PathBuf,
+    path::{Path, PathBuf},
+    str,
 };
 
 use anyhow::{anyhow, bail, Result};
 use bimap::BiBTreeMap;
-use flate2::read::GzDecoder;
+use flate2::bufread::GzDecoder;
 use log::warn;
 use regex::Regex;
 
@@ -137,7 +138,37 @@ impl KernelInspector {
         release: &str,
         kconf: Option<&PathBuf>,
     ) -> Result<Option<HashMap<String, String>>> {
-        let parse_kconfig = |file: &String| -> Result<HashMap<String, String>> {
+        // If we have a user-defined kernel configuration file, use it.
+        if let Some(kconf) = kconf {
+            return Ok(Some(Self::parse_kernel_config_single(kconf).map_err(
+                |e| anyhow!("Could not read {}: {e}", kconf.display()),
+            )?));
+        }
+
+        // If not, try auto-detection.
+        let paths = vec![
+            "/proc/config.gz".to_string(),
+            format!("/boot/config-{}", release),
+            // CoreOS & friends.
+            format!("/lib/modules/{}/config", release),
+            // Toolbox on CoreOS & friends.
+            format!("/run/host/usr/lib/modules/{}/config", release),
+        ];
+        for p in paths.iter() {
+            if let Ok(kconf) = Self::parse_kernel_config_single(p) {
+                return Ok(Some(kconf));
+            }
+        }
+
+        warn!(
+            "Could not parse kernel configuration from known paths: some checks won't be performed"
+        );
+        Ok(None)
+    }
+
+    /// Lower level helper to try parsing a single kernel configuration file.
+    fn parse_kernel_config_single<P: AsRef<Path>>(file: P) -> Result<HashMap<String, String>> {
+        let parse_kconfig = |file: &str| -> Result<HashMap<String, String>> {
             let mut map = HashMap::new();
 
             file.lines().try_for_each(|l| -> Result<()> {
@@ -165,41 +196,18 @@ impl KernelInspector {
             Ok(map)
         };
 
-        // If we have a user-defined kernel configuration file, use it.
-        if let Some(kconf) = kconf {
-            let file = fs::read_to_string(kconf)
-                .map_err(|e| anyhow!("Could not read {}: {e}", kconf.display()))?;
-            return Ok(Some(parse_kconfig(&file)?));
-        }
+        let bytes = fs::read(file)?;
 
-        // If not, try auto-detection.
-        // First try the config exposed by the running kernel.
-        if let Ok(bytes) = fs::read("/proc/config.gz") {
+        // Check gzip magic value.
+        if bytes[0] == 0x1f && bytes[1] == 0x8b {
             let mut decoder = GzDecoder::new(&bytes[..]);
-            let mut file = String::new();
-            decoder.read_to_string(&mut file)?;
+            let mut content = String::new();
+            decoder.read_to_string(&mut content)?;
 
-            return Ok(Some(parse_kconfig(&file)?));
+            parse_kconfig(&content)
+        } else {
+            parse_kconfig(str::from_utf8(&bytes)?)
         }
-
-        // If the above didn't work, try reading from known paths.
-        let paths = vec![
-            format!("/boot/config-{}", release),
-            // CoreOS & friends.
-            format!("/lib/modules/{}/config", release),
-            // Toolbox on CoreOS & friends.
-            format!("/run/host/usr/lib/modules/{}/config", release),
-        ];
-        for p in paths.iter() {
-            if let Ok(file) = fs::read_to_string(p) {
-                return Ok(Some(parse_kconfig(&file)?));
-            }
-        }
-
-        warn!(
-            "Could not parse kernel configuration from known paths: some checks won't be performed"
-        );
-        Ok(None)
     }
 
     /// Return the running kernel version.
