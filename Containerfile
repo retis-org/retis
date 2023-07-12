@@ -34,7 +34,8 @@ FROM quay.io/centos/centos:stream9
 LABEL org.opencontainers.image.authors="https://github.com/retis-org"
 
 RUN dnf install -y \
-    libpcap
+    libpcap \
+    nftables
 
 COPY --from=builder /retis/target/release/retis /usr/bin/retis
 COPY --from=builder /retis/profiles /etc/retis/profiles
