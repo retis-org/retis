@@ -405,6 +405,7 @@ $ retis --help
 
 ```
 $ podman run --privileged --rm -it --pid=host \
+      --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
       -v /boot/config-$(uname -r):/kconfig:ro \
