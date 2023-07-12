@@ -6,6 +6,7 @@ pub(super) struct NftOffsets {
     pub(super) nft_chain: i8,
     pub(super) nft_rule: i8,
     pub(super) nft_verdict: i8,
+    pub(super) nft_type: i8,
 }
 
 impl Default for NftOffsets {
@@ -14,6 +15,7 @@ impl Default for NftOffsets {
             nft_chain: -1,
             nft_rule: -1,
             nft_verdict: -1,
+            nft_type: -1,
         }
     }
 }
