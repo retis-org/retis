@@ -44,15 +44,20 @@ static __always_inline void get_regs(struct retis_regs *regs,
 SEC("raw_tracepoint/probe")
 int probe_raw_tracepoint(struct bpf_raw_tracepoint_args *ctx)
 {
-	struct retis_context context = {};
+	struct retis_context *context;
+	u32 key = bpf_get_smp_processor_id();
 
-	context.timestamp = bpf_ktime_get_ns();
-	context.ksym = ksym;
-	context.probe_type = KERNEL_PROBE_TRACEPOINT;
-	context.orig_ctx = ctx;
-	get_regs(&context.regs, ctx);
+	context = bpf_map_lookup_elem(&hook_context_map, &key);
+	if (!context)
+		return 0;
+	__builtin_memset(context, 0, sizeof(*context));
 
-	return chain(&context);
+	context->timestamp = bpf_ktime_get_ns();
+	context->ksym = ksym;
+	context->probe_type = KERNEL_PROBE_TRACEPOINT;
+	get_regs(&context->regs, ctx);
+
+	return chain(ctx, context);
 }
 
 char __license[] SEC("license") = "GPL";

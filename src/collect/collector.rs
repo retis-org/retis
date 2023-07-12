@@ -95,6 +95,7 @@ pub(crate) struct Collectors {
     // Keep a reference on the tracking configuration map.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
     loaded: Vec<ModuleId>,
+    map_handles: Vec<libbpf_rs::MapHandle>,
 }
 
 impl Collectors {
@@ -116,6 +117,7 @@ impl Collectors {
             tracking_gc: None,
             tracking_config_map: None,
             loaded: Vec::new(),
+            map_handles: Vec::new(),
         })
     }
 
@@ -280,6 +282,14 @@ impl Collectors {
             let sm = init_stack_map()?;
             self.probes.reuse_map("stack_map", sm.as_fd().as_raw_fd())?;
             self.probes.reuse_map("events_map", self.factory.map_fd())?;
+
+            let map = init_hook_context_map()?;
+            self.probes.reuse_map("hook_context_map", map.as_fd().as_raw_fd())?;
+            self.map_handles.push(map);
+            let map = init_hook_event_map()?;
+            self.probes.reuse_map("hook_event_map", map.as_fd().as_raw_fd())?;
+            self.map_handles.push(map);
+
             match section_factories.get_mut(&ModuleId::Kernel) {
                 Some(kernel_factory) => {
                     kernel_factory
@@ -461,6 +471,38 @@ impl Collectors {
 
         Ok(probes)
     }
+}
+
+fn init_hook_context_map() -> Result<libbpf_rs::MapHandle> {
+    let opts = libbpf_sys::bpf_map_create_opts {
+        sz: std::mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+        ..Default::default()
+    };
+
+    Ok(libbpf_rs::MapHandle::create(
+            libbpf_rs::MapType::PercpuArray,
+            Some("hook_context_map"),
+            std::mem::size_of::<u32>() as u32,
+            160,
+            num_cpus::get() as u32,
+            &opts,
+    )?)
+}
+
+fn init_hook_event_map() -> Result<libbpf_rs::MapHandle> {
+    let opts = libbpf_sys::bpf_map_create_opts {
+        sz: std::mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+        ..Default::default()
+    };
+
+    Ok(libbpf_rs::MapHandle::create(
+            libbpf_rs::MapType::PercpuArray,
+            Some("hook_event_map"),
+            std::mem::size_of::<u32>() as u32,
+            1024,
+            num_cpus::get() as u32,
+            &opts,
+    )?)
 }
 
 pub(crate) struct CollectRunner {}

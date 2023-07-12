@@ -41,9 +41,15 @@ static __always_inline void kprobe_get_regs(struct retis_regs *regs,
 SEC("kretprobe/probe")
 int probe_kretprobe_kretprobe(struct pt_regs *ctx)
 {
-	struct retis_context context = {};
+	struct retis_context *context;
 	struct retis_context *kprobe_ctx;
 	u64 tid = bpf_get_current_pid_tgid();
+	u32 key = bpf_get_smp_processor_id();
+
+	context = bpf_map_lookup_elem(&hook_context_map, &key);
+	if (!context)
+		return 0;
+	__builtin_memset(context, 0, sizeof(*context));
 
 	/* Look if the matching kprobe has left a context for us to pick up. */
 	kprobe_ctx = bpf_map_lookup_elem(&kretprobe_context, &tid);
@@ -52,14 +58,13 @@ int probe_kretprobe_kretprobe(struct pt_regs *ctx)
 	}
 	bpf_map_delete_elem(&kretprobe_context, &tid);
 
-	context.timestamp = bpf_ktime_get_ns();
-	context.ksym = kprobe_ctx->ksym;
-	context.probe_type = KERNEL_PROBE_KRETPROBE;
-	context.orig_ctx = ctx;
+	context->timestamp = bpf_ktime_get_ns();
+	context->ksym = kprobe_ctx->ksym;
+	context->probe_type = KERNEL_PROBE_KRETPROBE;
 
-	kretprobe_get_regs(&context.regs, &kprobe_ctx->regs, ctx);
+	kretprobe_get_regs(&context->regs, &kprobe_ctx->regs, ctx);
 
-	return chain(&context);
+	return chain(ctx, context);
 }
 
 SEC("kprobe/retprobe")

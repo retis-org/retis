@@ -36,6 +36,7 @@ libc = "0.2"
 log = { version = "0.4", features = ["std"] }
 memoffset = "0.9"
 nix = { version = "0.27", features = ["feature", "time", "user"] }
+num_cpus = "1.0"
 once_cell = "1.15"
 pager = "0.16"
 path-clean = "1.0"

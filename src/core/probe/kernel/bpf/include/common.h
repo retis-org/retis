@@ -85,15 +85,24 @@ enum {
  */
 #define DEFINE_HOOK(fmode, fflags, statements)					\
 	SEC("ext/hook")								\
-	int hook(struct retis_context *ctx, struct retis_raw_event *event)	\
+	int hook()								\
 	{									\
-		/* Let the verifier be happy */					\
-		if (!ctx || !event)						\
+		struct retis_raw_event *event;					\
+		struct retis_context *ctx;					\
+		u32 args_key = bpf_get_smp_processor_id();			\
+										\
+		ctx = bpf_map_lookup_elem(&hook_context_map, &args_key);	\
+		if (!ctx)							\
 			return 0;						\
 		if (!((fmode == F_OR) ?						\
 		      (ctx->filters_ret & (fflags)) :				\
 		      ((ctx->filters_ret & (fflags)) == (fflags))))		\
 			return 0;						\
+										\
+		event = bpf_map_lookup_elem(&hook_event_map, &args_key);	\
+		if (!event)							\
+			return 0;						\
+										\
 		statements							\
 	}
 
@@ -127,10 +136,8 @@ const volatile u32 nhooks = 0;
  */
 #define HOOK(x)									\
 	__attribute__ ((noinline))						\
-	int hook##x(struct retis_context *ctx, struct retis_raw_event *event) {	\
+	int hook##x() {								\
 		volatile int ret = 0;						\
-		if (!ctx || !event)						\
-			return 0;						\
 		return ret;							\
 	}
 HOOK(0)
@@ -145,6 +152,20 @@ HOOK(8)
 HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
+
+struct {
+        __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+        __uint(max_entries, 1);
+        __type(key, u32);
+        __type(value, struct retis_context);
+} hook_context_map SEC(".maps");
+
+struct {
+        __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+        __uint(max_entries, 1);
+        __type(key, u32);
+        __type(value, struct retis_raw_event);
+} hook_event_map SEC(".maps");
 
 static __always_inline void filter(struct retis_context *ctx)
 {
@@ -202,7 +223,7 @@ filter_outcome:
  * called from each probe specific part after filling the common context and
  * just before returning.
  */
-static __always_inline int chain(struct retis_context *ctx)
+static __always_inline int chain(void *orig_ctx, struct retis_context *ctx)
 {
 	struct retis_probe_config *cfg;
 	struct retis_raw_event *event;
@@ -213,6 +234,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct kernel_event *k;
+	u32 key = bpf_get_smp_processor_id();
 
 	cfg = bpf_map_lookup_elem(&config_map, &ctx->ksym);
 	if (!cfg)
@@ -238,33 +260,32 @@ static __always_inline int chain(struct retis_context *ctx)
 	if (nhooks == 0)
 		goto exit;
 
-	event = get_event();
-	if (!event) {
-		err_report(ctx->ksym, 0);
+	event = bpf_map_lookup_elem(&hook_event_map, &key);
+	if (!event)
 		goto exit;
-	}
+	event->size = 0;
 
 	e = get_event_section(event, COMMON, COMMON_SECTION_CORE, sizeof(*e));
 	if (!e)
-		goto discard_event;
+		goto exit;
 
 	e->timestamp = ctx->timestamp;
 
 	ti = get_event_zsection(event, COMMON, COMMON_SECTION_TASK, sizeof(*ti));
 	if (!ti)
-		goto discard_event;
+		goto exit;
 
 	ti->pid = bpf_get_current_pid_tgid();
 	bpf_get_current_comm(ti->comm, sizeof(ti->comm));
 
 	k = get_event_section(event, KERNEL, 1, sizeof(*k));
 	if (!k)
-		goto discard_event;
+		goto exit;
 
 	k->symbol = ctx->ksym;
 	k->type = ctx->probe_type;
 	if (cfg->stack_trace)
-		k->stack_id = bpf_get_stackid(ctx->orig_ctx, &stack_map, BPF_F_FAST_STACK_CMP);
+		k->stack_id = bpf_get_stackid(orig_ctx, &stack_map, BPF_F_FAST_STACK_CMP);
 	else
 		k->stack_id = -1;
 
@@ -281,9 +302,9 @@ static __always_inline int chain(struct retis_context *ctx)
 #define ENOMSG	42
 #define CALL_HOOK(x)				\
 	if (x < nhooks) {			\
-		int ret = hook##x(ctx, event);	\
+		int ret = hook##x();		\
 		if (ret == -ENOMSG)		\
-			goto discard_event;	\
+			goto exit;		\
 	}
 	CALL_HOOK(0)
 	CALL_HOOK(1)
@@ -296,11 +317,10 @@ static __always_inline int chain(struct retis_context *ctx)
 	CALL_HOOK(8)
 	CALL_HOOK(9)
 
-	if (get_event_size(event) > pass_threshold)
-		send_event(event);
-	else
-discard_event:
-		discard_event(event);
+	if (get_event_size(event) > pass_threshold) {
+		if (send_event(event))
+			err_report(ctx->ksym, 0);
+	}
 
 exit:
 	/* Cleanup stage while tracking an skb. If no skb is available this is a

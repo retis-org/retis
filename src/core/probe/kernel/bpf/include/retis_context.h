@@ -57,8 +57,6 @@ struct retis_context {
 	u64 ksym;
 	struct retis_probe_offsets offsets;
 	struct retis_regs regs;
-	/* Pointer to the original ctx. Needed for helper calls. */
-	void *orig_ctx;
 	/* Contains the bits identifying what filters yield a hit outcome.
 	 * A bit is set means that the filter matched the data based on its
 	 * criteria .
@@ -66,10 +64,33 @@ struct retis_context {
 	u32 filters_ret;
 };
 
+static __always_inline u64 __retis_get_param(struct retis_context *ctx, s8 offset)
+{
+	#define arg_case_get(x)     \
+		case x:		\
+			return ctx->regs.reg[x];
+	switch (offset) {
+	arg_case_get(0)
+	arg_case_get(1)
+	arg_case_get(2)
+	arg_case_get(3)
+	arg_case_get(4)
+	arg_case_get(5)
+	arg_case_get(6)
+	arg_case_get(7)
+	arg_case_get(8)
+	arg_case_get(9)
+	arg_case_get(10)
+	arg_case_get(11)
+	default:
+		return 0;
+	}
+}
+
 /* Helper to retrieve a function parameter argument using the common context */
 #define retis_get_param(ctx, offset, type)	\
 	(type)(((offset) >= 0 && (offset) < REG_MAX && (offset) < ctx->regs.num) ?	\
-       ctx->regs.reg[offset] : 0)
+       __retis_get_param(ctx, (offset)) : 0)
 
 /* Check if a given offset is valid. */
 #define retis_offset_valid(offset)	\

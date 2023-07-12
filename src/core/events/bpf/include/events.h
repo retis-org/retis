@@ -57,9 +57,9 @@ static __always_inline void discard_event(struct retis_raw_event *event)
 	bpf_ringbuf_discard(event, 0);
 }
 
-static __always_inline void send_event(struct retis_raw_event *event)
+static __always_inline long send_event(struct retis_raw_event *event)
 {
-	bpf_ringbuf_submit(event, 0);
+	return bpf_ringbuf_output(&events_map, event, sizeof(*event), 0);
 }
 
 static __always_inline void *get_event_section(struct retis_raw_event *event,
