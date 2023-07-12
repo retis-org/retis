@@ -163,6 +163,7 @@ void nft_retrieve_rule(struct retis_context *ctx, struct nft_config *cfg,
 	if (bpf_core_field_exists(info->rule)) {
 		*chain = retis_get_nft_chain(ctx, cfg);
 		*rule = BPF_CORE_READ(info, rule);
+		return;
 	}
 
 	*rule = retis_get_nft_rule(ctx, cfg);
