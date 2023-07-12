@@ -403,6 +403,17 @@ $ retis --help
 
 ### Container image
 
+The preferred method to run Retis in a container is by using the provided
+[retis_in_container.sh](tools/retis_in_container.sh) script,
+
+```
+$ curl -O https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh
+$ chmod +x retis_in_container.sh
+$ ./retis_in_container.sh --help
+```
+
+The Retis container can also be run manually,
+
 ```
 $ podman run --privileged --rm -it --pid=host \
       --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
