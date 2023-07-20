@@ -13,12 +13,12 @@ struct exec_event {
 /* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 struct exec_track_event {
 	u32 queue_id;
-} __attribute__((packed));
+};
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
+/* Please keep in sync with its Rust counterpart in crate::module::ovs::event.rs. */
 struct exec_output {
 	u32 port;
-} __attribute__((packed));
+};
 
 
 static __always_inline void handle_tracking(struct retis_context *ctx,

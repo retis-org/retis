@@ -394,12 +394,14 @@ pub(crate) enum OvsAction {
     DecTtl,
 }
 
+// Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
 /// OVS output action data.
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
 pub(crate) struct OvsActionOutput {
     /// Output port.
     pub(crate) port: u32,
 }
+unsafe impl Plain for OvsActionOutput {}
 
 #[cfg(test)]
 mod tests {

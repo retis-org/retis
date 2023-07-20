@@ -179,18 +179,8 @@ pub(super) fn unmarshall_exec_track(
     Ok(())
 }
 
-/// OVS output action data.
-#[derive(Default)]
-#[repr(C)]
-struct BpfOvsActionOutput {
-    /// Output port.
-    port: u32,
-}
-unsafe impl Plain for BpfOvsActionOutput {}
-
 pub(super) fn unmarshall_output(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    let raw = parse_raw_section::<BpfOvsActionOutput>(raw_section)?;
-    let output = OvsActionOutput { port: raw.port };
+    let output = parse_raw_section::<OvsActionOutput>(raw_section)?;
 
     // Any of the action-related bpf events (e.g BpfActionEvent, BpfActionTrackEvent, etc)
     // might have been received before. If so, event.event is already a valid
