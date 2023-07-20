@@ -45,6 +45,7 @@ impl RawEventSectionFactory for OvsEventFactory {
                 OvsDataType::ActionExec => unmarshall_exec(section, &mut event),
                 OvsDataType::ActionExecTrack => unmarshall_exec_track(section, &mut event),
                 OvsDataType::OutputAction => unmarshall_output(section, &mut event),
+                OvsDataType::RecircAction => unmarshall_recirc(section, &mut event),
             }?;
         }
 
@@ -325,6 +326,7 @@ impl EventFmt for ActionEvent {
 
         match self.action {
             OvsAction::Output(a) => write!(f, " oport {}", a.port)?,
+            OvsAction::Recirc(a) => write!(f, " recirc {}", a.id)?,
             other => write!(f, " {:?}", other)?,
         }
 
@@ -359,7 +361,7 @@ pub(crate) enum OvsAction {
     #[serde(rename = "sample")]
     Sample,
     #[serde(rename = "recirc")]
-    Recirc,
+    Recirc(OvsActionRecirc),
     #[serde(rename = "hash")]
     Hash,
     #[serde(rename = "push_mpls")]
@@ -402,6 +404,16 @@ pub(crate) struct OvsActionOutput {
     pub(crate) port: u32,
 }
 unsafe impl Plain for OvsActionOutput {}
+
+// Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
+/// OVS recirc action data.
+#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[repr(C)]
+pub(crate) struct OvsActionRecirc {
+    /// Recirculation id.
+    pub(crate) id: u32,
+}
+unsafe impl Plain for OvsActionRecirc {}
 
 #[cfg(test)]
 mod tests {

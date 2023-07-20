@@ -26,6 +26,8 @@ pub(crate) enum OvsDataType {
     ActionExecTrack = 6,
     // OUTPUT action specific data.
     OutputAction = 7,
+    /// Recirculate action.
+    RecircAction = 8,
 }
 
 impl OvsDataType {
@@ -40,6 +42,7 @@ impl OvsDataType {
             5 => ActionExec,
             6 => ActionExecTrack,
             7 => OutputAction,
+            8 => RecircAction,
             x => bail!("Can't construct a OvsDataType from {}", x),
         })
     }
@@ -105,7 +108,7 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
                     4 => OvsAction::PushVlan,
                     5 => OvsAction::PopVlan,
                     6 => OvsAction::Sample,
-                    7 => OvsAction::Recirc,
+                    7 => OvsAction::Recirc(OvsActionRecirc::default()),
                     8 => OvsAction::Hash,
                     9 => OvsAction::PushMpls,
                     10 => OvsAction::PopMpls,
@@ -179,31 +182,40 @@ pub(super) fn unmarshall_exec_track(
     Ok(())
 }
 
-pub(super) fn unmarshall_output(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    let output = parse_raw_section::<OvsActionOutput>(raw_section)?;
-
+fn update_action_event(event: &mut OvsEvent, action: OvsAction) -> Result<()> {
     // Any of the action-related bpf events (e.g BpfActionEvent, BpfActionTrackEvent, etc)
     // might have been received before. If so, event.event is already a valid
     // OvsEventType::Action.
     match &mut event.event {
-        OvsEventType::Action(ref mut action) => action.action = OvsAction::Output(output),
+        OvsEventType::Action(ref mut event) => event.action = action,
         OvsEventType::Undefined => {
             // We received the concrete action data type before the generic one.
             // Initialize the Action Event.
             event.event = OvsEventType::Action(ActionEvent {
-                action: OvsAction::Output(output),
+                action,
                 ..ActionEvent::default()
             });
         }
         other => {
             bail!(
                 "Conflicting OVS event types. Received {:?} data type but event is already {:#?}",
-                OvsDataType::OutputAction,
+                action,
                 other
             );
         }
     }
     Ok(())
+}
+
+pub(super) fn unmarshall_output(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
+    let output = parse_raw_section::<OvsActionOutput>(raw_section)?;
+
+    update_action_event(event, OvsAction::Output(output))
+}
+
+pub(super) fn unmarshall_recirc(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
+    let recirc = parse_raw_section::<OvsActionRecirc>(raw_section)?;
+    update_action_event(event, OvsAction::Recirc(recirc))
 }
 
 pub(super) fn unmarshall_recv(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {

@@ -20,6 +20,11 @@ struct exec_output {
 	u32 port;
 };
 
+/* Please keep in sync with its Rust counterpart in crate::module::ovs::event.rs. */
+struct exec_recirc {
+	u32 id;
+};
+
 
 static __always_inline void handle_tracking(struct retis_context *ctx,
 					   struct retis_raw_event *event)
@@ -92,6 +97,19 @@ DEFINE_HOOK_RAW(
 			return 0;
 
 		bpf_probe_read_kernel(&output->port, sizeof(output->port),
+				      nla_data(attr));
+		break;
+		}
+	case OVS_ACTION_ATTR_RECIRC:
+		{
+		struct exec_recirc *recirc =
+			get_event_section(event, COLLECTOR_OVS,
+					  OVS_DP_ACTION_RECIRC,
+					  sizeof(*recirc));
+		if (!recirc)
+			return 0;
+
+		bpf_probe_read_kernel(&recirc->id, sizeof(recirc->id),
 				      nla_data(attr));
 		break;
 		}
