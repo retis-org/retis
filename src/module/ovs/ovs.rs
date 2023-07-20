@@ -100,8 +100,8 @@ impl Collector for OvsModule {
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
         // Create tracking maps and add USDT hooks.
+        self.init_tracking_maps()?;
         if self.track {
-            self.init_tracking_maps()?;
             self.add_usdt_hooks(probes)?;
         }
         // Add targetted hooks.
@@ -331,40 +331,36 @@ impl OvsModule {
 
     /// Add exec hooks.
     fn add_exec_hooks(&mut self, probes: &mut ProbeManager) -> Result<()> {
+        let inflight_exec_map = Self::create_inflight_exec_map()?;
+
+        // ovs_execute_actions kprobe
+        let mut exec_actions_hook = Hook::from(hooks::kernel_exec_actions::DATA);
+        let ovs_execute_actions_sym = Symbol::from_name("ovs_execute_actions")?;
+        exec_actions_hook.reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        exec_actions_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
+        let mut probe = Probe::kprobe(ovs_execute_actions_sym.clone())?;
+        probe.set_option(ProbeOption::NoGenericHook)?;
+        probe.add_hook(exec_actions_hook)?;
+        probes.register_probe(probe)?;
+
+        // ovs_execute_actions kretprobe
+        let mut exec_actions_ret_hook = Hook::from(hooks::kernel_exec_actions_ret::DATA);
+        exec_actions_ret_hook.reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        exec_actions_ret_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
+        let mut probe = Probe::kretprobe(ovs_execute_actions_sym)?;
+        probe.set_option(ProbeOption::NoGenericHook)?;
+        probe.add_hook(exec_actions_ret_hook)?;
+        probes.register_probe(probe)?;
+
+        // ovs_do_execute_action tracepoint
         let mut exec_action_hook = Hook::from(hooks::kernel_exec_tp::DATA);
-
-        if self.track {
-            let inflight_exec_map = Self::create_inflight_exec_map()?;
-
-            exec_action_hook.reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
-
-            let mut exec_actions_hook = Hook::from(hooks::kernel_exec_actions::DATA);
-            let ovs_execute_actions_sym = Symbol::from_name("ovs_execute_actions")?;
-            exec_actions_hook.reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
-            exec_actions_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
-            let mut probe = Probe::kprobe(ovs_execute_actions_sym.clone())?;
-            probe.set_option(ProbeOption::NoGenericHook)?;
-            probe.add_hook(exec_actions_hook)?;
-            probes.register_probe(probe)?;
-
-            let mut exec_actions_ret_hook = Hook::from(hooks::kernel_exec_actions_ret::DATA);
-            exec_actions_ret_hook
-                .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
-            exec_actions_ret_hook.reuse_map("flow_exec_tracking", self.flow_exec_tracking_fd)?;
-            let mut probe = Probe::kretprobe(ovs_execute_actions_sym)?;
-            probe.set_option(ProbeOption::NoGenericHook)?;
-            probe.add_hook(exec_actions_ret_hook)?;
-            probes.register_probe(probe)?;
-
-            self.inflight_exec_map = Some(inflight_exec_map);
-        }
-
-        // Action execute probe.
+        exec_action_hook.reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
         let mut probe =
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?;
         probe.add_hook(exec_action_hook)?;
         probes.register_probe(probe)?;
 
+        self.inflight_exec_map = Some(inflight_exec_map);
         Ok(())
     }
 
