@@ -11,7 +11,7 @@ use log::{debug, info, warn};
 use nix::unistd::Uid;
 
 use super::cli::Collect;
-use crate::process::display::PrintSingle;
+use crate::{cli::SubCommandRunner, process::display::PrintSingle};
 
 #[cfg(not(test))]
 use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
@@ -410,18 +410,23 @@ impl Collectors {
     }
 }
 
-/// Run the collect subcommand
-pub(crate) fn run_collect(cli: FullCli, modules: Modules) -> Result<()> {
-    // Check if we can.
-    collection_prerequisites()?;
-    // Initialize collectors.
-    let mut collectors = Collectors::new(modules)?;
-    let mut cli = collectors.register_cli(cli)?;
-    collectors.init(&mut cli)?;
-    collectors.start()?;
-    // Starts a loop.
-    collectors.process(&mut cli)?;
-    Ok(())
+pub(crate) struct CollectRunner {}
+
+impl SubCommandRunner for CollectRunner {
+    fn check_prerequisites(&self) -> Result<()> {
+        collection_prerequisites()
+    }
+
+    fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
+        // Initialize collectors.
+        let mut collectors = Collectors::new(modules)?;
+        let mut cli = collectors.register_cli(cli)?;
+        collectors.init(&mut cli)?;
+        collectors.start()?;
+        // Starts a loop.
+        collectors.process(&mut cli)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

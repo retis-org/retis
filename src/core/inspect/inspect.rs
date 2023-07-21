@@ -1,8 +1,8 @@
 #![allow(dead_code)] // FIXME
 
-use std::fs;
+use std::{fs, path::PathBuf};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use once_cell::sync::OnceCell;
 
 use super::kernel::KernelInspector;
@@ -11,7 +11,17 @@ static INSPECTOR: OnceCell<Inspector> = OnceCell::new();
 
 /// Gets a reference on the inspector.
 pub(crate) fn inspector() -> Result<&'static Inspector> {
-    INSPECTOR.get_or_try_init(Inspector::new)
+    INSPECTOR.get_or_try_init(|| Inspector::from(None))
+}
+
+/// Initialize the inspector with custom parameters, fail is already
+/// initialized.
+pub(crate) fn init_inspector(kconf: &PathBuf) -> Result<()> {
+    let inspector = Inspector::from(Some(kconf))?;
+    if INSPECTOR.set(inspector).is_err() {
+        bail!("Could not init inspector: was already initialized.");
+    }
+    Ok(())
 }
 
 /// Provides helpers to inspect various information about the system and the
@@ -26,11 +36,11 @@ pub(crate) struct Inspector {
 }
 
 impl Inspector {
-    fn new() -> Result<Inspector> {
+    fn from(kconf: Option<&PathBuf>) -> Result<Inspector> {
         let (os_id, os_version) = Self::parse_os_info()?;
 
         Ok(Inspector {
-            kernel: KernelInspector::new()?,
+            kernel: KernelInspector::from(kconf)?,
             os_id,
             os_version,
         })
