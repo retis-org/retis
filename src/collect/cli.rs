@@ -18,8 +18,6 @@ use crate::{
 
 #[derive(Args, Debug, Default)]
 pub(crate) struct CollectArgs {
-    #[arg(long, default_value = "false")]
-    pub(super) ebpf_debug: bool,
     #[arg(
         long,
         default_value = "false",

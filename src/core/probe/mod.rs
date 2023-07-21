@@ -5,8 +5,6 @@
 mod builder;
 
 pub(crate) mod common;
-pub(crate) use common::get_ebpf_debug;
-
 pub(crate) mod kernel;
 
 pub(crate) mod manager;

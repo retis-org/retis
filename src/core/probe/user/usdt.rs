@@ -2,7 +2,7 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::core::filters::Filter;
 use crate::core::probe::builder::*;
-use crate::core::probe::{get_ebpf_debug, Hook, Probe, ProbeType};
+use crate::core::probe::{Hook, Probe, ProbeType};
 
 mod usdt_bpf {
     include!("bpf/.out/usdt.skel.rs");
@@ -42,10 +42,7 @@ impl ProbeBuilder for UsdtBuilder {
             _ => bail!("Wrong probe type"),
         };
 
-        let mut skel = UsdtSkelBuilder::default();
-        skel.obj_builder.debug(get_ebpf_debug());
-        let skel = skel.open()?;
-
+        let skel = UsdtSkelBuilder::default().open()?;
         let open_obj = skel.obj;
         reuse_map_fds(&open_obj, &self.map_fds)?;
 

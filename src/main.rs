@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use log::{debug, info, warn};
 use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
 mod cli;
@@ -31,6 +32,7 @@ fn main() -> Result<()> {
         TerminalMode::Stderr, // Use stderr so logs do not conflict w/ other output.
         ColorChoice::Auto,
     )?;
+    set_libbpf_rs_print_callback(log_level);
 
     // Save the --kconf option value before using the cli object to dispatch the
     // command.
@@ -53,4 +55,24 @@ fn main() -> Result<()> {
     runner.check_prerequisites()?;
     runner.run(cli, modules)?;
     Ok(())
+}
+
+fn set_libbpf_rs_print_callback(level: LevelFilter) {
+    let libbpf_rs_print = |level, msg: String| {
+        let msg = msg.trim_end_matches('\n');
+        match level {
+            libbpf_rs::PrintLevel::Debug => debug!("{msg}"),
+            libbpf_rs::PrintLevel::Info => info!("{msg}"),
+            libbpf_rs::PrintLevel::Warn => warn!("{msg}"),
+        }
+    };
+
+    libbpf_rs::set_print(match level {
+        LevelFilter::Error | LevelFilter::Off => None,
+        LevelFilter::Warn => Some((libbpf_rs::PrintLevel::Warn, libbpf_rs_print)),
+        LevelFilter::Info => Some((libbpf_rs::PrintLevel::Info, libbpf_rs_print)),
+        LevelFilter::Debug | LevelFilter::Trace => {
+            Some((libbpf_rs::PrintLevel::Debug, libbpf_rs_print))
+        }
+    });
 }
