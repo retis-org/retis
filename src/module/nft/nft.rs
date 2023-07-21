@@ -135,10 +135,15 @@ impl Collector for NftModule {
     fn can_run(&mut self, cli: &CliConfig) -> Result<()> {
         let inspector = inspect::inspector()?;
 
-        if inspector.kernel.get_config_option("CONFIG_NF_TABLES")? != Some("=y")
-            && inspector.kernel.is_module_loaded("nf_tables") == Some(false)
-        {
-            bail!("Kernel module 'nf_tables' is not loaded")
+        if Symbol::from_name("__nft_trace_packet").is_err() {
+            if let Ok(kconf) = inspector.kernel.get_config_option("CONFIG_NF_TABLES") {
+                if kconf != Some("=y")
+                    && inspector.kernel.is_module_loaded("nf_tables") == Some(false)
+                {
+                    bail!("Kernel module 'nf_tables' is not loaded");
+                }
+            }
+            bail!("Could not resolve nft kernel symbol: 'nf_tables' kernel module is likely not be built-in or loaded");
         }
 
         self.install_chain = cli

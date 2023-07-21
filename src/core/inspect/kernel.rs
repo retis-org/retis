@@ -77,6 +77,12 @@ impl KernelInspector {
             symbols.insert(u64::from_str_radix(data[0], 16)?, String::from(symbol));
         }
 
+        // If all symbols have a 0-address, only the last one will be left in
+        // the map after the above.
+        if symbols.len() == 1 {
+            bail!("Retis likely does not have the rights to read the symbol addresses from /proc/kallsyms.");
+        }
+
         let version = KernelVersion::new()?;
         let config = Self::parse_kernel_config(&version.full)?;
 
@@ -96,7 +102,7 @@ impl KernelInspector {
 
         if inspector.traceable_funcs.is_none() || inspector.traceable_events.is_none() {
             warn!(
-                "Consider mounting debugfs to /sys/kernel/debug to better filter available probes"
+                "Could not access files in /sys/kernel/debug/tracing: consider mounting debugfs, if not a permissions issue"
             );
         }
 
@@ -165,15 +171,21 @@ impl KernelInspector {
                 return Ok(Some(parse_kconfig(&file)?));
             }
 
-            // If the above didn't work, try reading from /boot/config-$(uname -r).
-            let config_file = format!("/boot/config-{}", release);
-            if let Ok(file) = fs::read_to_string(&config_file) {
-                return Ok(Some(parse_kconfig(&file)?));
+            // If the above didn't work, try reading from known paths.
+            let paths = vec![
+                format!("/boot/config-{}", release),
+                // CoreOS & friends.
+                format!("/lib/modules/{}/config", release),
+                // Toolbox on CoreOS & friends.
+                format!("/run/host/usr/lib/modules/{}/config", release),
+            ];
+            for p in paths.iter() {
+                if let Ok(file) = fs::read_to_string(p) {
+                    return Ok(Some(parse_kconfig(&file)?));
+                }
             }
 
-            warn!(
-                "Could not parse kernel configuration in either /proc/config.gz nor {config_file}"
-            );
+            warn!("Could not parse kernel configuration from known paths: some checks won't be performed");
         } else if let Ok(file) = fs::read_to_string("test_data/config-6.3.0-0.rc7.56.fc39.x86_64") {
             return Ok(Some(parse_kconfig(&file)?));
         }
@@ -324,7 +336,7 @@ impl KernelInspector {
         let set = &self.traceable_funcs;
 
         if set.is_none() {
-            bail!("Can't get matching functions, consider mounting /sys/kernel/debug");
+            bail!("Could not get matching functions as Retis can't access files in /sys/kernel/debug/tracing");
         }
 
         let target = format!("^{}$", target.replace('*', ".*"));

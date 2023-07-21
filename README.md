@@ -38,6 +38,7 @@ $ retis <command> --help
   * [COPR](#copr)
   * [Container image](#container-image)
   * [From sources](#from-sources)
+  * [Running as non-root](#running-as-non-root)
 
 ## Overview
 
@@ -410,7 +411,10 @@ $ podman run --privileged --rm -it --pid=host \
       quay.io/retis/retis:latest --help
 ```
 
-Or using `docker` in place of `podman` in the above.
+- Or using `docker` in place of `podman` in the above.
+
+- When running on CoreOS, Fedora Silverblue and friends replace `-v
+  /boot:/boot:ro` with `-v /lib/modules:/lib/modules:ro` in the above.
 
 ### From sources
 
@@ -451,4 +455,15 @@ Finally, profiles should be installed in either `/etc/retis/profiles` or
 ```
 $ mkdir -p /etc/retis/profiles
 $ cp profiles/* /etc/retis/profiles
+```
+
+### Running as non-root
+
+Retis can run as non-root if it has the right capabilities. Note that doing this
+alone often means `debugfs` won't be available as it's usually owned by `root`
+only and Retis won't be able to fully filter probes.
+
+```
+$ sudo setcap cap_sys_admin,cap_bpf,cap_syslog=ep $(which retis)
+$ retis collect
 ```

@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
+use nix::unistd::Uid;
 
 use super::cli::Collect;
 use crate::process::display::PrintSingle;
@@ -144,6 +145,11 @@ impl Collectors {
         probe::common::set_ebpf_debug(collect.args()?.ebpf_debug)?;
         if collect.args()?.stack {
             self.probes.set_probe_opt(probe::ProbeOption::StackTrace)?;
+        }
+
+        // --allow-system-changes requires root.
+        if collect.args()?.allow_system_changes && !Uid::effective().is_root() {
+            bail!("Retis needs to be run as root when --allow-system-changes is used");
         }
 
         // Try initializing all collectors.

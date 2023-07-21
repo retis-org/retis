@@ -3,8 +3,7 @@
 
 #include <bpf/bpf_tracing.h>
 
-extern int LINUX_KERNEL_VERSION __kconfig;
-extern bool CONFIG_X86_KERNEL_IBT __kconfig __weak;
+enum bpf_func_id___x { BPF_FUNC_get_func_ip___5_15_0 = 42 };
 
 /* The following helper retrieves the function IP in kprobes.
  *
@@ -20,16 +19,14 @@ extern bool CONFIG_X86_KERNEL_IBT __kconfig __weak;
  * handling in bpf_get_func_ip were done in different commits, merged into
  * different kernel versions, with no Fixes: tag. So we might end up in a
  * situation where CONFIG_X86_KERNEL_IBT=y and bpf_get_func_ip does not support
- * it. Our strategy is to force the use of bpf_get_func_ip when
- * CONFIG_X86_KERNEL_IBT=y to still allow some stable/downstream kernels to
- * work, and making the BPF verifier to reject the program otherwise. But we
- * can't do much more and it might happen that some kernels with
+ * it. Our strategy is to always use bpf_get_func_ip if available and still use
+ * the manual computation otherwise to allow some stable/downstream kernels to
+ * work. We can't do much more and it might happen that some kernels with
  * CONFIG_X86_KERNEL_IBT=y and bpf_get_func_ip won't work. Hopefully that should
  * be rare, and even less common over time.
  */
 static __always_inline u64 kprobe_get_func_ip(struct pt_regs *ctx) {
-	if (LINUX_KERNEL_VERSION >= KERNEL_VERSION(5, 15, 0) ||
-	    CONFIG_X86_KERNEL_IBT)
+	if (bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_get_func_ip___5_15_0))
 		return bpf_get_func_ip(ctx);
 	else
 		return PT_REGS_IP(ctx) - 1;
