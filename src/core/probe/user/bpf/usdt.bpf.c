@@ -52,7 +52,6 @@ int probe_usdt(struct pt_regs *ctx)
 {
 	u64 pid = bpf_get_current_pid_tgid();
 	u64 sym_addr = PT_REGS_IP(ctx);
-	struct pt_regs ctx_fp = *ctx;
 	volatile u16 pass_threshold;
 	struct common_task_event *ti;
 	struct common_event *e;

@@ -210,6 +210,9 @@ impl Collector for NftModule {
         if let Some(offset) = sym.parameter_offset("struct nft_verdict *")? {
             cfg.offsets.nft_verdict = offset as i8;
         }
+        if let Some(offset) = sym.parameter_offset("enum nft_trace_types")? {
+            cfg.offsets.nft_type = offset as i8;
+        }
 
         let cfg = unsafe { plain::as_bytes(&cfg) };
 

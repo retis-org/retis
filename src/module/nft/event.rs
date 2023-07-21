@@ -28,6 +28,7 @@ pub(crate) struct NftEvent {
     table_handle: i64,
     chain_handle: i64,
     rule_handle: Option<i64>,
+    policy: bool,
 }
 
 impl EventFmt for NftEvent {
@@ -43,6 +44,11 @@ impl EventFmt for NftEvent {
         }
 
         write!(f, " {}", self.verdict)?;
+
+        if self.policy {
+            write!(f, " (policy)")?;
+        }
+
         if let Some(name) = &self.verdict_chain_name {
             write!(f, " chain {name}")?;
         }
@@ -70,6 +76,8 @@ struct NftBpfEvent {
     ch: i64,
     /// Rule handle
     rh: i64,
+    /// Verdict refers to the policy
+    p: u8,
 }
 
 unsafe impl Plain for NftBpfEvent {}
@@ -87,6 +95,7 @@ impl RawEventSectionFactory for NftEventFactory {
         event.chain_name = raw.cn.to_string()?;
         event.table_handle = raw.th;
         event.chain_handle = raw.ch;
+        event.policy = raw.p == 1;
         event.rule_handle = match raw.rh {
             -1 => None,
             _ => Some(raw.rh),

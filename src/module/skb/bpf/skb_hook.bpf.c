@@ -164,7 +164,7 @@ static __always_inline int process_skb_l2_l4(struct retis_context *ctx,
 		bpf_probe_read_kernel(&protocol, sizeof(protocol), &ip4->protocol);
 
 		if (cfg->sections & BIT(COLLECT_IPV4)) {
-			u16 frag_off, offset;
+			u16 frag_off;
 			u8 tos;
 			struct skb_ipv4_event *e =
 				get_event_section(event, COLLECTOR_SKB,

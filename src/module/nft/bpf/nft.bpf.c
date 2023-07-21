@@ -13,6 +13,8 @@
 	RETIS_HOOK_GET(ctx, cfg->offsets, nft_rule, struct nft_rule_dp *)
 #define retis_get_nft_verdict(ctx, cfg)		\
 	RETIS_HOOK_GET(ctx, cfg->offsets, nft_verdict, struct nft_verdict *)
+#define retis_get_nft_type(ctx, cfg)		\
+	RETIS_HOOK_GET(ctx, cfg->offsets, nft_type, enum nft_trace_types)
 
 /* Nft hook configuration.
  *
@@ -22,6 +24,7 @@ struct nft_offsets {
 	s8 nft_chain;
 	s8 nft_rule;
 	s8 nft_verdict;
+	s8 nft_type;
 } __attribute__((packed));
 struct nft_config {
 	u64 verdicts;
@@ -43,6 +46,7 @@ struct nft_event {
 	s64 t_handle;
 	s64 c_handle;
 	s64 r_handle;
+	u8 policy;
 } __attribute__((packed));
 
 static __always_inline s64 nft_get_rule_handle(const struct nft_traceinfo *info,
@@ -65,13 +69,17 @@ static __always_inline int nft_trace(struct nft_config *cfg,
 				     const struct nft_traceinfo *info,
 				     const struct nft_chain *chain,
 				     const struct nft_verdict *verdict,
-				     const struct nft_rule_dp *rule)
+				     const struct nft_rule_dp *rule,
+				     enum nft_trace_types type)
 {
 	struct nft_event *e;
 	char *name;
+	u8 policy;
 	u32 code;
 
-	code = (u32)BPF_CORE_READ(verdict, code);
+	policy = (type == NFT_TRACETYPE_POLICY);
+	code = policy ? (u32)BPF_CORE_READ(info, basechain, policy) :
+		(u32)BPF_CORE_READ(verdict, code);
 	if (!ALLOWED_VERDICTS(code, cfg->verdicts))
 		return -ENOMSG;
 
@@ -79,6 +87,7 @@ static __always_inline int nft_trace(struct nft_config *cfg,
 	if (!e)
 		return 0;
 
+	e->policy = policy;
 	e->verdict = code;
 	/* Table info */
 	name = BPF_CORE_READ(chain, table, name);
@@ -107,9 +116,8 @@ const struct nft_chain *nft_get_chain_from_rule(struct retis_context *ctx,
 						struct nft_traceinfo *info,
 						const struct nft_rule_dp *rule)
 {
-	const struct nft_rule_dp_last___6_4_0 *last;
+	const struct nft_rule_dp_last___6_4_0 *last = NULL;
 	const struct nft_base_chain *base_chain;
-	bool last_rule;
 	u64 rule_dlen;
 	int i;
 
@@ -149,7 +157,7 @@ const struct nft_chain *nft_get_chain_from_rule(struct retis_context *ctx,
 /* Depending on the kernel:
  * - rule is under info, chain is a parameter
  * - rule is a parameter, chain is one of:
- *   - last_rule->chain
+ *   - last->chain; if rule->is_last
  *   - info->basechain->chain; if !rule
  *
  * The function deal with that and other than the rule, it also
@@ -164,6 +172,7 @@ void nft_retrieve_rule(struct retis_context *ctx, struct nft_config *cfg,
 	if (bpf_core_field_exists(info->rule)) {
 		*chain = retis_get_nft_chain(ctx, cfg);
 		*rule = BPF_CORE_READ(info, rule);
+		return;
 	}
 
 	*rule = retis_get_nft_rule(ctx, cfg);
@@ -210,7 +219,8 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 
 	verdict = nft_get_verdict(ctx, cfg, info);
 
-	return nft_trace(cfg, event, info, chain, verdict, rule);
+	return nft_trace(cfg, event, info, chain, verdict, rule,
+			 retis_get_nft_type(ctx, cfg));
 )
 
 char __license[] SEC("license") = "GPL";
