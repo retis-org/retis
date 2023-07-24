@@ -343,9 +343,6 @@ All requirements are for commands collecting events, for now only `collect`.
 
 Mandatory requirements:
 
-- The kernel configuration must be available either in `/proc/config.gz` or in
-  `/boot/config-$(uname -r)`.
-
 - Retis needs `CAP_BPF` and access to all files listed in the
   [requirements](#requirements).
 
