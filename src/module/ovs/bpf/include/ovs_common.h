@@ -5,7 +5,12 @@
 
 #include "jhash.h"
 
+/* <bpf/bpf_helpers.h> now includes the below definition, define it here if not
+ * found for the time being to allow a smooth transition.
+ */
+#ifndef barrier_var
 #define barrier_var(var) asm volatile("" : "=r"(var) : "0"(var))
+#endif
 
 /* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 enum trace_ovs_data_type {
