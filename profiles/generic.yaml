@@ -16,6 +16,7 @@ collect:
         - kprobe:tcp6_gro_receive
         - kprobe:tcp_rcv_established
         - kprobe:tcp_rcv_state_process
+        - kprobe:__tcp_retransmit_skb
         - kprobe:udp_rcv
         - kprobe:udpv6_rcv
         - kprobe:udp_gro_receive

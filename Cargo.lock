@@ -987,7 +987,7 @@ checksum = "436b050e76ed2903236f032a59761c1eb99e1b0aead2c257922771dab1fc8c78"
 
 [[package]]
 name = "retis"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "bimap",
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "retis-derive"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "quote",
  "syn 2.0.18",
