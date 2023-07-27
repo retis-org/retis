@@ -108,50 +108,17 @@ struct skb_data_ref_event {
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
-static __always_inline int process_skb_l2_l4(struct retis_raw_event *event,
-					     struct skb_config *cfg,
-					     struct sk_buff *skb)
+static __always_inline int process_skb_ip(struct retis_raw_event *event,
+					  struct skb_config *cfg,
+					  struct sk_buff *skb,
+					  unsigned char *head,
+					  u16 etype, u16 mac, u16 network)
 {
-	unsigned char *head = BPF_CORE_READ(skb, head);
-	u16 mac, network, transport, etype;
 	u8 protocol, ip_version;
+	u16 transport;
 
-	/* L2 */
-
-	mac = BPF_CORE_READ(skb, mac_header);
-	etype = BPF_CORE_READ(skb, protocol);
-
-	/* If the ethertype isn't set, bail out early as we can't process such
-	 * packets below.
-	 */
-	if (etype == 0)
-		return 0;
-
-	if (cfg->sections & BIT(COLLECT_ETH)) {
-		struct skb_eth_event *e =
-			get_event_zsection(event, COLLECTOR_SKB, COLLECT_ETH,
-					   sizeof(*e));
-		if (!e)
-			return 0;
-
-		if (mac != (u16)~0U) {
-			struct ethhdr *eth = (struct ethhdr *)(head + mac);
-
-			bpf_probe_read_kernel(e->src, sizeof(e->src), eth->h_source);
-			bpf_probe_read_kernel(e->dst, sizeof(e->dst), eth->h_dest);
-		}
-
-		e->etype = etype;
-	}
-
-	/* L3 */
-
-	/* We only support IPv4/IPv6. */
+	/* IPv4/IPv6. */
 	if (etype != bpf_ntohs(0x800) && etype != bpf_ntohs(0x86dd))
-		return 0;
-
-	network = BPF_CORE_READ(skb, network_header);
-	if (!network || network == mac || network == (u16)~0U)
 		return 0;
 
 	bpf_probe_read_kernel(&ip_version, sizeof(ip_version), head + network);
@@ -290,12 +257,55 @@ static __always_inline int process_skb_l2_l4(struct retis_raw_event *event,
 }
 
 /* Must be called with a valid skb pointer */
+static __always_inline int process_skb_l2(struct retis_raw_event *event,
+					  struct skb_config *cfg,
+					  struct sk_buff *skb,
+					  unsigned char *head)
+{
+	u16 mac, network, etype;
+
+	mac = BPF_CORE_READ(skb, mac_header);
+	etype = BPF_CORE_READ(skb, protocol);
+
+	/* If the ethertype isn't set, bail out early as we can't process such
+	 * packets below.
+	 */
+	if (etype == 0)
+		return 0;
+
+	if (cfg->sections & BIT(COLLECT_ETH)) {
+		struct skb_eth_event *e =
+			get_event_zsection(event, COLLECTOR_SKB, COLLECT_ETH,
+					   sizeof(*e));
+		if (!e)
+			return 0;
+
+		if (mac != (u16)~0U) {
+			struct ethhdr *eth = (struct ethhdr *)(head + mac);
+
+			bpf_probe_read_kernel(e->src, sizeof(e->src), eth->h_source);
+			bpf_probe_read_kernel(e->dst, sizeof(e->dst), eth->h_dest);
+		}
+
+		e->etype = etype;
+	}
+
+	network = BPF_CORE_READ(skb, network_header);
+	if (!network || network == mac || network == (u16)~0U)
+		return 0;
+
+	/* L3 */
+	return process_skb_ip(event, cfg, skb, head, etype, mac, network);
+}
+
+/* Must be called with a valid skb pointer */
 static __always_inline int process_skb(struct retis_raw_event *event,
 				       struct sk_buff *skb)
 {
 	struct skb_shared_info *si;
 	struct skb_config *cfg;
 	struct net_device *dev;
+	unsigned char *head;
 	u32 key = 0;
 
 	cfg = bpf_map_lookup_elem(&skb_config_map, &key);
@@ -303,6 +313,7 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 		return 0;
 
 	dev = BPF_CORE_READ(skb, dev);
+	head = BPF_CORE_READ(skb, head);
 
 	if (cfg->sections & BIT(COLLECT_DEV) && dev) {
 		struct skb_netdev_event *e =
@@ -358,7 +369,6 @@ skip_netns:
 	}
 
 	if (cfg->sections & BIT(COLLECT_DATA_REF)) {
-		unsigned char *head;
 		struct skb_data_ref_event *e =
 			get_event_section(event, COLLECTOR_SKB,
 					  COLLECT_DATA_REF, sizeof(*e));
@@ -370,12 +380,11 @@ skip_netns:
 		e->fclone = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, fclone);
 		e->users = (u8)BPF_CORE_READ(skb, users.refs.counter);
 
-		head = BPF_CORE_READ(skb, head);
 		si = (struct skb_shared_info *)(BPF_CORE_READ(skb, end) + head);
 		e->dataref = (u8)BPF_CORE_READ(si, dataref.counter);
 	}
 
-	return process_skb_l2_l4(event, cfg, skb);
+	return process_skb_l2(event, cfg, skb, head);
 }
 
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
