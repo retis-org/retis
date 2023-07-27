@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt};
 
 use anyhow::Result;
 use btf_rs::Type;
-use log::warn;
 use plain::Plain;
 
 use crate::{
@@ -39,32 +38,30 @@ pub(crate) struct SkbDropEventFactory {
     /// `parse_drop_reasons` on a machine not collecting events. A `Some` value
     /// with an empty map means we couldn't retrieve the drop reasons from the
     /// running kernel.
-    reasons: Option<HashMap<u32, String>>,
+    reasons: Option<HashMap<i32, String>>,
 }
 
 impl SkbDropEventFactory {
     pub(crate) fn parse_drop_reasons(&mut self) -> Result<()> {
         let mut reasons = HashMap::new();
 
-        if let (btf, Type::Enum(r#enum)) = inspector()?
+        if let Ok((btf, Type::Enum(r#enum))) = inspector()?
             .kernel
             .btf
-            .resolve_type_by_name("skb_drop_reason")?
+            .resolve_type_by_name("skb_drop_reason")
         {
             for member in r#enum.members.iter() {
                 if member.val() < 0 {
                     continue;
                 }
                 reasons.insert(
-                    u32::try_from(member.val())?,
+                    member.val(),
                     btf.resolve_name(member)?
                         .trim_start_matches("SKB_")
                         .trim_start_matches("DROP_REASON_")
                         .to_string(),
                 );
             }
-        } else {
-            warn!("Can't retrieve skb drop reason definitions from the kernel. Events will contain raw data (enum int value).");
         }
 
         self.reasons = Some(reasons);
@@ -85,7 +82,10 @@ impl RawEventSectionFactory for SkbDropEventFactory {
         // Unwrap as we just made sure it was Some(..).
         let drop_reason = match self.reasons.as_ref().unwrap().get(&drop_reason) {
             Some(r) => r.clone(),
-            None => format!("{}", drop_reason),
+            None => match drop_reason {
+                -1 => "NOT_SPECIFIED".to_string(),
+                _ => drop_reason.to_string(),
+            },
         };
 
         Ok(Box::new(SkbDropEvent { drop_reason }))
@@ -95,7 +95,7 @@ impl RawEventSectionFactory for SkbDropEventFactory {
 #[derive(Default)]
 #[repr(C, packed)]
 struct BpfSkbDropEvent {
-    drop_reason: u32,
+    drop_reason: i32,
 }
 
 unsafe impl Plain for BpfSkbDropEvent {}
