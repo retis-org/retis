@@ -20,7 +20,7 @@ pub(crate) struct SkbCollectorArgs {
         long,
         value_parser=PossibleValuesParser::new(["all", "eth", "arp", "ip", "tcp", "udp", "icmp", "dev", "ns", "meta", "dataref"]),
         value_delimiter=',',
-        default_value="ip,tcp,udp,icmp,dev",
+        default_value="ip,arp,tcp,udp,icmp,dev",
         help = "Comma separated list of data to collect from skbs"
     )]
     skb_sections: Vec<String>,
