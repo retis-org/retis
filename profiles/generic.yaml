@@ -8,6 +8,7 @@ collect:
         - tp:skb:kfree_skb
         - tp:net:netif_receive_skb
         - tp:net:netif_rx
+        - kprobe:arp_process
         - kprobe:ip_rcv
         - kprobe:ipv6_rcv
         - kprobe:tcp_v4_rcv
