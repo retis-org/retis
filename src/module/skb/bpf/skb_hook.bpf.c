@@ -6,20 +6,25 @@
 
 #define BIT(x) (1 << (x))
 
+#define ETH_P_IP	0x0800
+#define ETH_P_ARP	0x0806
+#define ETH_P_IPV6	0x86dd
+
 /* Skb raw event sections.
  *
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
 #define COLLECT_ETH		0
-#define COLLECT_IPV4		1
-#define COLLECT_IPV6		2
-#define COLLECT_TCP		3
-#define COLLECT_UDP		4
-#define COLLECT_ICMP		5
-#define COLLECT_DEV		6
-#define COLLECT_NS		7
-#define COLLECT_META		8
-#define COLLECT_DATA_REF	9
+#define COLLECT_ARP		1
+#define COLLECT_IPV4		2
+#define COLLECT_IPV6		3
+#define COLLECT_TCP		4
+#define COLLECT_UDP		5
+#define COLLECT_ICMP		6
+#define COLLECT_DEV		7
+#define COLLECT_NS		8
+#define COLLECT_META		9
+#define COLLECT_DATA_REF	10
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -42,6 +47,13 @@ struct skb_eth_event {
 	u8 dst[6];
 	u8 src[6];
 	u16 etype;
+} __attribute__((packed));
+struct skb_arp_event {
+	u16 operation;
+	u8 sha[6];
+	u32 spa;
+	u8 tha[6];
+	u32 tpa;
 } __attribute__((packed));
 struct skb_ipv4_event {
 	u32 src;
@@ -108,6 +120,64 @@ struct skb_data_ref_event {
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
+static __always_inline int process_skb_arp(struct retis_raw_event *event,
+					   struct skb_config *cfg,
+					   struct sk_buff *skb,
+					   unsigned char *head,
+					   u16 etype, u16 mac, u16 network)
+{
+	struct skb_arp_event *e;
+	struct arphdr *arp;
+	unsigned char *ptr;
+
+	if (!(cfg->sections & BIT(COLLECT_ARP)))
+		return 0;
+
+	arp = (struct arphdr *)(head + network);
+
+#define ARPHRD_ETHER	1
+	/* We only support ARP for IPv4 over Ethernet */
+	if (BPF_CORE_READ(arp, ar_hrd) != bpf_htons(ARPHRD_ETHER) ||
+	    BPF_CORE_READ(arp, ar_pro) != bpf_htons(ETH_P_IP))
+		return 0;
+
+#define ARPOP_REQUEST	1
+#define ARPOP_REPLY	2
+	/* We only support ARP request & reply */
+	if (BPF_CORE_READ(arp, ar_op) != bpf_htons(ARPOP_REQUEST) &&
+	    BPF_CORE_READ(arp, ar_op) != bpf_htons(ARPOP_REPLY))
+		return 0;
+
+	/* h/w addr len must be 6 (MAC) & protocol addr len 4 (IP) */
+	if (BPF_CORE_READ(arp, ar_hln) != 6 || BPF_CORE_READ(arp, ar_pln) != 4)
+		return 0;
+
+	e = get_event_section(event, COLLECTOR_SKB, COLLECT_ARP, sizeof(*e));
+	if (!e)
+		return 0;
+
+	bpf_probe_read_kernel(&e->operation, sizeof(e->operation), &arp->ar_op);
+
+	/* Sender hardware address */
+	ptr = (unsigned char *)(arp + 1);
+	bpf_probe_read_kernel(&e->sha, sizeof(e->sha), ptr);
+
+	/* Sender protocol address */
+	ptr += 6; /* h/w addr len */
+	bpf_probe_read_kernel(&e->spa, sizeof(e->spa), ptr);
+
+	/* Target hardware address */
+	ptr += 4; /* protocol addr len */
+	bpf_probe_read_kernel(&e->tha, sizeof(e->tha), ptr);
+
+	/* Target protocol address */
+	ptr += 6; /* h/w addr len */
+	bpf_probe_read_kernel(&e->tpa, sizeof(e->tpa), ptr);
+
+	return 0;
+}
+
+/* Must be called with a valid skb pointer */
 static __always_inline int process_skb_ip(struct retis_raw_event *event,
 					  struct skb_config *cfg,
 					  struct sk_buff *skb,
@@ -116,10 +186,6 @@ static __always_inline int process_skb_ip(struct retis_raw_event *event,
 {
 	u8 protocol, ip_version;
 	u16 transport;
-
-	/* IPv4/IPv6. */
-	if (etype != bpf_ntohs(0x800) && etype != bpf_ntohs(0x86dd))
-		return 0;
 
 	bpf_probe_read_kernel(&ip_version, sizeof(ip_version), head + network);
 	ip_version >>= 4;
@@ -294,8 +360,15 @@ static __always_inline int process_skb_l2(struct retis_raw_event *event,
 	if (!network || network == mac || network == (u16)~0U)
 		return 0;
 
-	/* L3 */
-	return process_skb_ip(event, cfg, skb, head, etype, mac, network);
+	/* IPv4/IPv6 and upper layers */
+	if (etype == bpf_ntohs(ETH_P_IP) || etype == bpf_ntohs(ETH_P_IPV6))
+		return process_skb_ip(event, cfg, skb, head, etype, mac, network);
+	/* ARP */
+	else if (etype == bpf_ntohs(ETH_P_ARP))
+		return process_skb_arp(event, cfg, skb, head, etype, mac, network);
+
+	/* Unsupported etype */
+	return 0;
 }
 
 /* Must be called with a valid skb pointer */

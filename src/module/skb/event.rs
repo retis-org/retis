@@ -13,6 +13,8 @@ use crate::{
 pub(crate) struct SkbEvent {
     /// Ethernet fields, if any.
     pub(crate) eth: Option<SkbEthEvent>,
+    /// ARP fields, if any.
+    pub(crate) arp: Option<SkbArpEvent>,
     /// IPv4 or IPv6 fields, if any.
     pub(crate) ip: Option<SkbIpEvent>,
     /// TCP fields, if any.
@@ -76,6 +78,23 @@ impl EventFmt for SkbEvent {
                 "{} > {} ethertype{} ({:#06x})",
                 eth.src, eth.dst, ethertype, eth.etype
             )?;
+        }
+
+        if let Some(arp) = &self.arp {
+            space(f, &mut first)?;
+
+            match arp.operation {
+                ArpOperation::Request => {
+                    write!(f, "request who-has {}", arp.tpa)?;
+                    if arp.tha != "00:00:00:00:00:00" {
+                        write!(f, " ({})", arp.tha)?;
+                    }
+                    write!(f, " tell {}", arp.spa)?;
+                }
+                ArpOperation::Reply => {
+                    write!(f, "reply {} is-at {}", arp.spa, arp.sha)?;
+                }
+            }
         }
 
         if let Some(ip) = &self.ip {
@@ -249,6 +268,28 @@ pub(crate) struct SkbEthEvent {
     pub(crate) dst: String,
 }
 
+/// ARP fields.
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub(crate) struct SkbArpEvent {
+    /// Operation type.
+    pub(crate) operation: ArpOperation,
+    /// Sender hardware address.
+    pub(crate) sha: String,
+    /// Sender protocol address.
+    pub(crate) spa: String,
+    /// Target hardware address.
+    pub(crate) tha: String,
+    /// Target protocol address.
+    pub(crate) tpa: String,
+}
+
+/// ARP operation type.
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub(crate) enum ArpOperation {
+    Request,
+    Reply,
+}
+
 /// IPv4/IPv6 fields.
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) struct SkbIpEvent {
@@ -393,6 +434,7 @@ impl RawEventSectionFactory for SkbEventFactory {
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
                 SECTION_ETH => event.eth = Some(unmarshal_eth(section)?),
+                SECTION_ARP => event.arp = Some(unmarshal_arp(section)?),
                 SECTION_IPV4 => event.ip = Some(unmarshal_ipv4(section)?),
                 SECTION_IPV6 => event.ip = Some(unmarshal_ipv6(section)?),
                 SECTION_TCP => event.tcp = Some(unmarshal_tcp(section)?),

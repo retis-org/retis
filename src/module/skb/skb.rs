@@ -18,7 +18,7 @@ use crate::{
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
-        value_parser=PossibleValuesParser::new(["all", "eth", "ip", "tcp", "udp", "icmp", "dev", "ns", "meta", "dataref"]),
+        value_parser=PossibleValuesParser::new(["all", "eth", "arp", "ip", "tcp", "udp", "icmp", "dev", "ns", "meta", "dataref"]),
         value_delimiter=',',
         default_value="ip,tcp,udp,icmp,dev",
         help = "Comma separated list of data to collect from skbs"
@@ -50,6 +50,7 @@ impl Collector for SkbModule {
             match category.as_str() {
                 "all" => sections |= !0_u64,
                 "eth" => sections |= 1 << SECTION_ETH,
+                "arp" => sections |= 1 << SECTION_ARP,
                 "ip" => sections |= 1 << SECTION_IPV4 | 1 << SECTION_IPV6,
                 "tcp" => sections |= 1 << SECTION_TCP,
                 "udp" => sections |= 1 << SECTION_UDP,
