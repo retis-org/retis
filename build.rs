@@ -67,7 +67,7 @@ fn build_hook(source: &str, extra_includes: Option<&[&str]>) {
         .clang_args(get_probe_clang_args(extra_includes))
         .build()
     {
-        panic!("{}", e);
+        panic!("{:?}", e);
     }
 
     let obj = File::open(output).unwrap();
@@ -97,7 +97,7 @@ fn build_probe(source: &str) {
         .clang_args(get_probe_clang_args(None))
         .build_and_generate(skel)
     {
-        panic!("{}", e);
+        panic!("{:?}", e);
     }
 
     println!("cargo:rerun-if-changed={source}");
@@ -133,7 +133,7 @@ fn build_extract_stub(source: &str) {
         .clang_args(format!("-I{FILTER_INCLUDE_PATH} "))
         .build()
     {
-        panic!("{}", e);
+        panic!("{:?}", e);
     }
 
     if !Command::new("llvm-objcopy")
