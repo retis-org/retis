@@ -14,7 +14,8 @@ dnf install -y \
     zlib-devel \
     libpcap-devel \
     git \
-    python3-pip
+    python3-pip \
+    socat
 
     python3 -m pip install pytest pyroute2
 SCRIPT
@@ -60,7 +61,8 @@ Vagrant.configure("2") do |config|
           git \
           pkg-config \
           python3-pip \
-          openvswitch-switch
+          openvswitch-switch \
+          socat
 
           python3 -m pip install pytest pyroute2
     SHELL
