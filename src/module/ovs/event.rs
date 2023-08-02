@@ -46,6 +46,7 @@ impl RawEventSectionFactory for OvsEventFactory {
                 OvsDataType::ActionExecTrack => unmarshall_exec_track(section, &mut event),
                 OvsDataType::OutputAction => unmarshall_output(section, &mut event),
                 OvsDataType::RecircAction => unmarshall_recirc(section, &mut event),
+                OvsDataType::ConntrackAction => unmarshall_ct(section, &mut event),
             }?;
         }
 
@@ -327,6 +328,68 @@ impl EventFmt for ActionEvent {
         match &self.action {
             OvsAction::Output(a) => write!(f, " oport {}", a.port)?,
             OvsAction::Recirc(a) => write!(f, " recirc {}", a.id)?,
+            OvsAction::Ct(ct) => {
+                write!(f, " ct zone {}", ct.zone_id)?;
+
+                if let Some(nat) = &ct.nat {
+                    write!(f, " nat")?;
+                    if let Some(dir) = &nat.dir {
+                        match dir {
+                            NatDirection::Src => write!(f, "(src")?,
+                            NatDirection::Dst => write!(f, "(dst")?,
+                        }
+
+                        if ct.flags & R_OVS_CT_NAT_RANGE_MAP_IPS != 0 {
+                            if let (Some(min_addr), Some(max_addr)) =
+                                (nat.min_addr.as_ref(), nat.max_addr.as_ref())
+                            {
+                                if min_addr.eq(max_addr) {
+                                    write!(f, "={}", min_addr)?;
+                                } else {
+                                    write!(f, "={}-{}", min_addr, max_addr)?;
+                                }
+                            }
+                        }
+                        if ct.flags & R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED != 0 {
+                            if let (Some(min_port), Some(max_port)) =
+                                (nat.min_port.as_ref(), nat.max_port.as_ref())
+                            {
+                                if min_port.eq(max_port) {
+                                    write!(f, ":{}", min_port)?;
+                                } else {
+                                    write!(f, ":{}-{}", min_port, max_port)?;
+                                }
+                            }
+                        }
+                        write!(f, ")")?;
+                    }
+                }
+
+                if ct.is_commit()
+                    || ct.is_force()
+                    || ct.is_persistent()
+                    || ct.is_hash()
+                    || ct.is_random()
+                {
+                    let mut flags = Vec::new();
+                    if ct.is_commit() {
+                        flags.push("commit");
+                    }
+                    if ct.is_force() {
+                        flags.push("force");
+                    }
+                    if ct.is_persistent() {
+                        flags.push("persistent");
+                    }
+                    if ct.is_hash() {
+                        flags.push("hash");
+                    }
+                    if ct.is_random() {
+                        flags.push("random");
+                    }
+                    write!(f, " {}", flags.join(","))?;
+                }
+            }
             other => write!(f, " {:?}", other)?,
         }
 
@@ -371,7 +434,7 @@ pub(crate) enum OvsAction {
     #[serde(rename = "set_masked")]
     SetMasked,
     #[serde(rename = "ct")]
-    Ct,
+    Ct(OvsActionCt),
     #[serde(rename = "trunc")]
     Trunc,
     #[serde(rename = "push_eth")]
@@ -415,6 +478,82 @@ pub(crate) struct OvsActionRecirc {
     pub(crate) id: u32,
 }
 unsafe impl Plain for OvsActionRecirc {}
+
+/// OVS conntrack flags
+// Keep in sync with their conterpart in bpf/kernel_exec_tp.bpf.c
+pub(super) const R_OVS_CT_COMMIT: u32 = 1 << 0;
+pub(super) const R_OVS_CT_FORCE: u32 = 1 << 1;
+pub(super) const R_OVS_CT_IP4: u32 = 1 << 2;
+pub(super) const R_OVS_CT_IP6: u32 = 1 << 3;
+pub(super) const R_OVS_CT_NAT: u32 = 1 << 4;
+pub(super) const R_OVS_CT_NAT_SRC: u32 = 1 << 5;
+pub(super) const R_OVS_CT_NAT_DST: u32 = 1 << 6;
+pub(super) const R_OVS_CT_NAT_RANGE_MAP_IPS: u32 = 1 << 7;
+pub(super) const R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED: u32 = 1 << 8;
+pub(super) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM: u32 = 1 << 9;
+pub(super) const R_OVS_CT_NAT_RANGE_PERSISTENT: u32 = 1 << 10;
+pub(super) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY: u32 = 1 << 11;
+
+/// OVS conntrack action data.
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+pub(crate) struct OvsActionCt {
+    /// Flags
+    pub(crate) flags: u32,
+    /// Conntrack zone
+    pub(crate) zone_id: u16,
+    /// NAT
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) nat: Option<OvsActionCtNat>,
+}
+
+impl OvsActionCt {
+    pub(crate) fn is_commit(&self) -> bool {
+        self.flags & R_OVS_CT_COMMIT != 0
+    }
+    pub(crate) fn is_force(&self) -> bool {
+        self.flags & R_OVS_CT_FORCE != 0
+    }
+    #[allow(dead_code)]
+    pub(crate) fn is_ipv4(&self) -> bool {
+        self.flags & R_OVS_CT_IP4 != 0
+    }
+    #[allow(dead_code)]
+    pub(crate) fn is_ipv6(&self) -> bool {
+        self.flags & R_OVS_CT_IP6 != 0
+    }
+    pub(crate) fn is_persistent(&self) -> bool {
+        self.flags & R_OVS_CT_NAT_RANGE_PERSISTENT != 0
+    }
+    pub(crate) fn is_hash(&self) -> bool {
+        self.flags & R_OVS_CT_NAT_RANGE_PROTO_RANDOM != 0
+    }
+    pub(crate) fn is_random(&self) -> bool {
+        self.flags & R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY != 0
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+pub(crate) enum NatDirection {
+    #[default]
+    #[serde(rename = "src")]
+    Src,
+    #[serde(rename = "dst")]
+    Dst,
+}
+/// OVS NAT action data.
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+pub(crate) struct OvsActionCtNat {
+    /// NAT direction, if any
+    pub(crate) dir: Option<NatDirection>,
+    /// Minimum address in address range, if any
+    pub(crate) min_addr: Option<String>,
+    /// Maximum address in address range, if any
+    pub(crate) max_addr: Option<String>,
+    /// Minimum port in port range, if any
+    pub(crate) min_port: Option<u16>,
+    /// Maximum port in port range, if any
+    pub(crate) max_port: Option<u16>,
+}
 
 #[cfg(test)]
 mod tests {
