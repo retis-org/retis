@@ -49,11 +49,9 @@ Vagrant.configure("2") do |config|
     jammy.vm.provision "shell", inline: <<-SHELL
       set -euxo pipefail
       apt-get update -y && apt-get install -y \
-          rustc \
-          cargo \
           clang \
+          curl \
           llvm \
-          rustfmt \
           libelf-dev \
           zlib1g-dev \
           libpcap-dev \
@@ -62,7 +60,8 @@ Vagrant.configure("2") do |config|
           python3-pip \
           openvswitch-switch
 
-          python3 -m pip install pytest pyroute2
+      su vagrant -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy"
+      python3 -m pip install pytest pyroute2
     SHELL
 
     jammy.vm.synced_folder ".", "/vagrant", type: "rsync"
