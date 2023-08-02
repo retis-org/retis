@@ -34,7 +34,7 @@ def test_skb_tcp_cc(two_ports_skb):
         "--skb-sections",
         "all",
         "-f",
-        "tcp port 80",
+        "tcp port 80 or arp",
         "-p",
         "tp:net:netif_rx",
     )
@@ -44,6 +44,56 @@ def test_skb_tcp_cc(two_ports_skb):
     retis.stop()
 
     expected_events = [
+        # ARP req
+        {
+            "common": {
+                "task": {
+                    "comm": "socat",
+                },
+            },
+            "kernel": {
+                "probe_type": "raw_tracepoint",
+                "symbol": "net:netif_rx",
+            },
+            "skb": {
+                "arp": {
+                    "operation": "Request",
+                    "spa": "10.0.42.1",
+                    "tpa": "10.0.42.2",
+                },
+                "dev": {
+                    "name": "veth10",
+                },
+                "eth": {
+                    "etype": 2054,
+                },
+            },
+        },
+        # ARP rep
+        {
+            "common": {
+                "task": {
+                    "comm": "socat",
+                },
+            },
+            "kernel": {
+                "probe_type": "raw_tracepoint",
+                "symbol": "net:netif_rx",
+            },
+            "skb": {
+                "arp": {
+                    "operation": "Reply",
+                    "spa": "10.0.42.2",
+                    "tpa": "10.0.42.1",
+                },
+                "dev": {
+                    "name": "veth01",
+                },
+                "eth": {
+                    "etype": 2054,
+                },
+            },
+        },
         # SYN
         {
             "common": {
