@@ -141,6 +141,12 @@ class NetworkNamespaces:
             ret = run(cmd)
         return ret
 
+    def run_fail(self, name, *cmd):
+        """Run a command inside a namespace that is expected to fail"""
+        with self.enter(name) as _:
+            ret = run(cmd, True)
+        return ret
+
     def run_bg(self, name, *cmd):
         """Run a background command inside a namespace"""
         with self.enter(name) as _:
@@ -217,11 +223,13 @@ def ovs():
     ovs.stop()
 
 
-def run(cmd):
+def run(cmd, should_fail=False):
     ret = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if ret.returncode != 0:
+    if (not should_fail and ret.returncode != 0) or (
+        should_fail and ret.returncode == 0
+    ):
         pytest.fail(
-            "Command: '{}' returned non-zero: {}. stdtout {}, stderr = {}".format(
+            "Command: '{}' returned: {}. stdtout {}, stderr = {}".format(
                 cmd,
                 ret.returncode,
                 ret.stdout.decode("utf8"),
@@ -229,6 +237,7 @@ def run(cmd):
             )
         )
     return ret
+
 
 def run_bg(cmd):
     return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
