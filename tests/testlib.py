@@ -141,6 +141,12 @@ class NetworkNamespaces:
             ret = run(cmd)
         return ret
 
+    def run_bg(self, name, *cmd):
+        """Run a background command inside a namespace"""
+        with self.enter(name) as _:
+            ret = run_bg(cmd)
+        return ret
+
     def enter(self, name):
         """Enter a namepsace. Returns a context object to be used as:
 
@@ -223,6 +229,9 @@ def run(cmd):
             )
         )
     return ret
+
+def run_bg(cmd):
+    return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
 def assert_events_present(events, expected):
