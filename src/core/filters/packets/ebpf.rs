@@ -241,21 +241,16 @@ impl eBpfProg {
         // we return in ctx->ret as, for what it seems to be an issue,
         // the retval of the freplacing function cannot be a value
         // other than 0
-        if reg {
-            self.add(eBpfInsn::mov(MovInfo::Reg {
-                src: BpfReg::A,
-                dst: BpfReg::SCRATCH,
-            }));
-        } else {
+        if !reg {
             self.add(eBpfInsn::mov(MovInfo::Imm {
-                dst: BpfReg::SCRATCH,
+                dst: BpfReg::A,
                 imm: insn.k as i32,
             }));
         }
 
         self.add(eBpfInsn::st(
             StInfo::Reg {
-                src: BpfReg::SCRATCH,
+                src: BpfReg::A,
                 dst: BpfReg::CTX,
                 off: i16::try_from(offset_of!(retis_filter_ctx, ret))?,
             },
