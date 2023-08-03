@@ -232,15 +232,9 @@ impl eBpfProg {
         Ok(())
     }
 
-    /// Prepare to return. If reg selector is set, the value of R0 (A
-    /// reg) will be stored ctx->ret, otherwise an immediate value
-    /// will be set.
+    /// Prepare to return. If reg selector is set, no operation is needed,
+    /// otherwise, k will be set to R0.
     fn prepare_ret(&mut self, insn: &BpfInsn, reg: bool) -> Result<()> {
-        // FIXME: This should handle options and return in A for the
-        // common case. Tracepoint are the exception, and in such case
-        // we return in ctx->ret as, for what it seems to be an issue,
-        // the retval of the freplacing function cannot be a value
-        // other than 0
         if !reg {
             self.add(eBpfInsn::mov(MovInfo::Imm {
                 dst: BpfReg::A,
@@ -248,19 +242,6 @@ impl eBpfProg {
             }));
         }
 
-        self.add(eBpfInsn::st(
-            StInfo::Reg {
-                src: BpfReg::A,
-                dst: BpfReg::CTX,
-                off: i16::try_from(offset_of!(retis_filter_ctx, ret))?,
-            },
-            BpfSize::Word,
-        ));
-
-        self.add(eBpfInsn::mov(MovInfo::Imm {
-            dst: BpfReg::A,
-            imm: 0x00000,
-        }));
         Ok(())
     }
 
