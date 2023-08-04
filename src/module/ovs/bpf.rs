@@ -4,7 +4,6 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 use anyhow::{bail, Result};
-use plain::Plain;
 
 use super::event::*;
 use crate::core::events::bpf::{parse_raw_section, BpfRawSection};
@@ -71,12 +70,11 @@ pub(crate) fn ensure_undefined(event: &OvsEvent, received: OvsDataType) -> Resul
 pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
     ensure_undefined(event, OvsDataType::Upcall)?;
     let upcall = parse_raw_section::<UpcallEvent>(raw_section)?;
-    event.event = OvsEventType::Upcall(upcall);
+    event.event = OvsEventType::Upcall(*upcall);
     Ok(())
 }
 
 /// OVS action event data.
-#[derive(Default)]
 #[repr(C)]
 struct BpfActionEvent {
     /// Action to be executed.
@@ -84,8 +82,6 @@ struct BpfActionEvent {
     /// Recirculation id.
     recirc_id: u32,
 }
-
-unsafe impl Plain for BpfActionEvent {}
 
 pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
     let raw = parse_raw_section::<BpfActionEvent>(raw_section)?;
@@ -152,14 +148,11 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
 }
 
 /// OVS action tracking event data.
-#[derive(Default)]
 #[repr(C)]
 struct BpfActionTrackEvent {
     /// Queue id.
     queue_id: u32,
 }
-
-unsafe impl Plain for BpfActionTrackEvent {}
 
 pub(super) fn unmarshall_exec_track(
     raw_section: &BpfRawSection,
@@ -219,12 +212,12 @@ fn update_action_event(event: &mut OvsEvent, action: OvsAction) -> Result<()> {
 pub(super) fn unmarshall_output(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
     let output = parse_raw_section::<OvsActionOutput>(raw_section)?;
 
-    update_action_event(event, OvsAction::Output(output))
+    update_action_event(event, OvsAction::Output(*output))
 }
 
 pub(super) fn unmarshall_recirc(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
     let recirc = parse_raw_section::<OvsActionRecirc>(raw_section)?;
-    update_action_event(event, OvsAction::Recirc(recirc))
+    update_action_event(event, OvsAction::Recirc(*recirc))
 }
 
 pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
@@ -243,8 +236,6 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
         min_port: u16,
         max_port: u16,
     }
-
-    unsafe impl Plain for BpfConntrackAction {}
 
     impl Default for BpfConntrackAction {
         fn default() -> Self {
@@ -319,7 +310,7 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
 pub(super) fn unmarshall_recv(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
     ensure_undefined(event, OvsDataType::RecvUpcall)?;
     let recv = parse_raw_section::<RecvUpcallEvent>(raw_section)?;
-    event.event = OvsEventType::RecvUpcall(recv);
+    event.event = OvsEventType::RecvUpcall(*recv);
 
     Ok(())
 }
@@ -331,7 +322,7 @@ pub(super) fn unmarshall_operation(
     ensure_undefined(event, OvsDataType::Operation)?;
     let op = parse_raw_section::<OperationEvent>(raw_section)?;
 
-    event.event = OvsEventType::Operation(op);
+    event.event = OvsEventType::Operation(*op);
     Ok(())
 }
 
@@ -342,7 +333,7 @@ pub(super) fn unmarshall_upcall_enqueue(
     ensure_undefined(event, OvsDataType::UpcallEnqueue)?;
     let enqueue = parse_raw_section::<UpcallEnqueueEvent>(raw_section)?;
 
-    event.event = OvsEventType::UpcallEnqueue(enqueue);
+    event.event = OvsEventType::UpcallEnqueue(*enqueue);
     Ok(())
 }
 
@@ -353,6 +344,6 @@ pub(super) fn unmarshall_upcall_return(
     ensure_undefined(event, OvsDataType::UpcallReturn)?;
     let uret = parse_raw_section::<UpcallReturnEvent>(raw_section)?;
 
-    event.event = OvsEventType::UpcallReturn(uret);
+    event.event = OvsEventType::UpcallReturn(*uret);
     Ok(())
 }

@@ -10,7 +10,6 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use plain::Plain;
 
 use super::*;
 use crate::core::events::bpf::{parse_raw_section, BpfRawSection};
@@ -38,7 +37,6 @@ pub(super) struct RawConfig {
 }
 
 /// Ethernet data retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawEthEvent {
     /// Source MAC address.
@@ -48,7 +46,6 @@ struct RawEthEvent {
     /// Ethertype. Stored in network order.
     etype: u16,
 }
-unsafe impl Plain for RawEthEvent {}
 
 pub(super) fn unmarshal_eth(raw_section: &BpfRawSection) -> Result<SkbEthEvent> {
     let raw = parse_raw_section::<RawEthEvent>(raw_section)?;
@@ -61,7 +58,6 @@ pub(super) fn unmarshal_eth(raw_section: &BpfRawSection) -> Result<SkbEthEvent> 
 }
 
 /// ARP data retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawArpEvent {
     /// Operation. Stored in network order.
@@ -75,7 +71,6 @@ struct RawArpEvent {
     /// Target protocol address.
     tpa: u32,
 }
-unsafe impl Plain for RawArpEvent {}
 
 pub(super) fn unmarshal_arp(raw_section: &BpfRawSection) -> Result<SkbArpEvent> {
     let raw = parse_raw_section::<RawArpEvent>(raw_section)?;
@@ -99,7 +94,6 @@ pub(super) fn unmarshal_arp(raw_section: &BpfRawSection) -> Result<SkbArpEvent> 
 }
 
 /// IPv4 data retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawIpv4Event {
     /// Source IP address. Stored in network order.
@@ -123,7 +117,6 @@ struct RawIpv4Event {
     /// Flags (CE, DF, MF).
     flags: u8,
 }
-unsafe impl Plain for RawIpv4Event {}
 
 pub(super) fn unmarshal_ipv4(raw_section: &BpfRawSection) -> Result<SkbIpEvent> {
     let raw = parse_raw_section::<RawIpv4Event>(raw_section)?;
@@ -148,7 +141,6 @@ pub(super) fn unmarshal_ipv4(raw_section: &BpfRawSection) -> Result<SkbIpEvent> 
 }
 
 /// IPv6 data retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawIpv6Event {
     /// Source IP address. Stored in network order.
@@ -166,7 +158,6 @@ struct RawIpv6Event {
     /// ECN bits.
     ecn: u8,
 }
-unsafe impl Plain for RawIpv6Event {}
 
 pub(super) fn unmarshal_ipv6(raw_section: &BpfRawSection) -> Result<SkbIpEvent> {
     let raw = parse_raw_section::<RawIpv6Event>(raw_section)?;
@@ -188,7 +179,6 @@ pub(super) fn unmarshal_ipv6(raw_section: &BpfRawSection) -> Result<SkbIpEvent> 
 }
 
 /// TCP data retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawTcpEvent {
     /// Source port. Stored in network order.
@@ -206,7 +196,6 @@ struct RawTcpEvent {
     /// TCP data offset: size of the TCP header in 32-bit words.
     doff: u8,
 }
-unsafe impl Plain for RawTcpEvent {}
 
 pub(super) fn unmarshal_tcp(raw_section: &BpfRawSection) -> Result<SkbTcpEvent> {
     let raw = parse_raw_section::<RawTcpEvent>(raw_section)?;
@@ -223,7 +212,6 @@ pub(super) fn unmarshal_tcp(raw_section: &BpfRawSection) -> Result<SkbTcpEvent> 
 }
 
 /// UDP data retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawUdpEvent {
     /// Source port. Stored in network order.
@@ -233,7 +221,6 @@ struct RawUdpEvent {
     /// Lenght: length in bytes of the UDP header and UDP data. Stored in network order.
     len: u16,
 }
-unsafe impl Plain for RawUdpEvent {}
 
 pub(super) fn unmarshal_udp(raw_section: &BpfRawSection) -> Result<SkbUdpEvent> {
     let raw = parse_raw_section::<RawUdpEvent>(raw_section)?;
@@ -246,7 +233,6 @@ pub(super) fn unmarshal_udp(raw_section: &BpfRawSection) -> Result<SkbUdpEvent> 
 }
 
 /// ICMP data retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawIcmpEvent {
     /// ICMP type.
@@ -254,7 +240,6 @@ struct RawIcmpEvent {
     /// ICMP sub-type.
     code: u8,
 }
-unsafe impl Plain for RawIcmpEvent {}
 
 pub(super) fn unmarshal_icmp(raw_section: &BpfRawSection) -> Result<SkbIcmpEvent> {
     let raw = parse_raw_section::<RawIcmpEvent>(raw_section)?;
@@ -266,7 +251,6 @@ pub(super) fn unmarshal_icmp(raw_section: &BpfRawSection) -> Result<SkbIcmpEvent
 }
 
 /// Net device information retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawDevEvent {
     /// Net device name.
@@ -276,7 +260,6 @@ struct RawDevEvent {
     /// Original ifindex the packet arrived on.
     iif: u32,
 }
-unsafe impl Plain for RawDevEvent {}
 
 /// Unmarshal net device info. Can return Ok(None) in case the info does not
 /// look like it's genuine (see below).
@@ -306,13 +289,11 @@ pub(super) fn unmarshal_dev(raw_section: &BpfRawSection) -> Result<Option<SkbDev
 }
 
 /// Net namespace information retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawNsEvent {
     /// Net namespace id.
     netns: u32,
 }
-unsafe impl Plain for RawNsEvent {}
 
 pub(super) fn unmarshal_ns(raw_section: &BpfRawSection) -> Result<SkbNsEvent> {
     let raw = parse_raw_section::<RawNsEvent>(raw_section)?;
@@ -321,7 +302,6 @@ pub(super) fn unmarshal_ns(raw_section: &BpfRawSection) -> Result<SkbNsEvent> {
 }
 
 /// Skb metadata & related.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawMetaEvent {
     len: u32,
@@ -330,7 +310,6 @@ struct RawMetaEvent {
     csum: u32,
     priority: u32,
 }
-unsafe impl Plain for RawMetaEvent {}
 
 pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent> {
     let raw = parse_raw_section::<RawMetaEvent>(raw_section)?;
@@ -345,7 +324,6 @@ pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent
 }
 
 /// Data & refcount information retrieved from skbs.
-#[derive(Default)]
 #[repr(C, packed)]
 struct RawDataRefEvent {
     nohdr: u8,
@@ -358,7 +336,6 @@ struct RawDataRefEvent {
     /// Data refcount.
     dataref: u8,
 }
-unsafe impl Plain for RawDataRefEvent {}
 
 pub(super) fn unmarshal_data_ref(raw_section: &BpfRawSection) -> Result<SkbDataRefEvent> {
     let raw = parse_raw_section::<RawDataRefEvent>(raw_section)?;

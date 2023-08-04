@@ -114,7 +114,7 @@ impl CtEventFactory {
     }
 
     pub(super) fn unmarshal_ct(&mut self, sections: Vec<BpfRawSection>) -> Result<CtEvent> {
-        let raw = parse_single_raw_section::<RawCtEvent>(ModuleId::Ct, sections)?;
+        let raw = parse_single_raw_section::<RawCtEvent>(ModuleId::Ct, &sections)?;
         let flags = raw.flags;
 
         let zone_dir = match flags {

@@ -303,36 +303,27 @@ pub(crate) fn parse_raw_event<'a>(
 }
 
 /// Helper to check a raw section validity and parse it into a structured type.
-pub(crate) fn parse_raw_section<T>(raw_section: &BpfRawSection) -> Result<T>
-where
-    T: Default + Plain,
-{
+pub(crate) fn parse_raw_section<'a, T>(raw_section: &'a BpfRawSection) -> Result<&'a T> {
     if raw_section.data.len() != mem::size_of::<T>() {
         bail!("Section data is not the expected size");
     }
 
-    let mut event = T::default();
-    plain::copy_from_bytes(&mut event, &raw_section.data)
-        .or_else(|_| bail!("Could not parse the raw section"))?;
-
-    Ok(event)
+    Ok(unsafe { mem::transmute(&raw_section.data[0]) })
 }
 
 /// Helper to parse a single raw section from BPF raw sections, checking the
 /// section validity and parsing it into a structured type.
-pub(crate) fn parse_single_raw_section<T>(
+pub(crate) fn parse_single_raw_section<'a, T>(
     id: ModuleId,
-    mut raw_sections: Vec<BpfRawSection>,
-) -> Result<T>
-where
-    T: Default + Plain,
-{
+    raw_sections: &'a Vec<BpfRawSection>,
+) -> Result<&'a T> {
     if raw_sections.len() != 1 {
         bail!("{id} event from BPF must be a single section");
     }
 
-    // Unwrap as we just checked the vector contains 1 element.
-    parse_raw_section::<T>(&raw_sections.pop().unwrap())
+    // We can access the first element safely as we just checked the vector
+    // contains 1 element.
+    parse_raw_section::<T>(&raw_sections[0])
 }
 
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -378,7 +369,7 @@ impl RawEventSectionFactory for CommonEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
-                COMMON_SECTION_CORE => common.timestamp = parse_raw_section::<u64>(section)?,
+                COMMON_SECTION_CORE => common.timestamp = *parse_raw_section::<u64>(section)?,
                 COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
                 _ => bail!("Unknown data type"),
             }
@@ -391,7 +382,6 @@ impl RawEventSectionFactory for CommonEventFactory {
 event_byte_array!(TaskName, 64);
 
 /// Task information retrieved in common probes.
-#[derive(Default)]
 #[repr(C)]
 struct RawTaskEvent {
     /// pid/tgid.
@@ -399,7 +389,6 @@ struct RawTaskEvent {
     /// Current task name.
     comm: TaskName,
 }
-unsafe impl Plain for RawTaskEvent {}
 
 pub(super) fn unmarshal_task(raw_section: &BpfRawSection) -> Result<TaskEvent> {
     let mut task_event = TaskEvent::default();

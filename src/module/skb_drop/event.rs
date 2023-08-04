@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt};
 
 use anyhow::Result;
 use btf_rs::Type;
-use plain::Plain;
 
 use crate::{
     core::{
@@ -71,7 +70,7 @@ impl SkbDropEventFactory {
 
 impl RawEventSectionFactory for SkbDropEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let raw = parse_single_raw_section::<BpfSkbDropEvent>(ModuleId::SkbDrop, raw_sections)?;
+        let raw = parse_single_raw_section::<BpfSkbDropEvent>(ModuleId::SkbDrop, &raw_sections)?;
         let drop_reason = raw.drop_reason;
 
         // Parse skb drop reasons if not already done.
@@ -92,10 +91,7 @@ impl RawEventSectionFactory for SkbDropEventFactory {
     }
 }
 
-#[derive(Default)]
 #[repr(C, packed)]
 struct BpfSkbDropEvent {
     drop_reason: i32,
 }
-
-unsafe impl Plain for BpfSkbDropEvent {}

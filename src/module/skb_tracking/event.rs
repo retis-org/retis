@@ -1,7 +1,6 @@
 use std::fmt;
 
 use anyhow::Result;
-use plain::Plain;
 
 use crate::{
     core::events::{
@@ -19,7 +18,7 @@ use crate::{
 ///
 /// Tl;dr; the tracking unique id is `(timestamp, orig_head)` and `skb` can be
 /// used to distinguished between clones.
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 #[event_section]
 #[repr(C)]
 pub(crate) struct SkbTrackingEvent {
@@ -31,8 +30,6 @@ pub(crate) struct SkbTrackingEvent {
     /// Socket buffer (`skb`) address of the current packet.
     pub(crate) skb: u64,
 }
-
-unsafe impl Plain for SkbTrackingEvent {}
 
 #[allow(dead_code)]
 impl SkbTrackingEvent {
@@ -65,9 +62,9 @@ pub(crate) struct SkbTrackingEventFactory {}
 
 impl RawEventSectionFactory for SkbTrackingEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        Ok(Box::new(parse_single_raw_section::<SkbTrackingEvent>(
-            ModuleId::SkbTracking,
-            raw_sections,
-        )?))
+        let event =
+            parse_single_raw_section::<SkbTrackingEvent>(ModuleId::SkbTracking, &raw_sections)?;
+
+        Ok(Box::new(*event))
     }
 }
