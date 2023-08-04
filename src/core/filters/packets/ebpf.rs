@@ -69,7 +69,7 @@ impl BpfReg {
     pub const CTX: Self = Self::R6;
     pub const X: Self = Self::R7;
     pub const CTXDATA: Self = Self::R8;
-    pub const SCRATCH: Self = Self::R9;
+    pub const INLINE_FP: Self = Self::R9;
     pub const FP: Self = Self::R10;
 }
 
@@ -166,7 +166,7 @@ impl eBpfProg {
 
         // mov %fp, %arg1
         self.add(Insn::mov(MovInfo::Reg {
-            src: BpfReg::FP,
+            src: BpfReg::INLINE_FP,
             dst: BpfReg::ARG1,
         }));
         // add -8, %arg1
@@ -215,7 +215,7 @@ impl eBpfProg {
         // ldx -STACK_RESERVED(%r10), %r0
         self.add(Insn::ld(
             LdInfo::Reg {
-                src: BpfReg::FP,
+                src: BpfReg::INLINE_FP,
                 dst: BpfReg::A,
                 off: -STACK_RESERVED,
             },
@@ -372,7 +372,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 )),
                 t @ BpfInsnType::LdxMem | t @ BpfInsnType::LdMem => ebpf.add(Insn::ld(
                     LdInfo::Reg {
-                        src: BpfReg::FP,
+                        src: BpfReg::INLINE_FP,
                         dst: if let BpfInsnType::LdMem = t {
                             BpfReg::A
                         } else {
@@ -466,7 +466,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 BpfInsnType::St => ebpf.add(Insn::st(
                     StInfo::Reg {
                         src: BpfReg::A,
-                        dst: BpfReg::FP,
+                        dst: BpfReg::INLINE_FP,
                         off: -SCRATCH_MEM_START + (cbpf_insn.k as i16 * SCRATCH_MEM_SIZE),
                     },
                     BpfSize::Word,
@@ -474,7 +474,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 BpfInsnType::Stx => ebpf.add(Insn::st(
                     StInfo::Reg {
                         src: BpfReg::X,
-                        dst: BpfReg::FP,
+                        dst: BpfReg::INLINE_FP,
                         off: -SCRATCH_MEM_START + (cbpf_insn.k as i16 * SCRATCH_MEM_SIZE),
                     },
                     BpfSize::Word,
