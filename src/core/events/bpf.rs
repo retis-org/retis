@@ -280,7 +280,7 @@ pub(crate) fn parse_raw_event<'a>(
         };
 
         // Get the raw data.
-        raw_section.data = data[cursor..raw_section_end].to_vec();
+        raw_section.data = &data[cursor..raw_section_end];
         cursor += raw_section.header.size as usize;
 
         // Save the raw section for later processing.
@@ -458,9 +458,9 @@ unsafe impl Plain for RawEvent {}
 /// Raw event section format shared between the Rust and BPF part. Please keep
 /// in sync with its BPF counterpart.
 #[derive(Clone, Default)]
-pub(crate) struct BpfRawSection {
+pub(crate) struct BpfRawSection<'a> {
     pub(crate) header: BpfRawSectionHeader,
-    pub(crate) data: Vec<u8>,
+    pub(crate) data: &'a [u8],
 }
 
 /// Raw event section header shared between the Rust and BPF part. Please keep
