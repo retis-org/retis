@@ -1,6 +1,6 @@
 #![allow(dead_code)] // FIXME
 
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use anyhow::{bail, Result};
 
@@ -117,6 +117,8 @@ impl EventFmt for StackTrace {
 pub(crate) struct KernelEventFactory {
     #[cfg(not(test))]
     pub(crate) stack_map: Option<libbpf_rs::MapHandle>,
+    // Cache of symbol addr -> name
+    symbols_cache: HashMap<u64, String>,
 }
 
 impl KernelEventFactory {
@@ -179,8 +181,15 @@ impl RawEventSectionFactory for KernelEventFactory {
 
         let mut event = KernelEvent::default();
 
-        let symbol = u64::from_ne_bytes(raw.data[0..8].try_into()?);
-        event.symbol = Symbol::from_addr(symbol)?.name();
+        let symbol_addr = u64::from_ne_bytes(raw.data[0..8].try_into()?);
+        event.symbol = match self.symbols_cache.get(&symbol_addr) {
+            Some(name) => name.clone(),
+            None => {
+                let name = Symbol::from_addr(symbol_addr)?.name();
+                self.symbols_cache.insert(symbol_addr, name.clone());
+                name
+            }
+        };
 
         event.probe_type = match raw.data[8] {
             0 => "kprobe",
