@@ -1,12 +1,15 @@
 //! Rust<>BPF types definitions for the ovs module.
 //! Please keep this file in sync with its BPF counterpart in bpf/.
 
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::Ipv6Addr;
 
 use anyhow::{bail, Result};
 
 use super::event::*;
-use crate::core::events::bpf::{parse_raw_section, BpfRawSection};
+use crate::core::{
+    events::bpf::{parse_raw_section, BpfRawSection},
+    helpers,
+};
 
 /// Event data types supported by the ovs module.
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -263,8 +266,8 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
                 let min_addr = unsafe { raw.min_addr.ipv4 };
                 let max_addr = unsafe { raw.max_addr.ipv4 };
                 (
-                    Some(Ipv4Addr::from(u32::from_be(min_addr)).to_string()),
-                    Some(Ipv4Addr::from(u32::from_be(max_addr)).to_string()),
+                    Some(helpers::net::parse_ipv4_addr(u32::from_be(min_addr))?),
+                    Some(helpers::net::parse_ipv4_addr(u32::from_be(max_addr))?),
                 )
             } else if raw.flags & R_OVS_CT_IP6 != 0 {
                 let min_addr = unsafe { raw.min_addr.ipv6 };

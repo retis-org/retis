@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Result};
 use btf_rs::Type;
 use plain::Plain;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::Ipv6Addr;
 
 use super::*;
 use crate::{
@@ -14,6 +14,7 @@ use crate::{
             bpf::{parse_single_raw_section, BpfRawSection},
             *,
         },
+        helpers,
         inspect::inspector,
     },
     event_section_factory,
@@ -132,15 +133,15 @@ impl CtEventFactory {
             let s = unsafe { raw.orig.src.addr.ipv4 };
             let d = unsafe { raw.orig.dst.addr.ipv4 };
             let orig = CtIp {
-                src: format!("{}", Ipv4Addr::from(u32::from_be(s))),
-                dst: format!("{}", Ipv4Addr::from(u32::from_be(d))),
+                src: helpers::net::parse_ipv4_addr(u32::from_be(s))?,
+                dst: helpers::net::parse_ipv4_addr(u32::from_be(d))?,
                 version: CtIpVersion::V4,
             };
             let s = unsafe { raw.reply.src.addr.ipv4 };
             let d = unsafe { raw.reply.dst.addr.ipv4 };
             let reply = CtIp {
-                src: format!("{}", Ipv4Addr::from(u32::from_be(s))),
-                dst: format!("{}", Ipv4Addr::from(u32::from_be(d))),
+                src: helpers::net::parse_ipv4_addr(u32::from_be(s))?,
+                dst: helpers::net::parse_ipv4_addr(u32::from_be(d))?,
                 version: CtIpVersion::V4,
             };
             (orig, reply)

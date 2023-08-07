@@ -4,10 +4,7 @@
 //!
 //! Please keep this file in sync with its BPF counterpart in bpf/skb_hook.bpf.c
 
-use std::{
-    net::{Ipv4Addr, Ipv6Addr},
-    str,
-};
+use std::{net::Ipv6Addr, str};
 
 use anyhow::{bail, Result};
 
@@ -84,15 +81,12 @@ pub(super) fn unmarshal_arp(raw_section: &BpfRawSection) -> Result<SkbArpEvent> 
         _ => bail!("Invalid ARP operation type"),
     };
 
-    let spa = Ipv4Addr::from(u32::from_be(raw.spa));
-    let tpa = Ipv4Addr::from(u32::from_be(raw.tpa));
-
     Ok(SkbArpEvent {
         operation,
         sha: helpers::net::parse_eth_addr(&raw.sha)?,
-        spa: format!("{spa}"),
+        spa: helpers::net::parse_ipv4_addr(u32::from_be(raw.spa))?,
         tha: helpers::net::parse_eth_addr(&raw.tha)?,
-        tpa: format!("{tpa}"),
+        tpa: helpers::net::parse_ipv4_addr(u32::from_be(raw.tpa))?,
     })
 }
 
@@ -124,12 +118,9 @@ struct RawIpv4Event {
 pub(super) fn unmarshal_ipv4(raw_section: &BpfRawSection) -> Result<SkbIpEvent> {
     let raw = parse_raw_section::<RawIpv4Event>(raw_section)?;
 
-    let src = Ipv4Addr::from(u32::from_be(raw.src));
-    let dst = Ipv4Addr::from(u32::from_be(raw.dst));
-
     Ok(SkbIpEvent {
-        saddr: format!("{src}"),
-        daddr: format!("{dst}"),
+        saddr: helpers::net::parse_ipv4_addr(u32::from_be(raw.src))?,
+        daddr: helpers::net::parse_ipv4_addr(u32::from_be(raw.dst))?,
         version: SkbIpVersion::V4(SkbIpv4Event {
             tos: raw.tos,
             flags: raw.flags,
