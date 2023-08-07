@@ -1,3 +1,5 @@
+use anyhow::{anyhow, Result};
+
 /// Returns a translation of some ethertypes into a readable format.
 pub(crate) fn etype_str(etype: u16) -> Option<&'static str> {
     Some(match etype {
@@ -46,9 +48,37 @@ pub(crate) fn protocol_str(protocol: u8) -> Option<&'static str> {
 }
 
 /// Parses an Ethernet address into a String.
-pub(crate) fn parse_eth_addr(raw: &[u8; 6]) -> String {
-    format!(
-        "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5],
-    )
+pub(crate) fn parse_eth_addr(raw: &[u8; 6]) -> Result<String> {
+    let mut addr = String::with_capacity(17);
+
+    for (i, group) in raw.iter().enumerate() {
+        addr.push(
+            char::from_digit((group >> 4).into(), 16).ok_or_else(|| anyhow!("invalid eth byte"))?,
+        );
+        addr.push(
+            char::from_digit((group & 0xf).into(), 16)
+                .ok_or_else(|| anyhow!("invalid eth byte"))?,
+        );
+        if i < 5 {
+            addr.push(':');
+        }
+    }
+
+    Ok(addr)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ethaddr_to_string() {
+        assert!(
+            &super::parse_eth_addr(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff]).unwrap()
+                == "ff:ff:ff:ff:ff:ff"
+        );
+        assert!(&super::parse_eth_addr(&[0, 0, 0, 0, 0, 0]).unwrap() == "00:00:00:00:00:00");
+        assert!(
+            &super::parse_eth_addr(&[0x0a, 0x58, 0x0a, 0xf4, 0x00, 0x01]).unwrap()
+                == "0a:58:0a:f4:00:01"
+        );
+    }
 }
