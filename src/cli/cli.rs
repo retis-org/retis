@@ -15,6 +15,8 @@ use clap::{
 use log::debug;
 
 use super::dynamic::DynamicCommand;
+#[cfg(feature = "benchmark")]
+use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
     module::{ModuleId, Modules},
@@ -432,6 +434,10 @@ pub(crate) fn get_cli() -> Result<ThinCli> {
     cli.add_subcommand(Box::new(Print::new()?))?;
     cli.add_subcommand(Box::new(Sort::new()?))?;
     cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
+
+    #[cfg(feature = "benchmark")]
+    cli.add_subcommand(Box::new(Benchmark::new()?))?;
+
     Ok(cli)
 }
 

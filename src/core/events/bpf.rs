@@ -208,7 +208,10 @@ impl EventFactory for BpfEventsFactory {
     }
 }
 
-fn parse_raw_event<'a>(data: &'a [u8], factories: &'a mut SectionFactories) -> Result<Event> {
+pub(crate) fn parse_raw_event<'a>(
+    data: &'a [u8],
+    factories: &'a mut SectionFactories,
+) -> Result<Event> {
     // First retrieve the buffer length.
     let data_size = data.len();
     if data_size < 2 {

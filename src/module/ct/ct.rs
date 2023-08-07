@@ -19,7 +19,9 @@ pub(crate) struct CtModule {
 
 impl Collector for CtModule {
     fn new() -> Result<Self> {
-        Ok(CtModule { init: false })
+        Ok(CtModule {
+            init: cfg!(feature = "benchmark"),
+        })
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {

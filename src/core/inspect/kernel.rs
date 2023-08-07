@@ -43,20 +43,21 @@ pub(crate) struct KernelInspector {
 
 impl KernelInspector {
     pub(crate) fn from(kconf: Option<&PathBuf>) -> Result<KernelInspector> {
-        let (symbols_file, events_file, funcs_file, modules_file) = match cfg!(test) {
-            false => (
-                "/proc/kallsyms",
-                "/sys/kernel/debug/tracing/available_events",
-                "/sys/kernel/debug/tracing/available_filter_functions",
-                "/proc/modules",
-            ),
-            true => (
-                "test_data/kallsyms",
-                "test_data/available_events",
-                "test_data/available_filter_functions",
-                "test_data/modules",
-            ),
-        };
+        let (symbols_file, events_file, funcs_file, modules_file) =
+            match cfg!(test) || cfg!(feature = "benchmark") {
+                false => (
+                    "/proc/kallsyms",
+                    "/sys/kernel/debug/tracing/available_events",
+                    "/sys/kernel/debug/tracing/available_filter_functions",
+                    "/proc/modules",
+                ),
+                true => (
+                    "test_data/kallsyms",
+                    "test_data/available_events",
+                    "test_data/available_filter_functions",
+                    "test_data/modules",
+                ),
+            };
         let btf = BtfInfo::new()?;
 
         // First parse the symbol file.
