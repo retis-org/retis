@@ -561,83 +561,104 @@ mod tests {
     use anyhow::{anyhow, Result};
     use serde_json::Value;
 
-    static EVENTS: [(&'static str, OvsEvent); 6] = [
-        // Upcall event
-        (
-            r#"{"cmd":1,"cpu":0,"event_type":"upcall","port":4195744766}"#,
-            OvsEvent {
-                event: OvsEventType::Upcall(UpcallEvent {
-                    cmd: 1,
-                    cpu: 0,
-                    port: 4195744766,
-                }),
-            },
-        ),
-        // Action event
-        (
-            r#"{"action":"output","event_type":"action_execute","port":2,"queue_id":1361394472,"recirc_id":0}"#,
-            OvsEvent {
-                event: OvsEventType::Action(ActionEvent {
-                    action: OvsAction::Output(OvsActionOutput { port: 2 }),
-                    recirc_id: 0,
-                    queue_id: Some(1361394472),
-                }),
-            },
-        ),
-        // Upcall enqueue event
-        (
-            r#"{"cmd":1,"event_type":"upcall_enqueue","queue_id":3316322986,"ret":0,"upcall_cpu":0,"port":4195744766,"upcall_ts":61096236973661}"#,
-            OvsEvent {
-                event: OvsEventType::UpcallEnqueue(UpcallEnqueueEvent {
-                    ret: 0,
-                    cmd: 1,
-                    port: 4195744766,
-                    upcall_ts: 61096236973661,
-                    upcall_cpu: 0,
-                    queue_id: 3316322986,
-                }),
-            },
-        ),
-        // Upcall return event
-        (
-            r#"{"event_type":"upcall_return","ret":0,"upcall_cpu":0,"upcall_ts":61096236973661}"#,
-            OvsEvent {
-                event: OvsEventType::UpcallReturn(UpcallReturnEvent {
-                    ret: 0,
-                    upcall_ts: 61096236973661,
-                    upcall_cpu: 0,
-                }),
-            },
-        ),
-        // Operation event exec
-        (
-            r#"{"batch_idx":0,"batch_ts":61096237019698,"event_type":"flow_operation","op_type":"exec","queue_id":3316322986}"#,
-            OvsEvent {
-                event: OvsEventType::Operation(OperationEvent {
-                    op_type: 0,
-                    queue_id: 3316322986,
-                    batch_ts: 61096237019698,
-                    batch_idx: 0,
-                }),
-            },
-        ),
-        // Operation event put
-        (
-            r#"{"batch_idx":0,"batch_ts":61096237019698,"event_type":"flow_operation","op_type":"put","queue_id":3316322986}"#,
-            OvsEvent {
-                event: OvsEventType::Operation(OperationEvent {
-                    op_type: 1,
-                    queue_id: 3316322986,
-                    batch_ts: 61096237019698,
-                    batch_idx: 0,
-                }),
-            },
-        ),
-    ];
-
     #[test]
-    fn test_event_to_json() -> Result<()> {
-        for (event_json, event) in EVENTS.iter() {
+    fn test_event_to_from_json() -> Result<()> {
+        let events: [(&'static str, OvsEvent); 7] = [
+            // Upcall event
+            (
+                r#"{"cmd":1,"cpu":0,"event_type":"upcall","port":4195744766}"#,
+                OvsEvent {
+                    event: OvsEventType::Upcall(UpcallEvent {
+                        cmd: 1,
+                        cpu: 0,
+                        port: 4195744766,
+                    }),
+                },
+            ),
+            // Action event
+            (
+                r#"{"action":"output","event_type":"action_execute","port":2,"queue_id":1361394472,"recirc_id":0}"#,
+                OvsEvent {
+                    event: OvsEventType::Action(ActionEvent {
+                        action: OvsAction::Output(OvsActionOutput { port: 2 }),
+                        recirc_id: 0,
+                        queue_id: Some(1361394472),
+                    }),
+                },
+            ),
+            // Upcall enqueue event
+            (
+                r#"{"cmd":1,"event_type":"upcall_enqueue","queue_id":3316322986,"ret":0,"upcall_cpu":0,"port":4195744766,"upcall_ts":61096236973661}"#,
+                OvsEvent {
+                    event: OvsEventType::UpcallEnqueue(UpcallEnqueueEvent {
+                        ret: 0,
+                        cmd: 1,
+                        port: 4195744766,
+                        upcall_ts: 61096236973661,
+                        upcall_cpu: 0,
+                        queue_id: 3316322986,
+                    }),
+                },
+            ),
+            // Upcall return event
+            (
+                r#"{"event_type":"upcall_return","ret":0,"upcall_cpu":0,"upcall_ts":61096236973661}"#,
+                OvsEvent {
+                    event: OvsEventType::UpcallReturn(UpcallReturnEvent {
+                        ret: 0,
+                        upcall_ts: 61096236973661,
+                        upcall_cpu: 0,
+                    }),
+                },
+            ),
+            // Operation event exec
+            (
+                r#"{"batch_idx":0,"batch_ts":61096237019698,"event_type":"flow_operation","op_type":"exec","queue_id":3316322986}"#,
+                OvsEvent {
+                    event: OvsEventType::Operation(OperationEvent {
+                        op_type: 0,
+                        queue_id: 3316322986,
+                        batch_ts: 61096237019698,
+                        batch_idx: 0,
+                    }),
+                },
+            ),
+            // Operation event put
+            (
+                r#"{"batch_idx":0,"batch_ts":61096237019698,"event_type":"flow_operation","op_type":"put","queue_id":3316322986}"#,
+                OvsEvent {
+                    event: OvsEventType::Operation(OperationEvent {
+                        op_type: 1,
+                        queue_id: 3316322986,
+                        batch_ts: 61096237019698,
+                        batch_idx: 0,
+                    }),
+                },
+            ),
+            // Conntrack action event
+            (
+                r#"{"action":"ct","event_type":"action_execute","flags":485,"nat":{"dir":"dst","max_addr":"10.244.1.30","max_port":36900,"min_addr":"10.244.1.3","min_port":36895},"recirc_id":34,"zone_id":20}"#,
+                OvsEvent {
+                    event: OvsEventType::Action(ActionEvent {
+                        action: OvsAction::Ct(OvsActionCt {
+                            zone_id: 20,
+                            flags: 485,
+                            nat: Some(OvsActionCtNat {
+                                dir: Some(NatDirection::Dst),
+                                min_addr: Some(String::from("10.244.1.3")),
+                                max_addr: Some(String::from("10.244.1.30")),
+                                min_port: Some(36895),
+                                max_port: Some(36900),
+                            }),
+                        }),
+                        recirc_id: 34,
+                        queue_id: None,
+                    }),
+                },
+            ),
+        ];
+
+        for (event_json, event) in events.iter() {
             let json = serde_json::to_string(event)
                 .map_err(|e| anyhow!("Failed to convert event {event:?} to json: {e}"))?;
             // Comparing json strings is error prone. Convert them to Values and compare those.
@@ -645,13 +666,7 @@ mod tests {
                 serde_json::from_str::<Value>(json.as_str()).unwrap(),
                 serde_json::from_str::<Value>(*event_json).unwrap()
             );
-        }
-        Ok(())
-    }
 
-    #[test]
-    fn test_json_to_event() -> Result<()> {
-        for (event_json, event) in EVENTS.iter() {
             let parsed: OvsEvent = serde_json::from_str(*event_json)
                 .map_err(|e| anyhow!("Failed to convert json '{event_json}' to event: {e}"))?;
             assert_eq!(&parsed, event);
