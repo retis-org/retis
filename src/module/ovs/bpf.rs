@@ -88,8 +88,8 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
     // Any of the action-related bpf events (e.g BpfActionTrackEvent, BpfActionTrackEvent, etc)
     // might have been received before. If so, event.event is already a valid
     // OvsEventType::Action.
-    match &event.event {
-        OvsEventType::Action(mut action) => {
+    match &mut event.event {
+        OvsEventType::Action(action) => {
             // One of the specific action events has already been received and it has initialized
             // the action.data enum. Only the common data has to be set here.
             action.recirc_id = raw.recirc_id;

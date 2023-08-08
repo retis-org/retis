@@ -122,8 +122,9 @@ impl AddTracking {
     pub(crate) fn process_one(&mut self, event: &mut Event) -> Result<()> {
         if let Some(ovs) = event.get_section::<OvsEvent>(ModuleId::Ovs) {
             use OvsEventType::*;
-            match ovs.event {
+            match &ovs.event {
                 Upcall(upcall) => {
+                    let cpu = upcall.cpu;
                     // Lookup the skb-based tracking information.
                     let info = self.process_skb(event)?;
 
@@ -134,23 +135,21 @@ impl AddTracking {
                             .get_section::<CommonEvent>(ModuleId::Common)
                             .map(|c| c.timestamp)
                             .ok_or_else(|| anyhow!("malformed event: no common section"))?;
-                        let key = UpcallKey {
-                            ts,
-                            cpu: upcall.cpu,
-                        };
+                        let key = UpcallKey { ts, cpu };
 
                         self.ovs_upcalls_tracking.insert(key, info);
                     }
                 }
                 UpcallReturn(ret) => {
-                    // Lookup the skb-based tracking information.
-                    self.process_skb(event)?;
-
                     // The upcall has finished. Remove the entry from the upcalls tracking table.
                     let key = UpcallKey {
                         ts: ret.upcall_ts,
                         cpu: ret.upcall_cpu,
                     };
+
+                    // Lookup the skb-based tracking information.
+                    self.process_skb(event)?;
+
                     self.ovs_upcalls_tracking.remove(&key);
                 }
                 UpcallEnqueue(enqueue) => {

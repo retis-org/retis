@@ -307,7 +307,7 @@ impl EventFmt for RecvUpcallEvent {
 }
 
 /// OVS output action data.
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
 pub(crate) struct ActionEvent {
     /// Action to be executed.
     #[serde(flatten)]
@@ -324,7 +324,7 @@ impl EventFmt for ActionEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
         write!(f, "exec")?;
 
-        match self.action {
+        match &self.action {
             OvsAction::Output(a) => write!(f, " oport {}", a.port)?,
             OvsAction::Recirc(a) => write!(f, " recirc {}", a.id)?,
             other => write!(f, " {:?}", other)?,
@@ -342,7 +342,7 @@ impl EventFmt for ActionEvent {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
 #[serde(tag = "action")]
 pub(crate) enum OvsAction {
     #[serde(rename = "unspecified")]
