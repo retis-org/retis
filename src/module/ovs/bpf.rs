@@ -130,6 +130,10 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
                     21 => OvsAction::CheckPktLen,
                     22 => OvsAction::AddMpls,
                     23 => OvsAction::DecTtl,
+                    // The private OVS_ACTION_ATTR_SET_TO_MASKED action is used
+                    // in the same way as OVS_ACTION_ATTR_SET_MASKED. Use only
+                    // one action to avoid confusion
+                    25 => OvsAction::SetMasked,
                     val => bail!("Unsupported action id {val}"),
                 },
                 recirc_id: raw.recirc_id,
