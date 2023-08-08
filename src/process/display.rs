@@ -33,15 +33,22 @@ impl PrintSingle {
 
     /// Process events one by one (format & print).
     pub(crate) fn process_one(&mut self, e: &Event) -> Result<()> {
-        let event = match self.format {
-            PrintSingleFormat::Text(format) => match format {
-                DisplayFormat::SingleLine => format!("{}\n", e.display(format)),
-                DisplayFormat::MultiLine => format!("\n{}\n", e.display(format)),
-            },
-            PrintSingleFormat::Json => format!("{}\n", e.to_json()),
-        };
+        match self.format {
+            PrintSingleFormat::Text(format) => {
+                let event = match format {
+                    DisplayFormat::SingleLine => format!("{}\n", e.display(format)),
+                    DisplayFormat::MultiLine => format!("\n{}\n", e.display(format)),
+                };
+                self.writer.write_all(event.as_bytes())?;
+            }
+            PrintSingleFormat::Json => {
+                let mut event = serde_json::to_vec(&e.to_json())?;
+                event.push(b'\n');
+                self.writer.write_all(&event)?;
+            }
+        }
 
-        Ok(self.writer.write_all(event.as_bytes())?)
+        Ok(())
     }
 
     /// Flush underlying writers.
@@ -83,32 +90,41 @@ impl PrintSeries {
     pub(crate) fn process_one(&mut self, series: &EventSeries) -> Result<()> {
         let mut content = String::new();
         match self.format {
-            PrintSingleFormat::Text(format) => match format {
-                DisplayFormat::SingleLine => {
-                    if let Some(first) = series.events.first() {
-                        content.push_str(&format!("\n{}\n", first.display(format)));
+            PrintSingleFormat::Text(format) => {
+                match format {
+                    DisplayFormat::SingleLine => {
+                        if let Some(first) = series.events.first() {
+                            content.push_str(&format!("\n{}\n", first.display(format)));
+                        }
+                        for event in series.events.iter().skip(1) {
+                            content
+                                .push_str(&Self::indent(2, format!("+ {}", event.display(format))));
+                            content.push('\n');
+                        }
                     }
-                    for event in series.events.iter().skip(1) {
-                        content.push_str(&Self::indent(2, format!("+ {}", event.display(format))));
-                        content.push('\n');
+                    DisplayFormat::MultiLine => {
+                        if let Some(first) = series.events.first() {
+                            content.push('\n');
+                            content.push_str(&format!("{}", first.display(format)));
+                            content.push('\n');
+                        }
+                        for event in series.events.iter().skip(1) {
+                            content
+                                .push_str(&Self::indent(2, format!("+ {}", event.display(format))));
+                            content.push('\n');
+                        }
                     }
                 }
-                DisplayFormat::MultiLine => {
-                    if let Some(first) = series.events.first() {
-                        content.push('\n');
-                        content.push_str(&format!("{}", first.display(format)));
-                        content.push('\n');
-                    }
-                    for event in series.events.iter().skip(1) {
-                        content.push_str(&Self::indent(2, format!("+ {}", event.display(format))));
-                        content.push('\n');
-                    }
-                }
-            },
-            PrintSingleFormat::Json => content.push_str(&format!("{}\n", series.to_json())),
-        };
+                self.writer.write_all(content.as_bytes())?;
+            }
+            PrintSingleFormat::Json => {
+                let mut event = serde_json::to_vec(&series.to_json())?;
+                event.push(b'\n');
+                self.writer.write_all(&event)?;
+            }
+        }
 
-        Ok(self.writer.write_all(content.as_bytes())?)
+        Ok(())
     }
 
     /// Flush underlying writers.
