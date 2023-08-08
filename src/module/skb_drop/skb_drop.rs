@@ -16,12 +16,15 @@ use crate::{
 
 pub(crate) struct SkbDropModule {
     reasons_available: bool,
+    // Was the module initialized, aka. installed BPF probes and hooks?
+    initialized: bool,
 }
 
 impl Collector for SkbDropModule {
     fn new() -> Result<Self> {
         Ok(Self {
             reasons_available: true,
+            initialized: cfg!(feature = "benchmark"),
         })
     }
 
@@ -84,6 +87,7 @@ impl Collector for SkbDropModule {
             bail!("Could not attach to skb:kfree_skb: {}", e);
         }
 
+        self.initialized = true;
         Ok(())
     }
 }
@@ -93,6 +97,9 @@ impl Module for SkbDropModule {
         self
     }
     fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::<SkbDropEventFactory>::default())
+        Ok(Box::new(match self.initialized {
+            true => SkbDropEventFactory::bpf()?,
+            false => SkbDropEventFactory::new()?,
+        }))
     }
 }

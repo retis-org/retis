@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use btf_rs::Type;
 
 use crate::{
@@ -30,7 +30,6 @@ impl EventFmt for SkbDropEvent {
     }
 }
 
-#[derive(Default)]
 #[event_section_factory(SkbDropEvent)]
 pub(crate) struct SkbDropEventFactory {
     /// Map of u32 to skb free reasons. It is filled lazyly to avoid executing
@@ -41,7 +40,13 @@ pub(crate) struct SkbDropEventFactory {
 }
 
 impl SkbDropEventFactory {
-    pub(crate) fn parse_drop_reasons(&mut self) -> Result<()> {
+    /// Initialize a new skb drop factory.
+    pub(crate) fn new() -> Result<Self> {
+        Ok(Self { reasons: None })
+    }
+
+    /// Initialize a new skb drop factory when handling events from BPF.
+    pub(crate) fn bpf() -> Result<Self> {
         let mut reasons = HashMap::new();
 
         if let Ok((btf, Type::Enum(r#enum))) = inspector()?
@@ -63,8 +68,9 @@ impl SkbDropEventFactory {
             }
         }
 
-        self.reasons = Some(reasons);
-        Ok(())
+        Ok(Self {
+            reasons: Some(reasons),
+        })
     }
 }
 
@@ -73,9 +79,9 @@ impl RawEventSectionFactory for SkbDropEventFactory {
         let raw = parse_single_raw_section::<BpfSkbDropEvent>(ModuleId::SkbDrop, &raw_sections)?;
         let drop_reason = raw.drop_reason;
 
-        // Parse skb drop reasons if not already done.
+        // Check if the drop reasons were correctly initalized.
         if self.reasons.is_none() {
-            self.parse_drop_reasons()?;
+            bail!("Factory was not initialized for consuming BPF events");
         }
 
         // Unwrap as we just made sure it was Some(..).
