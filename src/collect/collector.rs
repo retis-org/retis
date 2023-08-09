@@ -263,8 +263,9 @@ impl Collectors {
         self.probes.attach()?;
 
         self.modules.collectors().iter_mut().for_each(|(id, c)| {
+            debug!("Starting collector {id}");
             if c.start().is_err() {
-                warn!("Could not start collector '{id}'");
+                warn!("Could not start collector {id}");
             }
         });
 
@@ -279,9 +280,9 @@ impl Collectors {
         self.probes.report_counters()?;
 
         self.modules.collectors().iter_mut().for_each(|(id, c)| {
-            debug!("Stopping {}", id.to_str());
+            debug!("Stopping collector {id}");
             if c.stop().is_err() {
-                warn!("Could not stop '{}'", id.to_str());
+                warn!("Could not stop collector {}", id.to_str());
             }
         });
 
