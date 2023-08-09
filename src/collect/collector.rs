@@ -136,7 +136,7 @@ impl Collectors {
     /// Setup user defined input filter.
     fn setup_filters(probes: &mut ProbeManager, collect: &Collect) -> Result<()> {
         if let Some(f) = &collect.args()?.packet_filter {
-            let fb = FilterPacket::from_string(f.to_string())?;
+            let fb = FilterPacket::from_string_opt(f.to_string(), FilterPacketType::L2)?;
 
             probes.register_filter(Filter::Packet(
                 FilterPacketType::L2,
