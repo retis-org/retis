@@ -325,9 +325,23 @@ impl EventFmt for ActionEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
         write!(f, "exec")?;
 
+        if self.recirc_id != 0 {
+            write!(f, " recirc_id {}", self.recirc_id)?;
+        }
+
         match &self.action {
+            OvsAction::Unspecified => write!(f, " (unspecified)")?,
             OvsAction::Output(a) => write!(f, " oport {}", a.port)?,
+            OvsAction::Userspace => write!(f, " userspace")?,
+            OvsAction::Set => write!(f, " tunnel_set")?,
+            OvsAction::PushVlan => write!(f, " push_vlan")?,
+            OvsAction::PopVlan => write!(f, " pop_vlan")?,
+            OvsAction::Sample => write!(f, " sample")?,
             OvsAction::Recirc(a) => write!(f, " recirc {}", a.id)?,
+            OvsAction::Hash => write!(f, " hash")?,
+            OvsAction::PushMpls => write!(f, " push_mpls")?,
+            OvsAction::PopMpls => write!(f, " pop_mpls")?,
+            OvsAction::SetMasked => write!(f, " set_masked")?,
             OvsAction::Ct(ct) => {
                 write!(f, " ct zone {}", ct.zone_id)?;
 
@@ -390,11 +404,17 @@ impl EventFmt for ActionEvent {
                     write!(f, " {}", flags.join(","))?;
                 }
             }
-            other => write!(f, " {:?}", other)?,
-        }
-
-        if self.recirc_id != 0 {
-            write!(f, " recirc_id {}", self.recirc_id)?;
+            OvsAction::Trunc => write!(f, " trunc")?,
+            OvsAction::PushEth => write!(f, " push_eth")?,
+            OvsAction::PopEth => write!(f, " pop_eth")?,
+            OvsAction::CtClear => write!(f, " ct_clear")?,
+            OvsAction::PushNsh => write!(f, " push_nsh")?,
+            OvsAction::PopNsh => write!(f, " pop_nsh")?,
+            OvsAction::Meter => write!(f, " meter")?,
+            OvsAction::Clone => write!(f, " clone")?,
+            OvsAction::CheckPktLen => write!(f, " check_pkt_len")?,
+            OvsAction::AddMpls => write!(f, " add_mpls")?,
+            OvsAction::DecTtl => write!(f, " dec_ttl")?,
         }
 
         if let Some(p) = self.queue_id {
