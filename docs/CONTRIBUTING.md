@@ -6,12 +6,6 @@ This guide documents the process to get changes merged into this project, what
 one should expect, as well as prerequisites for pull-requests and patches to be
 considered acceptable.
 
-### Table of contents
-
-* [Reporting bugs](#reporting-bugs)
-* [Suggesting new features](#suggesting-new-features)
-* [Code contribution](#code-contribution)
-
 ## Reporting bugs
 
 Following the guidelines will help the community understand bug reports, which
