@@ -1,4 +1,7 @@
-use std::mem;
+use std::{
+    mem,
+    os::fd::{AsFd, AsRawFd},
+};
 
 use anyhow::{bail, Result};
 use clap::{arg, builder::PossibleValuesParser, Parser};
@@ -26,11 +29,16 @@ pub(crate) struct SkbCollectorArgs {
     skb_sections: Vec<String>,
 }
 
-pub(crate) struct SkbModule {}
+#[derive(Default)]
+pub(crate) struct SkbModule {
+    // Used to keep a reference to our internal config map.
+    #[allow(dead_code)]
+    config_map: Option<libbpf_rs::MapHandle>,
+}
 
 impl Collector for SkbModule {
     fn new() -> Result<Self> {
-        Ok(Self {})
+        Ok(Self::default())
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
@@ -76,9 +84,12 @@ impl Collector for SkbModule {
         // Register our generic skb hook.
         probes.register_kernel_hook(
             Hook::from(skb_hook::DATA)
-                .reuse_map("skb_config_map", config_map.fd())?
+                .reuse_map("skb_config_map", config_map.as_fd().as_raw_fd())?
                 .to_owned(),
-        )
+        )?;
+
+        self.config_map = Some(config_map);
+        Ok(())
     }
 }
 
@@ -92,14 +103,14 @@ impl Module for SkbModule {
 }
 
 impl SkbModule {
-    fn config_map() -> Result<libbpf_rs::Map> {
+    fn config_map() -> Result<libbpf_rs::MapHandle> {
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
         };
 
         // Please keep in sync with its BPF counterpart in bpf/skb_hook.bpf.c
-        libbpf_rs::Map::create(
+        libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::Array,
             Some("skb_config_map"),
             mem::size_of::<u32>() as u32,

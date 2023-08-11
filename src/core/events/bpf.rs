@@ -3,7 +3,14 @@
 #![cfg_attr(test, allow(dead_code))]
 #![cfg_attr(test, allow(unused_imports))]
 
-use std::{collections::HashMap, fmt, mem, sync::mpsc, thread, time::Duration};
+use std::{
+    collections::HashMap,
+    fmt, mem,
+    os::fd::{AsFd, AsRawFd, RawFd},
+    sync::mpsc,
+    thread,
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
 use log::error;
@@ -62,7 +69,7 @@ macro_rules! event_byte_array {
 /// parts.
 #[cfg(not(test))]
 pub(crate) struct BpfEventsFactory {
-    map: libbpf_rs::Map,
+    map: libbpf_rs::MapHandle,
     /// Receiver channel to retrieve events from the processing loop.
     rxc: Option<mpsc::Receiver<Event>>,
     /// Polling thread handle.
@@ -78,7 +85,7 @@ impl BpfEventsFactory {
             ..Default::default()
         };
 
-        let map = libbpf_rs::Map::create(
+        let map = libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::RingBuf,
             Some("events_map"),
             0,
@@ -97,8 +104,8 @@ impl BpfEventsFactory {
     }
 
     /// Get the events map fd for reuse.
-    pub(crate) fn map_fd(&self) -> i32 {
-        self.map.fd()
+    pub(crate) fn map_fd(&self) -> RawFd {
+        self.map.as_fd().as_raw_fd()
     }
 }
 

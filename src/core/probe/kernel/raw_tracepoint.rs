@@ -4,7 +4,11 @@
 //! tracepoints over tracepoints to access their arguments. The module is split
 //! in two parts, the Rust code (here) and the eBPF one
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
+
+use std::os::fd::{AsFd, AsRawFd, RawFd};
+
 use anyhow::{anyhow, bail, Result};
+use libbpf_rs::skel::SkelBuilder;
 
 use crate::core::filters::Filter;
 use crate::core::probe::builder::*;
@@ -20,7 +24,7 @@ pub(crate) struct RawTracepointBuilder {
     hooks: Vec<Hook>,
     links: Vec<libbpf_rs::Link>,
     obj: Option<libbpf_rs::Object>,
-    map_fds: Vec<(String, i32)>,
+    map_fds: Vec<(String, RawFd)>,
     filters: Vec<Filter>,
 }
 
@@ -31,7 +35,7 @@ impl ProbeBuilder for RawTracepointBuilder {
 
     fn init(
         &mut self,
-        map_fds: Vec<(String, i32)>,
+        map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
     ) -> Result<()> {
@@ -61,8 +65,8 @@ impl ProbeBuilder for RawTracepointBuilder {
             .prog_mut("probe_raw_tracepoint")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
 
-        replace_filters(prog.fd(), &self.filters)?;
-        let mut links = replace_hooks(prog.fd(), &self.hooks)?;
+        replace_filters(prog.as_fd().as_raw_fd(), &self.filters)?;
+        let mut links = replace_hooks(prog.as_fd().as_raw_fd(), &self.hooks)?;
         self.links.append(&mut links);
 
         self.links

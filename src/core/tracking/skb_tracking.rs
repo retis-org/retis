@@ -77,7 +77,12 @@
 //!    garbage collecting old events from the tracking map (such events should
 //!    be fairly rare, otherwise it's a bug).
 
-use std::{collections::HashMap, mem, time::Duration};
+use std::{
+    collections::HashMap,
+    mem,
+    os::fd::{AsFd, AsRawFd},
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail, Result};
 use plain::Plain;
@@ -102,14 +107,14 @@ const SKB_TRACKING_GC_INTERVAL: u64 = 5;
 // shouldn't happen much — or it is a bug.
 const TRACKING_OLD_LIMIT: u64 = 60;
 
-fn config_map() -> Result<libbpf_rs::Map> {
+fn config_map() -> Result<libbpf_rs::MapHandle> {
     let opts = libbpf_sys::bpf_map_create_opts {
         sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
         ..Default::default()
     };
 
     // Please keep in sync with its BPF counterpart.
-    libbpf_rs::Map::create(
+    libbpf_rs::MapHandle::create(
         libbpf_rs::MapType::Hash,
         Some("tracking_config_map"),
         mem::size_of::<u64>() as u32,
@@ -120,14 +125,14 @@ fn config_map() -> Result<libbpf_rs::Map> {
     .or_else(|e| bail!("Could not create the tracking config map: {}", e))
 }
 
-fn tracking_map() -> Result<libbpf_rs::Map> {
+fn tracking_map() -> Result<libbpf_rs::MapHandle> {
     let opts = libbpf_sys::bpf_map_create_opts {
         sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
         ..Default::default()
     };
 
     // Please keep in sync with its BPF counterpart.
-    libbpf_rs::Map::create(
+    libbpf_rs::MapHandle::create(
         libbpf_rs::MapType::Hash,
         Some("tracking_map"),
         mem::size_of::<u64>() as u32,
@@ -138,12 +143,14 @@ fn tracking_map() -> Result<libbpf_rs::Map> {
     .or_else(|e| bail!("Could not create the tracking map: {}", e))
 }
 
-pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<TrackingGC> {
+pub(crate) fn init_tracking(
+    probes: &mut ProbeManager,
+) -> Result<(TrackingGC, libbpf_rs::MapHandle)> {
     let config_map = config_map()?;
     let tracking_map = tracking_map()?;
 
-    probes.reuse_map("tracking_config_map", config_map.fd())?;
-    probes.reuse_map("tracking_map", tracking_map.fd())?;
+    probes.reuse_map("tracking_config_map", config_map.as_fd().as_raw_fd())?;
+    probes.reuse_map("tracking_map", tracking_map.as_fd().as_raw_fd())?;
 
     // For tracking skbs we only need the following three functions. First
     // track free events.
@@ -209,17 +216,20 @@ pub(crate) fn init_tracking(probes: &mut ProbeManager) -> Result<TrackingGC> {
     // in the BPF part for most if not all skbs but we might lose some
     // information (and tracked functions might fail resulting in incorrect
     // information).
-    Ok(TrackingGC::new(
-        "skb-tracking-gc",
-        HashMap::from([("skb_tracking", tracking_map)]),
-        |v| {
-            let mut info = TrackingInfo::default();
-            plain::copy_from_bytes(&mut info, &v[..]).map_err(|e| anyhow!("{:?}", e))?;
-            Ok(Duration::from_nanos(info.last_seen))
-        },
-    )
-    .interval(SKB_TRACKING_GC_INTERVAL)
-    .limit(TRACKING_OLD_LIMIT))
+    Ok((
+        TrackingGC::new(
+            "skb-tracking-gc",
+            HashMap::from([("skb_tracking", tracking_map)]),
+            |v| {
+                let mut info = TrackingInfo::default();
+                plain::copy_from_bytes(&mut info, &v[..]).map_err(|e| anyhow!("{:?}", e))?;
+                Ok(Duration::from_nanos(info.last_seen))
+            },
+        )
+        .interval(SKB_TRACKING_GC_INTERVAL)
+        .limit(TRACKING_OLD_LIMIT),
+        config_map,
+    ))
 }
 
 // Please keep in sync with its BPF counterpart.

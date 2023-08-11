@@ -1,5 +1,6 @@
 use std::{
     mem,
+    os::fd::{AsFd, AsRawFd},
     process::{Command, Stdio},
 };
 
@@ -41,6 +42,9 @@ Note that stolen verdicts might not be visible if a filter has been specified us
 #[derive(Default)]
 pub(crate) struct NftModule {
     install_chain: bool,
+    // Used to keep a reference to our internal config map.
+    #[allow(dead_code)]
+    config_map: Option<libbpf_rs::MapHandle>,
 }
 
 impl Module for NftModule {
@@ -104,14 +108,14 @@ impl NftModule {
             .map_err(|e| anyhow!("Unable to delete {table}: {e}. To remove the table, please run: {NFT_BIN} delete table inet {table}"))
     }
 
-    fn config_map() -> Result<libbpf_rs::Map> {
+    fn config_map() -> Result<libbpf_rs::MapHandle> {
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
         };
 
         // Please keep in sync with its BPF counterpart in bpf/nft.bpf.c
-        libbpf_rs::Map::create(
+        libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::Array,
             Some("nft_config_map"),
             mem::size_of::<u32>() as u32,
@@ -233,11 +237,12 @@ impl Collector for NftModule {
         let mut nft_probe = Probe::kprobe(sym)?;
         nft_probe.add_hook(
             Hook::from(nft_hook::DATA)
-                .reuse_map("nft_config_map", config_map.fd())?
+                .reuse_map("nft_config_map", config_map.as_fd().as_raw_fd())?
                 .to_owned(),
         )?;
         probes.register_probe(nft_probe)?;
 
+        self.config_map = Some(config_map);
         Ok(())
     }
 

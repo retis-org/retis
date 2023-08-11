@@ -1,3 +1,5 @@
+#[cfg(not(test))]
+use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::HashSet,
     fs::OpenOptions,
@@ -86,6 +88,8 @@ pub(crate) struct Collectors {
     known_kernel_types: HashSet<String>,
     run: Running,
     tracking_gc: Option<TrackingGC>,
+    // Keep a reference on the tracking configuration map.
+    tracking_config_map: Option<libbpf_rs::MapHandle>,
 }
 
 impl Collectors {
@@ -105,6 +109,7 @@ impl Collectors {
             known_kernel_types: HashSet::new(),
             run: Running::new(),
             tracking_gc: None,
+            tracking_config_map: None,
         })
     }
 
@@ -201,7 +206,9 @@ impl Collectors {
 
         // Initialize tracking & filters.
         if !cfg!(test) && self.known_kernel_types.contains("struct sk_buff *") {
-            self.tracking_gc = Some(init_tracking(&mut self.probes)?);
+            let (gc, map) = init_tracking(&mut self.probes)?;
+            self.tracking_gc = Some(gc);
+            self.tracking_config_map = Some(map);
         }
         Self::setup_filters(&mut self.probes, collect)?;
 
@@ -230,7 +237,7 @@ impl Collectors {
         #[cfg(not(test))]
         {
             let sm = init_stack_map()?;
-            self.probes.reuse_map("stack_map", sm.fd())?;
+            self.probes.reuse_map("stack_map", sm.as_fd().as_raw_fd())?;
             self.probes.reuse_map("events_map", self.factory.map_fd())?;
             match section_factories.get_mut(&ModuleId::Kernel) {
                 Some(kernel_factory) => {

@@ -1,6 +1,10 @@
 #![allow(dead_code)] // FIXME
 #![cfg_attr(test, allow(unused_imports))]
-use std::{cmp, collections::HashMap};
+use std::{
+    cmp,
+    collections::HashMap,
+    os::fd::{AsFd, AsRawFd, RawFd},
+};
 
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
@@ -38,15 +42,15 @@ pub(crate) struct ProbeManager {
     global_probes_options: Vec<ProbeOption>,
 
     /// HashMap of map names and file descriptors, to be reused in all hooks.
-    maps: HashMap<String, i32>,
+    maps: HashMap<String, RawFd>,
 
     /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
     #[cfg(not(test))]
-    config_map: libbpf_rs::Map,
+    config_map: libbpf_rs::MapHandle,
 
     /// Global per-probe map used to report counters.
     #[cfg(not(test))]
-    counters_map: libbpf_rs::Map,
+    counters_map: libbpf_rs::MapHandle,
 
     /// Internal vec to store "used" probe builders, so we can keep a reference
     /// on them and keep probes loaded & installed.
@@ -75,11 +79,13 @@ impl ProbeManager {
 
         #[cfg(not(test))]
         mgr.maps
-            .insert("config_map".to_string(), mgr.config_map.fd());
+            .insert("config_map".to_string(), mgr.config_map.as_fd().as_raw_fd());
 
         #[cfg(not(test))]
-        mgr.maps
-            .insert("counters_map".to_string(), mgr.counters_map.fd());
+        mgr.maps.insert(
+            "counters_map".to_string(),
+            mgr.counters_map.as_fd().as_raw_fd(),
+        );
 
         Ok(mgr)
     }
@@ -140,7 +146,7 @@ impl ProbeManager {
     /// ```
     /// mgr.reuse_map("config", fd).unwrap();
     /// ```
-    pub(crate) fn reuse_map(&mut self, name: &str, fd: i32) -> Result<()> {
+    pub(crate) fn reuse_map(&mut self, name: &str, fd: RawFd) -> Result<()> {
         let name = name.to_string();
 
         if self.maps.contains_key(&name) {
@@ -274,12 +280,12 @@ impl ProbeManager {
         probes: &mut [&mut Probe],
         hooks: &[Hook],
         filters: &[Filter],
-        maps: HashMap<String, i32>,
-        #[cfg(not(test))] config_map: &mut libbpf_rs::Map,
-        #[cfg(not(test))] counters_map: &mut libbpf_rs::Map,
+        maps: HashMap<String, RawFd>,
+        #[cfg(not(test))] config_map: &mut libbpf_rs::MapHandle,
+        #[cfg(not(test))] counters_map: &mut libbpf_rs::MapHandle,
     ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
         let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
-        let map_fds: Vec<(String, i32)> = maps.into_iter().collect();
+        let map_fds: Vec<(String, RawFd)> = maps.into_iter().collect();
 
         probes.iter_mut().try_for_each(|probe| {
             // Make a new builder if none if found for the current type. Builder

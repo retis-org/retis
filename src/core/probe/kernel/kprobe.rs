@@ -4,7 +4,10 @@
 //! in two parts, the Rust code (here) and the eBPF one (bpf/kprobe.bpf.c and
 //! its auto-generated part in bpf/.out/).
 
+use std::os::fd::{AsFd, AsRawFd, RawFd};
+
 use anyhow::{anyhow, bail, Result};
+use libbpf_rs::skel::SkelBuilder;
 
 use crate::core::filters::Filter;
 use crate::core::probe::builder::*;
@@ -28,7 +31,7 @@ impl ProbeBuilder for KprobeBuilder {
 
     fn init(
         &mut self,
-        map_fds: Vec<(String, i32)>,
+        map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
     ) -> Result<()> {
@@ -46,7 +49,8 @@ impl ProbeBuilder for KprobeBuilder {
         let fd = obj
             .prog("probe_kprobe")
             .ok_or_else(|| anyhow!("Couldn't get program"))?
-            .fd();
+            .as_fd()
+            .as_raw_fd();
         replace_filters(fd, &filters)?;
         let mut links = replace_hooks(fd, &hooks)?;
         self.links.append(&mut links);

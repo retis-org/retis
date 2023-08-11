@@ -85,7 +85,7 @@ functional_task:
     - ssh ${DISTRO} 'sh -exc "uname -a"'
 
   test_script: &functional_test
-    - ssh -tt ${DISTRO} "cd /vagrant/tests && cargo build"
+    - ssh -tt ${DISTRO} 'bash --login -exc "cd /vagrant/tests && cargo build"'
     - ssh -tt ${DISTRO} "cd /vagrant/tests && sudo python3 -m pytest ${TEST_EXTRA_ARGS}"
 
 # Manual trigger for non-PR branches.
