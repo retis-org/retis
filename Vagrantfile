@@ -33,6 +33,28 @@ Vagrant.configure("2") do |config|
     fedora.vm.synced_folder ".", "/vagrant", type: "rsync"
   end
 
+  config.vm.define "rawhide" do |rawhide|
+    def get_box(pattern)
+      require 'open-uri'
+      require 'nokogiri'
+
+      url = "https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/"
+      doc = Nokogiri::HTML(URI.open(url))
+      box = doc.css('a').map { |link| link['href'] }.select { |alink| alink.include?(pattern) }.last
+      url + box
+    end
+
+    rawhide.vm.box = "fedora-rawhide-cloud"
+    rawhide.vm.box_url = get_box("vagrant-libvirt.box")
+
+    rawhide.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
+    rawhide.vm.provision "shell", inline: <<-SHELL
+       dnf install -y openvswitch
+    SHELL
+
+    rawhide.vm.synced_folder ".", "/vagrant", type: "rsync"
+  end
+
   config.vm.define "c9s" do |centos|
     centos.vm.box = "generic/centos9s"
 
