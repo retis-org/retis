@@ -9,7 +9,7 @@ use std::{
     str,
 };
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use plain::Plain;
 
 use super::*;
@@ -18,15 +18,16 @@ use crate::core::events::bpf::{parse_raw_section, BpfRawSection};
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
 pub(super) const SECTION_ETH: u64 = 0;
-pub(super) const SECTION_IPV4: u64 = 1;
-pub(super) const SECTION_IPV6: u64 = 2;
-pub(super) const SECTION_TCP: u64 = 3;
-pub(super) const SECTION_UDP: u64 = 4;
-pub(super) const SECTION_ICMP: u64 = 5;
-pub(super) const SECTION_DEV: u64 = 6;
-pub(super) const SECTION_NS: u64 = 7;
-pub(super) const SECTION_META: u64 = 8;
-pub(super) const SECTION_DATA_REF: u64 = 9;
+pub(super) const SECTION_ARP: u64 = 1;
+pub(super) const SECTION_IPV4: u64 = 2;
+pub(super) const SECTION_IPV6: u64 = 3;
+pub(super) const SECTION_TCP: u64 = 4;
+pub(super) const SECTION_UDP: u64 = 5;
+pub(super) const SECTION_ICMP: u64 = 6;
+pub(super) const SECTION_DEV: u64 = 7;
+pub(super) const SECTION_NS: u64 = 8;
+pub(super) const SECTION_META: u64 = 9;
+pub(super) const SECTION_DATA_REF: u64 = 10;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -54,14 +55,46 @@ pub(super) fn unmarshal_eth(raw_section: &BpfRawSection) -> Result<SkbEthEvent> 
 
     Ok(SkbEthEvent {
         etype: u16::from_be(raw.etype),
-        src: format!(
-            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-            raw.src[0], raw.src[1], raw.src[2], raw.src[3], raw.src[4], raw.src[5],
-        ),
-        dst: format!(
-            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-            raw.dst[0], raw.dst[1], raw.dst[2], raw.dst[3], raw.dst[4], raw.dst[5],
-        ),
+        src: helpers::parse_eth_addr(&raw.src),
+        dst: helpers::parse_eth_addr(&raw.dst),
+    })
+}
+
+/// ARP data retrieved from skbs.
+#[derive(Default)]
+#[repr(C, packed)]
+struct RawArpEvent {
+    /// Operation. Stored in network order.
+    operation: u16,
+    /// Sender hardware address.
+    sha: [u8; 6],
+    /// Sender protocol address.
+    spa: u32,
+    /// Target hardware address.
+    tha: [u8; 6],
+    /// Target protocol address.
+    tpa: u32,
+}
+unsafe impl Plain for RawArpEvent {}
+
+pub(super) fn unmarshal_arp(raw_section: &BpfRawSection) -> Result<SkbArpEvent> {
+    let raw = parse_raw_section::<RawArpEvent>(raw_section)?;
+
+    let operation = match u16::from_be(raw.operation) {
+        1 => ArpOperation::Request,
+        2 => ArpOperation::Reply,
+        _ => bail!("Invalid ARP operation type"),
+    };
+
+    let spa = Ipv4Addr::from(u32::from_be(raw.spa));
+    let tpa = Ipv4Addr::from(u32::from_be(raw.tpa));
+
+    Ok(SkbArpEvent {
+        operation,
+        sha: helpers::parse_eth_addr(&raw.sha),
+        spa: format!("{spa}"),
+        tha: helpers::parse_eth_addr(&raw.tha),
+        tpa: format!("{tpa}"),
     })
 }
 

@@ -44,3 +44,11 @@ pub(super) fn protocol_str(protocol: u8) -> Option<&'static str> {
         _ => return None,
     })
 }
+
+/// Parses an Ethernet address into a String.
+pub(super) fn parse_eth_addr(raw: &[u8; 6]) -> String {
+    format!(
+        "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        raw[0], raw[1], raw[2], raw[3], raw[4], raw[5],
+    )
+}
