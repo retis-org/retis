@@ -157,7 +157,7 @@ bugs should be reported and fixed).
    and friends. This core skb tracking logic is used by the filtering part for
    Retis to track packets after they were modified (e.g. NAT). Full details on
    the implementation can be found
-   [in the sources](src/core/tracking/skb_tracking.rs).
+   [in the sources](https://github.com/retis-org/retis/blob/main/src/core/tracking/skb_tracking.rs).
 
 2. A collector, `skb-tracking`, retrieves the core tracking information (unique
    identifier and socket buffer address) and reports it in the event. Without
