@@ -127,8 +127,8 @@ $ retis collect -p tp:skb:kfree_skb -p kprobe:ovs_ct_clear
 
 New profiles can be written and used if stored in `/etc/retis/profiles` or
 `$HOME/.config/profiles`. Here is an
-[example profile](test_data/profiles/example.yaml) with inlined
-comments. If a profile is generic enough, consider contributing it!
+[example profile](https://github.com/retis-org/retis/blob/main/test_data/profiles/example.yaml)
+with inlined comments. If a profile is generic enough, consider contributing it!
 
 ## Filtering
 
@@ -157,7 +157,7 @@ bugs should be reported and fixed).
    and friends. This core skb tracking logic is used by the filtering part for
    Retis to track packets after they were modified (e.g. NAT). Full details on
    the implementation can be found
-   [in the sources](src/core/tracking/skb_tracking.rs).
+   [in the sources](https://github.com/retis-org/retis/blob/main/src/core/tracking/skb_tracking.rs).
 
 2. A collector, `skb-tracking`, retrieves the core tracking information (unique
    identifier and socket buffer address) and reports it in the event. Without
