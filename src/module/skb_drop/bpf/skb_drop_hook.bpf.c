@@ -15,8 +15,13 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	if (!e)
 		return 0;
 
-	e->drop_reason = retis_arg_valid(ctx, skb_drop_reason) ?
-		retis_get_skb_drop_reason(ctx) : -1;
+	if (bpf_core_type_exists(enum skb_drop_reason)) {
+		if (!retis_arg_valid(ctx, skb_drop_reason))
+			return 0;
+		e->drop_reason = retis_get_skb_drop_reason(ctx);
+	} else {
+		e->drop_reason = -1;
+	}
 
 	return 0;
 )
