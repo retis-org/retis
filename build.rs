@@ -90,10 +90,12 @@ fn build_hook(source: &str, extra_includes: Option<&[&str]>) {
 
 fn build_probe(source: &str) {
     let (out, name) = get_paths(source);
+    let output = format!("{}/{}.o", out.as_str(), name);
     let skel = format!("{out}/{name}.skel.rs");
 
     if let Err(e) = SkeletonBuilder::new()
         .source(source)
+        .obj(output)
         .clang_args(get_probe_clang_args(None))
         .build_and_generate(skel)
     {
