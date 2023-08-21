@@ -231,11 +231,7 @@ pub(crate) fn parse_raw_event<'a>(
 
     // Check the total buffer length to ensure we'll not go past.
     if raw_event_size > data_size {
-        bail!(
-            "Raw event size goes past the buffer length: {} > {}",
-            raw_event_size,
-            data_size
-        );
+        bail!("Raw event size goes past the buffer length: {raw_event_size} > {data_size}",);
     }
 
     // Let's loop through the raw event sections and collect them for later
@@ -261,10 +257,7 @@ pub(crate) fn parse_raw_event<'a>(
             error!("Section is empty, according to its header");
             continue;
         } else if raw_section_end > raw_event_size {
-            error!(
-                "Section goes past the buffer: {} > {}",
-                raw_section_end, raw_event_size
-            );
+            error!("Section goes past the buffer: {raw_section_end} > {raw_event_size}");
             break;
         }
 
@@ -274,7 +267,7 @@ pub(crate) fn parse_raw_event<'a>(
             Err(e) => {
                 // Skip the section.
                 cursor += raw_section.header.size as usize;
-                error!("Could not convert the raw owner: {}", e);
+                error!("Could not convert the raw owner: {e}");
                 continue;
             }
         };
@@ -292,11 +285,15 @@ pub(crate) fn parse_raw_event<'a>(
 
     let mut event = Event::new();
     raw_sections.drain().try_for_each(|(owner, sections)| {
-        let factory = match factories.get_mut(&owner) {
-            Some(factory) => factory,
-            None => bail!("Unknown factory for event section owner {}", owner),
-        };
-        event.insert_section(owner, factory.from_raw(sections)?)
+        let factory = factories
+            .get_mut(&owner)
+            .ok_or_else(|| anyhow!("Unknown factory for event section owner {}", &owner))?;
+        event.insert_section(
+            owner,
+            factory
+                .from_raw(sections)
+                .map_err(|e| anyhow!("Failed to parse section {}: {e}", &owner))?,
+        )
     })?;
 
     Ok(event)
