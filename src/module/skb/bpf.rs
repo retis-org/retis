@@ -156,12 +156,9 @@ struct RawIpv6Event {
 pub(super) fn unmarshal_ipv6(raw_section: &BpfRawSection) -> Result<SkbIpEvent> {
     let raw = parse_raw_section::<RawIpv6Event>(raw_section)?;
 
-    let src = Ipv6Addr::from(u128::from_be(raw.src));
-    let dst = Ipv6Addr::from(u128::from_be(raw.dst));
-
     Ok(SkbIpEvent {
-        saddr: format!("{src}"),
-        daddr: format!("{dst}"),
+        saddr: Ipv6Addr::from(u128::from_be(raw.src)).to_string(),
+        daddr: Ipv6Addr::from(u128::from_be(raw.dst)).to_string(),
         version: SkbIpVersion::V6(SkbIpv6Event {
             flow_label: raw.flow_label,
         }),
