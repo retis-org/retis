@@ -440,7 +440,7 @@ impl RawEventSectionFactory for SkbEventFactory {
                 SECTION_TCP => event.tcp = Some(unmarshal_tcp(section)?),
                 SECTION_UDP => event.udp = Some(unmarshal_udp(section)?),
                 SECTION_ICMP => event.icmp = Some(unmarshal_icmp(section)?),
-                SECTION_DEV => event.dev = Some(unmarshal_dev(section)?),
+                SECTION_DEV => event.dev = unmarshal_dev(section)?,
                 SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
                 SECTION_META => event.meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
