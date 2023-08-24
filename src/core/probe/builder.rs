@@ -9,7 +9,7 @@ use btf_rs::{Btf, Type};
 
 use crate::core::{
     bpf_sys,
-    filters::{BpfFilter, Filter},
+    filters::{register_filter, BpfFilter, Filter},
     probe::*,
 };
 
@@ -106,10 +106,10 @@ fn replace_raw_filter(filter: &BpfFilter, target: &str, fd: u32) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn replace_filters(fd: RawFd, filters: &[Filter]) -> Result<()> {
+pub(super) fn replace_filters(filters: &[Filter]) -> Result<()> {
     for filter in filters.iter() {
         match filter {
-            Filter::Packet(f) => replace_raw_filter(f, "packet_filter", fd as u32)?,
+            Filter::Packet(_) => register_filter(0xdeadbeef, filter)?,
         }
     }
 

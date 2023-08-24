@@ -55,7 +55,7 @@ impl ProbeBuilder for KretprobeBuilder {
             .ok_or_else(|| anyhow!("Couldn't get program"))?
             .as_fd()
             .as_raw_fd();
-        replace_filters(fd, &filters)?;
+        replace_filters(&filters)?;
         let mut links = replace_hooks(fd, &hooks)?;
         self.links.append(&mut links);
 

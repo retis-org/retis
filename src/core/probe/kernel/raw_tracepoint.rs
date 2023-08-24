@@ -65,7 +65,7 @@ impl ProbeBuilder for RawTracepointBuilder {
             .prog_mut("probe_raw_tracepoint")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
 
-        replace_filters(prog.as_fd().as_raw_fd(), &self.filters)?;
+        replace_filters(&self.filters)?;
         let mut links = replace_hooks(prog.as_fd().as_raw_fd(), &self.hooks)?;
         self.links.append(&mut links);
 
