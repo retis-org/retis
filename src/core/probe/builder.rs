@@ -6,10 +6,7 @@ use std::os::fd::RawFd;
 
 use anyhow::{anyhow, Result};
 
-use crate::core::{
-    filters::{register_filter, Filter},
-    probe::*,
-};
+use crate::core::probe::*;
 
 /// Trait representing the interface used to create and handle probes. We use a
 /// trait here as we're supporting various attach types.
@@ -22,12 +19,7 @@ pub(super) trait ProbeBuilder {
     /// Initialize the probe builder before attaching programs to probes. It
     /// takes an option vector of map fds so that maps can be reused and shared
     /// accross builders.
-    fn init(
-        &mut self,
-        map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
-        filters: Vec<Filter>,
-    ) -> Result<()>;
+    fn init(&mut self, map_fds: Vec<(String, RawFd)>, hooks: Vec<Hook>) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
     fn attach(&mut self, probe: &Probe) -> Result<()>;
     /// Detach all probes installed by the builder (function,
@@ -47,16 +39,6 @@ pub(super) fn reuse_map_fds(
             continue;
         }
     }
-    Ok(())
-}
-
-pub(super) fn replace_filters(filters: &[Filter]) -> Result<()> {
-    for filter in filters.iter() {
-        match filter {
-            Filter::Packet(_) => register_filter(0xdeadbeef, filter)?,
-        }
-    }
-
     Ok(())
 }
 

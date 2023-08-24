@@ -10,9 +10,7 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::SkelBuilder;
 
-use crate::core::filters::Filter;
-use crate::core::probe::builder::*;
-use crate::core::probe::*;
+use crate::core::{probe::builder::*, probe::*};
 
 mod raw_tracepoint_bpf {
     include!("bpf/.out/raw_tracepoint.skel.rs");
@@ -25,7 +23,6 @@ pub(crate) struct RawTracepointBuilder {
     links: Vec<libbpf_rs::Link>,
     obj: Option<libbpf_rs::Object>,
     map_fds: Vec<(String, RawFd)>,
-    filters: Vec<Filter>,
 }
 
 impl ProbeBuilder for RawTracepointBuilder {
@@ -33,15 +30,10 @@ impl ProbeBuilder for RawTracepointBuilder {
         RawTracepointBuilder::default()
     }
 
-    fn init(
-        &mut self,
-        map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
-        filters: Vec<Filter>,
-    ) -> Result<()> {
+    fn init(&mut self, map_fds: Vec<(String, RawFd)>, hooks: Vec<Hook>) -> Result<()> {
         self.map_fds = map_fds;
         self.hooks = hooks;
-        self.filters = filters;
+
         Ok(())
     }
 
@@ -65,7 +57,6 @@ impl ProbeBuilder for RawTracepointBuilder {
             .prog_mut("probe_raw_tracepoint")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
 
-        replace_filters(&self.filters)?;
         let mut links = replace_hooks(prog.as_fd().as_raw_fd(), &self.hooks)?;
         self.links.append(&mut links);
 
@@ -85,15 +76,24 @@ impl ProbeBuilder for RawTracepointBuilder {
 mod tests {
     use super::*;
 
-    use crate::core::kernel::Symbol;
+    use crate::core::{
+        filters::{fixup_filter_load_fn, register_filter_handler},
+        kernel::Symbol,
+    };
 
     #[test]
     #[cfg_attr(not(feature = "test_cap_bpf"), ignore)]
     fn init_and_attach() {
+        let _ = register_filter_handler(
+            "raw_tracepoint/probe",
+            libbpf_rs::ProgramType::RawTracepoint,
+            Some(fixup_filter_load_fn),
+        );
+
         let mut builder = RawTracepointBuilder::new();
 
         // It's for now, the probes below won't do much.
-        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
+        assert!(builder.init(Vec::new(), Vec::new()).is_ok());
         assert!(builder
             .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
             .is_ok());

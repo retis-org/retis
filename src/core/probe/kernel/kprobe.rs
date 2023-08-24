@@ -9,9 +9,7 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::SkelBuilder;
 
-use crate::core::filters::Filter;
-use crate::core::probe::builder::*;
-use crate::core::probe::*;
+use crate::core::{probe::builder::*, probe::*};
 
 mod kprobe_bpf {
     include!("bpf/.out/kprobe.skel.rs");
@@ -29,12 +27,7 @@ impl ProbeBuilder for KprobeBuilder {
         KprobeBuilder::default()
     }
 
-    fn init(
-        &mut self,
-        map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
-        filters: Vec<Filter>,
-    ) -> Result<()> {
+    fn init(&mut self, map_fds: Vec<(String, RawFd)>, hooks: Vec<Hook>) -> Result<()> {
         if self.obj.is_some() {
             bail!("Kprobe builder already initialized");
         }
@@ -51,7 +44,6 @@ impl ProbeBuilder for KprobeBuilder {
             .ok_or_else(|| anyhow!("Couldn't get program"))?
             .as_fd()
             .as_raw_fd();
-        replace_filters(&filters)?;
         let mut links = replace_hooks(fd, &hooks)?;
         self.links.append(&mut links);
 
@@ -87,14 +79,23 @@ impl ProbeBuilder for KprobeBuilder {
 mod tests {
     use super::*;
 
-    use crate::core::kernel::Symbol;
+    use crate::core::{
+        filters::{fixup_filter_load_fn, register_filter_handler},
+        kernel::Symbol,
+    };
 
     #[test]
     #[cfg_attr(not(feature = "test_cap_bpf"), ignore)]
     fn init_and_attach() {
+        let _ = register_filter_handler(
+            "kprobe/probe",
+            libbpf_rs::ProgramType::Kprobe,
+            Some(fixup_filter_load_fn),
+        );
+
         let mut builder = KprobeBuilder::new();
 
-        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
+        assert!(builder.init(Vec::new(), Vec::new()).is_ok());
         assert!(builder
             .attach(&Probe::kprobe(Symbol::from_name("kfree_skb_reason").unwrap()).unwrap())
             .is_ok());
