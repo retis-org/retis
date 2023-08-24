@@ -4,8 +4,6 @@ use std::io::{Error, Result};
 use std::mem;
 use std::os::raw::c_long;
 
-use anyhow::bail;
-
 // Embed in a mod to skip the linter
 mod bpf_gen {
     #![allow(non_upper_case_globals)]
@@ -39,101 +37,6 @@ pub(crate) fn bpf_unload(fd: u32) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn btf_get_fd(id: u32) -> anyhow::Result<u32> {
-    let mut attrs: bpf_gen::bpf_attr = unsafe { std::mem::zeroed() };
-    let btf_get_fd_attrs = unsafe { &mut attrs.__bindgen_anon_6.__bindgen_anon_1 };
-
-    btf_get_fd_attrs.btf_id = id;
-
-    let res = bpf(bpf_gen::bpf_cmd::BPF_BTF_GET_FD_BY_ID, &attrs)?;
-    Ok(res)
-}
-
-fn obj_get_info(fd: u32, info: &[u8]) -> anyhow::Result<u32> {
-    let mut attrs: bpf_gen::bpf_attr = unsafe { std::mem::zeroed() };
-    let info_attrs = unsafe { &mut attrs.info };
-
-    info_attrs.bpf_fd = fd;
-    info_attrs.info = info.as_ptr() as u64;
-    info_attrs.info_len = info.len() as u32;
-
-    let res = bpf(bpf_gen::bpf_cmd::BPF_OBJ_GET_INFO_BY_FD, &attrs)?;
-    Ok(res)
-}
-
-pub(crate) fn gen_dummy_func_info_rec(btf_tid: u32) -> (bpf_gen::bpf_func_info, usize, u32) {
-    (
-        bpf_gen::bpf_func_info {
-            type_id: btf_tid,
-            insn_off: 0,
-        },
-        std::mem::size_of::<bpf_gen::bpf_func_info>(),
-        1,
-    )
-}
-
-pub(crate) fn load_btf(btf: &[u8]) -> anyhow::Result<u32> {
-    let mut attrs: bpf_gen::bpf_attr = unsafe { std::mem::zeroed() };
-    let btf_load_attrs = unsafe { &mut attrs.__bindgen_anon_7 };
-
-    btf_load_attrs.btf = btf.as_ptr() as u64;
-    btf_load_attrs.btf_size = btf.len() as u32;
-
-    let ret = bpf(bpf_gen::bpf_cmd::BPF_BTF_LOAD, &attrs)?;
-    Ok(ret)
-}
-
-pub(crate) fn get_btf_from_fd(prog_fd: u32) -> anyhow::Result<Vec<u8>> {
-    let prog_info: bpf_gen::bpf_prog_info = unsafe { std::mem::zeroed() };
-
-    if prog_fd == 0 {
-        bail!("Invalid program file descriptor")
-    }
-
-    obj_get_info(prog_fd, unsafe {
-        std::slice::from_raw_parts(
-            &prog_info as *const _ as *const u8,
-            std::mem::size_of::<bpf_gen::bpf_prog_info>(),
-        )
-    })?;
-
-    let prog_btf_id = match prog_info.btf_id {
-        id if id > 0 => id,
-        id => bail!("Invalid bpf prog btf fd ({id})"),
-    };
-
-    let btf_fd = btf_get_fd(prog_btf_id)?;
-
-    let mut btf_info: bpf_gen::bpf_btf_info = unsafe { std::mem::zeroed() };
-    let mut btf_buff = vec![0u8; 2048];
-
-    let mut resized = false;
-
-    loop {
-        btf_info.btf = btf_buff.as_ptr() as u64;
-
-        obj_get_info(btf_fd, unsafe {
-            std::slice::from_raw_parts(
-                &btf_info as *const _ as *const u8,
-                std::mem::size_of::<bpf_gen::bpf_btf_info>(),
-            )
-        })?;
-
-        if btf_info.btf_size <= btf_buff.len() as u32 {
-            break;
-        }
-
-        if !resized {
-            btf_buff.resize(btf_info.btf_size as usize, 0);
-            resized = true;
-        } else {
-            bail!("Unable to retrieve btf data (buff too small)")
-        }
-    }
-
-    Ok(btf_buff)
 }
 
 #[cfg(test)]
