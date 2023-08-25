@@ -323,11 +323,11 @@ pub(crate) struct ActionEvent {
 
 impl EventFmt for ActionEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        write!(f, "exec")?;
-
         if self.recirc_id != 0 {
-            write!(f, " recirc_id {}", self.recirc_id)?;
+            write!(f, "[recirc_id {:#x}] ", self.recirc_id)?;
         }
+
+        write!(f, "exec")?;
 
         match &self.action {
             OvsAction::Unspecified => write!(f, " (unspecified)")?,
@@ -337,7 +337,7 @@ impl EventFmt for ActionEvent {
             OvsAction::PushVlan => write!(f, " push_vlan")?,
             OvsAction::PopVlan => write!(f, " pop_vlan")?,
             OvsAction::Sample => write!(f, " sample")?,
-            OvsAction::Recirc(a) => write!(f, " recirc {}", a.id)?,
+            OvsAction::Recirc(a) => write!(f, " recirc {:#x}", a.id)?,
             OvsAction::Hash => write!(f, " hash")?,
             OvsAction::PushMpls => write!(f, " push_mpls")?,
             OvsAction::PopMpls => write!(f, " pop_mpls")?,
