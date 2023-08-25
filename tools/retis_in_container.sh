@@ -42,4 +42,4 @@ $runtime run $extra_args --privileged --rm -it --pid=host \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
       -v $kconfig:/kconfig:ro \
       -v $(pwd):/data:rw \
-      quay.io/retis/retis:$RETIS_TAG $@
+      quay.io/retis/retis:$RETIS_TAG "$@"
