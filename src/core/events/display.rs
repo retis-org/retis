@@ -49,3 +49,52 @@ where
         })
     }
 }
+
+/// DelimWriter is a simple helper that prints a character delimiter (e.g: ',' or ' ') only if it's
+/// not the first time write() is called. This helps print lists of optional fields.
+///
+/// # Example:
+///
+/// ```
+/// use std::fmt;
+///
+/// struct Flags {
+///     opt1: bool,
+///     opt2: bool,
+/// }
+/// impl fmt::Display for Flags {
+///     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+///         write!(f, "flags")?;
+///         let mut space = DelimWriter::new(' ');
+///         if self.opt1 {
+///             space.write(f)?;
+///             write!(f, "opt1");
+///          }
+///         if self.opt2 {
+///             space.write(f)?;
+///             write!(f, "opt2")?;
+///          }
+///          Ok(())
+///     }
+/// }
+/// ```
+pub(crate) struct DelimWriter {
+    delim: char,
+    first: bool,
+}
+
+impl DelimWriter {
+    /// Create a new DelimWriter
+    pub(crate) fn new(delim: char) -> Self {
+        DelimWriter { delim, first: true }
+    }
+
+    /// If it's not the first time it's called, write the delimiter.
+    pub(crate) fn write(&mut self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.first {
+            true => self.first = false,
+            false => write!(f, "{}", self.delim)?,
+        }
+        Ok(())
+    }
+}
