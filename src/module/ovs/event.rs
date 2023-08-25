@@ -399,6 +399,7 @@ pub(crate) enum OvsAction {
 // Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
 /// OVS output action data.
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[repr(C)]
 pub(crate) struct OvsActionOutput {
     /// Output port.
     pub(crate) port: u32,
