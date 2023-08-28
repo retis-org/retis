@@ -74,6 +74,8 @@ impl ProbeBuilder for RawTracepointBuilder {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
     use crate::core::{
@@ -82,6 +84,7 @@ mod tests {
     };
 
     #[test]
+    #[serial(libbpf)]
     #[cfg_attr(not(feature = "test_cap_bpf"), ignore)]
     fn init_and_attach() {
         let _ = register_filter_handler(

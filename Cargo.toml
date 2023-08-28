@@ -59,3 +59,4 @@ memmap2 = "0.9"
 
 [dev-dependencies]
 probe = "0.5"
+serial_test = "2.0"
