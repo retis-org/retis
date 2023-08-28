@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt};
 use anyhow::{bail, Result};
 
 use super::{
-    nft::NftModule, ovs::OvsModule, skb::SkbModule, skb_drop::SkbDropModule,
+    ct::CtModule, nft::NftModule, ovs::OvsModule, skb::SkbModule, skb_drop::SkbDropModule,
     skb_tracking::SkbTrackingModule,
 };
 use crate::{
@@ -27,8 +27,9 @@ pub(crate) enum ModuleId {
     Skb = 7,
     Ovs = 8,
     Nft = 9,
+    Ct = 10,
     // TODO: use std::mem::variant_count once in stable.
-    _MAX = 10,
+    _MAX = 11,
 }
 
 impl ModuleId {
@@ -46,6 +47,7 @@ impl ModuleId {
             7 => Skb,
             8 => Ovs,
             9 => Nft,
+            10 => Ct,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -65,7 +67,8 @@ impl ModuleId {
             Skb => 7,
             Ovs => 8,
             Nft => 9,
-            _MAX => 10,
+            Ct => 10,
+            _MAX => 11,
         }
     }
 
@@ -82,6 +85,7 @@ impl ModuleId {
             "skb" => Skb,
             "ovs" => Ovs,
             "nft" => Nft,
+            "ct" => Ct,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -99,6 +103,7 @@ impl ModuleId {
             Skb => "skb",
             Ovs => "ovs",
             Nft => "nft",
+            Ct => "ct",
             _MAX => "_max",
         }
     }
@@ -198,7 +203,8 @@ pub(crate) fn get_modules() -> Result<Modules> {
         .register(ModuleId::Skb, Box::new(SkbModule::new()?))?
         .register(ModuleId::SkbDrop, Box::new(SkbDropModule::new()?))?
         .register(ModuleId::Ovs, Box::new(OvsModule::new()?))?
-        .register(ModuleId::Nft, Box::new(NftModule::new()?))?;
+        .register(ModuleId::Nft, Box::new(NftModule::new()?))?
+        .register(ModuleId::Ct, Box::new(CtModule::new()?))?;
 
     Ok(group)
 }
