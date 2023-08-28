@@ -51,7 +51,7 @@ impl ProbeBuilder for KretprobeBuilder {
 
         let obj = open_obj.load()?;
         let fd = obj
-            .prog("probe_kretprobe")
+            .prog("probe_kretprobe_kretprobe")
             .ok_or_else(|| anyhow!("Couldn't get program"))?
             .as_fd()
             .as_raw_fd();
@@ -76,14 +76,14 @@ impl ProbeBuilder for KretprobeBuilder {
 
         // Attach the kretprobe
         self.links.push(
-            obj.prog_mut("probe_kretprobe")
+            obj.prog_mut("probe_kretprobe_kretprobe")
                 .ok_or_else(|| anyhow!("Couldn't get kretprobe program"))?
                 .attach_kprobe(true, probe.symbol.attach_name())?,
         );
 
         // Attach the kprobe
         self.links.push(
-            obj.prog_mut("probe_kprobe")
+            obj.prog_mut("probe_kretprobe_kprobe")
                 .ok_or_else(|| anyhow!("Couldn't get kprobe program"))?
                 .attach_kprobe(false, probe.symbol.attach_name())?,
         );
