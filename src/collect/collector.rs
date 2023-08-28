@@ -140,7 +140,7 @@ impl Collectors {
     }
 
     /// Initialize all collectors by calling their `init()` function.
-    pub(crate) fn init(&mut self, cli: &mut CliConfig) -> Result<()> {
+    pub(crate) fn init(&mut self, cli: &CliConfig) -> Result<()> {
         self.run.register_term_signals()?;
 
         let collect = cli
@@ -314,7 +314,7 @@ impl Collectors {
     /// Starts the processing loop and block until we get a single SIGINT
     /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
     /// collector cmd loop.
-    pub(crate) fn process(&mut self, cli: &mut CliConfig) -> Result<()> {
+    pub(crate) fn process(&mut self, cli: &CliConfig) -> Result<()> {
         let collect = cli
             .subcommand
             .as_any()
@@ -438,11 +438,11 @@ impl SubCommandRunner for CollectRunner {
     fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
         // Initialize collectors.
         let mut collectors = Collectors::new(modules)?;
-        let mut cli = collectors.register_cli(cli)?;
-        collectors.init(&mut cli)?;
+        let cli = collectors.register_cli(cli)?;
+        collectors.init(&cli)?;
         collectors.start()?;
         // Starts a loop.
-        collectors.process(&mut cli)?;
+        collectors.process(&cli)?;
         Ok(())
     }
 }

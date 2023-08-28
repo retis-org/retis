@@ -230,9 +230,9 @@ impl ProbeManager {
             &self.filters,
             self.maps.clone(),
             #[cfg(not(test))]
-            &mut self.config_map,
+            &self.config_map,
             #[cfg(not(test))]
-            &mut self.counters_map,
+            &self.counters_map,
         )?);
 
         // Then targeted ones.
@@ -251,9 +251,9 @@ impl ProbeManager {
                     &self.filters,
                     self.maps.clone(),
                     #[cfg(not(test))]
-                    &mut self.config_map,
+                    &self.config_map,
                     #[cfg(not(test))]
-                    &mut self.counters_map,
+                    &self.counters_map,
                 )?);
                 Ok(())
             })?;
@@ -281,8 +281,8 @@ impl ProbeManager {
         hooks: &[Hook],
         filters: &[Filter],
         maps: HashMap<String, RawFd>,
-        #[cfg(not(test))] config_map: &mut libbpf_rs::MapHandle,
-        #[cfg(not(test))] counters_map: &mut libbpf_rs::MapHandle,
+        #[cfg(not(test))] config_map: &libbpf_rs::MapHandle,
+        #[cfg(not(test))] counters_map: &libbpf_rs::MapHandle,
     ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
         let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
         let map_fds: Vec<(String, RawFd)> = maps.into_iter().collect();
