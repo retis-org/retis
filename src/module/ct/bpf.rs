@@ -53,6 +53,7 @@ struct RawCtEvent {
     zone_id: u16,
     orig: NfConnTuple,
     reply: NfConnTuple,
+    state: u8,
 }
 
 unsafe impl Plain for RawCtEvent {}
@@ -147,6 +148,20 @@ pub(super) fn unmarshal_ct(sections: Vec<BpfRawSection>) -> Result<CtEvent> {
         bail!("ct: invalid protocol tuple information");
     };
 
+    let raw_state = raw.state;
+    // These values must be kept in sync with the ones defined in:
+    // include/uapi/linux/netfilter/nf_conntrack_common.h
+    use CtState::*;
+    let state = match raw_state {
+        0 => Established,
+        1 => Related,
+        2 => New,
+        3 => Reply,
+        4 => RelatedReply,
+        7 => Untracked,
+        _ => bail!("ct: unsupported ct state {}", raw_state),
+    };
+
     Ok(CtEvent {
         zone_id: raw.zone_id,
         zone_dir,
@@ -158,5 +173,6 @@ pub(super) fn unmarshal_ct(sections: Vec<BpfRawSection>) -> Result<CtEvent> {
             ip: reply_ip,
             proto: reply_proto,
         },
+        state,
     })
 }

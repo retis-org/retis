@@ -37,26 +37,23 @@ struct nf_conn_tuple {
 	struct nf_conn_addr_proto dst;
 } __attribute__((packed));
 
-/* Conntrack entry information */
+/* Conntrack event information */
 struct ct_event {
 	u32 flags;
 	u16 zone_id;
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
+	u8 state;
 } __attribute__((packed));
 
-static __always_inline int process_nf_conn(struct retis_raw_event *event,
+static __always_inline int process_nf_conn(struct ct_event *e,
 					   struct nf_conn *ct)
 {
 	struct nf_conntrack_tuple *orig, *reply;
 	struct nf_conntrack_zone *zone;
 	struct nf_conn *nf_conn;
-	struct ct_event *e;
 	u8 zone_dir;
 
-	e = get_event_section(event, COLLECTOR_CT, 0, sizeof(*e));
-	if (!e)
-		return 0;
 
 	if (bpf_core_field_exists(ct->zone)) {
 		zone_dir = (u8) BPF_CORE_READ(ct, zone.dir);
@@ -150,6 +147,7 @@ static __always_inline int process_nf_conn(struct retis_raw_event *event,
 }
 
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+	struct ct_event *e;
 	struct nf_conn *nf_conn;
 	struct sk_buff *skb;
 	unsigned long nfct;
@@ -169,7 +167,14 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	if (!nf_conn)
 		return 0;
 
-	return process_nf_conn(event, nf_conn);
+	e = get_event_section(event, COLLECTOR_CT, 0, sizeof(*e));
+	if (!e)
+		return 0;
+
+	process_nf_conn(e, nf_conn);
+	e->state = (u8) nfct & NFCT_INFOMASK;
+
+	return 0;
 )
 
 char __license[] SEC("license") = "GPL";

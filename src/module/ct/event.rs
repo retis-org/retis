@@ -82,6 +82,20 @@ pub(crate) struct CtTuple {
     /// Protocol information
     pub(crate) proto: CtProto,
 }
+
+/// Conntrack state
+#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum CtState {
+    Established,
+    Related,
+    New,
+    // Represents both IP_CT_REPLY and IP_CT_ESTABLISHED_REPLY as they have the same value.
+    Reply,
+    RelatedReply,
+    #[default]
+    Untracked,
+}
 /// Conntrack event
 #[event_section]
 pub(crate) struct CtEvent {
@@ -93,9 +107,22 @@ pub(crate) struct CtEvent {
     pub(crate) orig: CtTuple,
     /// Reply tuple
     pub(crate) reply: CtTuple,
+    /// Packet's conntrack state
+    pub(crate) state: CtState,
 }
+
 impl EventFmt for CtEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        use CtState::*;
+        match self.state {
+            Established => write!(f, "ct_state ESTABLISHED ")?,
+            Related => write!(f, "ct_state RELATED ")?,
+            New => write!(f, "ct_state NEW ")?,
+            Reply => write!(f, "ct_state REPLY ")?,
+            RelatedReply => write!(f, "ct_state RELATED_REPLY ")?,
+            Untracked => write!(f, "ct_state UNTRACKED ")?,
+        }
+
         match (&self.orig.proto, &self.reply.proto) {
             (CtProto::Tcp(tcp_orig), CtProto::Tcp(tcp_reply)) => {
                 write!(
@@ -147,6 +174,7 @@ impl EventFmt for CtEvent {
             ZoneDir::Default => write!(f, "zone {}", self.zone_id)?,
             ZoneDir::None => (),
         }
+
         Ok(())
     }
 }
