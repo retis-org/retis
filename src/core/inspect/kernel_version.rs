@@ -57,10 +57,10 @@ impl KernelVersion {
             .ok_or_else(|| anyhow!("Could not get kernel patch version from {version}"))?
             .trim_end_matches('+')
             .parse()?;
-        let build: Option<u32> = match tmp.next() {
-            Some(build) => Some(build.parse()?),
-            None => None,
-        };
+
+        // Build can be in any position of the remaining string, e.g:
+        // 6.2.0-20-generic or 6.4.12-arch1-1.
+        let build = tmp.find_map(|s| s.parse::<u32>().ok());
 
         Ok(KernelVersion {
             major,
@@ -296,6 +296,13 @@ mod tests {
         assert_eq!(version.patch, 14);
         assert_eq!(version.build, None);
         assert_eq!(version.full, "6.2.14.fc38.x86_64");
+
+        let version = KernelVersion::parse("6.4.12-arch1-1").unwrap();
+        assert_eq!(version.major, 6);
+        assert_eq!(version.minor, 4);
+        assert_eq!(version.patch, 12);
+        assert_eq!(version.build, Some(1));
+        assert_eq!(version.full, "6.4.12-arch1-1");
 
         assert!(KernelVersion::parse("6.2").is_err());
     }
