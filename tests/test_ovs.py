@@ -1,3 +1,6 @@
+import copy
+import time
+
 import pytest
 
 from testlib import Retis, assert_events_present
@@ -24,6 +27,208 @@ def test_ovs_sanity(two_port_ovs):
     )
 
     assert len(execs) == 2
+
+
+# Test OVS and conntrack integration
+def test_ovs_conntrack(two_port_ovs):
+    ovs, ns = two_port_ovs
+
+    # Configure a simple conntrack set of flows
+    ovs.ofctl("del-flows", "test")
+    # Allow ARP
+    ovs.ofctl("add-flow", "test", "table=0,arp actions=NORMAL")
+    # Send untracked traffic through ct
+    ovs.ofctl("add-flow", "test", "table=0,ct_state=-trk,ip actions=ct(table=1)")
+    # Commit new connections
+    ovs.ofctl(
+        "add-flow",
+        "test",
+        "table=1,ct_state=+trk+new,ip actions=ct(commit),NORMAL",
+    )
+    # Accept established connection
+    ovs.ofctl("add-flow", "test", "table=1,ct_state=+trk+est,ip actions=NORMAL")
+
+    retis = Retis()
+    retis.collect(
+        "-c",
+        "skb,ovs,ct",
+        "--skb-sections",
+        "all",
+        "-f",
+        "host 192.168.1.1 and (tcp port 80 or arp)",
+    )
+    print(ns.run_bg("ns1", "socat", "TCP-LISTEN:80", "STDOUT"))
+    time.sleep(1)
+    print(ns.run("ns0", "socat", "-T", "3", "-,ignoreeof", "TCP:192.168.1.2:80"))
+    retis.stop()
+
+    events = retis.events()
+
+    # Expected events
+    ovs_exec = {
+        "probe_type": "raw_tracepoint",
+        "symbol": "openvswitch:ovs_do_execute_action",
+    }
+    orig_skb = {
+        "eth": {
+            "etype": 2048,
+        },
+        "ip": {
+            "daddr": "192.168.1.2",
+            "saddr": "192.168.1.1",
+            "ttl": 64,
+        },
+        "tcp": {
+            "dport": 80,
+        },
+    }
+    reply_skb = {
+        "eth": {
+            "etype": 2048,
+        },
+        "ip": {
+            "daddr": "192.168.1.1",
+            "saddr": "192.168.1.2",
+            "ttl": 64,
+        },
+        "tcp": {
+            "sport": 80,
+        },
+    }
+
+    # SYN
+    syn = copy.deepcopy(orig_skb)
+    syn["tcp"]["flags"] = 2
+
+    # SYN+ACK
+    syn_ack = copy.deepcopy(reply_skb)
+    syn_ack["tcp"]["flags"] = 18
+
+    # ACK
+    ack = copy.deepcopy(orig_skb)
+    ack["tcp"]["flags"] = 16
+
+    # FIN
+    fin = copy.deepcopy(syn)
+    fin["tcp"]["flags"] = 17
+
+    expected_events = [
+        # SYN actions: ct, recirc, ct(commit), output
+        {
+            "kernel": ovs_exec,
+            "skb": syn,
+            "ovs": {"action": "ct", "flags": 4},
+        },
+        {
+            "kernel": ovs_exec,
+            "skb": syn,
+            "ovs": {
+                "action": "recirc",
+            },
+            "ct": {"state": "new"},
+        },
+        {
+            "kernel": ovs_exec,
+            "skb": syn,
+            "ovs": {
+                "action": "ct",
+                "flags": 5,
+            },
+        },
+        {
+            "kernel": ovs_exec,
+            "skb": syn,
+            "ovs": {"action": "output"},
+            "ct": {"state": "new"},
+        },
+        # SYN+ACK actions: ct, recirc, output
+        {
+            "kernel": ovs_exec,
+            "skb": syn_ack,
+            "ovs": {"action": "ct", "flags": 4},
+        },
+        {
+            "kernel": ovs_exec,
+            "skb": syn_ack,
+            "ovs": {
+                "action": "recirc",
+            },
+            "ct": {"state": "reply"},
+        },
+        {
+            "kernel": ovs_exec,
+            "skb": syn_ack,
+            "ovs": {
+                "action": "output",
+            },
+        },
+        # ACK actions: ct, recirc, output
+        {"kernel": ovs_exec, "skb": ack, "ovs": {"action": "ct", "flags": 4}},
+        {
+            "kernel": ovs_exec,
+            "skb": ack,
+            "ovs": {
+                "action": "recirc",
+            },
+            "ct": {"state": "established"},
+        },
+        {
+            "kernel": ovs_exec,
+            "skb": ack,
+            "ovs": {
+                "action": "output",
+            },
+        },
+        # FIN actions: ct, recirc, output
+        {"kernel": ovs_exec, "skb": fin, "ovs": {"action": "ct", "flags": 4}},
+        {
+            "kernel": ovs_exec,
+            "skb": fin,
+            "ovs": {
+                "action": "recirc",
+                "id": "&recirc_id_orig",  # Store orig recirc_id
+            },
+            "ct": {"state": "established"},
+        },
+        {
+            "kernel": ovs_exec,
+            "skb": fin,
+            "ovs": {
+                "action": "output",
+                "recirc_id": "*recirc_id_orig",  # Check orig recirc_id
+            },
+            "ct": {"state": "established"},
+        },
+        # ACK actions: ct, recirc, output
+        {"kernel": ovs_exec, "skb": ack, "ovs": {"action": "ct", "flags": 4}},
+        {
+            "kernel": ovs_exec,
+            "skb": ack,
+            "ovs": {
+                "action": "recirc",
+                "id": "&recirc_id_reply",  # Store reply recirc_id
+            },
+            "ct": {"state": "established"},
+        },
+        {
+            "kernel": ovs_exec,
+            "skb": ack,
+            "ovs": {
+                "action": "output",
+                "recirc_id": "*recirc_id_reply",  # Check reply recirc_id
+            },
+            "ct": {"state": "established"},
+        },
+    ]
+
+    # Only interested in TCP OVS execute actions.
+    def interested(e):
+        return e["kernel"]["symbol"] == "openvswitch:ovs_do_execute_action" and e[
+            "skb"
+        ].get("ip")
+
+    events = list(filter(interested, events))
+    assert_events_present(events, expected_events)
 
 
 # Expected OVS upcall events.
