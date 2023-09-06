@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 
-use super::{ct_hook, CtEventFactory};
+use super::{bpf::CtEventFactory, ct_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
@@ -12,12 +12,14 @@ use crate::{
     module::{Module, ModuleId},
 };
 
-#[derive(Default)]
-pub(crate) struct CtModule {}
+pub(crate) struct CtModule {
+    // Whether the event capturing module was initialized
+    init: bool,
+}
 
 impl Collector for CtModule {
     fn new() -> Result<Self> {
-        Ok(Self::default())
+        Ok(CtModule { init: false })
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
@@ -49,6 +51,7 @@ impl Collector for CtModule {
     fn init(&mut self, _cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
         // Register our generic conntrack hook.
         probes.register_kernel_hook(Hook::from(ct_hook::DATA))?;
+        self.init = true;
         Ok(())
     }
 }
@@ -58,6 +61,9 @@ impl Module for CtModule {
         self
     }
     fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::<CtEventFactory>::default())
+        Ok(Box::new(match self.init {
+            true => CtEventFactory::bpf()?,
+            false => CtEventFactory::new()?,
+        }))
     }
 }

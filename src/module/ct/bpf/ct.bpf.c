@@ -44,6 +44,8 @@ struct ct_event {
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
 	u8 state;
+	u8 tcp_state;
+
 } __attribute__((packed));
 
 static __always_inline int process_nf_conn(struct ct_event *e,
@@ -112,6 +114,9 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 			      &ct->REPLY.src.u.tcp.port);
 		bpf_core_read(&e->reply.dst.data, sizeof(e->reply.dst.data),
 			      &ct->REPLY.dst.u.tcp.port);
+
+		e->tcp_state = (u8)BPF_CORE_READ(ct, proto.tcp.state);
+
 		break;
 	case IPPROTO_UDP:
 		e->flags |= RETIS_CT_PROTO_UDP;
@@ -171,8 +176,8 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	if (!e)
 		return 0;
 
+	e->state = (u8) (nfct & NFCT_INFOMASK);
 	process_nf_conn(e, nf_conn);
-	e->state = (u8) nfct & NFCT_INFOMASK;
 
 	return 0;
 )

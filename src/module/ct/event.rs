@@ -1,12 +1,6 @@
 use std::fmt;
 
-use anyhow::Result;
-
-use super::bpf::*;
-use crate::{
-    core::events::{bpf::BpfRawSection, *},
-    event_section, event_section_factory,
-};
+use crate::{core::events::*, event_section};
 
 #[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
 pub(crate) enum ZoneDir {
@@ -109,6 +103,8 @@ pub(crate) struct CtEvent {
     pub(crate) reply: CtTuple,
     /// Packet's conntrack state
     pub(crate) state: CtState,
+    /// TCP state; if any
+    pub(crate) tcp_state: Option<String>,
 }
 
 impl EventFmt for CtEvent {
@@ -127,7 +123,8 @@ impl EventFmt for CtEvent {
             (CtProto::Tcp(tcp_orig), CtProto::Tcp(tcp_reply)) => {
                 write!(
                     f,
-                    "tcp orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
+                    "tcp ({}) orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
+                    self.tcp_state.as_ref().unwrap_or(&"UNKNOWN".to_string()),
                     self.orig.ip.src,
                     tcp_orig.sport,
                     self.orig.ip.dst,
@@ -176,15 +173,5 @@ impl EventFmt for CtEvent {
         }
 
         Ok(())
-    }
-}
-
-#[derive(Default)]
-#[event_section_factory(CtEvent)]
-pub(crate) struct CtEventFactory {}
-
-impl RawEventSectionFactory for CtEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        Ok(Box::new(unmarshal_ct(raw_sections)?))
     }
 }
