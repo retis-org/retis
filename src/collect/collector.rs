@@ -90,6 +90,7 @@ pub(crate) struct Collectors {
     tracking_gc: Option<TrackingGC>,
     // Keep a reference on the tracking configuration map.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
+    loaded: Vec<ModuleId>,
 }
 
 impl Collectors {
@@ -110,6 +111,7 @@ impl Collectors {
             run: Running::new(),
             tracking_gc: None,
             tracking_config_map: None,
+            loaded: Vec::new(),
         })
     }
 
@@ -157,7 +159,6 @@ impl Collectors {
         }
 
         // Try initializing all collectors.
-        let mut loaded = Vec::new();
         for name in &collect.args()?.collectors {
             let id = ModuleId::from_str(name)?;
             let c = self
@@ -181,7 +182,7 @@ impl Collectors {
                 bail!("Could not initialize the {} collector: {}", id, e);
             }
 
-            loaded.push(id);
+            self.loaded.push(id);
 
             // If the collector provides known kernel types, meaning we have a
             // dynamic collector, retrieve and store them for later processing.
@@ -196,7 +197,7 @@ impl Collectors {
         if collect.default_collectors_list {
             info!(
                 "Collector(s) started: {}",
-                loaded
+                self.loaded
                     .iter()
                     .map(|id| id.to_str())
                     .collect::<Vec<&str>>()
@@ -262,11 +263,17 @@ impl Collectors {
         // Attach probes and start collectors.
         self.probes.attach()?;
 
-        self.modules.collectors().iter_mut().for_each(|(id, c)| {
+        for id in &self.loaded {
+            let c = self
+                .modules
+                .get_collector(id)
+                .ok_or_else(|| anyhow!("unknown collector {}", id.to_str()))?;
+
+            debug!("Starting collector {id}");
             if c.start().is_err() {
-                warn!("Could not start collector '{id}'");
+                warn!("Could not start collector {id}");
             }
-        });
+        }
 
         Ok(())
     }
@@ -278,12 +285,17 @@ impl Collectors {
         self.probes.detach()?;
         self.probes.report_counters()?;
 
-        self.modules.collectors().iter_mut().for_each(|(id, c)| {
-            debug!("Stopping {}", id.to_str());
+        for id in &self.loaded {
+            let c = self
+                .modules
+                .get_collector(id)
+                .ok_or_else(|| anyhow!("unknown collector {}", id.to_str()))?;
+
+            debug!("Stopping collector {id}");
             if c.stop().is_err() {
-                warn!("Could not stop '{}'", id.to_str());
+                warn!("Could not stop collector {id}");
             }
-        });
+        }
 
         // We're not actually stopping but just joining. The actual
         // termination got performed implicitly by the signal handler.
