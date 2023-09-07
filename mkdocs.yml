@@ -11,6 +11,8 @@ nav:
   - Installation: install.md
   - Requirements: requirements.md
   - Contributing: CONTRIBUTING.md
+  - Modules:
+      - OVS: modules/ovs.md
 
 theme: readthedocs
 plugins:
