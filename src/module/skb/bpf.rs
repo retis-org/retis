@@ -278,19 +278,31 @@ struct RawDevEvent {
 }
 unsafe impl Plain for RawDevEvent {}
 
-pub(super) fn unmarshal_dev(raw_section: &BpfRawSection) -> Result<SkbDevEvent> {
+/// Unmarshal net device info. Can return Ok(None) in case the info does not
+/// look like it's genuine (see below).
+pub(super) fn unmarshal_dev(raw_section: &BpfRawSection) -> Result<Option<SkbDevEvent>> {
     let raw = parse_raw_section::<RawDevEvent>(raw_section)?;
-    let mut event = SkbDevEvent::default();
 
-    let dev_name = str::from_utf8(&raw.dev_name)?.trim_end_matches(char::from(0));
-    event.name = dev_name.to_string();
-    event.ifindex = raw.ifindex;
+    // Retrieving information from `skb->dev` is tricky as this is inside an
+    // union and there is no way we can know of the data is valid. Try our best
+    // below to report an empty section if the data does not look like what it
+    // should.
+    let dev_name = match str::from_utf8(&raw.dev_name) {
+        Ok(s) => s.trim_end_matches(char::from(0)),
+        Err(_) => return Ok(None),
+    };
 
+    // Not much more we can do, construct the event section.
+    let mut event = SkbDevEvent {
+        name: dev_name.to_string(),
+        ifindex: raw.ifindex,
+        ..Default::default()
+    };
     if raw.iif > 0 {
         event.rx_ifindex = Some(raw.iif);
     }
 
-    Ok(event)
+    Ok(Some(event))
 }
 
 /// Net namespace information retrieved from skbs.

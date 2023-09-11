@@ -389,15 +389,19 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 	head = BPF_CORE_READ(skb, head);
 
 	if (cfg->sections & BIT(COLLECT_DEV) && dev) {
-		struct skb_netdev_event *e =
-			get_event_section(event, COLLECTOR_SKB, COLLECT_DEV,
-					  sizeof(*e));
-		if (!e)
-			return 0;
+		int ifindex = BPF_CORE_READ(dev, ifindex);
 
-		bpf_probe_read(e->dev_name, IFNAMSIZ, dev->name);
-		e->ifindex = BPF_CORE_READ(dev, ifindex);
-		e->iif = BPF_CORE_READ(skb, skb_iif);
+		if (ifindex > 0) {
+			struct skb_netdev_event *e =
+				get_event_section(event, COLLECTOR_SKB,
+						  COLLECT_DEV, sizeof(*e));
+			if (!e)
+				return 0;
+
+			bpf_probe_read(e->dev_name, IFNAMSIZ, dev->name);
+			e->ifindex = ifindex;
+			e->iif = BPF_CORE_READ(skb, skb_iif);
+		}
 	}
 
 	if (cfg->sections & BIT(COLLECT_NS)) {
