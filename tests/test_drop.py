@@ -1,8 +1,8 @@
 from testlib import Retis, assert_events_present
 
 
-def test_drop_sanity(two_ports_skb):
-    ns = two_ports_skb
+def test_drop_sanity(two_ns_simple):
+    ns = two_ns_simple
     retis = Retis()
 
     retis.collect("-c", "skb-drop,skb", "-f", "tcp")

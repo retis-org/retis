@@ -45,7 +45,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture
-def two_ports_skb(netns):
+def two_ns_simple(netns):
     """Fixture that creates two netns connected through a veth pair."""
     ipr = IPRoute()
 
