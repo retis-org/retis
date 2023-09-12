@@ -49,19 +49,48 @@ struct nft_event {
 	u8 policy;
 } __attribute__((packed));
 
+struct nft_rule_dp___5_17_0 {
+	u64	is_last:1,
+		handle:42;
+} __attribute__((preserve_access_index));
+
+struct nft_rule___3_13_0 {
+	u64	handle:42;
+} __attribute__((preserve_access_index));
+
+/* Specialized macro. Deals with different types with similar layout. */
+#define __nft_get_rule_handle(__info, __verdict, __rule) ({	\
+	if (BPF_CORE_READ_BITFIELD_PROBED(info, type) == NFT_TRACETYPE_RETURN || \
+	    BPF_CORE_READ(verdict, code) == NFT_CONTINUE)	\
+		return -1;					\
+	(u64)BPF_CORE_READ_BITFIELD_PROBED(__rule, handle); })
+
+/* Handles both legacy and current upstream types. is_last for
+ * nft_rule_dp acts as a flag to identify a trailing rule and acts
+ * as a NULL rule marker.
+ */
 static __always_inline s64 nft_get_rule_handle(const struct nft_traceinfo *info,
 					       const struct nft_verdict *verdict,
-					       const struct nft_rule_dp *rule)
+					       const void *rule)
 {
 	if (!rule || !verdict || !info)
 		return -1;
 
-	if (BPF_CORE_READ_BITFIELD_PROBED(rule, is_last) ||
-	    (BPF_CORE_READ_BITFIELD_PROBED(info, type) == NFT_TRACETYPE_RETURN) ||
-	    (BPF_CORE_READ(verdict, code) == NFT_CONTINUE))
-		return -1;
+	if (bpf_core_type_exists(struct nft_rule_dp___5_17_0)) {
+		const struct nft_rule_dp___5_17_0 *r = rule;
+		if (BPF_CORE_READ_BITFIELD_PROBED(r, is_last))
+			return -1;
 
-	return (u64)BPF_CORE_READ_BITFIELD_PROBED(rule, handle);
+		return __nft_get_rule_handle(info, verdict, r);
+	} else if (bpf_core_type_exists(struct nft_rule___3_13_0)){
+		const struct nft_rule___3_13_0 *r = rule;
+		return __nft_get_rule_handle(info, verdict, r);
+	} else {
+		/* This should emit a warning that must be returned by
+		 * userspace.
+		 */
+		return -1;
+	}
 }
 
 static __always_inline int nft_trace(struct nft_config *cfg,
@@ -69,7 +98,7 @@ static __always_inline int nft_trace(struct nft_config *cfg,
 				     const struct nft_traceinfo *info,
 				     const struct nft_chain *chain,
 				     const struct nft_verdict *verdict,
-				     const struct nft_rule_dp *rule,
+				     const void *rule,
 				     enum nft_trace_types type)
 {
 	struct nft_event *e;
@@ -156,6 +185,8 @@ const struct nft_chain *nft_get_chain_from_rule(struct retis_context *ctx,
 
 /* Depending on the kernel:
  * - rule is under info, chain is a parameter
+ *   - rule type is nft_rule
+ *   - rule type is nft_rule_dp
  * - rule is a parameter, chain is one of:
  *   - last->chain; if rule->is_last
  *   - info->basechain->chain; if !rule
@@ -166,7 +197,7 @@ const struct nft_chain *nft_get_chain_from_rule(struct retis_context *ctx,
 static __always_inline
 void nft_retrieve_rule(struct retis_context *ctx, struct nft_config *cfg,
 		       struct nft_traceinfo *info,
-		       const struct nft_rule_dp **rule,
+		       const void **rule,
 		       const struct nft_chain **chain)
 {
 	if (bpf_core_field_exists(info->rule)) {
@@ -197,10 +228,10 @@ const struct nft_verdict *nft_get_verdict(struct retis_context *ctx,
 
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	const struct nft_verdict *verdict;
-	const struct nft_rule_dp *rule;
 	const struct nft_chain *chain;
 	struct nft_traceinfo *info;
 	struct nft_config *cfg;
+	const void *rule;
 	u32 zero = 0;
 
 	cfg = bpf_map_lookup_elem(&nft_config_map, &zero);
