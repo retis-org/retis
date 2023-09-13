@@ -84,6 +84,99 @@ def two_ports_skb(netns):
 
 
 @pytest.fixture
+def three_ns_nat(netns):
+    """Fixture that creates three netns connected through veth pairs, a VIP and DNATing
+    packets in the middle"""
+    ipr = IPRoute()
+
+    # Create the netns
+    ns0 = netns.add("ns0")
+    ns1 = netns.add("ns1")
+    ns2 = netns.add("ns2")
+
+    # Create the veth pairs
+    ipr.link("add", ifname="veth01", peer="veth10", kind="veth")
+    ipr.link("add", ifname="veth12", peer="veth21", kind="veth")
+
+    # Wait until links appear
+    peer, veth = ipr.poll(
+        ipr.link, "dump", timeout=5, ifname=lambda x: x in ("veth01", "veth10")
+    )
+    peer, veth = ipr.poll(
+        ipr.link, "dump", timeout=5, ifname=lambda x: x in ("veth12", "veth21")
+    )
+
+    # Move ifaces to their netns
+    ipr.link("set", ifname="veth01", net_ns_fd="ns0")
+    ipr.link("set", ifname="veth10", net_ns_fd="ns1")
+    ipr.link("set", ifname="veth12", net_ns_fd="ns1")
+    ipr.link("set", ifname="veth21", net_ns_fd="ns2")
+
+    # Setup first pair
+    ns0.link("set", ifname="veth01", state="up")
+    ns1.link("set", ifname="veth10", state="up")
+    ns0.addr(
+        "add",
+        index=ns0.link_lookup(ifname="veth01")[0],
+        address="10.0.42.2",
+        prefixlen=24,
+    )
+    ns1.addr(
+        "add",
+        index=ns1.link_lookup(ifname="veth10")[0],
+        address="10.0.42.1",
+        prefixlen=24,
+    )
+
+    # Setup second pair
+    ns1.link("set", ifname="veth12", state="up")
+    ns2.link("set", ifname="veth21", state="up")
+    ns1.addr(
+        "add",
+        index=ns1.link_lookup(ifname="veth12")[0],
+        address="10.0.43.1",
+        prefixlen=24,
+    )
+    ns2.addr(
+        "add",
+        index=ns2.link_lookup(ifname="veth21")[0],
+        address="10.0.43.2",
+        prefixlen=24,
+    )
+
+    # Setup a VIP on ns1/lo
+    ns1.link("set", ifname="lo", state="up")
+    ns1.addr(
+        "add",
+        index=ns1.link_lookup(ifname="lo")[0],
+        address="10.0.255.1",
+        prefixlen=32,
+    )
+
+    # Enable forwarding and DNAT in ns1
+    netns.run("ns1", "sysctl", "-w", "net.ipv4.conf.all.forwarding=1")
+    netns.run(
+        "ns1",
+        "nft",
+        """
+table nat {
+        chain prerouting {
+                type nat hook prerouting priority -100;
+                ip daddr 10.0.255.1/32 dnat to 10.0.43.2
+        }
+}
+        """,
+    )
+
+    # Add routes ns0 <> ns2
+    ns0.route("add", dst="10.0.255.1/32", gateway="10.0.42.1")
+    ns2.route("add", dst="10.0.42.0/24", gateway="10.0.43.1")
+
+    ipr.close()
+    yield netns
+
+
+@pytest.fixture
 def two_port_ovs(ovs, netns):
     """Fixture that creates two netns connected together through OVS."""
     ipr = IPRoute()
