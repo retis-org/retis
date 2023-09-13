@@ -291,7 +291,9 @@ def is_subset(superset, subset, aliases):
     name, the value is stored in the provided hash table indexed by the alias
     name (no verification is made). If a value starts with '*' followed
     by an alias name, the value is retrieved from the aliases hash table
-    and is checked.
+    and is checked. If a value starts with '!' followed by an alias name, the
+    value is retrieved from the aliases hash table and is checked to make sure
+    it does not match.
 
     E.g:
         > aliases = {}
@@ -324,6 +326,12 @@ def is_subset(superset, subset, aliases):
             new_value = aliases.get(value[1:], None)
             print(f"Restoring value from aliases {value} -> {new_value}")
             value = new_value
+        if isinstance(value, str) and len(value) > 1 and value[0] == "!":
+            # Load alias & compare it does not match the current value
+            old_value = aliases.get(value[1:], None)
+            if old_value == superset[key]:
+                return (False, f"{old_value} is equal to {superset[key]}")
+            continue
 
         # Recursively assert nested dictionaries
         if isinstance(value, dict):
