@@ -15,7 +15,8 @@ dnf install -y \
     libpcap-devel \
     git \
     python3-pip \
-    socat
+    socat \
+    nftables
 
     python3 -m pip install pytest pyroute2
 SCRIPT
@@ -60,7 +61,8 @@ Vagrant.configure("2") do |config|
           pkg-config \
           python3-pip \
           openvswitch-switch \
-          socat
+          socat \
+          nftables
 
       su vagrant -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy"
       python3 -m pip install pytest pyroute2
