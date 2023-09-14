@@ -37,22 +37,15 @@ impl EventFmt for SkbEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
         let mut len = 0;
 
-        let mut first = true;
-        let space = |f: &mut fmt::Formatter, first: &mut bool| {
-            if !*first {
-                write!(f, " ")?;
-            }
-            *first = false;
-            Ok(())
-        };
+        let mut space = DelimWriter::new(' ');
 
         if let Some(ns) = &self.ns {
-            space(f, &mut first)?;
+            space.write(f)?;
             write!(f, "ns {}", ns.netns)?;
         }
 
         if let Some(dev) = &self.dev {
-            space(f, &mut first)?;
+            space.write(f)?;
 
             if dev.ifindex > 0 {
                 write!(f, "if {}", dev.ifindex)?;
@@ -66,7 +59,7 @@ impl EventFmt for SkbEvent {
         }
 
         if let Some(eth) = &self.eth {
-            space(f, &mut first)?;
+            space.write(f)?;
 
             let ethertype = match helpers::etype_str(eth.etype) {
                 Some(s) => format!(" {}", s),
@@ -81,7 +74,7 @@ impl EventFmt for SkbEvent {
         }
 
         if let Some(arp) = &self.arp {
-            space(f, &mut first)?;
+            space.write(f)?;
 
             match arp.operation {
                 ArpOperation::Request => {
@@ -98,7 +91,7 @@ impl EventFmt for SkbEvent {
         }
 
         if let Some(ip) = &self.ip {
-            space(f, &mut first)?;
+            space.write(f)?;
 
             // The below is not 100% correct:
             // - IPv4: we use the fixed 20 bytes size as options are rarely used.
@@ -165,7 +158,7 @@ impl EventFmt for SkbEvent {
         }
 
         if let Some(tcp) = &self.tcp {
-            space(f, &mut first)?;
+            space.write(f)?;
 
             let mut flags = Vec::new();
             if tcp.flags & 1 << 0 != 0 {
@@ -203,20 +196,20 @@ impl EventFmt for SkbEvent {
         }
 
         if let Some(udp) = &self.udp {
-            space(f, &mut first)?;
+            space.write(f)?;
             let len = udp.len;
             // Substract the UDP header size when reporting the length.
             write!(f, "len {}", len.saturating_sub(8))?;
         }
 
         if let Some(icmp) = &self.icmp {
-            space(f, &mut first)?;
+            space.write(f)?;
             // TODO: text version
             write!(f, "type {} code {}", icmp.r#type, icmp.code)?;
         }
 
         if self.meta.is_some() || self.data_ref.is_some() {
-            space(f, &mut first)?;
+            space.write(f)?;
             write!(f, "skb [")?;
 
             if let Some(meta) = &self.meta {

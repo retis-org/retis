@@ -1,6 +1,8 @@
 //! Rust<>BPF types definitions for the ovs module.
 //! Please keep this file in sync with its BPF counterpart in bpf/.
 
+use std::net::{Ipv4Addr, Ipv6Addr};
+
 use anyhow::{bail, Result};
 use plain::Plain;
 
@@ -26,6 +28,10 @@ pub(crate) enum OvsDataType {
     ActionExecTrack = 6,
     // OUTPUT action specific data.
     OutputAction = 7,
+    /// Recirculate action.
+    RecircAction = 8,
+    /// Conntrack action.
+    ConntrackAction = 9,
 }
 
 impl OvsDataType {
@@ -40,6 +46,8 @@ impl OvsDataType {
             5 => ActionExec,
             6 => ActionExecTrack,
             7 => OutputAction,
+            8 => RecircAction,
+            9 => ConntrackAction,
             x => bail!("Can't construct a OvsDataType from {}", x),
         })
     }
@@ -85,8 +93,8 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
     // Any of the action-related bpf events (e.g BpfActionTrackEvent, BpfActionTrackEvent, etc)
     // might have been received before. If so, event.event is already a valid
     // OvsEventType::Action.
-    match &event.event {
-        OvsEventType::Action(mut action) => {
+    match &mut event.event {
+        OvsEventType::Action(action) => {
             // One of the specific action events has already been received and it has initialized
             // the action.data enum. Only the common data has to be set here.
             action.recirc_id = raw.recirc_id;
@@ -105,12 +113,12 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
                     4 => OvsAction::PushVlan,
                     5 => OvsAction::PopVlan,
                     6 => OvsAction::Sample,
-                    7 => OvsAction::Recirc,
+                    7 => OvsAction::Recirc(OvsActionRecirc::default()),
                     8 => OvsAction::Hash,
                     9 => OvsAction::PushMpls,
                     10 => OvsAction::PopMpls,
                     11 => OvsAction::SetMasked,
-                    12 => OvsAction::Ct,
+                    12 => OvsAction::Ct(OvsActionCt::default()),
                     13 => OvsAction::Trunc,
                     14 => OvsAction::PushEth,
                     15 => OvsAction::PopEth,
@@ -122,6 +130,10 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
                     21 => OvsAction::CheckPktLen,
                     22 => OvsAction::AddMpls,
                     23 => OvsAction::DecTtl,
+                    // The private OVS_ACTION_ATTR_SET_TO_MASKED action is used
+                    // in the same way as OVS_ACTION_ATTR_SET_MASKED. Use only
+                    // one action to avoid confusion
+                    25 => OvsAction::SetMasked,
                     val => bail!("Unsupported action id {val}"),
                 },
                 recirc_id: raw.recirc_id,
@@ -179,41 +191,129 @@ pub(super) fn unmarshall_exec_track(
     Ok(())
 }
 
-/// OVS output action data.
-#[derive(Default)]
-#[repr(C)]
-struct BpfOvsActionOutput {
-    /// Output port.
-    port: u32,
-}
-unsafe impl Plain for BpfOvsActionOutput {}
-
-pub(super) fn unmarshall_output(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    let raw = parse_raw_section::<BpfOvsActionOutput>(raw_section)?;
-    let output = OvsActionOutput { port: raw.port };
-
+fn update_action_event(event: &mut OvsEvent, action: OvsAction) -> Result<()> {
     // Any of the action-related bpf events (e.g BpfActionEvent, BpfActionTrackEvent, etc)
     // might have been received before. If so, event.event is already a valid
     // OvsEventType::Action.
     match &mut event.event {
-        OvsEventType::Action(ref mut action) => action.action = OvsAction::Output(output),
+        OvsEventType::Action(ref mut event) => event.action = action,
         OvsEventType::Undefined => {
             // We received the concrete action data type before the generic one.
             // Initialize the Action Event.
             event.event = OvsEventType::Action(ActionEvent {
-                action: OvsAction::Output(output),
+                action,
                 ..ActionEvent::default()
             });
         }
         other => {
             bail!(
                 "Conflicting OVS event types. Received {:?} data type but event is already {:#?}",
-                OvsDataType::OutputAction,
+                action,
                 other
             );
         }
     }
     Ok(())
+}
+
+pub(super) fn unmarshall_output(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
+    let output = parse_raw_section::<OvsActionOutput>(raw_section)?;
+
+    update_action_event(event, OvsAction::Output(output))
+}
+
+pub(super) fn unmarshall_recirc(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
+    let recirc = parse_raw_section::<OvsActionRecirc>(raw_section)?;
+    update_action_event(event, OvsAction::Recirc(recirc))
+}
+
+pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
+    #[repr(C)]
+    union IP {
+        ipv4: u32,
+        ipv6: u128,
+    }
+
+    #[repr(C)]
+    struct BpfConntrackAction {
+        flags: u32,
+        zone_id: u16,
+        min_addr: IP,
+        max_addr: IP,
+        min_port: u16,
+        max_port: u16,
+    }
+
+    unsafe impl Plain for BpfConntrackAction {}
+
+    impl Default for BpfConntrackAction {
+        fn default() -> Self {
+            BpfConntrackAction {
+                flags: 0,
+                zone_id: 0,
+                min_addr: IP { ipv6: 0 },
+                max_addr: IP { ipv6: 0 },
+                min_port: 0,
+                max_port: 0,
+            }
+        }
+    }
+
+    let raw = parse_raw_section::<BpfConntrackAction>(raw_section)?;
+    let nat = if raw.flags & R_OVS_CT_NAT != 0 {
+        let dir = match raw.flags {
+            f if f & R_OVS_CT_NAT_SRC != 0 => Some(NatDirection::Src),
+            f if f & R_OVS_CT_NAT_DST != 0 => Some(NatDirection::Dst),
+            _ => None,
+        };
+
+        let (min_addr, max_addr) = if raw.flags & R_OVS_CT_NAT_RANGE_MAP_IPS != 0 {
+            if raw.flags & R_OVS_CT_IP4 != 0 {
+                let min_addr = unsafe { raw.min_addr.ipv4 };
+                let max_addr = unsafe { raw.max_addr.ipv4 };
+                (
+                    Some(Ipv4Addr::from(u32::from_be(min_addr)).to_string()),
+                    Some(Ipv4Addr::from(u32::from_be(max_addr)).to_string()),
+                )
+            } else if raw.flags & R_OVS_CT_IP6 != 0 {
+                let min_addr = unsafe { raw.min_addr.ipv6 };
+                let max_addr = unsafe { raw.max_addr.ipv6 };
+                (
+                    Some(Ipv6Addr::from(u128::from_be(min_addr)).to_string()),
+                    Some(Ipv6Addr::from(u128::from_be(max_addr)).to_string()),
+                )
+            } else {
+                bail!("Unknown ct address family");
+            }
+        } else {
+            (None, None)
+        };
+
+        let (min_port, max_port) = if raw.flags & R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED != 0 {
+            (
+                Some(u16::from_be(raw.min_port)),
+                Some(u16::from_be(raw.max_port)),
+            )
+        } else {
+            (None, None)
+        };
+        Some(OvsActionCtNat {
+            dir,
+            min_addr,
+            max_addr,
+            min_port,
+            max_port,
+        })
+    } else {
+        None
+    };
+
+    let ct = OvsActionCt {
+        flags: raw.flags,
+        zone_id: raw.zone_id,
+        nat,
+    };
+    update_action_event(event, OvsAction::Ct(ct))
 }
 
 pub(super) fn unmarshall_recv(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {

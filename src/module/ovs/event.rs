@@ -45,6 +45,8 @@ impl RawEventSectionFactory for OvsEventFactory {
                 OvsDataType::ActionExec => unmarshall_exec(section, &mut event),
                 OvsDataType::ActionExecTrack => unmarshall_exec_track(section, &mut event),
                 OvsDataType::OutputAction => unmarshall_output(section, &mut event),
+                OvsDataType::RecircAction => unmarshall_recirc(section, &mut event),
+                OvsDataType::ConntrackAction => unmarshall_ct(section, &mut event),
             }?;
         }
 
@@ -306,7 +308,7 @@ impl EventFmt for RecvUpcallEvent {
 }
 
 /// OVS output action data.
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
 pub(crate) struct ActionEvent {
     /// Action to be executed.
     #[serde(flatten)]
@@ -321,15 +323,98 @@ pub(crate) struct ActionEvent {
 
 impl EventFmt for ActionEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        write!(f, "exec")?;
-
-        match self.action {
-            OvsAction::Output(a) => write!(f, " oport {}", a.port)?,
-            other => write!(f, " {:?}", other)?,
+        if self.recirc_id != 0 {
+            write!(f, "[recirc_id {:#x}] ", self.recirc_id)?;
         }
 
-        if self.recirc_id != 0 {
-            write!(f, " recirc_id {}", self.recirc_id)?;
+        write!(f, "exec")?;
+
+        match &self.action {
+            OvsAction::Unspecified => write!(f, " (unspecified)")?,
+            OvsAction::Output(a) => write!(f, " oport {}", a.port)?,
+            OvsAction::Userspace => write!(f, " userspace")?,
+            OvsAction::Set => write!(f, " tunnel_set")?,
+            OvsAction::PushVlan => write!(f, " push_vlan")?,
+            OvsAction::PopVlan => write!(f, " pop_vlan")?,
+            OvsAction::Sample => write!(f, " sample")?,
+            OvsAction::Recirc(a) => write!(f, " recirc {:#x}", a.id)?,
+            OvsAction::Hash => write!(f, " hash")?,
+            OvsAction::PushMpls => write!(f, " push_mpls")?,
+            OvsAction::PopMpls => write!(f, " pop_mpls")?,
+            OvsAction::SetMasked => write!(f, " set_masked")?,
+            OvsAction::Ct(ct) => {
+                write!(f, " ct zone {}", ct.zone_id)?;
+
+                if let Some(nat) = &ct.nat {
+                    write!(f, " nat")?;
+                    if let Some(dir) = &nat.dir {
+                        match dir {
+                            NatDirection::Src => write!(f, "(src")?,
+                            NatDirection::Dst => write!(f, "(dst")?,
+                        }
+
+                        if ct.flags & R_OVS_CT_NAT_RANGE_MAP_IPS != 0 {
+                            if let (Some(min_addr), Some(max_addr)) =
+                                (nat.min_addr.as_ref(), nat.max_addr.as_ref())
+                            {
+                                if min_addr.eq(max_addr) {
+                                    write!(f, "={}", min_addr)?;
+                                } else {
+                                    write!(f, "={}-{}", min_addr, max_addr)?;
+                                }
+                            }
+                        }
+                        if ct.flags & R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED != 0 {
+                            if let (Some(min_port), Some(max_port)) =
+                                (nat.min_port.as_ref(), nat.max_port.as_ref())
+                            {
+                                if min_port.eq(max_port) {
+                                    write!(f, ":{}", min_port)?;
+                                } else {
+                                    write!(f, ":{}-{}", min_port, max_port)?;
+                                }
+                            }
+                        }
+                        write!(f, ")")?;
+                    }
+                }
+
+                if ct.is_commit()
+                    || ct.is_force()
+                    || ct.is_persistent()
+                    || ct.is_hash()
+                    || ct.is_random()
+                {
+                    let mut flags = Vec::new();
+                    if ct.is_commit() {
+                        flags.push("commit");
+                    }
+                    if ct.is_force() {
+                        flags.push("force");
+                    }
+                    if ct.is_persistent() {
+                        flags.push("persistent");
+                    }
+                    if ct.is_hash() {
+                        flags.push("hash");
+                    }
+                    if ct.is_random() {
+                        flags.push("random");
+                    }
+                    write!(f, " {}", flags.join(","))?;
+                }
+            }
+            OvsAction::Trunc => write!(f, " trunc")?,
+            OvsAction::PushEth => write!(f, " push_eth")?,
+            OvsAction::PopEth => write!(f, " pop_eth")?,
+            OvsAction::CtClear => write!(f, " ct_clear")?,
+            OvsAction::PushNsh => write!(f, " push_nsh")?,
+            OvsAction::PopNsh => write!(f, " pop_nsh")?,
+            OvsAction::Meter => write!(f, " meter")?,
+            OvsAction::Clone => write!(f, " clone")?,
+            OvsAction::CheckPktLen => write!(f, " check_pkt_len")?,
+            OvsAction::AddMpls => write!(f, " add_mpls")?,
+            OvsAction::DecTtl => write!(f, " dec_ttl")?,
         }
 
         if let Some(p) = self.queue_id {
@@ -340,7 +425,7 @@ impl EventFmt for ActionEvent {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
 #[serde(tag = "action")]
 pub(crate) enum OvsAction {
     #[serde(rename = "unspecified")]
@@ -359,7 +444,7 @@ pub(crate) enum OvsAction {
     #[serde(rename = "sample")]
     Sample,
     #[serde(rename = "recirc")]
-    Recirc,
+    Recirc(OvsActionRecirc),
     #[serde(rename = "hash")]
     Hash,
     #[serde(rename = "push_mpls")]
@@ -369,7 +454,7 @@ pub(crate) enum OvsAction {
     #[serde(rename = "set_masked")]
     SetMasked,
     #[serde(rename = "ct")]
-    Ct,
+    Ct(OvsActionCt),
     #[serde(rename = "trunc")]
     Trunc,
     #[serde(rename = "push_eth")]
@@ -394,11 +479,100 @@ pub(crate) enum OvsAction {
     DecTtl,
 }
 
+// Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
 /// OVS output action data.
 #[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[repr(C)]
 pub(crate) struct OvsActionOutput {
     /// Output port.
     pub(crate) port: u32,
+}
+unsafe impl Plain for OvsActionOutput {}
+
+// Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
+/// OVS recirc action data.
+#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[repr(C)]
+pub(crate) struct OvsActionRecirc {
+    /// Recirculation id.
+    pub(crate) id: u32,
+}
+unsafe impl Plain for OvsActionRecirc {}
+
+/// OVS conntrack flags
+// Keep in sync with their conterpart in bpf/kernel_exec_tp.bpf.c
+pub(super) const R_OVS_CT_COMMIT: u32 = 1 << 0;
+pub(super) const R_OVS_CT_FORCE: u32 = 1 << 1;
+pub(super) const R_OVS_CT_IP4: u32 = 1 << 2;
+pub(super) const R_OVS_CT_IP6: u32 = 1 << 3;
+pub(super) const R_OVS_CT_NAT: u32 = 1 << 4;
+pub(super) const R_OVS_CT_NAT_SRC: u32 = 1 << 5;
+pub(super) const R_OVS_CT_NAT_DST: u32 = 1 << 6;
+pub(super) const R_OVS_CT_NAT_RANGE_MAP_IPS: u32 = 1 << 7;
+pub(super) const R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED: u32 = 1 << 8;
+pub(super) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM: u32 = 1 << 9;
+pub(super) const R_OVS_CT_NAT_RANGE_PERSISTENT: u32 = 1 << 10;
+pub(super) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY: u32 = 1 << 11;
+
+/// OVS conntrack action data.
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+pub(crate) struct OvsActionCt {
+    /// Flags
+    pub(crate) flags: u32,
+    /// Conntrack zone
+    pub(crate) zone_id: u16,
+    /// NAT
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) nat: Option<OvsActionCtNat>,
+}
+
+impl OvsActionCt {
+    pub(crate) fn is_commit(&self) -> bool {
+        self.flags & R_OVS_CT_COMMIT != 0
+    }
+    pub(crate) fn is_force(&self) -> bool {
+        self.flags & R_OVS_CT_FORCE != 0
+    }
+    #[allow(dead_code)]
+    pub(crate) fn is_ipv4(&self) -> bool {
+        self.flags & R_OVS_CT_IP4 != 0
+    }
+    #[allow(dead_code)]
+    pub(crate) fn is_ipv6(&self) -> bool {
+        self.flags & R_OVS_CT_IP6 != 0
+    }
+    pub(crate) fn is_persistent(&self) -> bool {
+        self.flags & R_OVS_CT_NAT_RANGE_PERSISTENT != 0
+    }
+    pub(crate) fn is_hash(&self) -> bool {
+        self.flags & R_OVS_CT_NAT_RANGE_PROTO_RANDOM != 0
+    }
+    pub(crate) fn is_random(&self) -> bool {
+        self.flags & R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY != 0
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+pub(crate) enum NatDirection {
+    #[default]
+    #[serde(rename = "src")]
+    Src,
+    #[serde(rename = "dst")]
+    Dst,
+}
+/// OVS NAT action data.
+#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+pub(crate) struct OvsActionCtNat {
+    /// NAT direction, if any
+    pub(crate) dir: Option<NatDirection>,
+    /// Minimum address in address range, if any
+    pub(crate) min_addr: Option<String>,
+    /// Maximum address in address range, if any
+    pub(crate) max_addr: Option<String>,
+    /// Minimum port in port range, if any
+    pub(crate) min_port: Option<u16>,
+    /// Maximum port in port range, if any
+    pub(crate) max_port: Option<u16>,
 }
 
 #[cfg(test)]
@@ -407,83 +581,104 @@ mod tests {
     use anyhow::{anyhow, Result};
     use serde_json::Value;
 
-    static EVENTS: [(&'static str, OvsEvent); 6] = [
-        // Upcall event
-        (
-            r#"{"cmd":1,"cpu":0,"event_type":"upcall","port":4195744766}"#,
-            OvsEvent {
-                event: OvsEventType::Upcall(UpcallEvent {
-                    cmd: 1,
-                    cpu: 0,
-                    port: 4195744766,
-                }),
-            },
-        ),
-        // Action event
-        (
-            r#"{"action":"output","event_type":"action_execute","port":2,"queue_id":1361394472,"recirc_id":0}"#,
-            OvsEvent {
-                event: OvsEventType::Action(ActionEvent {
-                    action: OvsAction::Output(OvsActionOutput { port: 2 }),
-                    recirc_id: 0,
-                    queue_id: Some(1361394472),
-                }),
-            },
-        ),
-        // Upcall enqueue event
-        (
-            r#"{"cmd":1,"event_type":"upcall_enqueue","queue_id":3316322986,"ret":0,"upcall_cpu":0,"port":4195744766,"upcall_ts":61096236973661}"#,
-            OvsEvent {
-                event: OvsEventType::UpcallEnqueue(UpcallEnqueueEvent {
-                    ret: 0,
-                    cmd: 1,
-                    port: 4195744766,
-                    upcall_ts: 61096236973661,
-                    upcall_cpu: 0,
-                    queue_id: 3316322986,
-                }),
-            },
-        ),
-        // Upcall return event
-        (
-            r#"{"event_type":"upcall_return","ret":0,"upcall_cpu":0,"upcall_ts":61096236973661}"#,
-            OvsEvent {
-                event: OvsEventType::UpcallReturn(UpcallReturnEvent {
-                    ret: 0,
-                    upcall_ts: 61096236973661,
-                    upcall_cpu: 0,
-                }),
-            },
-        ),
-        // Operation event exec
-        (
-            r#"{"batch_idx":0,"batch_ts":61096237019698,"event_type":"flow_operation","op_type":"exec","queue_id":3316322986}"#,
-            OvsEvent {
-                event: OvsEventType::Operation(OperationEvent {
-                    op_type: 0,
-                    queue_id: 3316322986,
-                    batch_ts: 61096237019698,
-                    batch_idx: 0,
-                }),
-            },
-        ),
-        // Operation event put
-        (
-            r#"{"batch_idx":0,"batch_ts":61096237019698,"event_type":"flow_operation","op_type":"put","queue_id":3316322986}"#,
-            OvsEvent {
-                event: OvsEventType::Operation(OperationEvent {
-                    op_type: 1,
-                    queue_id: 3316322986,
-                    batch_ts: 61096237019698,
-                    batch_idx: 0,
-                }),
-            },
-        ),
-    ];
-
     #[test]
-    fn test_event_to_json() -> Result<()> {
-        for (event_json, event) in EVENTS.iter() {
+    fn test_event_to_from_json() -> Result<()> {
+        let events: [(&'static str, OvsEvent); 7] = [
+            // Upcall event
+            (
+                r#"{"cmd":1,"cpu":0,"event_type":"upcall","port":4195744766}"#,
+                OvsEvent {
+                    event: OvsEventType::Upcall(UpcallEvent {
+                        cmd: 1,
+                        cpu: 0,
+                        port: 4195744766,
+                    }),
+                },
+            ),
+            // Action event
+            (
+                r#"{"action":"output","event_type":"action_execute","port":2,"queue_id":1361394472,"recirc_id":0}"#,
+                OvsEvent {
+                    event: OvsEventType::Action(ActionEvent {
+                        action: OvsAction::Output(OvsActionOutput { port: 2 }),
+                        recirc_id: 0,
+                        queue_id: Some(1361394472),
+                    }),
+                },
+            ),
+            // Upcall enqueue event
+            (
+                r#"{"cmd":1,"event_type":"upcall_enqueue","queue_id":3316322986,"ret":0,"upcall_cpu":0,"port":4195744766,"upcall_ts":61096236973661}"#,
+                OvsEvent {
+                    event: OvsEventType::UpcallEnqueue(UpcallEnqueueEvent {
+                        ret: 0,
+                        cmd: 1,
+                        port: 4195744766,
+                        upcall_ts: 61096236973661,
+                        upcall_cpu: 0,
+                        queue_id: 3316322986,
+                    }),
+                },
+            ),
+            // Upcall return event
+            (
+                r#"{"event_type":"upcall_return","ret":0,"upcall_cpu":0,"upcall_ts":61096236973661}"#,
+                OvsEvent {
+                    event: OvsEventType::UpcallReturn(UpcallReturnEvent {
+                        ret: 0,
+                        upcall_ts: 61096236973661,
+                        upcall_cpu: 0,
+                    }),
+                },
+            ),
+            // Operation event exec
+            (
+                r#"{"batch_idx":0,"batch_ts":61096237019698,"event_type":"flow_operation","op_type":"exec","queue_id":3316322986}"#,
+                OvsEvent {
+                    event: OvsEventType::Operation(OperationEvent {
+                        op_type: 0,
+                        queue_id: 3316322986,
+                        batch_ts: 61096237019698,
+                        batch_idx: 0,
+                    }),
+                },
+            ),
+            // Operation event put
+            (
+                r#"{"batch_idx":0,"batch_ts":61096237019698,"event_type":"flow_operation","op_type":"put","queue_id":3316322986}"#,
+                OvsEvent {
+                    event: OvsEventType::Operation(OperationEvent {
+                        op_type: 1,
+                        queue_id: 3316322986,
+                        batch_ts: 61096237019698,
+                        batch_idx: 0,
+                    }),
+                },
+            ),
+            // Conntrack action event
+            (
+                r#"{"action":"ct","event_type":"action_execute","flags":485,"nat":{"dir":"dst","max_addr":"10.244.1.30","max_port":36900,"min_addr":"10.244.1.3","min_port":36895},"recirc_id":34,"zone_id":20}"#,
+                OvsEvent {
+                    event: OvsEventType::Action(ActionEvent {
+                        action: OvsAction::Ct(OvsActionCt {
+                            zone_id: 20,
+                            flags: 485,
+                            nat: Some(OvsActionCtNat {
+                                dir: Some(NatDirection::Dst),
+                                min_addr: Some(String::from("10.244.1.3")),
+                                max_addr: Some(String::from("10.244.1.30")),
+                                min_port: Some(36895),
+                                max_port: Some(36900),
+                            }),
+                        }),
+                        recirc_id: 34,
+                        queue_id: None,
+                    }),
+                },
+            ),
+        ];
+
+        for (event_json, event) in events.iter() {
             let json = serde_json::to_string(event)
                 .map_err(|e| anyhow!("Failed to convert event {event:?} to json: {e}"))?;
             // Comparing json strings is error prone. Convert them to Values and compare those.
@@ -491,13 +686,7 @@ mod tests {
                 serde_json::from_str::<Value>(json.as_str()).unwrap(),
                 serde_json::from_str::<Value>(*event_json).unwrap()
             );
-        }
-        Ok(())
-    }
 
-    #[test]
-    fn test_json_to_event() -> Result<()> {
-        for (event_json, event) in EVENTS.iter() {
             let parsed: OvsEvent = serde_json::from_str(*event_json)
                 .map_err(|e| anyhow!("Failed to convert json '{event_json}' to event: {e}"))?;
             assert_eq!(&parsed, event);
