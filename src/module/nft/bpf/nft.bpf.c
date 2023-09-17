@@ -60,7 +60,7 @@ struct nft_rule___3_13_0 {
 
 /* Specialized macro. Deals with different types with similar layout. */
 #define __nft_get_rule_handle(__info, __verdict, __rule) ({	\
-	if (BPF_CORE_READ_BITFIELD_PROBED(info, type) == NFT_TRACETYPE_RETURN || \
+	if (BPF_CORE_READ_BITFIELD_PROBED(info, type) == NFT_TRACETYPE_RETURN && \
 	    BPF_CORE_READ(verdict, code) == NFT_CONTINUE)	\
 		return -1;					\
 	(u64)BPF_CORE_READ_BITFIELD_PROBED(__rule, handle); })
