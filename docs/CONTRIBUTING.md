@@ -6,12 +6,6 @@ This guide documents the process to get changes merged into this project, what
 one should expect, as well as prerequisites for pull-requests and patches to be
 considered acceptable.
 
-### Table of contents
-
-* [Reporting bugs](#reporting-bugs)
-* [Suggesting new features](#suggesting-new-features)
-* [Code contribution](#code-contribution)
-
 ## Reporting bugs
 
 Following the guidelines will help the community understand bug reports, which
@@ -122,3 +116,16 @@ flavor coding style for the BPF parts.
 1. If the pull-request has a conflict and cannot be merged, please rebase on the
    latest `main`. This can happen at any time, e.g. when other pull-requests are
    being merged.
+
+### Documentation preview
+
+HTTP documentation is automatically generated for releases and the
+`main` branch. However, if you want to generate a local preview of the
+documentation, you can use [MkDocs](https://www.mkdocs.org/) directly:
+
+```
+pip install -r docs/requirements.txt
+mkdocs serve
+```
+
+Then point your browser to `localhost:8000`.

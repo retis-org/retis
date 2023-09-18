@@ -1,0 +1,19 @@
+site_name: Retis
+site_description: Documentation for Retis, the Linux packet tracing tool
+site_author: The Retis community
+site_url: https://retis.readthedocs.io/
+docs_dir: docs/
+repo_name: GitHub
+repo_url: https://github.com/retis-org/retis
+
+nav:
+  - Overview: README.md
+  - Installation: install.md
+  - Requirements: requirements.md
+  - Contributing: CONTRIBUTING.md
+  - Collectors:
+      - ovs: modules/ovs.md
+
+theme: readthedocs
+plugins:
+  - search
