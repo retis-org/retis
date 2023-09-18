@@ -5,6 +5,7 @@
 #include <common.h>
 
 #define BIT(x) (1 << (x))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 
 #define ETH_P_IP	0x0800
 #define ETH_P_ARP	0x0806
@@ -25,6 +26,7 @@
 #define COLLECT_NS		8
 #define COLLECT_META		9
 #define COLLECT_DATA_REF	10
+#define COLLECT_PACKET		11
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -117,6 +119,15 @@ struct skb_data_ref_event {
 	u8 fclone;
 	u8 users;
 	u8 dataref;
+} __attribute__((packed));
+/* Please keep the following structs in sync with its Rust counterpart in
+ * module::skb::event.
+ */
+struct skb_packet_event {
+	u32 len;
+	u32 capture_len;
+#define PACKET_CAPTURE_SIZE	256
+	u8 packet[PACKET_CAPTURE_SIZE];
 } __attribute__((packed));
 
 /* Must be called with a valid skb pointer */
@@ -371,6 +382,85 @@ static __always_inline int process_skb_l2(struct retis_raw_event *event,
 	return 0;
 }
 
+static __always_inline int process_packet(struct retis_raw_event *event,
+					  struct sk_buff *skb)
+{
+	unsigned char *head, *data;
+	struct skb_packet_event *e;
+	int size, data_offset;
+	u32 len, linear_len;
+	u16 mac, network;
+
+	data = BPF_CORE_READ(skb, data);
+	head = BPF_CORE_READ(skb, head);
+
+	data_offset = data - head;
+	if (data_offset < 0) /* Keep the verifier happy */
+		return 0;
+
+	mac = BPF_CORE_READ(skb, mac_header);
+	network = BPF_CORE_READ(skb, network_header);
+	len = BPF_CORE_READ(skb, len);
+	linear_len = len - BPF_CORE_READ(skb, data_len); /* Linear buffer size */
+
+	/* Best case: mac offset is set and valid */
+	if (mac != (u16)~0U && (!network || (network && mac != network))) {
+		int mac_offset;
+
+		mac_offset = mac - data_offset;
+		size = min(linear_len - mac_offset, PACKET_CAPTURE_SIZE);
+		if (size <= 0)
+			return 0;
+
+		e = get_event_section(event, COLLECTOR_SKB, COLLECT_PACKET,
+				      sizeof(*e));
+		if (!e)
+			return 0;
+
+		e->len = len - mac_offset;
+		bpf_probe_read_kernel(e->packet, size, head + mac);
+	/* Valid network offset with an unset or invalid mac offset: we can fake
+	 * the eth header.
+	 */
+	} else if (network && network != (u16)~0U) {
+		u16 etype = BPF_CORE_READ(skb, protocol);
+		struct ethhdr *eth;
+		int network_offset;
+
+		/* We do need the ethertype to be set at the skb level here,
+		 * otherwise we can't guess what kind of packet this is.
+		 */
+		if (!etype)
+			return 0;
+
+		network_offset = network - data_offset;
+		size = min(linear_len - network_offset, PACKET_CAPTURE_SIZE);
+		size -= sizeof(struct ethhdr);
+		if (size <= 0)
+			return 0;
+
+		e = get_event_section(event, COLLECTOR_SKB, COLLECT_PACKET,
+				      sizeof(*e));
+		if (!e)
+			return 0;
+
+		/* Fake eth header */
+		eth = (struct ethhdr *)e->packet;
+		__builtin_memset(eth, 0, sizeof(*eth));
+		eth->h_proto = etype;
+
+		e->len = len - network_offset + sizeof(*eth);
+		bpf_probe_read_kernel(e->packet + sizeof(*eth), size,
+				      head + network);
+	/* Can't guess any useful packet offset */
+	} else {
+		return 0;
+	}
+
+	e->capture_len = size;
+	return 0;
+}
+
 /* Must be called with a valid skb pointer */
 static __always_inline int process_skb(struct retis_raw_event *event,
 				       struct sk_buff *skb)
@@ -387,6 +477,9 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 
 	dev = BPF_CORE_READ(skb, dev);
 	head = BPF_CORE_READ(skb, head);
+
+	if (cfg->sections & BIT(COLLECT_PACKET))
+		process_packet(event, skb);
 
 	if (cfg->sections & BIT(COLLECT_DEV) && dev) {
 		int ifindex = BPF_CORE_READ(dev, ifindex);

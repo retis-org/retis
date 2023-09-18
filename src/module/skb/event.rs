@@ -34,6 +34,8 @@ pub(crate) struct SkbEvent {
     pub(crate) meta: Option<SkbMetaEvent>,
     /// Skb data-related and refcnt information, if any.
     pub(crate) data_ref: Option<SkbDataRefEvent>,
+    /// Raw packet and related metadata.
+    pub(crate) packet: Option<SkbPacketEvent>,
 }
 
 impl EventFmt for SkbEvent {
@@ -419,6 +421,17 @@ pub(crate) struct SkbDataRefEvent {
     pub(crate) dataref: u8,
 }
 
+/// Raw packet and related metadata extracted from skbs.
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub(crate) struct SkbPacketEvent {
+    /// Length of the packet.
+    pub(crate) len: u32,
+    /// Lenght of the capture. <= len.
+    pub(crate) capture_len: u32,
+    /// Raw packet data.
+    pub(crate) packet: Vec<u8>,
+}
+
 #[derive(Default)]
 #[event_section_factory(SkbEvent)]
 pub(crate) struct SkbEventFactory {}
@@ -440,6 +453,7 @@ impl RawEventSectionFactory for SkbEventFactory {
                 SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
                 SECTION_META => event.meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
+                SECTION_PACKET => event.packet = Some(unmarshal_packet(section)?),
                 _ => bail!("Unknown data type"),
             }
         }
