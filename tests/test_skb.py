@@ -3,8 +3,8 @@ import time
 from testlib import Retis, assert_events_present
 
 
-def test_skb_sanity(two_ports_skb):
-    ns = two_ports_skb
+def test_skb_sanity(two_ns_simple):
+    ns = two_ns_simple
     retis = Retis()
 
     retis.collect("-c", "skb", "-f", "icmp", "-p", "kprobe:ip_rcv")
@@ -24,8 +24,8 @@ def test_skb_sanity(two_ports_skb):
     assert len(ip_rcv_events) == 2
 
 
-def test_skb_tcp_cc(two_ports_skb):
-    ns = two_ports_skb
+def test_skb_tcp_cc(two_ns_simple):
+    ns = two_ns_simple
     retis = Retis()
 
     retis.collect(
