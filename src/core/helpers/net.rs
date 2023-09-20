@@ -1,5 +1,5 @@
 /// Returns a translation of some ethertypes into a readable format.
-pub(super) fn etype_str(etype: u16) -> Option<&'static str> {
+pub(crate) fn etype_str(etype: u16) -> Option<&'static str> {
     Some(match etype {
         0x0800 => "IPv4",
         0x0806 => "ARP",
@@ -22,7 +22,7 @@ pub(super) fn etype_str(etype: u16) -> Option<&'static str> {
 }
 
 /// Returns a translation of some protocols into a readable format.
-pub(super) fn protocol_str(protocol: u8) -> Option<&'static str> {
+pub(crate) fn protocol_str(protocol: u8) -> Option<&'static str> {
     Some(match protocol {
         1 => "ICMP",
         2 => "IGMP",
@@ -46,7 +46,7 @@ pub(super) fn protocol_str(protocol: u8) -> Option<&'static str> {
 }
 
 /// Parses an Ethernet address into a String.
-pub(super) fn parse_eth_addr(raw: &[u8; 6]) -> String {
+pub(crate) fn parse_eth_addr(raw: &[u8; 6]) -> String {
     format!(
         "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
         raw[0], raw[1], raw[2], raw[3], raw[4], raw[5],

@@ -12,7 +12,10 @@ use std::{
 use anyhow::{bail, Result};
 
 use super::*;
-use crate::core::events::bpf::{parse_raw_section, BpfRawSection};
+use crate::core::{
+    events::bpf::{parse_raw_section, BpfRawSection},
+    helpers,
+};
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
@@ -52,8 +55,8 @@ pub(super) fn unmarshal_eth(raw_section: &BpfRawSection) -> Result<SkbEthEvent> 
 
     Ok(SkbEthEvent {
         etype: u16::from_be(raw.etype),
-        src: helpers::parse_eth_addr(&raw.src),
-        dst: helpers::parse_eth_addr(&raw.dst),
+        src: helpers::net::parse_eth_addr(&raw.src),
+        dst: helpers::net::parse_eth_addr(&raw.dst),
     })
 }
 
@@ -86,9 +89,9 @@ pub(super) fn unmarshal_arp(raw_section: &BpfRawSection) -> Result<SkbArpEvent> 
 
     Ok(SkbArpEvent {
         operation,
-        sha: helpers::parse_eth_addr(&raw.sha),
+        sha: helpers::net::parse_eth_addr(&raw.sha),
         spa: format!("{spa}"),
-        tha: helpers::parse_eth_addr(&raw.tha),
+        tha: helpers::net::parse_eth_addr(&raw.tha),
         tpa: format!("{tpa}"),
     })
 }
