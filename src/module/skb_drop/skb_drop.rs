@@ -14,11 +14,15 @@ use crate::{
     module::{Module, ModuleId},
 };
 
-pub(crate) struct SkbDropModule {}
+pub(crate) struct SkbDropModule {
+    reasons_available: bool,
+}
 
 impl Collector for SkbDropModule {
     fn new() -> Result<Self> {
-        Ok(Self {})
+        Ok(Self {
+            reasons_available: true,
+        })
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
@@ -54,6 +58,7 @@ impl Collector for SkbDropModule {
                     bail!("Could not retrieve skb drop reasons from the kernel");
                 } else {
                     warn!("This kernel doesn't provide skb drop reasons");
+                    self.reasons_available = false;
                 }
             }
             _ => (),
@@ -63,13 +68,23 @@ impl Collector for SkbDropModule {
     }
 
     fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
-        let symbol = Symbol::from_name("skb:kfree_skb")?;
+        let mut probe = Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?;
+        let hook = Hook::from(skb_drop_hook::DATA);
 
-        if let Err(e) = probes.register_probe(Probe::raw_tracepoint(symbol)?) {
+        if self.reasons_available {
+            probes.register_kernel_hook(hook)?;
+        } else {
+            // If the kernel doesn't support drop reasons, only attach the hook
+            // to the skb:kfree_skb tracepoint (otherwise we would have a fake
+            // reason attached to all events).
+            probe.add_hook(hook)?;
+        }
+
+        if let Err(e) = probes.register_probe(probe) {
             bail!("Could not attach to skb:kfree_skb: {}", e);
         }
 
-        probes.register_kernel_hook(Hook::from(skb_drop_hook::DATA))
+        Ok(())
     }
 }
 
