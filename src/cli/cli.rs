@@ -272,7 +272,7 @@ impl ThinCli {
         let matches = command
             .clone()
             .ignore_errors(true)
-            .try_get_matches_from(args.iter())?;
+            .get_matches_from(args.iter());
 
         let ran_subcommand = matches.subcommand_name();
 
