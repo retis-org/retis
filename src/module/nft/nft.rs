@@ -141,7 +141,7 @@ impl Collector for NftModule {
 
         if Symbol::from_name("__nft_trace_packet").is_err() {
             if let Ok(kconf) = inspector.kernel.get_config_option("CONFIG_NF_TABLES") {
-                if kconf != Some("=y")
+                if kconf != Some("y")
                     && inspector.kernel.is_module_loaded("nf_tables") == Some(false)
                 {
                     bail!("Kernel module 'nf_tables' is not loaded");
