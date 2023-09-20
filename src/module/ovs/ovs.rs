@@ -80,7 +80,7 @@ impl Collector for OvsModule {
         // module in case CONFIG_OPENVSWITCH=n because if might be out of tree.
         if Symbol::from_name("openvswitch:ovs_dp_upcall").is_err() {
             if let Ok(kconf) = inspector.kernel.get_config_option("CONFIG_OPENVSWITCH") {
-                if kconf != Some("=y")
+                if kconf != Some("y")
                     && inspector.kernel.is_module_loaded("openvswitch") == Some(false)
                 {
                     bail!("Kernel module 'openvswitch' is not loaded");
