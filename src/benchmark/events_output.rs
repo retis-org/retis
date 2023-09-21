@@ -9,8 +9,12 @@ use crate::{
 };
 
 /// Benchmark time to output events (text, json).
-pub(super) fn bench() -> Result<()> {
+pub(super) fn bench(ci: bool) -> Result<()> {
     let modules = get_modules()?;
+    let iters = match ci {
+        false => 1000000,
+        true => 1,
+    };
 
     // PrintSingle benchmark
 
@@ -26,7 +30,7 @@ pub(super) fn bench() -> Result<()> {
         DisplayFormat::SingleLine,
     );
     let now = Instant::now();
-    for _ in 0..1000000 {
+    for _ in 0..iters {
         p.process_one(&event)?;
     }
     println!(
@@ -39,14 +43,14 @@ pub(super) fn bench() -> Result<()> {
         DisplayFormat::MultiLine,
     );
     let now = Instant::now();
-    for _ in 0..1000000 {
+    for _ in 0..iters {
         p.process_one(&event)?;
     }
     println!("1M_print_single_multiline_us {}", now.elapsed().as_micros());
 
     let mut p = PrintSingle::json(Box::new(OpenOptions::new().write(true).open("/dev/null")?));
     let now = Instant::now();
-    for _ in 0..1000000 {
+    for _ in 0..iters {
         p.process_one(&event)?;
     }
     println!("1M_print_single_json_us {}", now.elapsed().as_micros());
@@ -69,7 +73,7 @@ pub(super) fn bench() -> Result<()> {
         DisplayFormat::SingleLine,
     );
     let now = Instant::now();
-    for _ in 0..1000000 {
+    for _ in 0..iters {
         p.process_one(&series)?;
     }
     println!(
@@ -82,14 +86,14 @@ pub(super) fn bench() -> Result<()> {
         DisplayFormat::MultiLine,
     );
     let now = Instant::now();
-    for _ in 0..1000000 {
+    for _ in 0..iters {
         p.process_one(&series)?;
     }
     println!("1M_print_series_multiline_us {}", now.elapsed().as_micros());
 
     let mut p = PrintSeries::json(Box::new(OpenOptions::new().write(true).open("/dev/null")?));
     let now = Instant::now();
-    for _ in 0..1000000 {
+    for _ in 0..iters {
         p.process_one(&series)?;
     }
     println!("1M_print_series_json_us {}", now.elapsed().as_micros());

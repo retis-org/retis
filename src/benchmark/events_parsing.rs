@@ -5,7 +5,12 @@ use anyhow::Result;
 use crate::{core::events::bpf::parse_raw_event, module::get_modules};
 
 /// Benchmark time to parse a bunch of raw events.
-pub(super) fn bench() -> Result<()> {
+pub(super) fn bench(ci: bool) -> Result<()> {
+    let iters = match ci {
+        false => 1000000,
+        true => 1,
+    };
+
     let modules = get_modules()?;
     let mut factories = modules.section_factories()?;
 
@@ -58,7 +63,7 @@ pub(super) fn bench() -> Result<()> {
     println!("first_raw_event_parsing_us {}", now.elapsed().as_micros());
 
     let now = Instant::now();
-    for _ in 0..1000000 {
+    for _ in 0..iters {
         parse_raw_event(&data, &mut factories)?;
     }
     println!("1M_raw_events_parsing_us {}", now.elapsed().as_micros());
