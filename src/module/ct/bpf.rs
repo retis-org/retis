@@ -221,7 +221,7 @@ impl CtEventFactory {
             1 => Related,
             2 => New,
             3 => Reply,
-            5 => RelatedReply,
+            4 => RelatedReply,
             7 => Untracked,
             _ => bail!("ct: unsupported ct state {}", raw.state),
         };
