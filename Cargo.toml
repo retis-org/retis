@@ -18,6 +18,7 @@ maintenance = { status = "actively-developed" }
 [features]
 test_bindgen_layout = []
 test_cap_bpf = []
+benchmark = []
 debug = ["dep:rbpf"]
 
 [dependencies]

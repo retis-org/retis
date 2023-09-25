@@ -208,7 +208,10 @@ impl EventFactory for BpfEventsFactory {
     }
 }
 
-fn parse_raw_event<'a>(data: &'a [u8], factories: &'a mut SectionFactories) -> Result<Event> {
+pub(crate) fn parse_raw_event<'a>(
+    data: &'a [u8],
+    factories: &'a mut SectionFactories,
+) -> Result<Event> {
     // First retrieve the buffer length.
     let data_size = data.len();
     if data_size < 2 {
@@ -228,11 +231,7 @@ fn parse_raw_event<'a>(data: &'a [u8], factories: &'a mut SectionFactories) -> R
 
     // Check the total buffer length to ensure we'll not go past.
     if raw_event_size > data_size {
-        bail!(
-            "Raw event size goes past the buffer length: {} > {}",
-            raw_event_size,
-            data_size
-        );
+        bail!("Raw event size goes past the buffer length: {raw_event_size} > {data_size}",);
     }
 
     // Let's loop through the raw event sections and collect them for later
@@ -258,10 +257,7 @@ fn parse_raw_event<'a>(data: &'a [u8], factories: &'a mut SectionFactories) -> R
             error!("Section is empty, according to its header");
             continue;
         } else if raw_section_end > raw_event_size {
-            error!(
-                "Section goes past the buffer: {} > {}",
-                raw_section_end, raw_event_size
-            );
+            error!("Section goes past the buffer: {raw_section_end} > {raw_event_size}");
             break;
         }
 
@@ -271,13 +267,13 @@ fn parse_raw_event<'a>(data: &'a [u8], factories: &'a mut SectionFactories) -> R
             Err(e) => {
                 // Skip the section.
                 cursor += raw_section.header.size as usize;
-                error!("Could not convert the raw owner: {}", e);
+                error!("Could not convert the raw owner: {e}");
                 continue;
             }
         };
 
         // Get the raw data.
-        raw_section.data = data[cursor..raw_section_end].to_vec();
+        raw_section.data = &data[cursor..raw_section_end];
         cursor += raw_section.header.size as usize;
 
         // Save the raw section for later processing.
@@ -289,47 +285,42 @@ fn parse_raw_event<'a>(data: &'a [u8], factories: &'a mut SectionFactories) -> R
 
     let mut event = Event::new();
     raw_sections.drain().try_for_each(|(owner, sections)| {
-        let factory = match factories.get_mut(&owner) {
-            Some(factory) => factory,
-            None => bail!("Unknown factory for event section owner {}", owner),
-        };
-        event.insert_section(owner, factory.from_raw(sections)?)
+        let factory = factories
+            .get_mut(&owner)
+            .ok_or_else(|| anyhow!("Unknown factory for event section owner {}", &owner))?;
+        event.insert_section(
+            owner,
+            factory
+                .from_raw(sections)
+                .map_err(|e| anyhow!("Failed to parse section {}: {e}", &owner))?,
+        )
     })?;
 
     Ok(event)
 }
 
 /// Helper to check a raw section validity and parse it into a structured type.
-pub(crate) fn parse_raw_section<T>(raw_section: &BpfRawSection) -> Result<T>
-where
-    T: Default + Plain,
-{
+pub(crate) fn parse_raw_section<'a, T>(raw_section: &'a BpfRawSection) -> Result<&'a T> {
     if raw_section.data.len() != mem::size_of::<T>() {
         bail!("Section data is not the expected size");
     }
 
-    let mut event = T::default();
-    plain::copy_from_bytes(&mut event, &raw_section.data)
-        .or_else(|_| bail!("Could not parse the raw section"))?;
-
-    Ok(event)
+    Ok(unsafe { mem::transmute(&raw_section.data[0]) })
 }
 
 /// Helper to parse a single raw section from BPF raw sections, checking the
 /// section validity and parsing it into a structured type.
-pub(crate) fn parse_single_raw_section<T>(
+pub(crate) fn parse_single_raw_section<'a, T>(
     id: ModuleId,
-    mut raw_sections: Vec<BpfRawSection>,
-) -> Result<T>
-where
-    T: Default + Plain,
-{
+    raw_sections: &'a Vec<BpfRawSection>,
+) -> Result<&'a T> {
     if raw_sections.len() != 1 {
         bail!("{id} event from BPF must be a single section");
     }
 
-    // Unwrap as we just checked the vector contains 1 element.
-    parse_raw_section::<T>(&raw_sections.pop().unwrap())
+    // We can access the first element safely as we just checked the vector
+    // contains 1 element.
+    parse_raw_section::<T>(&raw_sections[0])
 }
 
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
@@ -375,7 +366,7 @@ impl RawEventSectionFactory for CommonEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
-                COMMON_SECTION_CORE => common.timestamp = parse_raw_section::<u64>(section)?,
+                COMMON_SECTION_CORE => common.timestamp = *parse_raw_section::<u64>(section)?,
                 COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
                 _ => bail!("Unknown data type"),
             }
@@ -388,7 +379,6 @@ impl RawEventSectionFactory for CommonEventFactory {
 event_byte_array!(TaskName, 64);
 
 /// Task information retrieved in common probes.
-#[derive(Default)]
 #[repr(C)]
 struct RawTaskEvent {
     /// pid/tgid.
@@ -396,7 +386,6 @@ struct RawTaskEvent {
     /// Current task name.
     comm: TaskName,
 }
-unsafe impl Plain for RawTaskEvent {}
 
 pub(super) fn unmarshal_task(raw_section: &BpfRawSection) -> Result<TaskEvent> {
     let mut task_event = TaskEvent::default();
@@ -455,9 +444,9 @@ unsafe impl Plain for RawEvent {}
 /// Raw event section format shared between the Rust and BPF part. Please keep
 /// in sync with its BPF counterpart.
 #[derive(Clone, Default)]
-pub(crate) struct BpfRawSection {
+pub(crate) struct BpfRawSection<'a> {
     pub(crate) header: BpfRawSectionHeader,
-    pub(crate) data: Vec<u8>,
+    pub(crate) data: &'a [u8],
 }
 
 /// Raw event section header shared between the Rust and BPF part. Please keep

@@ -1,4 +1,4 @@
-unittest_task:
+cargo_task_tempate: &cargo_task_template
   container:
     image: rust:bookworm
   registry_cache:
@@ -14,12 +14,24 @@ unittest_task:
     - apt-get -y install llvm clang libelf-dev libpcap-dev python3-pip
     - rustup component add rustfmt
     - rustup component add clippy
+  before_cache_script: rm -rf $CARGO_HOME/registry/index
+
+unittest_task:
+  << : *cargo_task_template
   build_script: cargo build --verbose
   test_script: cargo test --verbose
   check_script:
     - cargo fmt --check
     - cargo clippy -- -D warnings
-  before_cache_script: rm -rf $CARGO_HOME/registry/index
+
+benchmark_task:
+  << : *cargo_task_template
+  build_script: cargo build -F benchmark --verbose
+  test_script:
+    - ./target/debug/retis benchmark --ci events_parsing
+    - ./target/debug/retis benchmark --ci events_output
+  check_script:
+    - cargo clippy -F benchmark -- -D warnings
 
 python_task:
   name: Python lint & format

@@ -1,7 +1,6 @@
 use std::fmt;
 
 use anyhow::{bail, Result};
-use plain::Plain;
 use serde::{
     de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer, Serialize, Serializer,
 };
@@ -134,7 +133,6 @@ pub(crate) struct UpcallEvent {
     /// Cpu ID
     pub(crate) cpu: u32,
 }
-unsafe impl Plain for UpcallEvent {}
 
 impl EventFmt for UpcallEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
@@ -169,7 +167,6 @@ pub(crate) struct UpcallEnqueueEvent {
     /// Enqueue id used for tracking.
     pub(crate) queue_id: u32,
 }
-unsafe impl Plain for UpcallEnqueueEvent {}
 
 impl EventFmt for UpcallEnqueueEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
@@ -196,7 +193,6 @@ pub(crate) struct UpcallReturnEvent {
     pub(crate) upcall_cpu: u32,
     pub(crate) ret: i32,
 }
-unsafe impl Plain for UpcallReturnEvent {}
 
 impl EventFmt for UpcallReturnEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
@@ -228,7 +224,6 @@ pub(crate) struct OperationEvent {
     /// Index within the batch
     pub(crate) batch_idx: u8,
 }
-unsafe impl Plain for OperationEvent {}
 
 impl OperationEvent {
     fn operation_str(op_type: u8) -> Result<&'static str> {
@@ -294,7 +289,6 @@ pub(crate) struct RecvUpcallEvent {
     /// Index within the batch
     pub(crate) batch_idx: u8,
 }
-unsafe impl Plain for RecvUpcallEvent {}
 
 impl EventFmt for RecvUpcallEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
@@ -487,7 +481,6 @@ pub(crate) struct OvsActionOutput {
     /// Output port.
     pub(crate) port: u32,
 }
-unsafe impl Plain for OvsActionOutput {}
 
 // Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
 /// OVS recirc action data.
@@ -497,7 +490,6 @@ pub(crate) struct OvsActionRecirc {
     /// Recirculation id.
     pub(crate) id: u32,
 }
-unsafe impl Plain for OvsActionRecirc {}
 
 /// OVS conntrack flags
 // Keep in sync with their conterpart in bpf/kernel_exec_tp.bpf.c

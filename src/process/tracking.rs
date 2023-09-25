@@ -78,7 +78,7 @@ impl RawEventSectionFactory for TrackingInfoEventFactory {
 impl TrackingInfo {
     fn new(track: &SkbTrackingEvent) -> Result<Self> {
         Ok(TrackingInfo {
-            skb: track.clone(),
+            skb: *track,
             idx: 0,
         })
     }

@@ -9,6 +9,9 @@ mod module;
 mod process;
 mod profiles;
 
+#[cfg(feature = "benchmark")]
+mod benchmark;
+
 use crate::{cli::get_cli, core::inspect::init_inspector, module::get_modules};
 
 // Re-export derive macros.

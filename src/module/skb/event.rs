@@ -2,9 +2,12 @@ use std::fmt;
 
 use anyhow::{bail, Result};
 
-use super::{bpf::*, helpers};
+use super::bpf::*;
 use crate::{
-    core::events::{bpf::BpfRawSection, *},
+    core::{
+        events::{bpf::BpfRawSection, *},
+        helpers,
+    },
     event_section, event_section_factory,
 };
 
@@ -61,7 +64,7 @@ impl EventFmt for SkbEvent {
         if let Some(eth) = &self.eth {
             space.write(f)?;
 
-            let ethertype = match helpers::etype_str(eth.etype) {
+            let ethertype = match helpers::net::etype_str(eth.etype) {
                 Some(s) => format!(" {}", s),
                 None => String::new(),
             };
@@ -149,7 +152,7 @@ impl EventFmt for SkbEvent {
                 }
             }
 
-            let protocol = match helpers::protocol_str(ip.protocol) {
+            let protocol = match helpers::net::protocol_str(ip.protocol) {
                 Some(s) => format!(" {}", s),
                 None => String::new(),
             };

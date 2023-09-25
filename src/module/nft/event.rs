@@ -1,7 +1,6 @@
 use std::{fmt, str};
 
 use anyhow::Result;
-use plain::Plain;
 
 use crate::{
     core::events::{
@@ -59,7 +58,6 @@ impl EventFmt for NftEvent {
 
 // Please keep in sync with its bpf counterpart under
 // src/modules/nft/bpf/nft.bpf.c
-#[derive(Default)]
 #[repr(C, packed)]
 struct NftBpfEvent {
     /// Table name.
@@ -80,8 +78,6 @@ struct NftBpfEvent {
     p: u8,
 }
 
-unsafe impl Plain for NftBpfEvent {}
-
 #[derive(Default)]
 #[event_section_factory(NftEvent)]
 pub(crate) struct NftEventFactory {}
@@ -89,7 +85,7 @@ pub(crate) struct NftEventFactory {}
 impl RawEventSectionFactory for NftEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = NftEvent::default();
-        let raw = parse_single_raw_section::<NftBpfEvent>(ModuleId::Nft, raw_sections)?;
+        let raw = parse_single_raw_section::<NftBpfEvent>(ModuleId::Nft, &raw_sections)?;
 
         event.table_name = raw.tn.to_string()?;
         event.chain_name = raw.cn.to_string()?;

@@ -16,7 +16,7 @@ pub(crate) struct BtfInfo {
 impl BtfInfo {
     /// Parse kernel BTF files and create a Btf object.
     pub(super) fn new() -> Result<BtfInfo> {
-        let vmlinux = match cfg!(test) {
+        let vmlinux = match cfg!(test) || cfg!(feature = "benchmark") {
             false => "/sys/kernel/btf/vmlinux",
             true => "test_data/vmlinux",
         };
@@ -25,7 +25,7 @@ impl BtfInfo {
             Btf::from_file(vmlinux).map_err(|e| anyhow!("Could not open {vmlinux}: {e}"))?;
 
         // Load module btf files if possible.
-        let modules = match cfg!(test) {
+        let modules = match cfg!(test) || cfg!(feature = "benchmark") {
             false => fs::read_dir("/sys/kernel/btf")?
                 .filter(|f| f.is_ok() && f.as_ref().unwrap().file_name().ne("vmlinux"))
                 .map(|f| Btf::from_split_file(f.as_ref().unwrap().path(), &vmlinux))
