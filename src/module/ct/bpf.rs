@@ -162,7 +162,7 @@ impl CtEventFactory {
             };
             (orig, reply)
         } else {
-            bail!("ct: invalid protocol tuple information");
+            bail!("ct: invalid ip tuple information");
         };
 
         let (orig_proto, reply_proto) = if flags & RETIS_CT_PROTO_TCP != 0 {
