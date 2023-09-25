@@ -17,7 +17,7 @@ use retis_derive::*;
 const VERSION_NAME: &str = "pizza margherita";
 
 fn main() -> Result<()> {
-    let mut cli = get_cli()?.build()?;
+    let mut cli = get_cli()?.build();
 
     let log_level = match cli.main_config.log_level.as_str() {
         "error" => LevelFilter::Error,

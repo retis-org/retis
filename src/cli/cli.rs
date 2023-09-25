@@ -242,11 +242,14 @@ impl ThinCli {
 
     /// Build a FullCli by running a first round of CLI parsing without subcommand argument
     /// validation.
-    pub(crate) fn build(self) -> Result<FullCli, ClapError> {
-        self.build_from(env::args_os())
+    /// If clap reports an error (including "--help" and "--version"), print the message and
+    /// exit the program.
+    pub(crate) fn build(self) -> FullCli {
+        self.build_from(env::args_os()).unwrap_or_else(|e| e.exit())
     }
 
     /// Build a FullCli by running a first round of CLI parsing with the given list of arguments.
+    /// This function should be only used directly by unit tests.
     pub(crate) fn build_from<I, T>(mut self, args: I) -> Result<FullCli, ClapError>
     where
         I: IntoIterator<Item = T>,
@@ -272,7 +275,7 @@ impl ThinCli {
         let matches = command
             .clone()
             .ignore_errors(true)
-            .get_matches_from(args.iter());
+            .try_get_matches_from(args.iter())?;
 
         let ran_subcommand = matches.subcommand_name();
 
@@ -282,16 +285,11 @@ impl ThinCli {
                 .get(&ran_subcommand.unwrap().to_string())
                 .is_none()
         {
-            // There is no subcommand or it's invalid. Let clap handle this error since it prints
-            // nicer error messages and knows where they should be printed to.
-            let err = command
+            // There is no subcommand or it's invalid. Re-run the match to generate
+            // the right clap error that to be printed nicely.
+            return Err(command
                 .try_get_matches_from_mut(args.iter())
-                .expect_err("clap should fail with no arguments");
-
-            match cfg!(test) {
-                true => return Err(err),
-                false => err.exit(),
-            };
+                .expect_err("clap should fail with no arguments"));
         }
 
         // Get main config.
