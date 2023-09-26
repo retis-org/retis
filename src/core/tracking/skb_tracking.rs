@@ -212,6 +212,24 @@ pub(crate) fn init_tracking(
     let cfg = unsafe { plain::as_bytes(&cfg) };
     config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
 
+    // As discussed in an old thread[1], the net:net_dev_xmit tracepoint can
+    // access freed skbs. In such case, we don't want to generate a new tracking
+    // id that won't ever be freed. Instead, we're marking this probe as
+    // 'no_tracking', so that a tracking id is reported only if it already
+    // exists, but no new one is generated.
+    //
+    // [1] https://lore.kernel.org/lkml/4DE877E1.7000606@jp.fujitsu.com/T/
+    let symbol = Symbol::from_name("net:net_dev_xmit")?;
+    let key = symbol.addr()?.to_ne_bytes();
+    let cfg = TrackingConfig {
+        free: 0,
+        partial_free: 0,
+        inv_head: 0,
+        no_tracking: 1,
+    };
+    let cfg = unsafe { plain::as_bytes(&cfg) };
+    config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
+
     // Take care of gargabe collection of tracking info. This should be done
     // in the BPF part for most if not all skbs but we might lose some
     // information (and tracked functions might fail resulting in incorrect
