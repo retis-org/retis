@@ -25,7 +25,7 @@ collect:
         - kprobe:icmp_rcv
         - kprobe:icmpv6_rcv
         - tp:net:net_dev_queue
-        - tp:net:net_dev_xmit
+        - tp:net:net_dev_start_xmit
         - kprobe:ip_output
         - kprobe:ip6_output
         - kprobe:skb_scrub_packet
