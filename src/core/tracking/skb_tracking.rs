@@ -198,7 +198,7 @@ pub(crate) fn init_tracking(
     p.set_option(ProbeOption::NoGenericHook)?;
     probes.register_probe(p)?;
 
-    // Special case for skb_release_head_state, which can be tracked as it is
+    // Special case for skb_release_head_state, which can't be tracked as it is
     // being called by kfree_skb_partial where we have a hook removing the
     // tracking id.
     let symbol = Symbol::from_name("skb_release_head_state")?;
