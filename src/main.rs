@@ -17,7 +17,7 @@ use crate::{cli::get_cli, core::inspect::init_inspector, module::get_modules};
 // Re-export derive macros.
 use retis_derive::*;
 
-const VERSION_NAME: &str = "pizza margherita";
+const VERSION_NAME: &str = "pizza marinara";
 
 fn main() -> Result<()> {
     let mut cli = get_cli()?.build();
