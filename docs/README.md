@@ -23,7 +23,7 @@ output the events to the console.
 
 ```
 $ retis collect
-00:42:00 [INFO] Collector(s) started: skb-tracking, skb, skb-drop, ovs, ct
+00:42:00 [INFO] Collector(s) started: skb-tracking, skb, skb-drop, ovs, nft, ct
 00:42:01 [INFO] 5 probe(s) loaded
 ...
 $ retis collect -c skb,skb-drop
