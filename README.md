@@ -25,7 +25,7 @@ $ retis <command> --help
 ## Examples
 
 ### Drop monitoring
-Listing packets being dropped by the kerenel with an associated stack trace and drop reason
+Listing packets being dropped by the kernel with an associated stack trace and drop reason
 ```
 $ retis -p dropmon collect
 00:42:00 [INFO] 4 probe(s) loaded
