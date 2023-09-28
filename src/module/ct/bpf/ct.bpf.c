@@ -23,6 +23,9 @@
 #define NF_CT_ZONE_DIR_REPL	(1 << IP_CT_DIR_REPLY)
 #define NF_CT_DEFAULT_ZONE_DIR	(NF_CT_ZONE_DIR_ORIG | NF_CT_ZONE_DIR_REPL)
 
+#define ORIG tuplehash[IP_CT_DIR_ORIGINAL].tuple
+#define REPLY tuplehash[IP_CT_DIR_REPLY].tuple
+
 struct nf_conn_addr_proto {
 	union {
 		u32 ip;
@@ -48,8 +51,31 @@ struct ct_event {
 
 } __attribute__((packed));
 
+static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
+{
+	switch (l3num) {
+	case NFPROTO_IPV4:
+	case NFPROTO_IPV6:
+		break;
+	default:
+		return false;
+	}
+
+	switch (protonum) {
+	case IPPROTO_TCP:
+	case IPPROTO_UDP:
+	case IPPROTO_ICMP:
+		break;
+	default:
+		return false;
+	}
+
+	return true;
+}
+
 static __always_inline int process_nf_conn(struct ct_event *e,
-					   struct nf_conn *ct)
+					   struct nf_conn *ct, u16 l3num,
+					   u8 protonum)
 {
 	struct nf_conntrack_tuple *orig, *reply;
 	struct nf_conntrack_zone *zone;
@@ -67,10 +93,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 		e->zone_id = (u8) BPF_CORE_READ(ct, zone.id);
 	}
 
-#define ORIG tuplehash[IP_CT_DIR_ORIGINAL].tuple
-#define REPLY tuplehash[IP_CT_DIR_REPLY].tuple
-
-	switch ((u16) BPF_CORE_READ(ct, ORIG.src.l3num)) {
+	switch (l3num) {
 	case NFPROTO_IPV4:
 		e->flags |= RETIS_CT_IPV4;
 		bpf_core_read(&e->orig.src.addr.ip,
@@ -103,7 +126,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 		break;
 	}
 
-	switch ((u8) BPF_CORE_READ(ct, ORIG.dst.protonum)) {
+	switch (protonum) {
 	case IPPROTO_TCP:
 		e->flags |= RETIS_CT_PROTO_TCP;
 		bpf_core_read(&e->orig.src.data, sizeof(e->orig.src.data),
@@ -152,10 +175,12 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 }
 
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
-	struct ct_event *e;
 	struct nf_conn *nf_conn;
 	struct sk_buff *skb;
 	unsigned long nfct;
+	struct ct_event *e;
+	u8 protonum;
+	u16 l3num;
 
 	skb = retis_get_sk_buff(ctx);
 	if (!skb)
@@ -172,12 +197,18 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	if (!nf_conn)
 		return 0;
 
+	l3num = (u16) BPF_CORE_READ(nf_conn, ORIG.src.l3num);
+	protonum = (u8) BPF_CORE_READ(nf_conn, ORIG.dst.protonum);
+
+	if (!ct_protocol_is_supported(l3num, protonum))
+		return 0;
+
 	e = get_event_section(event, COLLECTOR_CT, 0, sizeof(*e));
 	if (!e)
 		return 0;
 
 	e->state = (u8) (nfct & NFCT_INFOMASK);
-	process_nf_conn(e, nf_conn);
+	process_nf_conn(e, nf_conn, l3num, protonum);
 
 	return 0;
 )
