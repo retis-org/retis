@@ -198,10 +198,28 @@ pub(crate) fn init_tracking(
     p.set_option(ProbeOption::NoGenericHook)?;
     probes.register_probe(p)?;
 
-    // Special case for skb_release_head_state, which can be tracked as it is
+    // Special case for skb_release_head_state, which can't be tracked as it is
     // being called by kfree_skb_partial where we have a hook removing the
     // tracking id.
     let symbol = Symbol::from_name("skb_release_head_state")?;
+    let key = symbol.addr()?.to_ne_bytes();
+    let cfg = TrackingConfig {
+        free: 0,
+        partial_free: 0,
+        inv_head: 0,
+        no_tracking: 1,
+    };
+    let cfg = unsafe { plain::as_bytes(&cfg) };
+    config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
+
+    // As discussed in an old thread[1], the net:net_dev_xmit tracepoint can
+    // access freed skbs. In such case, we don't want to generate a new tracking
+    // id that won't ever be freed. Instead, we're marking this probe as
+    // 'no_tracking', so that a tracking id is reported only if it already
+    // exists, but no new one is generated.
+    //
+    // [1] https://lore.kernel.org/lkml/4DE877E1.7000606@jp.fujitsu.com/T/
+    let symbol = Symbol::from_name("net:net_dev_xmit")?;
     let key = symbol.addr()?.to_ne_bytes();
     let cfg = TrackingConfig {
         free: 0,
