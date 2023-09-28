@@ -8,7 +8,6 @@
    1. Run `cargo publish --dry-run` to check for any issue.
    1. Open a PR and get it merged. This must have runtime tests enabled!
    1. Tag the right commit in the `vx.y.z` form and push it.
-1. Release on [crates.io](https://crates.io): `cargo publish`.
 1. Release binaries.
    1. Build a new set of packages on [copr](https://copr.fedorainfracloud.org/coprs/g/retis/retis/).
       1. Update the spec file in our [copr](https://github.com/retis-org/copr)
@@ -21,6 +20,7 @@
       1. `$ buildah push quay.io/retis/retis:x.y.z`
       1. Manually tag on the web UI the image pushed with `latest`, if
          applicable.
+1. Release on [crates.io](https://crates.io): `cargo publish`.
 1. Write and publish a release notes in the GitHub interface. This must be done
    once the rpm and the image successfully built to allow pushing last minute
    build fixes.
