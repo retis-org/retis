@@ -23,7 +23,7 @@ output the events to the console.
 
 ```
 $ retis collect
-00:42:00 [INFO] Collector(s) started: skb-tracking, skb, skb-drop, ovs
+00:42:00 [INFO] Collector(s) started: skb-tracking, skb, skb-drop, ovs, ct
 00:42:01 [INFO] 5 probe(s) loaded
 ...
 $ retis collect -c skb,skb-drop
@@ -57,6 +57,7 @@ Currently supported collectors are:
 | skb-tracking | Packet tracking id  | No[^1]          |
 | ovs          | OpenVSwitch data    | Yes (many)      |
 | nft          | Nftables context    | Yes (1)         |
+| ct           | Conntrack info      | No              |
 
 See `retis collect --help` for a description of each collector and its command
 line arguments.
