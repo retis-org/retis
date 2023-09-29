@@ -25,7 +25,8 @@ $ retis --help
 ### Container image
 
 The preferred method to run Retis in a container is by using the provided
-[retis_in_container.sh](tools/retis_in_container.sh) script,
+[retis_in_container.sh](https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh)
+script,
 
 ```
 $ curl -O https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh
