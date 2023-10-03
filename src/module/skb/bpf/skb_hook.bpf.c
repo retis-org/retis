@@ -124,7 +124,7 @@ static __always_inline int process_skb_arp(struct retis_raw_event *event,
 					   struct skb_config *cfg,
 					   struct sk_buff *skb,
 					   unsigned char *head,
-					   u16 etype, u16 mac, u16 network)
+					   u16 mac, u16 network)
 {
 	struct skb_arp_event *e;
 	struct arphdr *arp;
@@ -182,7 +182,7 @@ static __always_inline int process_skb_ip(struct retis_raw_event *event,
 					  struct skb_config *cfg,
 					  struct sk_buff *skb,
 					  unsigned char *head,
-					  u16 etype, u16 mac, u16 network)
+					  u16 mac, u16 network)
 {
 	u8 protocol, ip_version;
 	u16 transport;
@@ -362,10 +362,10 @@ static __always_inline int process_skb_l2(struct retis_raw_event *event,
 
 	/* IPv4/IPv6 and upper layers */
 	if (etype == bpf_ntohs(ETH_P_IP) || etype == bpf_ntohs(ETH_P_IPV6))
-		return process_skb_ip(event, cfg, skb, head, etype, mac, network);
+		return process_skb_ip(event, cfg, skb, head, mac, network);
 	/* ARP */
 	else if (etype == bpf_ntohs(ETH_P_ARP))
-		return process_skb_arp(event, cfg, skb, head, etype, mac, network);
+		return process_skb_arp(event, cfg, skb, head, mac, network);
 
 	/* Unsupported etype */
 	return 0;
