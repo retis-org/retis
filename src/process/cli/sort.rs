@@ -35,7 +35,7 @@ const DEFAULT_BUFFER: usize = 1000;
 #[command(name = "sort")]
 pub(crate) struct Sort {
     /// File from which to read events.
-    #[arg()]
+    #[arg(default_value = "retis.data")]
     pub(super) input: PathBuf,
 
     /// Maximum number of events to buffer
