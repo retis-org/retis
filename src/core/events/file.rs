@@ -23,12 +23,15 @@ pub(crate) struct FileEventsFactory {
 
 impl FileEventsFactory {
     #[allow(dead_code)] // FIXME
-    pub(crate) fn new<P>(filename: P) -> Result<Self>
+    pub(crate) fn new<P>(file: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {
         Ok(FileEventsFactory {
-            reader: BufReader::new(File::open(filename)?),
+            reader: BufReader::new(
+                File::open(&file)
+                    .map_err(|e| anyhow!("Could not open {}: {e}", file.as_ref().display()))?,
+            ),
             factories: HashMap::new(),
         })
     }
