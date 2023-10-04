@@ -22,7 +22,6 @@ pub(crate) struct FileEventsFactory {
 }
 
 impl FileEventsFactory {
-    #[allow(dead_code)] // FIXME
     pub(crate) fn new<P>(file: P) -> Result<Self>
     where
         P: AsRef<Path>,
