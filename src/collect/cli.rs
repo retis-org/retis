@@ -51,7 +51,14 @@ Valid TYPEs:
 Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
     )]
     pub(super) probes: Vec<String>,
-    #[arg(short, long, help = "Write the events to a file rather than to sdout.")]
+    #[arg(
+        short,
+        long,
+        num_args = 0..=1,
+        default_missing_value = "retis.data",
+        help = "Write the events to a file rather than to sdout. If the flag is used without a file name,
+defaults to \"retis.data\"."
+    )]
     pub(super) out: Option<PathBuf>,
     #[arg(
         long,
