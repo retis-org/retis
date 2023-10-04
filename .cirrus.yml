@@ -85,7 +85,7 @@ functional_task:
   # Download, provision and cache test image(s).
   vagrant_cache: &vagrant_cache
     fingerprint_script: uname -s ; cat Vagrantfile
-    folder: /root/.vagrant.d
+    folder: /root/.vagrant.d/boxes
 
   up_script: &vagrant_up
     - vagrant up ${DISTRO} --no-tty || vagrant up ${DISTRO} --no-tty # Retry to overcome network glitches.
