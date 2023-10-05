@@ -84,7 +84,7 @@ functional_task:
 
   # Download, provision and cache test image(s).
   vagrant_cache: &vagrant_cache
-    fingerprint_script: uname -s ; cat Vagrantfile
+    fingerprint_script: echo ${DISTRO}; cat Vagrantfile
     folder: /root/.vagrant.d/boxes
 
   up_script: &vagrant_up
