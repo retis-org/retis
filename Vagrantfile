@@ -22,6 +22,8 @@ dnf install -y \
 SCRIPT
 
 Vagrant.configure("2") do |config|
+  config.vm.box_check_update = false
+
   config.vm.define "f38" do |fedora|
     fedora.vm.box = "fedora/38-cloud-base"
 

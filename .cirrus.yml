@@ -88,6 +88,7 @@ functional_task:
 
   # Download, provision and cache test image(s).
   vagrant_cache: &vagrant_cache
+    reupload_on_changes: true
     fingerprint_script: |
       # for rawhide invalidate once a week
       if [ x${DISTRO} = xrawhide ]; then
@@ -97,6 +98,8 @@ functional_task:
     folder: /root/.vagrant.d/boxes
 
   up_script: &vagrant_up
+    - vagrant box update -f ${DISTRO}
+    - vagrant box prune -f
     - vagrant up ${DISTRO} --no-tty || vagrant up ${DISTRO} --no-tty # Retry to overcome network glitches.
     - mkdir -p -m 0700 /root/.ssh
     - vagrant ssh-config ${DISTRO} >> /root/.ssh/config
