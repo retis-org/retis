@@ -104,6 +104,8 @@ functional_task:
     - mkdir -p -m 0700 /root/.ssh
     - vagrant ssh-config ${DISTRO} >> /root/.ssh/config
 
+  upload_caches: vagrant
+
   guest_info_script: &guest_info
     - echo "--- Host info ---"
     - ssh ${DISTRO} 'sh -exc "uname -a"'
