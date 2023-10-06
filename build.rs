@@ -1,7 +1,7 @@
 use std::{
     env,
-    fs::{create_dir_all, File},
-    io::Write,
+    fmt::Write,
+    fs::{self, create_dir_all, File},
     path::Path,
     process::Command,
 };
@@ -29,18 +29,19 @@ const CLANG_ARGS: &[&str] = &["-Werror"];
 
 fn get_probe_clang_args(extra_includes: Option<&[&str]>) -> String {
     let mut args: Vec<String> = CLANG_ARGS.iter().map(|x| x.to_string()).collect();
-    args.push(
-        INCLUDE_PATHS
-            .iter()
-            .map(|x| format!("-I{x} "))
-            .collect::<String>(),
-    );
+    args.push(INCLUDE_PATHS.iter().fold(String::new(), |mut output, x| {
+        write!(output, "-I{x} ").unwrap();
+        output
+    }));
+
     args.push(
         extra_includes
             .unwrap_or_default()
             .iter()
-            .map(|x| format!("-I{x} "))
-            .collect::<String>(),
+            .fold(String::new(), |mut output, x| {
+                write!(output, "-I{x} ").unwrap();
+                output
+            }),
     );
     args.join(" ")
 }
@@ -72,15 +73,14 @@ fn build_hook(source: &str, extra_includes: Option<&[&str]>) {
 
     let obj = File::open(output).unwrap();
     let obj: &[u8] = &unsafe { Mmap::map(&obj).unwrap() };
+    let hook_skel = format!(
+        r#" pub(crate) const
+           DATA: &[u8] = &{obj:?}; "#
+    );
 
-    let mut rs = File::create(skel).unwrap();
-    write!(
-        rs,
-        r#"
-           pub(crate) const DATA: &[u8] = &{obj:?};
-           "#
-    )
-    .unwrap();
+    if let Err(e) = fs::write(skel, hook_skel) {
+        panic!("{:?}", e);
+    }
 
     println!("cargo:rerun-if-changed={source}");
     for inc in extra_includes.unwrap_or_default().iter() {
@@ -159,8 +159,11 @@ fn build_extract_stub(source: &str) {
     let obj = File::open(&btf).unwrap();
     let obj: &[u8] = &unsafe { Mmap::map(&obj).unwrap() };
 
-    let mut rs = File::create(stub_ext).unwrap();
-    write!(rs, r#"pub(crate) const BTF: &[u8] = &{obj:?};"#).unwrap();
+    let btf_skel = format!(r#"pub(crate) const BTF: &[u8] = &{obj:?};"#);
+
+    if let Err(e) = fs::write(stub_ext, btf_skel) {
+        panic!("{:?}", e);
+    }
 
     println!("cargo:rerun-if-changed={source}");
 }
