@@ -54,6 +54,10 @@ functional_task:
       env:
         DISTRO: f38
         TEST_EXTRA_ARGS: "--ovs-track"
+    - name: Fedora Rawhide
+      env:
+        DISTRO: rawhide
+        TEST_EXTRA_ARGS: "--ovs-track"
     - name: Centos 9 Stream
       env:
         DISTRO: c9s
@@ -78,19 +82,29 @@ functional_task:
       # Installing it from Hashicorp directly
     - wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
     - echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
-    - DEBIAN_FRONTEND=noninteractive apt-get -y update && DEBIAN_FRONTEND=noninteractiven apt-get -y install vagrant ruby-libvirt qemu-kvm virt-manager libvirt-daemon-system virtinst libvirt-clients bridge-utils pkg-config libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev gcc make
+    - DEBIAN_FRONTEND=noninteractive apt-get -y update && DEBIAN_FRONTEND=noninteractiven apt-get -y install vagrant ruby-libvirt qemu-kvm virt-manager libvirt-daemon-system virtinst libvirt-clients bridge-utils pkg-config libxslt-dev libxml2-dev libvirt-dev zlib1g-dev ruby-dev gcc make ruby-nokogiri
     - vagrant plugin install vagrant-libvirt
     - systemctl enable --now libvirtd
 
   # Download, provision and cache test image(s).
   vagrant_cache: &vagrant_cache
-    fingerprint_script: uname -s ; cat Vagrantfile
-    folder: /root/.vagrant.d
+    reupload_on_changes: true
+    fingerprint_script: |
+      # for rawhide invalidate once a week
+      if [ x${DISTRO} = xrawhide ]; then
+          date -d 'next monday - 1 week' +%Y%m%d
+      fi
+      echo ${DISTRO}; cat Vagrantfile
+    folder: /root/.vagrant.d/boxes
 
   up_script: &vagrant_up
+    - vagrant box update -f ${DISTRO}
+    - vagrant box prune -f
     - vagrant up ${DISTRO} --no-tty || vagrant up ${DISTRO} --no-tty # Retry to overcome network glitches.
     - mkdir -p -m 0700 /root/.ssh
     - vagrant ssh-config ${DISTRO} >> /root/.ssh/config
+
+  upload_caches: vagrant
 
   guest_info_script: &guest_info
     - echo "--- Host info ---"
