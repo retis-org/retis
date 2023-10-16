@@ -30,6 +30,7 @@ fn main() -> Result<()> {
         "warn" => LevelFilter::Warn,
         "info" => LevelFilter::Info,
         "debug" => LevelFilter::Debug,
+        "trace" => LevelFilter::Trace,
         x => bail!("Invalid log_level: {}", x),
     };
     Logger::init(log_level)?;
