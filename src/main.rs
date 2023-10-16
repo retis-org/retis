@@ -1,6 +1,5 @@
 use anyhow::{bail, Result};
-use log::{debug, info, warn};
-use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
+use log::{debug, info, warn, LevelFilter};
 
 mod cli;
 mod collect;
@@ -12,7 +11,11 @@ mod profiles;
 #[cfg(feature = "benchmark")]
 mod benchmark;
 
-use crate::{cli::get_cli, core::inspect::init_inspector, module::get_modules};
+use crate::{
+    cli::get_cli,
+    core::{inspect::init_inspector, logger::Logger},
+    module::get_modules,
+};
 
 // Re-export derive macros.
 use retis_derive::*;
@@ -29,12 +32,7 @@ fn main() -> Result<()> {
         "debug" => LevelFilter::Debug,
         x => bail!("Invalid log_level: {}", x),
     };
-    TermLogger::init(
-        log_level,
-        Config::default(),
-        TerminalMode::Stderr, // Use stderr so logs do not conflict w/ other output.
-        ColorChoice::Auto,
-    )?;
+    Logger::init(log_level)?;
     set_libbpf_rs_print_callback(log_level);
 
     // Save the --kconf option value before using the cli object to dispatch the
