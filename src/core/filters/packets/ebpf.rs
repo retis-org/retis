@@ -69,7 +69,7 @@ impl BpfReg {
     pub const CTX: Self = Self::R6;
     pub const X: Self = Self::R7;
     pub const CTXDATA: Self = Self::R8;
-    pub const SCRATCH: Self = Self::R9;
+    pub const INLINE_FP: Self = Self::R9;
     pub const FP: Self = Self::R10;
 }
 
@@ -91,6 +91,9 @@ struct retis_filter_ctx {
 pub(crate) struct eBpfProg(Vec<eBpfInsn>);
 
 impl eBpfProg {
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
     pub(crate) fn add(&mut self, insn: eBpfInsn) {
         self.0.push(insn);
     }
@@ -166,7 +169,7 @@ impl eBpfProg {
 
         // mov %fp, %arg1
         self.add(Insn::mov(MovInfo::Reg {
-            src: BpfReg::FP,
+            src: BpfReg::INLINE_FP,
             dst: BpfReg::ARG1,
         }));
         // add -8, %arg1
@@ -215,7 +218,7 @@ impl eBpfProg {
         // ldx -STACK_RESERVED(%r10), %r0
         self.add(Insn::ld(
             LdInfo::Reg {
-                src: BpfReg::FP,
+                src: BpfReg::INLINE_FP,
                 dst: BpfReg::A,
                 off: -STACK_RESERVED,
             },
@@ -232,40 +235,16 @@ impl eBpfProg {
         Ok(())
     }
 
-    /// Prepare to return. If reg selector is set, the value of R0 (A
-    /// reg) will be stored ctx->ret, otherwise an immediate value
-    /// will be set.
+    /// Prepare to return. If reg selector is set, no operation is needed,
+    /// otherwise, k will be set to R0.
     fn prepare_ret(&mut self, insn: &BpfInsn, reg: bool) -> Result<()> {
-        // FIXME: This should handle options and return in A for the
-        // common case. Tracepoint are the exception, and in such case
-        // we return in ctx->ret as, for what it seems to be an issue,
-        // the retval of the freplacing function cannot be a value
-        // other than 0
-        if reg {
-            self.add(eBpfInsn::mov(MovInfo::Reg {
-                src: BpfReg::A,
-                dst: BpfReg::SCRATCH,
-            }));
-        } else {
+        if !reg {
             self.add(eBpfInsn::mov(MovInfo::Imm {
-                dst: BpfReg::SCRATCH,
+                dst: BpfReg::A,
                 imm: insn.k as i32,
             }));
         }
 
-        self.add(eBpfInsn::st(
-            StInfo::Reg {
-                src: BpfReg::SCRATCH,
-                dst: BpfReg::CTX,
-                off: i16::try_from(offset_of!(retis_filter_ctx, ret))?,
-            },
-            BpfSize::Word,
-        ));
-
-        self.add(eBpfInsn::mov(MovInfo::Imm {
-            dst: BpfReg::A,
-            imm: 0x00000,
-        }));
         Ok(())
     }
 
@@ -310,6 +289,28 @@ impl eBpfProg {
         }
 
         Ok(ret)
+    }
+
+    fn inline_returns(&mut self) -> Result<()> {
+        let mut eop = self.len();
+        let mut rem_pos = Vec::new();
+
+        for (ip, insn) in self.0.iter_mut().enumerate().rev() {
+            if insn.code == bpf_sys::BPF_JMP | bpf_sys::BPF_EXIT {
+                if eop - ip - 1 == 0 {
+                    rem_pos.push(ip);
+                    eop -= 1;
+                    continue;
+                }
+                *insn = eBpfInsn::jmp_a((eop - ip - 1) as i16);
+            }
+        }
+
+        rem_pos.iter().for_each(|p| {
+            self.0.remove(*p);
+        });
+
+        Ok(())
     }
 }
 
@@ -377,7 +378,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 )),
                 t @ BpfInsnType::LdxMem | t @ BpfInsnType::LdMem => ebpf.add(Insn::ld(
                     LdInfo::Reg {
-                        src: BpfReg::FP,
+                        src: BpfReg::INLINE_FP,
                         dst: if let BpfInsnType::LdMem = t {
                             BpfReg::A
                         } else {
@@ -471,7 +472,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 BpfInsnType::St => ebpf.add(Insn::st(
                     StInfo::Reg {
                         src: BpfReg::A,
-                        dst: BpfReg::FP,
+                        dst: BpfReg::INLINE_FP,
                         off: -SCRATCH_MEM_START + (cbpf_insn.k as i16 * SCRATCH_MEM_SIZE),
                     },
                     BpfSize::Word,
@@ -479,7 +480,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 BpfInsnType::Stx => ebpf.add(Insn::st(
                     StInfo::Reg {
                         src: BpfReg::X,
-                        dst: BpfReg::FP,
+                        dst: BpfReg::INLINE_FP,
                         off: -SCRATCH_MEM_START + (cbpf_insn.k as i16 * SCRATCH_MEM_SIZE),
                     },
                     BpfSize::Word,
@@ -517,6 +518,8 @@ impl TryFrom<BpfProg> for eBpfProg {
                     - 1,
             )?;
         }
+
+        ebpf.inline_returns()?;
 
         Ok(ebpf)
     }

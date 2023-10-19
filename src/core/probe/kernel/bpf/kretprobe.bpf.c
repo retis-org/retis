@@ -39,7 +39,7 @@ static __always_inline void kprobe_get_regs(struct retis_regs *regs,
 }
 
 SEC("kretprobe/probe")
-int probe_kretprobe(struct pt_regs *ctx)
+int probe_kretprobe_kretprobe(struct pt_regs *ctx)
 {
 	struct retis_context context = {};
 	struct retis_context *kprobe_ctx;
@@ -62,8 +62,8 @@ int probe_kretprobe(struct pt_regs *ctx)
 	return chain(&context);
 }
 
-SEC("kprobe/probe")
-int probe_kprobe(struct pt_regs *ctx)
+SEC("kprobe/retprobe")
+int probe_kretprobe_kprobe(struct pt_regs *ctx)
 {
 	struct retis_context context = {};
 	u64 tid = bpf_get_current_pid_tgid();

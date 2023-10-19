@@ -19,7 +19,11 @@ use super::{
 };
 
 use super::{common::init_counters_map, kernel::config::init_config_map};
-use crate::core::{filters::Filter, kernel::Symbol, user::proc::Process};
+use crate::core::{
+    filters::{self, fixup_filter_load_fn, register_filter_handler, Filter},
+    kernel::Symbol,
+    user::proc::Process,
+};
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
 pub(crate) const PROBE_MAX: usize = 1024;
@@ -202,6 +206,34 @@ impl ProbeManager {
         Ok(())
     }
 
+    fn setup_dyn_filters(&self) -> Result<()> {
+        for filter in self.filters.iter() {
+            match filter {
+                Filter::Packet(_) => {
+                    filters::register_filter(0xdeadbeef, filter)?;
+                }
+            }
+        }
+
+        register_filter_handler(
+            "kprobe/probe",
+            libbpf_rs::ProgramType::Kprobe,
+            Some(fixup_filter_load_fn),
+        )?;
+        register_filter_handler(
+            "kretprobe/probe",
+            libbpf_rs::ProgramType::Kprobe,
+            Some(fixup_filter_load_fn),
+        )?;
+        register_filter_handler(
+            "raw_tracepoint/probe",
+            libbpf_rs::ProgramType::RawTracepoint,
+            Some(fixup_filter_load_fn),
+        )?;
+
+        Ok(())
+    }
+
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
         // Prepare all hooks:
@@ -218,6 +250,8 @@ impl ProbeManager {
                 .iter()
                 .try_for_each(|o| p.set_option(o.clone()))
         })?;
+
+        self.setup_dyn_filters()?;
 
         // Handle generic probes.
         self.builders.extend(Self::attach_probes(
@@ -279,7 +313,7 @@ impl ProbeManager {
     fn attach_probes(
         probes: &mut [&mut Probe],
         hooks: &[Hook],
-        filters: &[Filter],
+        _filters: &[Filter],
         maps: HashMap<String, RawFd>,
         #[cfg(not(test))] config_map: &libbpf_rs::MapHandle,
         #[cfg(not(test))] counters_map: &libbpf_rs::MapHandle,
@@ -302,7 +336,7 @@ impl ProbeManager {
                     };
 
                     // Initialize the probe builder, only once for all targets.
-                    builder.init(map_fds.clone(), hooks.to_vec(), filters.to_owned())?;
+                    builder.init(map_fds.clone(), hooks.to_vec())?;
 
                     builders.insert(probe.type_key(), builder);
                 }

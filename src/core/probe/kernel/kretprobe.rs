@@ -13,9 +13,7 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::SkelBuilder;
 
-use crate::core::filters::Filter;
-use crate::core::probe::builder::*;
-use crate::core::probe::*;
+use crate::core::{probe::builder::*, probe::*};
 
 mod kretprobe_bpf {
     include!("bpf/.out/kretprobe.skel.rs");
@@ -33,12 +31,7 @@ impl ProbeBuilder for KretprobeBuilder {
         KretprobeBuilder::default()
     }
 
-    fn init(
-        &mut self,
-        map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
-        filters: Vec<Filter>,
-    ) -> Result<()> {
+    fn init(&mut self, map_fds: Vec<(String, RawFd)>, hooks: Vec<Hook>) -> Result<()> {
         if self.obj.is_some() {
             bail!("Kretprobe builder already initialized");
         }
@@ -51,11 +44,10 @@ impl ProbeBuilder for KretprobeBuilder {
 
         let obj = open_obj.load()?;
         let fd = obj
-            .prog("probe_kretprobe")
+            .prog("probe_kretprobe_kretprobe")
             .ok_or_else(|| anyhow!("Couldn't get program"))?
             .as_fd()
             .as_raw_fd();
-        replace_filters(fd, &filters)?;
         let mut links = replace_hooks(fd, &hooks)?;
         self.links.append(&mut links);
 
@@ -76,14 +68,14 @@ impl ProbeBuilder for KretprobeBuilder {
 
         // Attach the kretprobe
         self.links.push(
-            obj.prog_mut("probe_kretprobe")
+            obj.prog_mut("probe_kretprobe_kretprobe")
                 .ok_or_else(|| anyhow!("Couldn't get kretprobe program"))?
                 .attach_kprobe(true, probe.symbol.attach_name())?,
         );
 
         // Attach the kprobe
         self.links.push(
-            obj.prog_mut("probe_kprobe")
+            obj.prog_mut("probe_kretprobe_kprobe")
                 .ok_or_else(|| anyhow!("Couldn't get kprobe program"))?
                 .attach_kprobe(false, probe.symbol.attach_name())?,
         );
@@ -98,16 +90,27 @@ impl ProbeBuilder for KretprobeBuilder {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
-    use crate::core::kernel::Symbol;
+    use crate::core::{
+        filters::{fixup_filter_load_fn, register_filter_handler},
+        kernel::Symbol,
+    };
 
     #[test]
+    #[serial(libbpf)]
     #[cfg_attr(not(feature = "test_cap_bpf"), ignore)]
     fn init_and_attach() {
-        let mut builder = KretprobeBuilder::new();
+        let _ = register_filter_handler(
+            "kretprobe/probe",
+            libbpf_rs::ProgramType::Kprobe,
+            Some(fixup_filter_load_fn),
+        );
 
-        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
+        let mut builder = KretprobeBuilder::new();
+        assert!(builder.init(Vec::new(), Vec::new()).is_ok());
         assert!(builder
             .attach(
                 &Probe::kretprobe(Symbol::from_name("tcp_sendmsg").expect("symbol should exist"))

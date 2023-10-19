@@ -201,6 +201,10 @@ Additional notes (not strictly limitations):
   tracking SNATed packets only in `skb:consume_skb` with a filter on the
   original address won't generate any event.
 
+- As explained in the [filtering section](https://retis.readthedocs.io/en/stable/#filtering)
+  filters are eventually translated to eBPF instructions. Currently, the maximum
+  size of an eBPF filter is 4096 instructions.
+
 - Some fields present in the packet might not be reported when probes are early
   in the stack, while being shown in later ones. This is because Retis probes
   rely on the networking stack knowledge of the packet and if some parts weren't

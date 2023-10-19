@@ -138,7 +138,8 @@ Retis implements a filtering logic to only report packets matching the filter or
 being tracked (see [tracking](#tracking)).
 
 Retis uses a pcap-filter syntax. See `man pcap-filter` for an overview on the
-syntax.
+syntax. Upon execution the pcap-filter gets compiled in cBPF and subsequently
+translated into an eBPF program which in turn gets consumed by the probes.
 
 ```
 $ retis collect -f 'tcp port 443'
