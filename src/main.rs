@@ -1,6 +1,5 @@
 use anyhow::{bail, Result};
-use log::{debug, info, warn};
-use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
+use log::{info, trace, warn, LevelFilter};
 
 mod cli;
 mod collect;
@@ -12,7 +11,11 @@ mod profiles;
 #[cfg(feature = "benchmark")]
 mod benchmark;
 
-use crate::{cli::get_cli, core::inspect::init_inspector, module::get_modules};
+use crate::{
+    cli::get_cli,
+    core::{inspect::init_inspector, logger::Logger},
+    module::get_modules,
+};
 
 // Re-export derive macros.
 use retis_derive::*;
@@ -27,14 +30,10 @@ fn main() -> Result<()> {
         "warn" => LevelFilter::Warn,
         "info" => LevelFilter::Info,
         "debug" => LevelFilter::Debug,
+        "trace" => LevelFilter::Trace,
         x => bail!("Invalid log_level: {}", x),
     };
-    TermLogger::init(
-        log_level,
-        Config::default(),
-        TerminalMode::Stderr, // Use stderr so logs do not conflict w/ other output.
-        ColorChoice::Auto,
-    )?;
+    Logger::init(log_level)?;
     set_libbpf_rs_print_callback(log_level);
 
     // Save the --kconf option value before using the cli object to dispatch the
@@ -64,7 +63,7 @@ fn set_libbpf_rs_print_callback(level: LevelFilter) {
     let libbpf_rs_print = |level, msg: String| {
         let msg = msg.trim_end_matches('\n');
         match level {
-            libbpf_rs::PrintLevel::Debug => debug!("{msg}"),
+            libbpf_rs::PrintLevel::Debug => trace!("{msg}"),
             libbpf_rs::PrintLevel::Info => info!("{msg}"),
             libbpf_rs::PrintLevel::Warn => warn!("{msg}"),
         }
@@ -73,9 +72,9 @@ fn set_libbpf_rs_print_callback(level: LevelFilter) {
     libbpf_rs::set_print(match level {
         LevelFilter::Error | LevelFilter::Off => None,
         LevelFilter::Warn => Some((libbpf_rs::PrintLevel::Warn, libbpf_rs_print)),
-        LevelFilter::Info => Some((libbpf_rs::PrintLevel::Info, libbpf_rs_print)),
-        LevelFilter::Debug | LevelFilter::Trace => {
-            Some((libbpf_rs::PrintLevel::Debug, libbpf_rs_print))
+        LevelFilter::Info | LevelFilter::Debug => {
+            Some((libbpf_rs::PrintLevel::Info, libbpf_rs_print))
         }
+        LevelFilter::Trace => Some((libbpf_rs::PrintLevel::Debug, libbpf_rs_print)),
     });
 }

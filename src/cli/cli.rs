@@ -195,7 +195,7 @@ where
 pub(crate) struct MainConfig {
     #[arg(
         long,
-        value_parser=PossibleValuesParser::new(["error", "warn", "info", "debug"]),
+        value_parser=PossibleValuesParser::new(["error", "warn", "info", "debug", "trace"]),
         default_value = "info",
         help = "Log level",
     )]
