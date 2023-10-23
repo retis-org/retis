@@ -79,7 +79,7 @@ impl RawEventSectionFactory for SkbDropEventFactory {
         let raw = parse_single_raw_section::<BpfSkbDropEvent>(ModuleId::SkbDrop, &raw_sections)?;
         let drop_reason = raw.drop_reason;
 
-        // Check if the drop reasons were correctly initalized.
+        // Check if the drop reasons were correctly initialized.
         if self.reasons.is_none() {
             bail!("Factory was not initialized for consuming BPF events");
         }
