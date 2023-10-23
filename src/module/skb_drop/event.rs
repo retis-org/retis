@@ -47,30 +47,9 @@ impl SkbDropEventFactory {
 
     /// Initialize a new skb drop factory when handling events from BPF.
     pub(crate) fn bpf() -> Result<Self> {
-        let mut reasons = HashMap::new();
+        let reasons = Some(parse_enum("skb_drop_reason", &["SKB_", "DROP_REASON_"])?);
 
-        if let Ok((btf, Type::Enum(r#enum))) = inspector()?
-            .kernel
-            .btf
-            .resolve_type_by_name("skb_drop_reason")
-        {
-            for member in r#enum.members.iter() {
-                if member.val() < 0 {
-                    continue;
-                }
-                reasons.insert(
-                    member.val(),
-                    btf.resolve_name(member)?
-                        .trim_start_matches("SKB_")
-                        .trim_start_matches("DROP_REASON_")
-                        .to_string(),
-                );
-            }
-        }
-
-        Ok(Self {
-            reasons: Some(reasons),
-        })
+        Ok(Self { reasons })
     }
 }
 
@@ -100,4 +79,23 @@ impl RawEventSectionFactory for SkbDropEventFactory {
 #[repr(C, packed)]
 struct BpfSkbDropEvent {
     drop_reason: i32,
+}
+
+fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<i32, String>> {
+    let mut values = HashMap::new();
+
+    if let Ok((btf, Type::Enum(r#enum))) = inspector()?.kernel.btf.resolve_type_by_name(r#enum) {
+        for member in r#enum.members.iter() {
+            if member.val() < 0 {
+                continue;
+            }
+            let mut val = btf.resolve_name(member)?;
+            trim_start
+                .iter()
+                .for_each(|p| val = val.trim_start_matches(p).to_string());
+            values.insert(member.val(), val.to_string());
+        }
+    }
+
+    Ok(values)
 }
