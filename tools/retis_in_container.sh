@@ -52,7 +52,6 @@ fi
 
 # Run the Retis container.
 exec $runtime run $extra_args $term_opts -e TERM --privileged --rm --pid=host \
-      --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
       -v $kconfig:/kconfig:ro \
