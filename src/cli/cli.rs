@@ -20,8 +20,7 @@ use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
     module::{ModuleId, Modules},
-    process::cli::Print,
-    process::cli::Sort,
+    process::cli::*,
     profiles::{cli::ProfileCmd, Profile},
     VERSION_NAME,
 };
@@ -432,6 +431,7 @@ pub(crate) fn get_cli() -> Result<ThinCli> {
     cli.add_subcommand(Box::new(Print::new()?))?;
     cli.add_subcommand(Box::new(Sort::new()?))?;
     cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
+    cli.add_subcommand(Box::new(Pcap::new()?))?;
 
     #[cfg(feature = "benchmark")]
     cli.add_subcommand(Box::new(Benchmark::new()?))?;

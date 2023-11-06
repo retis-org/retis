@@ -44,23 +44,32 @@ impl Symbol {
         // We couldn't induce the type with certainty, fallback to a
         // non-foolproof logic.
 
-        // Events have a group:target format. Let's see if we match something.
-        if let Some((_, tp_name)) = name.split_once(':') {
-            // We might have an event, let's see if we can find a tracepoint
-            // symbol.
-            let tp_name = format!("__tracepoint_{tp_name}");
-            if inspector()?.kernel.get_symbol_addr(&tp_name).is_ok() {
-                return Ok(Symbol::Event(name.to_string()));
-            }
+        // At least check the symbol is in the kallsyms file. If the target
+        // contains a ':' we assume it's a tracepoint (group:target).
+        if inspector()?
+            .kernel
+            .get_symbol_addr(&match name.split_once(':') {
+                Some((_, tp_name)) => format!("__tracepoint_{tp_name}"),
+                _ => name.to_string(),
+            })
+            .is_err()
+        {
+            bail!("Symbol {} does not exist or isn't traceable", name);
         }
 
-        // Traceable functions should be in the kallsyms file. Let's see if we
-        // find a match.
-        if inspector()?.kernel.get_symbol_addr(name).is_ok() {
-            return Ok(Symbol::Func(name.to_string()));
-        }
+        Ok(Self::from_name_no_inspect(name))
+    }
 
-        bail!("Symbol {} does not exist or isn't traceable", name);
+    /// Create a new symbol given its name without inspecting the current
+    /// kernel. Result is non-foolprool but always returns a Symbol.
+    pub(crate) fn from_name_no_inspect(name: &str) -> Symbol {
+        match name.split_once(':') {
+            Some(_) => Symbol::Event(name.to_string()),
+            None => match name.strip_prefix("__tracepoint_") {
+                Some(name) => Symbol::Event(name.to_string()),
+                None => Symbol::Func(name.to_string()),
+            },
+        }
     }
 
     /// Create a new symbol given its address. We'll try hard to induce its

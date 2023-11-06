@@ -27,6 +27,7 @@ pub(super) const SECTION_DEV: u64 = 7;
 pub(super) const SECTION_NS: u64 = 8;
 pub(super) const SECTION_META: u64 = 9;
 pub(super) const SECTION_DATA_REF: u64 = 10;
+pub(super) const SECTION_PACKET: u64 = 11;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -337,5 +338,26 @@ pub(super) fn unmarshal_data_ref(raw_section: &BpfRawSection) -> Result<SkbDataR
         fclone: raw.fclone,
         users: raw.users,
         dataref: raw.dataref,
+    })
+}
+
+/// Raw packet and related metadata extracted from skbs.
+#[repr(C, packed)]
+pub(super) struct RawPacketEvent {
+    /// Length of the packet.
+    len: u32,
+    /// Lenght of the capture. <= len.
+    capture_len: u32,
+    /// Raw packet data.
+    packet: [u8; 256],
+}
+
+pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<SkbPacketEvent> {
+    let raw = parse_raw_section::<RawPacketEvent>(raw_section)?;
+
+    Ok(SkbPacketEvent {
+        len: raw.len,
+        capture_len: raw.capture_len,
+        packet: raw.packet[..(raw.capture_len as usize)].to_vec(),
     })
 }

@@ -39,6 +39,7 @@ nix = { version = "0.27", features = ["feature", "time", "user"] }
 once_cell = "1.15"
 path-clean = "1.0"
 pcap = "1.0"
+pcap-file = "2.0"
 plain = "0.2"
 rbpf = {version = "0.2", optional = true}
 regex = "1.7"
