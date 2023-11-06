@@ -279,8 +279,7 @@ static __always_inline int process_skb_ip(struct retis_raw_event *event,
 	/* L4 */
 
 	transport = BPF_CORE_READ(skb, transport_header);
-	if (!transport || transport == mac || transport == network ||
-	    transport == (u16)~0U)
+	if (!is_transport_data_valid(skb))
 		return 0;
 
 	if (protocol == IPPROTO_TCP && cfg->sections & BIT(COLLECT_TCP)) {
@@ -357,7 +356,7 @@ static __always_inline int process_skb_l2(struct retis_raw_event *event,
 		if (!e)
 			return 0;
 
-		if (mac != (u16)~0U) {
+		if (is_mac_data_valid(skb)) {
 			struct ethhdr *eth = (struct ethhdr *)(head + mac);
 
 			bpf_probe_read_kernel(e->src, sizeof(e->src), eth->h_source);
@@ -368,7 +367,7 @@ static __always_inline int process_skb_l2(struct retis_raw_event *event,
 	}
 
 	network = BPF_CORE_READ(skb, network_header);
-	if (!network || network == mac || network == (u16)~0U)
+	if (!is_network_data_valid(skb))
 		return 0;
 
 	/* IPv4/IPv6 and upper layers */
@@ -387,15 +386,15 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 {
 	unsigned char *head, *data;
 	struct skb_packet_event *e;
-	int size, data_offset;
 	u32 len, linear_len;
+	int size, headroom;
 	u16 mac, network;
 
 	data = BPF_CORE_READ(skb, data);
 	head = BPF_CORE_READ(skb, head);
 
-	data_offset = data - head;
-	if (data_offset < 0) /* Keep the verifier happy */
+	headroom = data - head;
+	if (headroom < 0) /* Keep the verifier happy */
 		return 0;
 
 	mac = BPF_CORE_READ(skb, mac_header);
@@ -404,10 +403,10 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 	linear_len = len - BPF_CORE_READ(skb, data_len); /* Linear buffer size */
 
 	/* Best case: mac offset is set and valid */
-	if (mac != (u16)~0U && (!network || (network && mac != network))) {
+	if (is_mac_data_valid(skb)) {
 		int mac_offset;
 
-		mac_offset = mac - data_offset;
+		mac_offset = mac - headroom;
 		size = min(linear_len - mac_offset, PACKET_CAPTURE_SIZE);
 		if (size <= 0)
 			return 0;
@@ -422,7 +421,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 	/* Valid network offset with an unset or invalid mac offset: we can fake
 	 * the eth header.
 	 */
-	} else if (network && network != (u16)~0U) {
+	} else if (is_network_data_valid(skb)) {
 		u16 etype = BPF_CORE_READ(skb, protocol);
 		struct ethhdr *eth;
 		int network_offset;
@@ -433,7 +432,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		if (!etype)
 			return 0;
 
-		network_offset = network - data_offset;
+		network_offset = network - headroom;
 		size = min(linear_len - network_offset, PACKET_CAPTURE_SIZE);
 		size -= sizeof(struct ethhdr);
 		if (size <= 0)
