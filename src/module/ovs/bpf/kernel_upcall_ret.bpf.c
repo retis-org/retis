@@ -9,7 +9,7 @@ struct upcall_ret_event {
 };
 
 /* Hook for kretprobe:ovs_dp_upcall */
-DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	struct upcall_context *uctx;
 	struct upcall_ret_event *ret;
 	u64 tid = bpf_get_current_pid_tgid();

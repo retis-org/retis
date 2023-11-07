@@ -559,7 +559,7 @@ skip_netns:
 	return process_skb_l2(event, cfg, skb, head);
 }
 
-DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);

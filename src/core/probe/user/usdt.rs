@@ -3,6 +3,7 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::SkelBuilder;
 
+use crate::core::filters::Filter;
 use crate::core::probe::builder::*;
 use crate::core::probe::{Hook, Probe, ProbeType};
 
@@ -24,7 +25,12 @@ impl ProbeBuilder for UsdtBuilder {
         UsdtBuilder::default()
     }
 
-    fn init(&mut self, map_fds: Vec<(String, RawFd)>, hooks: Vec<Hook>) -> Result<()> {
+    fn init(
+        &mut self,
+        map_fds: Vec<(String, RawFd)>,
+        hooks: Vec<Hook>,
+        _filters: Vec<Filter>,
+    ) -> Result<()> {
         self.map_fds = map_fds;
         if hooks.len() > 1 {
             bail!("USDT Probes only support a single hook");
@@ -81,7 +87,7 @@ mod tests {
         let p = Process::from_pid(std::process::id() as i32).unwrap();
 
         // It's for now, the probes below won't do much.
-        assert!(builder.init(Vec::new(), Vec::new()).is_ok());
+        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
         assert!(builder
             .attach(&Probe::usdt(UsdtProbe::new(&p, "test_builder::usdt").unwrap()).unwrap())
             .is_ok());

@@ -226,7 +226,7 @@ const struct nft_verdict *nft_get_verdict(struct retis_context *ctx,
 }
 
 
-DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	const struct nft_verdict *verdict;
 	const struct nft_chain *chain;
 	struct nft_traceinfo *info;

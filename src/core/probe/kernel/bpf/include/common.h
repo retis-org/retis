@@ -10,6 +10,7 @@
 #include <events.h>
 #include <helpers.h>
 #include <packet_filter.h>
+#include <meta_filter.h>
 #include <skb_tracking.h>
 
 /* Kernel section of the event data. */
@@ -52,12 +53,17 @@ struct {
 /* Defines the bit position for each filter */
 enum {
 	RETIS_F_PASS(PACKET, 0),
+	RETIS_F_PASS(META, 1),
 };
 
 /* Filters chain is an and */
 #define F_AND		0
 /* Filters chain is an or */
 #define F_OR		1
+
+#define RETIS_ALL_FILTERS	(RETIS_F_PACKET_PASS | RETIS_F_META_PASS)
+
+#define RETIS_TRACKABLE(mask)	(!(mask ^ RETIS_ALL_FILTERS))
 
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
@@ -166,7 +172,7 @@ static __always_inline void filter(struct retis_context *ctx)
 	 * - Filtering packets when the whole data isn't available anymore.
 	 */
 	if (skb_is_tracked(skb)) {
-		ctx->filters_ret |= RETIS_F_PACKET_PASS;
+		ctx->filters_ret |= RETIS_ALL_FILTERS;
 		return;
 	}
 
@@ -180,6 +186,7 @@ static __always_inline void filter(struct retis_context *ctx)
 	 */
 	packet_filter(&fctx);
 	ctx->filters_ret |= (!!fctx.ret) << RETIS_F_PACKET_PASS_SH;
+	ctx->filters_ret |= (!!meta_filter(skb)) << RETIS_F_META_PASS_SH;
 }
 
 /* The chaining function, which contains all our core probe logic. This is
@@ -213,7 +220,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	 * logic runs even if later ops fail: we don't want to miss information
 	 * because of non-fatal errors!
 	 */
-	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
+	if (RETIS_TRACKABLE(ctx->filters_ret))
 		track_skb_start(ctx);
 
 	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
@@ -290,7 +297,7 @@ exit:
 	/* Cleanup stage while tracking an skb. If no skb is available this is a
 	 * no-op.
 	 */
-	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
+	if (RETIS_TRACKABLE(ctx->filters_ret))
 		track_skb_end(ctx);
 
 	return 0;

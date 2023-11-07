@@ -13,7 +13,9 @@ use log::{debug, info, warn};
 use nix::unistd::Uid;
 
 use super::cli::Collect;
-use crate::{cli::SubCommandRunner, process::display::PrintSingle};
+use crate::{
+    cli::SubCommandRunner, core::filters::meta::filter::FilterMeta, process::display::PrintSingle,
+};
 
 #[cfg(not(test))]
 use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
@@ -134,6 +136,12 @@ impl Collectors {
         if let Some(f) = &collect.args()?.packet_filter {
             let fb = FilterPacket::from_string(f.to_string())?;
             probes.register_filter(Filter::Packet(BpfFilter(fb.to_bytes()?)))?;
+        }
+
+        if let Some(f) = &collect.args()?.meta_filter {
+            let fb =
+                FilterMeta::from_string(f.to_string()).map_err(|e| anyhow!("meta filter: {e}"))?;
+            probes.register_filter(Filter::Meta(fb))?;
         }
 
         Ok(())
