@@ -86,12 +86,20 @@ impl BtfInfo {
     ///
     /// vmlinux is given priority in the lookups.
     pub(crate) fn resolve_type_by_name(&self, name: &str) -> Result<(&Btf, Type)> {
-        match self.vmlinux.resolve_type_by_name(name) {
-            Ok(res) => Ok((&self.vmlinux, res)),
+        match self.vmlinux.resolve_types_by_name(name) {
+            Ok(mut res) => Ok((
+                &self.vmlinux,
+                res.pop()
+                    .ok_or_else(|| anyhow!("failed to pop symbol {name}"))?,
+            )),
             Err(e) => {
                 for module in self.modules.iter() {
-                    if let Ok(res) = module.resolve_type_by_name(name) {
-                        return Ok((module, res));
+                    if let Ok(mut res) = module.resolve_types_by_name(name) {
+                        return Ok((
+                            module,
+                            res.pop()
+                                .ok_or_else(|| anyhow!("failed to pop symbol {name}"))?,
+                        ));
                     }
                 }
                 Err(e)

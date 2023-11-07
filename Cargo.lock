@@ -154,8 +154,7 @@ checksum = "327762f6e5a765692301e5bb513e0d9fef63be86bbc14528052b1cd3e6f03e07"
 [[package]]
 name = "btf-rs"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16ef76e74fca4e68764ec47b49ed20e92513c4cc8e80d21315ef0dc8de1b0aa9"
+source = "git+https://github.com/retis-org/btf-rs?rev=62d3cd4d61b4#62d3cd4d61b406701d7b7a8cd4d4ffd2224a898b"
 dependencies = [
  "anyhow",
  "byteorder",

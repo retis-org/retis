@@ -100,11 +100,11 @@ impl CtEventFactory {
             .resolve_type_by_name("tcp_conntrack")
         {
             for member in r#enum.members.iter() {
-                if member.val() < 0 {
+                if (member.val() as i32) < 0 {
                     continue;
                 }
                 self.tcp_states.insert(
-                    member.val(),
+                    member.val() as i32,
                     btf.resolve_name(member)?
                         .trim_start_matches("TCP_CONNTRACK_")
                         .to_string(),
