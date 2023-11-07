@@ -79,6 +79,21 @@ Example: --filter-packet "ip dst host 10.0.0.1""#
     )]
     pub(super) packet_filter: Option<String>,
     #[arg(
+        id = "filter-meta",
+        short = 'm',
+        long,
+        help = r#"Add a meta filter to all targets. A meta filter compares a field within a kernel structure against a user-provided input.
+The syntax follows:
+sk_buff.member1.[...].memberN.member_leaf [==|<=|>=|!=] value
+With value ::= "string" | number.
+"==" is the only operator valid for "string" assuming member_leaf type is a pointer to a char or array of chars.
+
+Examples of meta filters:
+--filter-meta 'sk_buff.dev.name == "eth0"'
+--filter-meta 'sk_buff.dev.nd_net.net.ns.inum == 4026531840'"#
+    )]
+    pub(super) meta_filter: Option<String>,
+    #[arg(
         long,
         default_value = "false",
         help = r#"Allow the tool to setup all the system changes needed to make the tracing
