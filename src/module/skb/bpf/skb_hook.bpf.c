@@ -384,18 +384,14 @@ static __always_inline int process_skb_l2(struct retis_raw_event *event,
 static __always_inline int process_packet(struct retis_raw_event *event,
 					  struct sk_buff *skb)
 {
+	u32 len, linear_len, headroom;
 	unsigned char *head, *data;
 	struct skb_packet_event *e;
-	u32 len, linear_len;
-	int size, headroom;
 	u16 mac, network;
+	int size;
 
-	data = BPF_CORE_READ(skb, data);
 	head = BPF_CORE_READ(skb, head);
-
-	headroom = data - head;
-	if (headroom < 0) /* Keep the verifier happy */
-		return 0;
+	headroom = BPF_CORE_READ(skb, data) - head;
 
 	mac = BPF_CORE_READ(skb, mac_header);
 	network = BPF_CORE_READ(skb, network_header);
