@@ -7,6 +7,6 @@ collector also adds a probe on the `skb:kfree_skb` tracepoint.
 
 ## Event
 
-```
+```none
 drop ({drop reason})
 ```

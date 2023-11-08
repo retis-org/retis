@@ -11,7 +11,7 @@ specific data. Currently supported protocols are IPv4/6, TCP, UDP and ICMP.
 
 The `ct` events start with the state information,
 
-```
+```none
 ct_state {state}
 ```
 
@@ -20,14 +20,14 @@ ct_state {state}
 
 Then the event is followed by a protocol specific part. For TCP and UDP,
 
-```
+```none
 {protocol name} ({TCP state if any}) orig [{src ip}.{src port} > {dst ip}.{dst port}]
     reply [{src ip}.{src port} > {dst ip}.{dst port}]
 ```
 
 For ICMP,
 
-```
+```none
 icmp orig [{src ip} > {dst ip} type {type number} code {code number} id {id}]
     reply [{src ip} > {dst ip} type {type number} code {code number} id {id}]
 ```

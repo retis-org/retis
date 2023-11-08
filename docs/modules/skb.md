@@ -28,31 +28,31 @@ or invalid fields are automatically hidden.
 
 ### Ns event section
 
-```
+```none
 ns {namespace id}
 ```
 
 ### Net device event section
 
-```
+```none
 if {interface index} ({interface name}) rxif {rx interface index}
 ```
 
 ### Ethernet section
 
-```
+```none
 {src mac} > {dst mac} ethertype {etype name} ({etype hex})
 ```
 
 ### ARP section
 
-```
+```none
 request who-has {ip} tell {ip}
 ```
 
 or,
 
-```
+```none
 reply {ip} is at {mac}
 ```
 
@@ -60,7 +60,7 @@ reply {ip} is at {mac}
 
 For IPv4:
 
-```
+```none
 {src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} tos {tos} id {id}
     off {frag offset} [{flags}] len {packet len} proto {protocol name}
 ```
@@ -69,14 +69,15 @@ For IPv4:
 - `flags` are constructed with a combination of `+`, `DF` and `rsvd`.
 
 For IPv6:
-```
+
+```none
 {src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} label {flow label}
     len {packet len} proto {protocol name}
 ```
 
 ### TCP section
 
-```
+```none
 flags [{flags}] seq {sequence} ack {acked sequence} win {window}
 ```
 
@@ -86,13 +87,13 @@ flags [{flags}] seq {sequence} ack {acked sequence} win {window}
 
 ### UDP section
 
-```
+```none
 len {UDP data len}
 ```
 
 # ICMP section
 
-```
+```none
 type {type number} code {code number}
 ```
 
@@ -101,7 +102,7 @@ type {type number} code {code number}
 Those two sections report metadata and reference counting from the socket buffer
 itself.
 
-```
+```none
 skb [csum {packet checksum} hash {skb hash} data_len {skb data lenght} priority {skb priority}
     {flags} fclone {fast clone count} users {user count} dataref {skb refcount}]
 ```

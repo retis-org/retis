@@ -4,7 +4,7 @@ The `nft` collector provides insight into Netfilter rules and actions, by
 automatically adding a probe on `__nft_trace_packet`. For the `nft` collector to
 work a special dummy `nft` table must be added:
 
-```
+```none
 table inet Retis_Table {
     chain Retis_Chain {
         meta nftrace set 1
@@ -23,7 +23,7 @@ reports only `drop` and `accept` verdicts.
 
 ## Event
 
-```
+```none
 table {table name} ({table handle}) chain {chain name} ({chain handle})
     handle {rule handle} {verdict} chain {chain name}
 ```
@@ -35,7 +35,7 @@ not explicit and comes from the policy.
 
 The `nft` collector will output events like the following:
 
-```
+```none
 $ retis collect --allow-system-changes -c nft
 53529978697438 [swapper/0] 0 [k] __nft_trace_packet
   table firewalld (2) chain filter_PREROUTING (164) accept (policy)
@@ -54,7 +54,7 @@ accept rules were hit:
 The Netfilter rule set can be dumped including handles, by using the following
 command:
 
-```
+```none
 $ nft -a list ruleset
 [...]
 table inet firewalld { # handle 2
@@ -82,7 +82,7 @@ table inet firewalld { # handle 2
 Using this events can be mapped to the `nft` configuration. First packet hit
 the accept policy below:
 
-```
+```none
 chain filter_PREROUTING { # handle 164
 	type filter hook prerouting priority filter + 10; policy accept;    <--
 
@@ -90,7 +90,7 @@ chain filter_PREROUTING { # handle 164
 
 Second packet hit the accept action below:
 
-```
+```none
 chain filter_INPUT { # handle 165
 	type filter hook input priority filter + 10; policy accept;
 	ct state { established, related } accept # handle 169               <--
