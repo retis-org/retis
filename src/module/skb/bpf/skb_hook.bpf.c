@@ -388,6 +388,12 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 	unsigned char *head, *data;
 	struct skb_packet_event *e;
 	u16 mac, network;
+	/* Due to verifier issues on some (old) kernel versions, namely
+	 * 5.15.0-88-generic on Ubuntu 22.04, size is limited to 0xff when
+	 * retrieving packets starting at the mac offset and to 0xef for packets
+	 * starting at the network offset. The difference in mask is due to the
+	 * fake eth header added in the later case.
+	 */
 	int size;
 
 	head = BPF_CORE_READ(skb, head);
@@ -413,7 +419,8 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 			return 0;
 
 		e->len = len - mac_offset;
-		bpf_probe_read_kernel(e->packet, size, head + mac);
+		e->capture_len = size & 0xff;
+		bpf_probe_read_kernel(e->packet, size & 0xff, head + mac);
 	/* Valid network offset with an unset or invalid mac offset: we can fake
 	 * the eth header.
 	 */
@@ -445,14 +452,14 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		eth->h_proto = etype;
 
 		e->len = len - network_offset + sizeof(*eth);
-		bpf_probe_read_kernel(e->packet + sizeof(*eth), size,
+		e->capture_len = size & 0xef;
+		bpf_probe_read_kernel(e->packet + sizeof(*eth), size & 0xef,
 				      head + network);
 	/* Can't guess any useful packet offset */
 	} else {
 		return 0;
 	}
 
-	e->capture_len = size;
 	return 0;
 }
 
