@@ -55,18 +55,18 @@ impl SymbolCondition {
 /// Specifies a condition that must be met for a CollectProfile to be applied.
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type")]
-pub(crate) enum CollectCondition {
+pub(crate) enum ProfileCondition {
     #[serde(rename = "version")]
     Version(VersionCondition),
     #[serde(rename = "symbol")]
     Symbol(SymbolCondition),
 }
 
-impl CollectCondition {
+impl ProfileCondition {
     fn matches(&self) -> Result<bool> {
         match self {
-            CollectCondition::Version(v) => v.matches(),
-            CollectCondition::Symbol(s) => s.matches(),
+            ProfileCondition::Version(v) => v.matches(),
+            ProfileCondition::Symbol(s) => s.matches(),
         }
     }
 }
@@ -88,7 +88,7 @@ pub(crate) struct CollectProfile {
     pub(crate) name: String,
     /// Set of conditions associated with the profile
     #[serde(default = "Vec::default")]
-    pub(crate) when: Vec<CollectCondition>,
+    pub(crate) when: Vec<ProfileCondition>,
     /// Arguments to be appended to the CLI if this profile is active
     pub(crate) args: BTreeMap<String, ArgValue>,
 }
@@ -298,7 +298,7 @@ mod tests {
                 .pop()
                 .unwrap()
             {
-                CollectCondition::Version(v) => return v,
+                ProfileCondition::Version(v) => return v,
                 _ => panic!("Wrong condition type"),
             }
         }
