@@ -8,20 +8,19 @@ use std::{
 use libbpf_cargo::SkeletonBuilder;
 use memmap2::Mmap;
 
-const FILTER_INCLUDE_PATH: &str = "src/core/filters/packets/bpf/include";
 const BINDGEN_HEADER: &str = "src/core/bpf_sys/include/bpf-sys.h";
 const INCLUDE_PATHS: &[&str] = &[
+    "src/core/events/bpf/include",
+    "src/core/filters/packets/bpf/include",
     "src/core/probe/bpf/include",
     "src/core/probe/kernel/bpf/include",
     "src/core/probe/user/bpf/include",
-    "src/core/events/bpf/include",
     "src/core/tracking/bpf/include",
     // Taking errno.h from libc instead of linux headers.
     // TODO: Remove when we fix proper header dependencies.
     "/usr/include/x86_64-linux-gnu",
     "vendor/linux/include",
     "vendor/linux/asm/x86/include",
-    FILTER_INCLUDE_PATH,
 ];
 const OVS_INCLUDES: &[&str] = &["src/module/ovs/bpf/include"];
 const CLANG_ARGS: &[&str] = &["-Werror"];
