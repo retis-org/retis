@@ -52,7 +52,7 @@ impl SymbolCondition {
     }
 }
 
-/// Specifies a condition that must be met for a CollectProfile to be applied.
+/// Specifies a condition that must be met for a SubcommandProfile to be applied.
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type")]
 pub(crate) enum ProfileCondition {
@@ -82,7 +82,7 @@ pub(crate) enum ArgValue {
 /// Collect profile.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
-pub(crate) struct CollectProfile {
+pub(crate) struct SubcommandProfile {
     /// Name of this collect profile
     #[serde(default = "default_name")]
     pub(crate) name: String,
@@ -93,7 +93,7 @@ pub(crate) struct CollectProfile {
     pub(crate) args: BTreeMap<String, ArgValue>,
 }
 
-impl CollectProfile {
+impl SubcommandProfile {
     fn matches(&self) -> Result<bool> {
         if self.when.is_empty() {
             return Ok(true);
@@ -124,7 +124,7 @@ pub(crate) struct Profile {
     pub(crate) about: Option<String>,
     /// Collect Profiles
     #[serde(default = "Vec::new")]
-    pub(crate) collect: Vec<CollectProfile>,
+    pub(crate) collect: Vec<SubcommandProfile>,
 }
 
 impl Profile {
@@ -205,7 +205,7 @@ impl Profile {
     }
 
     /// Evaluate collect profiles and return the one that matches.
-    pub fn match_collect(&self) -> Result<Option<&CollectProfile>> {
+    pub fn match_collect(&self) -> Result<Option<&SubcommandProfile>> {
         if self.collect.is_empty() {
             return Ok(None);
         }
