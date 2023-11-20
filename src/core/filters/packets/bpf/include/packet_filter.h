@@ -6,7 +6,7 @@
  * Keep in sync with its Rust counterpart in
  * core::filters::packets::ebpf.
  */
-struct retis_filter_context {
+struct retis_packet_filter_ctx {
 	/* Input */
 	char *data;		/* points to the beginning of the mac header. */
 	unsigned int len;	/* linear length. */

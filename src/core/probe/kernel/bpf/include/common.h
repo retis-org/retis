@@ -173,9 +173,9 @@ HOOK(9)
  * fail to load and the verifier will report an error.
  */
 static __always_inline
-unsigned int packet_filter(struct retis_filter_context *ctx)
+unsigned int packet_filter(struct retis_packet_filter_ctx *ctx)
 {
-	register struct retis_filter_context *ctx_reg asm("r1");
+	register struct retis_packet_filter_ctx *ctx_reg asm("r1");
 	u8 stack[STACK_SIZE] __attribute__ ((aligned (8)));
 	register u64 *fp asm("r9");
 
@@ -214,7 +214,7 @@ static __always_inline char *skb_mac_header(struct sk_buff *skb)
 
 static __always_inline void filter(struct retis_context *ctx)
 {
-	struct retis_filter_context fctx = {};
+	struct retis_packet_filter_ctx fctx = {};
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);
