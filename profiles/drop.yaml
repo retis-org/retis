@@ -5,6 +5,9 @@ collect:
   - args:
       collectors: skb-drop,skb
       stack: ~
+pcap:
+  - args:
+      probe: tp:skb:kfree_skb
 ---
 version: 1.0
 name: nft-dropmon
@@ -14,3 +17,6 @@ collect:
       collectors: nft,skb
       nft_verdicts: drop
       stack: ~
+pcap:
+  - args:
+      probe: kprobe:__nft_trace_packet
