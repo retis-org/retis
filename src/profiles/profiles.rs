@@ -122,9 +122,12 @@ pub(crate) struct Profile {
     pub(crate) version: ApiVersion,
     /// Information about the profile in human readable format.
     pub(crate) about: Option<String>,
-    /// Collect Profiles
+    /// Collect profiles
     #[serde(default = "Vec::new")]
     pub(crate) collect: Vec<SubcommandProfile>,
+    /// Pcap profiles
+    #[serde(default = "Vec::new")]
+    pub(crate) pcap: Vec<SubcommandProfile>,
 }
 
 impl Profile {
@@ -218,6 +221,20 @@ impl Profile {
         Ok(None)
     }
 
+    /// Evaluate pcap profiles and return the one that matches.
+    pub fn match_pcap(&self) -> Result<Option<&SubcommandProfile>> {
+        if self.pcap.is_empty() {
+            return Ok(None);
+        }
+
+        for p in self.pcap.iter() {
+            if p.matches()? {
+                return Ok(Some(p));
+            }
+        }
+        Ok(None)
+    }
+
     /// Generate cli arguments from a profile. The result is a list of arguments that can be
     /// concatenated to the ones provided by the user.
     pub fn cli_args(&self, subcommand: &str) -> Result<Vec<OsString>> {
@@ -236,6 +253,20 @@ impl Profile {
                 };
                 info!("Applying profile {}: {}", self.name, collect.name);
                 &collect.args
+            }
+            "pcap" => {
+                let pcap = match self.match_pcap()? {
+                    None => {
+                        warn!(
+                            "None of the pcap profiles defined in {} were selected",
+                            self.name
+                        );
+                        return Ok(result);
+                    }
+                    Some(pcap) => pcap,
+                };
+                info!("Applying profile {}: {}", self.name, pcap.name);
+                &pcap.args
             }
             _ => bail!("Subcommand {subcommand} does not support profile enhancement"),
         };
