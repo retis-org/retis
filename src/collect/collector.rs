@@ -30,7 +30,7 @@ use crate::{
             packets::filter::FilterPacket,
         },
         inspect::check::collection_prerequisites,
-        kernel::{symbol::matching_functions_to_symbols, Symbol},
+        kernel::symbol::{matching_events_to_symbols, matching_functions_to_symbols},
         probe::{self, Probe, ProbeManager},
         signals::Running,
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
@@ -429,7 +429,8 @@ impl Collectors {
         // supporting it.
         let mut symbols = match type_str {
             "kprobe" | "kretprobe" => matching_functions_to_symbols(target)?,
-            _ => vec![Symbol::from_name(target)?],
+            "tp" => matching_events_to_symbols(target)?,
+            x => bail!("Invalid TYPE {}. See the help.", x),
         };
 
         let mut probes = Vec::new();

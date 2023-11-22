@@ -188,9 +188,33 @@ impl fmt::Display for Symbol {
     }
 }
 
+pub(crate) fn matching_events_to_symbols(target: &str) -> Result<Vec<Symbol>> {
+    let symbols = inspector()?
+        .kernel
+        .matching_events(target)?
+        .iter()
+        .filter_map(|t| {
+            // Filter valid tracepoints, eg. ones where we can find an address
+            // using our Symbol logic.
+            if let Ok(sym) = Symbol::from_name(t) {
+                if sym.addr().is_ok() {
+                    return Some(sym);
+                }
+            }
+            None
+        })
+        .collect::<Vec<Symbol>>();
+
+    if symbols.is_empty() {
+        bail!("Could not find a tracepoint matching '{target}'");
+    }
+
+    Ok(symbols)
+}
+
 pub(crate) fn matching_functions_to_symbols(target: &str) -> Result<Vec<Symbol>> {
     let inspector = inspector()?;
-    let symbols: Vec<Symbol> = inspector
+    let symbols = inspector
         .kernel
         .matching_functions(target)?
         .iter()
@@ -202,10 +226,10 @@ pub(crate) fn matching_functions_to_symbols(target: &str) -> Result<Vec<Symbol>>
             }
             None
         })
-        .collect();
+        .collect::<Vec<Symbol>>();
 
     if symbols.is_empty() {
-        bail!("Could not get traceable symbols matching '{target}'");
+        bail!("Could not find a traceable function matching '{target}'");
     }
 
     Ok(symbols)
