@@ -181,6 +181,7 @@ impl OvsModule {
         #[repr(C)]
         struct ExecuteActionsContext {
             skb: u64,
+            queue_id: u32,
             command: bool,
         }
         let opts = libbpf_sys::bpf_map_create_opts {
