@@ -212,6 +212,12 @@ static __always_inline int batch_process_op(enum ovs_operation_type type,
 	if (!batch)
 		return -1;
 
+	if (!batch->total)
+		/* There are no elements in this batch. This probably means
+		 * we missed the recv_upcall event (e.g: we started collecting
+		 * events after it happened). */
+		return 0;
+
 	if (!batch_is_processing(batch)) {
 		batch_start_processing(batch);
 	}
