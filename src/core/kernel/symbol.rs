@@ -85,9 +85,9 @@ impl Symbol {
         // Check if the symbol is a tracepoint.
         let name = match target.strip_prefix("__tracepoint_") {
             Some(strip) => {
-                match inspector()?.kernel.find_matching_event(strip) {
-                    Some(event) => event,
-                    None => {
+                match inspector()?.kernel.matching_events(&format!("*:{strip}")) {
+                    Ok(mut events) if events.len() == 1 => events.pop().unwrap(),
+                    _ => {
                         // Not much we can do, we know it's a valid one. Let's
                         // still return an object.
                         return Ok(Symbol::Event(format!("unknow:{strip}")));
