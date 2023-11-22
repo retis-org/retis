@@ -44,9 +44,11 @@ not released. If exhausted, no stack trace will be included."
 follow the [TYPE:]TARGET pattern. When TYPE is not set 'kprobe' is used.
 
 Valid TYPEs:
-- kprobe: kernel probes. Wildcards (*) can be used, eg. \"tcp_*\".
+- kprobe: kernel probes.
 - kretprobe: kernel return probes.
 - tp: kernel tracepoints.
+
+Wildcards (*) can be used, eg. \"kprobe:tcp_*\" or \"tp:skb:*\".
 
 Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
     )]
