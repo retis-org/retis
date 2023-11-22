@@ -15,8 +15,11 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	queue_id = queue_id_gen_skb(skb);
 
 	if (bpf_map_lookup_elem(&flow_exec_tracking, &queue_id)) {
-		/* Indicate this flow execution is the result of a userpace
-		 * command */
+		/* Indicate this flow execution is the result of a userspace
+		 * command and store the current queue_id so that further
+		 * actions will use the same one regardless of packet
+		 * modifications. */
+		ectx.queue_id = queue_id;
 		ectx.command = true;
 	}
 	bpf_map_delete_elem(&flow_exec_tracking, &queue_id);

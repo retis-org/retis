@@ -57,6 +57,7 @@ struct {
 /* Context saved between the begining and end of ovs_execute_actions calls. */
 struct execute_actions_ctx {
 	struct sk_buff *skb;
+	u32 queue_id;
 	bool command;
 };
 
