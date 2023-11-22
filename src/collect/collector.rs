@@ -428,7 +428,7 @@ impl Collectors {
         // Convert the target to a list of matching ones for probe types
         // supporting it.
         let mut symbols = match type_str {
-            "kprobe" => matching_functions_to_symbols(target)?,
+            "kprobe" | "kretprobe" => matching_functions_to_symbols(target)?,
             _ => vec![Symbol::from_name(target)?],
         };
 
