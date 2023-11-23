@@ -35,6 +35,11 @@ else
 	exit -1
 fi
 
+# Determine if OVS is installed on the host and, if so, mount its binary.
+if binary=$(command -v ovs-vswitchd); then
+	ovs_binary_mount="-v ${binary}:${binary}:ro"
+fi
+
 # Run the Retis container.
 $runtime run $extra_args --privileged --rm -it --pid=host \
       --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
@@ -42,4 +47,5 @@ $runtime run $extra_args --privileged --rm -it --pid=host \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
       -v $kconfig:/kconfig:ro \
       -v $(pwd):/data:rw \
+      $ovs_binary_mount \
       quay.io/retis/retis:$RETIS_TAG "$@"
