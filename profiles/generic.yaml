@@ -7,6 +7,8 @@ collect:
       probe:
         - tp:net:netif_receive_skb
         - tp:net:netif_rx
+        - tp:net:napi_gro_receive_entry
+        - tp:net:napi_gro_frags_entry
         - kprobe:arp_process
         - kprobe:ip_rcv
         - kprobe:ipv6_rcv
