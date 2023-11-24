@@ -56,31 +56,6 @@ struct exec_ct {
 	u16 max_port;
 };
 
-static __always_inline void handle_tracking(struct retis_context *ctx,
-					   struct retis_raw_event *event)
-{
-	struct exec_track_event *track;
-	struct retis_packet_buffer *buff;
-	struct sk_buff *skb;
-	int zero = 0;
-
-	skb = __retis_get_sk_buff(ctx);
-	if (!skb)
-		return;
-
-	buff = bpf_map_lookup_elem(&packet_buffers, &zero);
-	if (!buff)
-		return;
-
-	track = get_event_section(event, COLLECTOR_OVS, OVS_DP_ACTION_TRACK,
-				  sizeof(*track));
-	if (!track)
-		return;
-
-	track->queue_id = hash_skb(buff, skb);
-	return;
-}
-
 static __always_inline void fill_nat(struct ovs_conntrack_info *info,
 				     struct exec_ct *ct)
 {
@@ -155,10 +130,15 @@ DEFINE_HOOK_RAW(
 
 	exec->action = nla_type(attr);
 	exec->recirc_id = BPF_CORE_READ(key, recirc_id);
-	/* Do not calculate tracking information if it's not a flow_exec action
-	 * upcall. */
+	/* Do not emit tracking information if it's not a flow_exec action. */
 	if (ectx->command) {
-		handle_tracking(ctx, event);
+		struct exec_track_event *track =
+			get_event_section(event, COLLECTOR_OVS,
+					  OVS_DP_ACTION_TRACK, sizeof(*track));
+		if (!track)
+			return 0;
+
+		track->queue_id = ectx->queue_id;
 	}
 
 	// Add action-specific data for some actions.
