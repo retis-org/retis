@@ -8,11 +8,17 @@ repo_url: https://github.com/retis-org/retis
 
 nav:
   - Overview: README.md
+  - Profiles: profiles.md
   - Installation: install.md
   - Requirements: requirements.md
   - Contributing: CONTRIBUTING.md
   - Collectors:
+      - skb: modules/skb.md
+      - skb-drop: modules/skb_drop.md
+      - skb-tracking: modules/skb_tracking.md
       - ovs: modules/ovs.md
+      - ct: modules/ct.md
+      - nft: modules/nft.md
 
 theme: readthedocs
 plugins:

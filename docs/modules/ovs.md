@@ -103,7 +103,7 @@ retis is able to keep track of it and know which skb it belongs to.
 ### Example
 Let's see an example. Say we capture ICMP traffic going through OVS and store the events in a file
 with the following command:
-```
+```none
 $ retis -p generic collect -f "icmp" -c ovs --ovs-track -o /tmp/events.json
 ```
 
@@ -111,13 +111,13 @@ We use the `generic` command to also probe some common places in the networking 
 Now we use retis' post-processing `sort` command to group together events that belong to the same
 packet.
 
-```
+```none
 $ retis sort /tmp/events.json
 ```
 
 We would be able to visualize OVS's behavior perfectly. First we see the packet being processed by the IP
 stack.
-```
+```none
 202388856790511 [ping] 3215414 [tp] net:net_dev_queue #b81253ea5defffff977be5ec6f80 (skb 18446629157470561024) n 0
   if 178 (p1_r) 172.200.0.2 > 172.200.0.3 ttl 64 tos 0x0 id 22378 off 0 [DF] len 84 proto ICMP (1) type 8 code 0
   + 202388856802883 [ping] 3215414 [k] skb_scrub_packet #b81253ea5defffff977be5ec6f80 (skb 18446629157470561024) n 1
@@ -131,7 +131,7 @@ stack.
 ```
 Then we see how the first packet hits the OVS kernel module and is is upcalled. The *upcall* event is followed by an *upcall_enqueue* event:
 
-```
+```none
   + 202388857516033 [handler7] 3215286/3215259 [tp] openvswitch:ovs_dp_upcall #b81253f4ce4bffff977beedbe580 (skb 18446629158226620928) n 5
     if 181 (p2_l) rxif 181 172.200.0.3 > 172.200.0.2 ttl 64 tos 0x0 id 58112 off 0 len 84 proto ICMP (1) type 0 code 0
     upcall (miss) port 3644007146 cpu 7
@@ -146,7 +146,7 @@ It's called a "queue identifier".
 
 After the *upcall_enqueue* event, USDT events are generated showing userspace processing of the packet:
 
-```
+```none
   + 202388857658575 [handler9] 3215302/3215259 [u] dpif_recv:recv_upcall (ovs-vswitchd) #b81253f4ce4bffff977beedbe580 (skb 18446629158226620928) n 8
     upcall_recv q 2809249329 pkt_size 98
   + 202388857762836 [handler9] 3215302/3215259 [u] dpif_netlink_operate__:op_flow_put (ovs-vswitchd) #b81253f4ce4bffff977beedbe580 (skb 18446629158226620928) n 9
@@ -159,7 +159,7 @@ Remember the unique id we saw in the *upcall_enqueue* event? Here it is again on
 that belongs to the same packet!
 
 Then, the packet is re-injected into the kernel and we see an action being executed on it:
-```
+```none
   + 202388857827572 [handler9] 3215302/3215259 [tp] openvswitch:ovs_do_execute_action #b81253f4ce4bffff977beedbe580 (skb 18446629158226620928) n 11
     if 181 (p2_l) 172.200.0.3 > 172.200.0.2 ttl 64 tos 0x0 id 58112 off 0 len 84 proto ICMP (1) type 0 code 0
     exec oport 2 q 2809249329
@@ -168,7 +168,7 @@ The upcall tracking information is present on the *action_execute* event as well
 
 Finally, we see more events as the packet leaves OVS and is further processed by the kernel stack:
 
-```
+```none
   + 202388857835660 [handler9] 3215302/3215259 [tp] net:net_dev_queue #b81253f4ce4bffff977beedbe580 (skb 18446629158226620928) n 12
     if 179 (p1_l) 172.200.0.3 > 172.200.0.2 ttl 64 tos 0x0 id 58112 off 0 len 84 proto ICMP (1) type 0 code 0
   + 202388857842985 [handler9] 3215302/3215259 [k] skb_scrub_packet #b81253f4ce4bffff977beedbe580 (skb 18446629158226620928) n 13

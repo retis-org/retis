@@ -123,9 +123,9 @@ HTTP documentation is automatically generated for releases and the
 `main` branch. However, if you want to generate a local preview of the
 documentation, you can use [MkDocs](https://www.mkdocs.org/) directly:
 
-```
-pip install -r docs/requirements.txt
-mkdocs serve
+```none
+$ pip install -r docs/requirements.txt
+$ mkdocs serve
 ```
 
 Then point your browser to `localhost:8000`.
