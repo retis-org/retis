@@ -20,6 +20,12 @@ else
 	exit -1
 fi
 
+# We can't use a pseudo-tty (see `-t` option in `man podman run`) when using
+# a command outputting a specific format to stdout (which could be piped into
+# another utility parsing it), like the pcap command. This is because an extra
+# EOL char is added (see commit 9f3361ac39c3).
+[[ ! $@ =~ "pcap" ]] && term_opts="-it"
+
 # Look for a kernel configuration file.
 if [ ! -z $RETIS_KCONF ]; then
 	kconfig=$RETIS_KCONF
@@ -45,7 +51,7 @@ if binary=$(command -v ovs-vswitchd); then
 fi
 
 # Run the Retis container.
-exec $runtime run $extra_args -e TERM --privileged --rm --pid=host \
+exec $runtime run $extra_args $term_opts -e TERM --privileged --rm --pid=host \
       --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
