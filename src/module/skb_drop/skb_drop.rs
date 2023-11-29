@@ -29,7 +29,11 @@ impl Collector for SkbDropModule {
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
-        Some(vec!["enum skb_drop_reason"])
+        Some(vec![
+            "enum skb_drop_reason",
+            "enum mac80211_drop_reason",
+            "enum ovs_drop_reason",
+        ])
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
