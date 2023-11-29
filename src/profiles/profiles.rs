@@ -52,21 +52,21 @@ impl SymbolCondition {
     }
 }
 
-/// Specifies a condition that must be met for a CollectProfile to be applied.
+/// Specifies a condition that must be met for a SubcommandProfile to be applied.
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type")]
-pub(crate) enum CollectCondition {
+pub(crate) enum ProfileCondition {
     #[serde(rename = "version")]
     Version(VersionCondition),
     #[serde(rename = "symbol")]
     Symbol(SymbolCondition),
 }
 
-impl CollectCondition {
+impl ProfileCondition {
     fn matches(&self) -> Result<bool> {
         match self {
-            CollectCondition::Version(v) => v.matches(),
-            CollectCondition::Symbol(s) => s.matches(),
+            ProfileCondition::Version(v) => v.matches(),
+            ProfileCondition::Symbol(s) => s.matches(),
         }
     }
 }
@@ -82,18 +82,18 @@ pub(crate) enum ArgValue {
 /// Collect profile.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
-pub(crate) struct CollectProfile {
+pub(crate) struct SubcommandProfile {
     /// Name of this collect profile
     #[serde(default = "default_name")]
     pub(crate) name: String,
     /// Set of conditions associated with the profile
     #[serde(default = "Vec::default")]
-    pub(crate) when: Vec<CollectCondition>,
+    pub(crate) when: Vec<ProfileCondition>,
     /// Arguments to be appended to the CLI if this profile is active
     pub(crate) args: BTreeMap<String, ArgValue>,
 }
 
-impl CollectProfile {
+impl SubcommandProfile {
     fn matches(&self) -> Result<bool> {
         if self.when.is_empty() {
             return Ok(true);
@@ -122,9 +122,12 @@ pub(crate) struct Profile {
     pub(crate) version: ApiVersion,
     /// Information about the profile in human readable format.
     pub(crate) about: Option<String>,
-    /// Collect Profiles
+    /// Collect profiles
     #[serde(default = "Vec::new")]
-    pub(crate) collect: Vec<CollectProfile>,
+    pub(crate) collect: Vec<SubcommandProfile>,
+    /// Pcap profiles
+    #[serde(default = "Vec::new")]
+    pub(crate) pcap: Vec<SubcommandProfile>,
 }
 
 impl Profile {
@@ -205,12 +208,26 @@ impl Profile {
     }
 
     /// Evaluate collect profiles and return the one that matches.
-    pub fn match_collect(&self) -> Result<Option<&CollectProfile>> {
+    pub fn match_collect(&self) -> Result<Option<&SubcommandProfile>> {
         if self.collect.is_empty() {
             return Ok(None);
         }
 
         for p in self.collect.iter() {
+            if p.matches()? {
+                return Ok(Some(p));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Evaluate pcap profiles and return the one that matches.
+    pub fn match_pcap(&self) -> Result<Option<&SubcommandProfile>> {
+        if self.pcap.is_empty() {
+            return Ok(None);
+        }
+
+        for p in self.pcap.iter() {
             if p.matches()? {
                 return Ok(Some(p));
             }
@@ -236,6 +253,20 @@ impl Profile {
                 };
                 info!("Applying profile {}: {}", self.name, collect.name);
                 &collect.args
+            }
+            "pcap" => {
+                let pcap = match self.match_pcap()? {
+                    None => {
+                        warn!(
+                            "None of the pcap profiles defined in {} were selected",
+                            self.name
+                        );
+                        return Ok(result);
+                    }
+                    Some(pcap) => pcap,
+                };
+                info!("Applying profile {}: {}", self.name, pcap.name);
+                &pcap.args
             }
             _ => bail!("Subcommand {subcommand} does not support profile enhancement"),
         };
@@ -298,7 +329,7 @@ mod tests {
                 .pop()
                 .unwrap()
             {
-                CollectCondition::Version(v) => return v,
+                ProfileCondition::Version(v) => return v,
                 _ => panic!("Wrong condition type"),
             }
         }
