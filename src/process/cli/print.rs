@@ -23,7 +23,7 @@ use crate::{
 #[command(name = "print")]
 pub(crate) struct Print {
     /// File from which to read events.
-    #[arg()]
+    #[arg(default_value = "retis.data")]
     pub(super) input: PathBuf,
     #[arg(long, help = "Format used when printing an event.")]
     #[clap(value_enum, default_value_t=DisplayFormat::MultiLine)]
