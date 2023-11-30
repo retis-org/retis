@@ -1,14 +1,12 @@
 use std::fmt;
 
 use anyhow::{bail, Result};
-use serde::{
-    de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer, Serialize, Serializer,
-};
+use serde::{de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer, Serializer};
 
 use super::bpf::*;
 use crate::{
     core::events::{bpf::BpfRawSection, *},
-    event_section, event_section_factory,
+    event_section, event_section_factory, event_type,
 };
 
 ///The OVS Event
@@ -53,8 +51,9 @@ impl RawEventSectionFactory for OvsEventFactory {
     }
 }
 
-#[derive(Debug, PartialEq, Default, Deserialize, Serialize)]
+#[event_type]
 #[serde(tag = "event_type")]
+#[derive(Default, PartialEq)]
 pub(crate) enum OvsEventType {
     /// Upcall event. It indicates the begining of an upcall. An upcall can have multiple enqueue
     /// events.
@@ -119,7 +118,8 @@ fn fmt_upcall_cmd(cmd: u8) -> &'static str {
 // Please keep it sync with its ebpf counterpart in
 // "bpf/kernel_upcall_tp.bpf.c".
 /// OVS upcall event
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
 #[repr(C)]
 pub(crate) struct UpcallEvent {
     /// Upcall command. Holds OVS_PACKET_CMD:
@@ -150,7 +150,8 @@ impl EventFmt for UpcallEvent {
 // Please keep it sync with its ebpf counterpart in
 // "bpf/kernel_enqueue.bpf.c".
 /// Upcall enqueue event.
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
 #[repr(C)]
 pub(crate) struct UpcallEnqueueEvent {
     /// Return code. Any value different from zero indicates the upcall enqueue
@@ -186,7 +187,8 @@ impl EventFmt for UpcallEnqueueEvent {
 // Please keep it sync with its ebpf counterpart in
 // "bpf/kernel_upcall_ret.bpf.c".
 /// Upcall return event
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
 #[repr(C)]
 pub(crate) struct UpcallReturnEvent {
     pub(crate) upcall_ts: u64,
@@ -208,7 +210,8 @@ impl EventFmt for UpcallReturnEvent {
 // Please keep it sync with its ebpf counterpart in
 // "bpf/include/ovs_operation.h".
 /// Operation event.
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
 #[repr(C)]
 pub(crate) struct OperationEvent {
     /// Operation type ("put" or "exec")
@@ -273,7 +276,8 @@ impl EventFmt for OperationEvent {
 // Please keep it sync with its ebpf counterpart in
 // "bpf/user_recv_upcall.bpf.c".
 /// OVS Receive Event
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
 #[repr(C)]
 pub(crate) struct RecvUpcallEvent {
     /// Type of upcall
@@ -302,7 +306,8 @@ impl EventFmt for RecvUpcallEvent {
 }
 
 /// OVS output action data.
-#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Default, PartialEq)]
 pub(crate) struct ActionEvent {
     /// Action to be executed.
     #[serde(flatten)]
@@ -419,8 +424,9 @@ impl EventFmt for ActionEvent {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+#[event_type]
 #[serde(tag = "action")]
+#[derive(Default, PartialEq)]
 pub(crate) enum OvsAction {
     #[serde(rename = "unspecified")]
     #[default]
@@ -475,7 +481,8 @@ pub(crate) enum OvsAction {
 
 // Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
 /// OVS output action data.
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
 #[repr(C)]
 pub(crate) struct OvsActionOutput {
     /// Output port.
@@ -484,7 +491,8 @@ pub(crate) struct OvsActionOutput {
 
 // Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
 /// OVS recirc action data.
-#[derive(Debug, PartialEq, Copy, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
 #[repr(C)]
 pub(crate) struct OvsActionRecirc {
     /// Recirculation id.
@@ -507,7 +515,8 @@ pub(super) const R_OVS_CT_NAT_RANGE_PERSISTENT: u32 = 1 << 10;
 pub(super) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY: u32 = 1 << 11;
 
 /// OVS conntrack action data.
-#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Default, PartialEq)]
 pub(crate) struct OvsActionCt {
     /// Flags
     pub(crate) flags: u32,
@@ -544,7 +553,8 @@ impl OvsActionCt {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Default, PartialEq)]
 pub(crate) enum NatDirection {
     #[default]
     #[serde(rename = "src")]
@@ -553,7 +563,8 @@ pub(crate) enum NatDirection {
     Dst,
 }
 /// OVS NAT action data.
-#[derive(Debug, PartialEq, Clone, Default, Deserialize, Serialize)]
+#[event_type]
+#[derive(Default, PartialEq)]
 pub(crate) struct OvsActionCtNat {
     /// NAT direction, if any
     pub(crate) dir: Option<NatDirection>,

@@ -18,7 +18,8 @@ use plain::Plain;
 
 use super::{Event, EventResult};
 use crate::{
-    core::events::*, core::signals::Running, event_section, event_section_factory, module::ModuleId,
+    core::events::*, core::signals::Running, event_section, event_section_factory, event_type,
+    module::ModuleId,
 };
 
 /// Raw event sections for common.
@@ -324,7 +325,8 @@ pub(crate) fn parse_single_raw_section<'a, T>(
     parse_raw_section::<T>(&raw_sections[0])
 }
 
-#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+#[event_type]
+#[derive(Default)]
 pub(crate) struct TaskEvent {
     /// Process id.
     pub(crate) pid: i32,

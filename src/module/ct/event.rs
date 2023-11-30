@@ -1,8 +1,9 @@
 use std::fmt;
 
-use crate::{core::events::*, event_section};
+use crate::{core::events::*, event_section, event_type};
 
-#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
+#[derive(Default)]
 pub(crate) enum ZoneDir {
     Original,
     Reply,
@@ -11,7 +12,8 @@ pub(crate) enum ZoneDir {
     None,
 }
 
-#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
+#[derive(Default)]
 pub(crate) struct CtTcp {
     /// TCP source port
     pub(crate) sport: u16,
@@ -19,7 +21,8 @@ pub(crate) struct CtTcp {
     pub(crate) dport: u16,
 }
 
-#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
+#[derive(Default)]
 pub(crate) struct CtUdp {
     /// UDP source port
     pub(crate) sport: u16,
@@ -27,7 +30,8 @@ pub(crate) struct CtUdp {
     pub(crate) dport: u16,
 }
 
-#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
+#[derive(Default)]
 pub(crate) struct CtIcmp {
     /// ICMP code
     pub(crate) code: u8,
@@ -37,7 +41,7 @@ pub(crate) struct CtIcmp {
     pub(crate) id: u16,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum CtProto {
     Tcp(CtTcp),
@@ -50,15 +54,17 @@ impl Default for CtProto {
     }
 }
 
-#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub(crate) enum CtIpVersion {
     #[default]
     V4,
     V6,
 }
 
-#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
+#[derive(Default)]
 pub(crate) struct CtIp {
     /// Source IP address
     pub(crate) src: String,
@@ -69,7 +75,8 @@ pub(crate) struct CtIp {
 }
 
 /// Conntrack tuple.
-#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
+#[derive(Default)]
 pub(crate) struct CtTuple {
     /// IP address
     pub(crate) ip: CtIp,
@@ -78,8 +85,9 @@ pub(crate) struct CtTuple {
 }
 
 /// Conntrack state
-#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub(crate) enum CtState {
     Established,
     Related,

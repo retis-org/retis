@@ -8,7 +8,7 @@ use crate::{
         events::{bpf::BpfRawSection, *},
         helpers,
     },
-    event_section, event_section_factory,
+    event_section, event_section_factory, event_type,
 };
 
 /// Skb event section.
@@ -256,7 +256,7 @@ impl EventFmt for SkbEvent {
 }
 
 /// Ethernet fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbEthEvent {
     /// Ethertype.
     pub(crate) etype: u16,
@@ -267,7 +267,7 @@ pub(crate) struct SkbEthEvent {
 }
 
 /// ARP fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbArpEvent {
     /// Operation type.
     pub(crate) operation: ArpOperation,
@@ -282,14 +282,14 @@ pub(crate) struct SkbArpEvent {
 }
 
 /// ARP operation type.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) enum ArpOperation {
     Request,
     Reply,
 }
 
 /// IPv4/IPv6 fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbIpEvent {
     /// Source IP address.
     pub(crate) saddr: String,
@@ -309,7 +309,7 @@ pub(crate) struct SkbIpEvent {
 }
 
 /// IP version and specific fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) enum SkbIpVersion {
     #[serde(rename = "v4")]
     V4(SkbIpv4Event),
@@ -318,7 +318,7 @@ pub(crate) enum SkbIpVersion {
 }
 
 /// IPv4 specific fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub struct SkbIpv4Event {
     /// Type of service.
     pub(crate) tos: u8,
@@ -331,14 +331,14 @@ pub struct SkbIpv4Event {
 }
 
 /// IPv6 specific fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub struct SkbIpv6Event {
     /// Flow label.
     pub(crate) flow_label: u32,
 }
 
 /// TCP fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbTcpEvent {
     /// Source port.
     pub(crate) sport: u16,
@@ -354,7 +354,7 @@ pub(crate) struct SkbTcpEvent {
 }
 
 /// UDP fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbUdpEvent {
     /// Source port.
     pub(crate) sport: u16,
@@ -365,15 +365,15 @@ pub(crate) struct SkbUdpEvent {
 }
 
 /// ICMP fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbIcmpEvent {
     pub(crate) r#type: u8,
     pub(crate) code: u8,
 }
 
 /// Network device fields.
-#[serde_with::skip_serializing_none]
-#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+#[event_type]
+#[derive(Default)]
 pub(crate) struct SkbDevEvent {
     /// Net device name associated with the packet, from `skb->dev->name`.
     pub(crate) name: String,
@@ -384,7 +384,7 @@ pub(crate) struct SkbDevEvent {
 }
 
 /// Network namespace fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbNsEvent {
     /// Id of the network namespace associated with the packet, from the device
     /// or the associated socket (in that order).
@@ -392,7 +392,7 @@ pub(crate) struct SkbNsEvent {
 }
 
 /// Skb metadata & releated fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbMetaEvent {
     /// Total number of bytes in the packet.
     pub(crate) len: u32,
@@ -407,7 +407,7 @@ pub(crate) struct SkbMetaEvent {
 }
 
 /// Skb data & refcnt fields.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbDataRefEvent {
     /// Payload reference only.
     pub(crate) nohdr: bool,
@@ -422,7 +422,7 @@ pub(crate) struct SkbDataRefEvent {
 }
 
 /// Raw packet and related metadata extracted from skbs.
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[event_type]
 pub(crate) struct SkbPacketEvent {
     /// Length of the packet.
     pub(crate) len: u32,

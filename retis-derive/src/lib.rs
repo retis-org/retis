@@ -8,8 +8,21 @@ pub fn event_section(
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let output = format!(r#"
+        #[derive(Default, crate::EventSection)]
+        #[crate::event_type]
+        {item}
+    "#);
+    output.parse().expect("Invalid tokens from event_section macro")
+}
+
+#[proc_macro_attribute]
+pub fn event_type(
+    _: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let output = format!(r#"
         #[serde_with::skip_serializing_none]
-        #[derive(Debug, Default, serde::Serialize, serde::Deserialize, crate::EventSection)]
+        #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
         {item}
     "#);
     output.parse().expect("Invalid tokens from event_section macro")

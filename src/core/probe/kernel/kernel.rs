@@ -13,7 +13,7 @@ use crate::core::{
         ProbeOption,
     },
 };
-use crate::{event_section, event_section_factory};
+use crate::{event_section, event_section_factory, event_type};
 
 // Split to exclude from tests.
 #[cfg(not(test))]
@@ -91,7 +91,8 @@ impl EventFmt for KernelEvent {
     }
 }
 
-#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+#[event_type]
+#[derive(Default)]
 pub(crate) struct StackTrace(Vec<String>);
 
 impl EventFmt for StackTrace {
