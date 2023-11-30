@@ -286,7 +286,7 @@ where
     W: Write,
 {
     // Create running instance that will handle signal termination.
-    let mut run = Running::new();
+    let run = Running::new();
     run.register_term_signals()?;
 
     // Start our events factory.

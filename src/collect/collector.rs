@@ -351,7 +351,7 @@ impl Collectors {
         }
 
         if let Some(cmd) = collect.cmd.to_owned() {
-            let mut run = self.run.clone();
+            let run = self.run.clone();
             std::thread::spawn(move || {
                 match Command::new("sh")
                     .arg("-c")
