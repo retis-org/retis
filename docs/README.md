@@ -148,15 +148,71 @@ with inlined comments. If a profile is generic enough, consider contributing it!
 Tracing packets can generate a lot of events, some of which are not interesting.
 Retis implements a filtering logic to only report packets matching the filter or
 being tracked (see [tracking](#tracking)).
+Retis has two ways of filtering and both can coexist. The former is based
+on the packet content, the latter is based on metadata.
 
-Retis uses a pcap-filter syntax. See `man pcap-filter` for an overview on the
-syntax. Upon execution the pcap-filter gets compiled in cBPF and subsequently
-translated into an eBPF program which in turn gets consumed by the probes.
+Packet filtering uses a pcap-filter syntax. See `man pcap-filter` for an
+overview on the syntax. Upon execution the pcap-filter gets compiled in cBPF
+and subsequently translated into an eBPF program which in turn gets consumed by
+the probes.
 
 ```none
 $ retis collect -f 'tcp port 443'
 ...
 ```
+
+Metadata filtering instead allows to write filters that match packets based
+on their metadata.
+Metadata filters can match against any subfield of the `sk_buff` and subsequent
+inner data structures.
+Meta filtering also automatically follows struct pointers, so indirect access to
+structures pointed by an `sk_buff` field is possible.
+
+```none
+$ retis collect -m 'sk_buff.dev.nd_net.net.ns.inum == 4026531840'
+...
+```
+
+The comparison operators are:
+- "==" for *equal to*
+- "!=" for *not equal to*
+- "<" and "<=" for *less than* and *less than or equal to*
+- ">" and ">=" for *greater than* and *greater than or equal to*
+
+At the moment, only number and string comparisons are supported.
+All the comparison operators support numbers (both signed and unsigned).
+For strings only the operator *equal to* is supported, furthermore, the
+string must be enclosed between *quotes*.
+
+```none
+$ retis collect -m 'sk_buff.dev.name == "eth0"'
+...
+```
+
+The example above shows how strings can be matched and how they are
+required to be quoted.
+
+Metadata filtering, being a BTF-based way of filtering, is theoretically
+not limited to `sk_buff`, so from a generic point of view it can support
+all filters under the form *struct_type_name.field1.field2.field3* with
+the above constraints, but for the time being only `struct sk_buff` is
+supported.
+This implies that the `sk_buff` keyword **MUST** always be present and **MUST**
+always appear first.
+
+It is possible to combine packet and meta filtering, and doing so is just a
+matter of specifying their respective options and filters.
+
+```none
+$ retis collect -f 'tcp port 443' -m 'sk_buff.dev.name == "eth0"'
+...
+```
+
+The above options will be concatenated, meaning that both filters must match
+in order to have a match and generate events for packets.
+
+Meta filtering has some known limitations, in particular no bitfield
+support is available and only one field at the time can be matched.
 
 ## Tracking
 
