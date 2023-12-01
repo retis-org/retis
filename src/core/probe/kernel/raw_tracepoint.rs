@@ -52,13 +52,13 @@ impl ProbeBuilder for RawTracepointBuilder {
             _ => bail!("Wrong probe type {}", probe),
         };
 
-        skel.rodata().ksym = probe.symbol.addr()?;
-        skel.rodata().nargs = probe.symbol.nargs()?;
-        skel.rodata().nhooks = self.hooks.len() as u32;
+        skel.rodata_mut().ksym = probe.symbol.addr()?;
+        skel.rodata_mut().nargs = probe.symbol.nargs()?;
+        skel.rodata_mut().nhooks = self.hooks.len() as u32;
 
         self.filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {
-                skel.rodata().nmeta = m.0.len() as u32
+                skel.rodata_mut().nmeta = m.0.len() as u32
             }
         });
 

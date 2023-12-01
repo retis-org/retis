@@ -42,11 +42,11 @@ impl ProbeBuilder for KretprobeBuilder {
         }
 
         let mut skel = KretprobeSkelBuilder::default().open()?;
-        skel.rodata().nhooks = hooks.len() as u32;
+        skel.rodata_mut().nhooks = hooks.len() as u32;
 
         filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {
-                skel.rodata().nmeta = m.0.len() as u32
+                skel.rodata_mut().nmeta = m.0.len() as u32
             }
         });
 

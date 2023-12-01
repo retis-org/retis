@@ -53,8 +53,7 @@ pub(super) fn replace_hooks(fd: RawFd, hooks: &[Hook]) -> Result<Vec<libbpf_rs::
     for (i, hook) in hooks.iter().enumerate() {
         let target = format!("hook{i}");
 
-        let mut open_obj =
-            libbpf_rs::ObjectBuilder::default().open_memory("hook", hook.bpf_prog)?;
+        let mut open_obj = libbpf_rs::ObjectBuilder::default().open_memory(hook.bpf_prog)?;
 
         // We have to explicitly use a Vec below to avoid having an unknown size
         // at build time.

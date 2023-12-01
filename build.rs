@@ -113,7 +113,7 @@ fn gen_bindings() {
         .default_enum_style(bindgen::EnumVariation::Rust {
             non_exhaustive: false,
         })
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .layout_tests(cfg!(feature = "test_bindgen_layout"))
         .fit_macro_constants(true)
         .generate()

@@ -161,13 +161,13 @@ impl EventFactory for BpfEventsFactory {
         self.handle = Some(thread::spawn(move || {
             while rs.running() {
                 if let Err(e) = rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS)) {
-                    match e {
+                    match e.kind() {
                         // Received EINTR while polling the
                         // ringbuffer. This could normally be
                         // triggered by an actual interruption
                         // (signal) or artificially from the
                         // callback. Exit without printing any error.
-                        libbpf_rs::Error::System(4) => (),
+                        libbpf_rs::ErrorKind::Interrupted => (),
                         _ => error!("Unexpected error while polling ({e})"),
                     }
                     break;
