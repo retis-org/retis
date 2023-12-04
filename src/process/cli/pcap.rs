@@ -216,7 +216,7 @@ pub(crate) struct Pcap {
         help = "Write the generated PCAP output to a file rather than stdio"
     )]
     pub(super) out: Option<PathBuf>,
-    #[arg(help = "File from which to read events")]
+    #[arg(default_value = "retis.data", help = "File from which to read events")]
     pub(super) input: PathBuf,
 }
 
