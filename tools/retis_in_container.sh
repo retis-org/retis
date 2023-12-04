@@ -35,6 +35,10 @@ else
 	exit -1
 fi
 
+# Map local config if exist.
+local_conf=$HOME/.config/retis
+[ -d $local_conf ] && local_conf="-v $local_conf:/root/.config/retis:ro" || local_conf=""
+
 # Determine if OVS is installed on the host and, if so, mount its binary.
 if binary=$(command -v ovs-vswitchd); then
 	ovs_binary_mount="-v ${binary}:${binary}:ro"
@@ -47,5 +51,6 @@ exec $runtime run $extra_args -e TERM --privileged --rm --pid=host \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
       -v $kconfig:/kconfig:ro \
       -v $(pwd):/data:rw \
+      $local_conf \
       $ovs_binary_mount \
       quay.io/retis/retis:$RETIS_TAG "$@"
