@@ -203,9 +203,9 @@ pub(crate) struct MainConfig {
         long,
         short,
         value_delimiter = ',',
-        help = "Comma separated list of profile names to apply"
+        help = "Comma separated list of profile names or paths to apply"
     )]
-    pub(crate) profile: Vec<String>,
+    pub(crate) profile: Vec<PathBuf>,
     #[arg(
         long,
         help = "Path to kernel configuration (e.g. /boot/config-6.3.8-200.fc38.x86_64; default: auto-detect)"
@@ -330,8 +330,28 @@ impl FullCli {
             return Ok(());
         }
 
-        for name in self.main_config.profile.iter() {
-            let profile = Profile::find(name.as_str())?;
+        for p in self.main_config.profile.iter() {
+            let profile = if p.as_path().is_file() {
+                // In case we're loading a profile from an explicitly given
+                // profiles YAML, we can only support if the YAML has a single
+                // definition.
+                let mut profiles = Profile::load(p)?;
+                if profiles.len() > 1 {
+                    bail!("Can't load {}: more than one profile found", p.display());
+                }
+
+                // We just checked len() > 1.
+                profiles.remove(0)
+            } else {
+                let name = p.as_os_str().to_str().ok_or_else(|| {
+                    anyhow!(
+                        "Could not convert {} to a string representation",
+                        p.display()
+                    )
+                })?;
+                Profile::find(name)?
+            };
+
             let mut extra_args = profile.cli_args(self.subcommand.name().as_str())?;
             self.args.append(&mut extra_args);
         }
