@@ -2,7 +2,7 @@
 
 ## Generic
 
-The `generic` profile aims at providing a starting point for investigating
+The `generic` profile aims to provide a starting point for investigating
 packets in the networking stack. It defines a wide set of probes in various
 places and enables the `skb`, `skb-drop` and `skb-tracking` collectors.
 

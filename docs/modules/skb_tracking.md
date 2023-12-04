@@ -2,7 +2,7 @@
 
 The `skb-tracking` collector does not track itself `skb` in the kernel (this is
 done in the core) but allows to report the tracking information in the events.
-This tracking information, which is basically an unique "id", can be used at
+This tracking information, which is basically a unique "id", can be used at
 post-processing time to reconstruct in-kernel packets flow using the `sort`
 post-processing command.
 
