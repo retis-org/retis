@@ -19,6 +19,9 @@ use crate::{event_section, event_section_factory};
 #[cfg(not(test))]
 use crate::core::inspect::inspector;
 
+// 17 bytes of actual data + tail padding.
+const DATA_SIZE: usize = 17 + 7;
+
 /// Kernel encapsulates all the information about a kernel probe (kprobe or tracepoint) needed to attach to it.
 #[derive(Clone)]
 pub(crate) struct KernelProbe {
@@ -172,16 +175,16 @@ impl RawEventSectionFactory for KernelEventFactory {
             bail!("Unknown data type");
         }
 
-        if raw.data.len() != 17 {
+        if raw.data.len() != DATA_SIZE {
             bail!(
-                "Section data is not the expected size {} != 17",
+                "Section data is not the expected size {} != {DATA_SIZE}",
                 raw.data.len()
             );
         }
 
         let mut event = KernelEvent::default();
 
-        let symbol_addr = u64::from_ne_bytes(raw.data[0..8].try_into()?);
+        let symbol_addr = u64::from_ne_bytes(raw.data[0..=7].try_into()?);
         event.symbol = match self.symbols_cache.get(&symbol_addr) {
             Some(name) => name.clone(),
             None => {
@@ -191,19 +194,19 @@ impl RawEventSectionFactory for KernelEventFactory {
             }
         };
 
-        event.probe_type = match raw.data[8] {
+        #[cfg(not(test))]
+        self.unmarshal_stackid(
+            &mut event,
+            i64::from_ne_bytes(raw.data[8..=15].try_into()?) as i32,
+        )?;
+
+        event.probe_type = match raw.data[16] {
             0 => "kprobe",
             1 => "kretprobe",
             2 => "raw_tracepoint",
             x => bail!("Unknown probe type {x}"),
         }
         .to_string();
-
-        #[cfg(not(test))]
-        self.unmarshal_stackid(
-            &mut event,
-            i64::from_ne_bytes(raw.data[9..17].try_into()?) as i32,
-        )?;
 
         Ok(Box::new(event))
     }
