@@ -349,7 +349,7 @@ pub(super) struct RawPacketEvent {
     /// Lenght of the capture. <= len.
     capture_len: u32,
     /// Raw packet data.
-    packet: [u8; 256],
+    packet: [u8; 255],
 }
 
 pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<SkbPacketEvent> {

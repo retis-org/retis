@@ -126,7 +126,7 @@ struct skb_data_ref_event {
 struct skb_packet_event {
 	u32 len;
 	u32 capture_len;
-#define PACKET_CAPTURE_SIZE	256
+#define PACKET_CAPTURE_SIZE	255
 	u8 packet[PACKET_CAPTURE_SIZE];
 } __attribute__((packed));
 
