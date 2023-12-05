@@ -30,7 +30,7 @@ pub(super) const SECTION_DATA_REF: u64 = 10;
 pub(super) const SECTION_PACKET: u64 = 11;
 
 /// Global configuration passed down the BPF part.
-#[repr(C, packed)]
+#[repr(C)]
 pub(super) struct RawConfig {
     /// Bitfield of what to collect from skbs. Currently `1 << SECTION_x` is
     /// used to trigger retrieval of a given section.
