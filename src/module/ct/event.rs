@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{core::events::*, event_section, event_type};
+use crate::{core::events::*, event_section, event_type, event_type_no_py};
 
 #[event_type]
 #[derive(Default)]
@@ -41,7 +41,7 @@ pub(crate) struct CtIcmp {
     pub(crate) id: u16,
 }
 
-#[event_type]
+#[event_type_no_py]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum CtProto {
     Tcp(CtTcp),

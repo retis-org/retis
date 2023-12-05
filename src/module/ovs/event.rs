@@ -6,7 +6,7 @@ use serde::{de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer
 use super::bpf::*;
 use crate::{
     core::events::{bpf::BpfRawSection, *},
-    event_section, event_section_factory, event_type,
+    event_section, event_section_factory, event_type, event_type_no_py,
 };
 
 ///The OVS Event
@@ -51,7 +51,7 @@ impl RawEventSectionFactory for OvsEventFactory {
     }
 }
 
-#[event_type]
+#[event_type_no_py]
 #[serde(tag = "event_type")]
 #[derive(Default, PartialEq)]
 pub(crate) enum OvsEventType {
@@ -424,7 +424,7 @@ impl EventFmt for ActionEvent {
     }
 }
 
-#[event_type]
+#[event_type_no_py]
 #[serde(tag = "action")]
 #[derive(Default, PartialEq)]
 pub(crate) enum OvsAction {
