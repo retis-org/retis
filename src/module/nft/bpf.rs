@@ -1,7 +1,7 @@
 /// Nft specific parameter offsets; keep in sync with its BPF counterpart in
 /// bpf/nft.bpf.c
 #[derive(Clone, Copy)]
-#[repr(C, packed)]
+#[repr(C)]
 pub(super) struct NftOffsets {
     pub(super) nft_chain: i8,
     pub(super) nft_rule: i8,
@@ -22,7 +22,7 @@ impl Default for NftOffsets {
 
 /// Global configuration passed down the BPF part.
 #[derive(Default)]
-#[repr(C, packed)]
+#[repr(C)]
 pub(super) struct NftConfig {
     /// Bitfield of events to collect based on the verdict.
     /// The values follow the kernel definitions as they are uapi.
