@@ -49,14 +49,14 @@ struct skb_eth_event {
 	u8 dst[6];
 	u8 src[6];
 	u16 etype;
-} __attribute__((packed));
+};
 struct skb_arp_event {
 	u16 operation;
 	u8 sha[6];
 	u32 spa;
 	u8 tha[6];
 	u32 tpa;
-} __attribute__((packed));
+};
 struct skb_ipv4_event {
 	u32 src;
 	u32 dst;
@@ -68,7 +68,7 @@ struct skb_ipv4_event {
 	u8 ecn;
 	u16 offset;
 	u8 flags;
-} __attribute__((packed));
+};
 struct skb_ipv6_event {
 	u128 src;
 	u128 dst;
@@ -77,7 +77,7 @@ struct skb_ipv6_event {
 	u8 protocol;
 	u8 ttl;
 	u8 ecn;
-} __attribute__((packed));
+};
 struct skb_tcp_event {
 	u16 sport;
 	u16 dport;
@@ -87,39 +87,39 @@ struct skb_tcp_event {
 	/* TCP flags: fin, syn, rst, psh, ack, urg, ece, cwr. */
 	u8 flags;
 	u8 doff;
-} __attribute__((packed));
+};
 struct skb_udp_event {
 	u16 sport;
 	u16 dport;
 	u16 len;
-} __attribute__((packed));
+};
 struct skb_icmp_event {
 	u8 type;
 	u8 code;
-} __attribute__((packed));
+};
 struct skb_netdev_event {
 #define IFNAMSIZ	16
 	u8 dev_name[IFNAMSIZ];
 	u32 ifindex;
 	u32 iif;
-} __attribute__((packed));
+};
 struct skb_netns_event {
 	u32 netns;
-} __attribute__((packed));
+};
 struct skb_meta_event {
 	u32 len;
 	u32 data_len;
 	u32 hash;
 	u32 csum;
 	u32 priority;
-} __attribute__((packed));
+};
 struct skb_data_ref_event {
 	u8 nohdr;
 	u8 cloned;
 	u8 fclone;
 	u8 users;
 	u8 dataref;
-} __attribute__((packed));
+};
 /* Please keep the following structs in sync with its Rust counterpart in
  * module::skb::event.
  */
@@ -128,7 +128,7 @@ struct skb_packet_event {
 	u32 capture_len;
 #define PACKET_CAPTURE_SIZE	256
 	u8 packet[PACKET_CAPTURE_SIZE];
-} __attribute__((packed));
+};
 
 /* Must be called with a valid skb pointer */
 static __always_inline int process_skb_arp(struct retis_raw_event *event,

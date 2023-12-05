@@ -38,7 +38,7 @@ pub(super) struct RawConfig {
 }
 
 /// Ethernet data retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawEthEvent {
     /// Source MAC address.
     src: [u8; 6],
@@ -59,7 +59,7 @@ pub(super) fn unmarshal_eth(raw_section: &BpfRawSection) -> Result<SkbEthEvent> 
 }
 
 /// ARP data retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawArpEvent {
     /// Operation. Stored in network order.
     operation: u16,
@@ -92,7 +92,7 @@ pub(super) fn unmarshal_arp(raw_section: &BpfRawSection) -> Result<SkbArpEvent> 
 }
 
 /// IPv4 data retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawIpv4Event {
     /// Source IP address. Stored in network order.
     src: u32,
@@ -136,7 +136,7 @@ pub(super) fn unmarshal_ipv4(raw_section: &BpfRawSection) -> Result<SkbIpEvent> 
 }
 
 /// IPv6 data retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawIpv6Event {
     /// Source IP address. Stored in network order.
     src: u128,
@@ -171,7 +171,7 @@ pub(super) fn unmarshal_ipv6(raw_section: &BpfRawSection) -> Result<SkbIpEvent> 
 }
 
 /// TCP data retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawTcpEvent {
     /// Source port. Stored in network order.
     sport: u16,
@@ -204,7 +204,7 @@ pub(super) fn unmarshal_tcp(raw_section: &BpfRawSection) -> Result<SkbTcpEvent> 
 }
 
 /// UDP data retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawUdpEvent {
     /// Source port. Stored in network order.
     sport: u16,
@@ -225,7 +225,7 @@ pub(super) fn unmarshal_udp(raw_section: &BpfRawSection) -> Result<SkbUdpEvent> 
 }
 
 /// ICMP data retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawIcmpEvent {
     /// ICMP type.
     r#type: u8,
@@ -243,7 +243,7 @@ pub(super) fn unmarshal_icmp(raw_section: &BpfRawSection) -> Result<SkbIcmpEvent
 }
 
 /// Net device information retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawDevEvent {
     /// Net device name.
     dev_name: [u8; 16],
@@ -281,7 +281,7 @@ pub(super) fn unmarshal_dev(raw_section: &BpfRawSection) -> Result<Option<SkbDev
 }
 
 /// Net namespace information retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawNsEvent {
     /// Net namespace id.
     netns: u32,
@@ -294,7 +294,7 @@ pub(super) fn unmarshal_ns(raw_section: &BpfRawSection) -> Result<SkbNsEvent> {
 }
 
 /// Skb metadata & related.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawMetaEvent {
     len: u32,
     data_len: u32,
@@ -316,7 +316,7 @@ pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent
 }
 
 /// Data & refcount information retrieved from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 struct RawDataRefEvent {
     nohdr: u8,
     /// Is the skb a clone?
@@ -342,7 +342,7 @@ pub(super) fn unmarshal_data_ref(raw_section: &BpfRawSection) -> Result<SkbDataR
 }
 
 /// Raw packet and related metadata extracted from skbs.
-#[repr(C, packed)]
+#[repr(C)]
 pub(super) struct RawPacketEvent {
     /// Length of the packet.
     len: u32,
