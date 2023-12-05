@@ -6,7 +6,7 @@
 
 struct skb_drop_event {
 	s32 drop_reason;
-} __attribute__((packed));
+};
 
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	struct skb_drop_event *e;
