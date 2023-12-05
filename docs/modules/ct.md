@@ -1,6 +1,6 @@
 # Conntrack collector
 
-The `ct` collector report information collected from socket buffers
+The `ct` collector reports information collected from socket buffers
 (`struct sk_buff`) about their conntrack status. This is done by reading the
 `_nfct` field of an `skb`.
 

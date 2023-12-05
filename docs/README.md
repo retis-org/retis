@@ -77,7 +77,7 @@ $ retis print retis.data
 But events can also be post-processed. Retis allows to trace packets across the
 networking stack and as such the same packet can be seen multiple times (e.g. in
 the IP stack, TCP stack, OvS stack & netfilter stack; sometimes multiple times
-in each subsystem depending on which probes where loaded). The `sort` command
+in each subsystem depending on which probes were loaded). The `sort` command
 uses information reported by the `skb-tracking` and the `ovs` collectors to
 identify unique packets and group/reorder the events so the same packet can be
 efficiently tracked in the stack.

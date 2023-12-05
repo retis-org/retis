@@ -9,12 +9,12 @@ considered acceptable.
 ## Reporting bugs
 
 Following the guidelines will help the community understand bug reports, which
-in turns will help in reproducing, triaging and fixing those bugs.
+in turn will help in reproducing, triaging and fixing those bugs.
 
 ### Before submitting the report
 
 1. Check for similar opened or closed issues. If a similar issue is still
-   opened, please add a comment there.
+   open, please add a comment there.
 1. Check the version used when the bug was triggered. If it was not the latest,
    please reproduce with it.
 
@@ -23,11 +23,11 @@ in turns will help in reproducing, triaging and fixing those bugs.
 1. Use a clear, concise and descriptive title.
 1. Describe how to reproduce the bug, in clear exact steps, with examples. The
    community should not have to guess extra steps, configuration, prerequisites
-   and spend lot of time gathering this information to work on fixing a bug.
+   and spend a lot of time gathering this information to work on fixing a bug.
 1. How reliable are those steps to reproduce the issue?
 1. Describe the outcome of those steps.
 1. Then describe what would have been expected and why.
-1. If it is performances related, include numbers.
+1. If it is performance-related, include numbers.
 
 ### Following-up on the report
 
@@ -37,13 +37,13 @@ in turns will help in reproducing, triaging and fixing those bugs.
 
 ## Suggesting new features
 
-Features requirement vary depending on users, use cases, priorities, etc. But
-expressing an interest is valuable as it can help prioritizing things and
-shaping the actual behavior.
+Features requirements vary depending on users, use cases, priorities, etc. But
+expressing an interest is valuable as it can help prioritize things and
+shape the actual behavior.
 
 ### Before suggesting a new feature
 
-1. Check the feature isn't already available. See the tool help.
+1. Check if the feature isn't already available. See the tool help.
 1. Check it is not already being planned by looking at the different
    [milestones](https://github.com/retis-org/retis/milestones) and
    [issues](https://github.com/retis-org/retis/issues). If a matching issue is
@@ -60,11 +60,11 @@ shaping the actual behavior.
    you'd like it to be.
 1. Understand we have limited time and do prioritize things. In this regard,
    external contributions for new features are highly recommended and can have a
-   great impact in choosing the direction of the project.
+   great impact on choosing the direction of the project.
 
 ## Code contribution
 
-Looking for topics to work on? Please have a look at issues triaged as
+Looking for topics to work on? Please have a look at the issues triaged as
 [good first issues](https://github.com/retis-org/retis/issues?q=is%3Aissue+is%3Aopen+label%3A"good+first+issue")
 and/or [help wanted](https://github.com/retis-org/retis/issues?q=is%3Aissue+is%3Aopen+label%3A"help+wanted").
 
@@ -72,7 +72,7 @@ and/or [help wanted](https://github.com/retis-org/retis/issues?q=is%3Aissue+is%3
 
 1. Follow the [coding style](#coding-style).
 1. Document functions, structures (including members), enums, ..., and the code
-   itself. You can look at the existing code for understanding what level of
+   itself. You can look at the existing code to understand what level of
    documentation we expect.
 1. Add unit tests.
 1. Base new work on top of the `main` branch.
