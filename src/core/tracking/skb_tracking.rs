@@ -251,7 +251,7 @@ pub(crate) fn init_tracking(
 }
 
 // Please keep in sync with its BPF counterpart.
-#[repr(C, packed)]
+#[repr(C)]
 struct TrackingConfig {
     free: u8,
     partial_free: u8,
@@ -263,7 +263,7 @@ unsafe impl Plain for TrackingConfig {}
 
 // Please keep in sync with its BPF counterpart.
 #[derive(Default)]
-#[repr(C, packed)]
+#[repr(C)]
 struct TrackingInfo {
     timestamp: u64,
     last_seen: u64,
