@@ -26,7 +26,7 @@ struct kernel_event {
 struct retis_probe_config {
 	struct retis_probe_offsets offsets;
 	u8 stack_trace;
-} __attribute__((packed));
+};
 
 /* Probe configuration; the key is the target symbol address */
 struct {
