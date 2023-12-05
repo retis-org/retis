@@ -31,7 +31,7 @@ pub(super) const RETIS_CT_PROTO_UDP: u32 = 1 << 5;
 pub(super) const RETIS_CT_PROTO_ICMP: u32 = 1 << 6;
 
 #[derive(Clone, Copy)]
-#[repr(C, packed)]
+#[repr(C)]
 union IP {
     ipv4: u32,
     ipv6: u128,
@@ -44,21 +44,21 @@ impl Default for IP {
 }
 
 #[derive(Clone, Copy, Default)]
-#[repr(C, packed)]
+#[repr(C)]
 struct IpProto {
     addr: IP,
     data: u16,
 }
 
 #[derive(Clone, Copy, Default)]
-#[repr(C, packed)]
+#[repr(C)]
 struct NfConnTuple {
     src: IpProto,
     dst: IpProto,
 }
 
 #[derive(Default)]
-#[repr(C, packed)]
+#[repr(C)]
 struct RawCtEvent {
     flags: u32,
     zone_id: u16,
