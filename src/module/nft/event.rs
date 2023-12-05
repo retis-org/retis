@@ -58,7 +58,7 @@ impl EventFmt for NftEvent {
 
 // Please keep in sync with its bpf counterpart under
 // src/modules/nft/bpf/nft.bpf.c
-#[repr(C, packed)]
+#[repr(C)]
 struct NftBpfEvent {
     /// Table name.
     tn: NftName,

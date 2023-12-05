@@ -47,7 +47,7 @@ struct nft_event {
 	s64 c_handle;
 	s64 r_handle;
 	u8 policy;
-} __attribute__((packed));
+};
 
 struct nft_rule_dp___5_17_0 {
 	u64	is_last:1,
