@@ -207,7 +207,8 @@ pub(crate) struct Pcap {
     #[arg(
         short,
         long,
-        help = "Filter events from this probe. Probes should follow the TYPE:TARGET pattern. See `retis collect --help` for more details on the probe format."
+        help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern.
+See `retis collect --help` for more details on the probe format."
     )]
     pub(super) probe: String,
     #[arg(
@@ -224,13 +225,7 @@ impl SubCommandParserRunner for Pcap {
     fn run(&mut self, modules: Modules) -> Result<()> {
         let (probe_type, target) = match self.probe.split_once(':') {
             Some((r#type, target)) => (r#type, target),
-            None => {
-                info!(
-                    "Invalid probe format, no TYPE given in '{}', using 'kprobe:{}'. See the help.",
-                    self.probe, self.probe
-                );
-                ("kprobe", self.probe.as_str())
-            }
+            None => ("kprobe", self.probe.as_str()),
         };
         let symbol = Symbol::from_name_no_inspect(target);
 

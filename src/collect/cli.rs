@@ -41,7 +41,7 @@ not released. If exhausted, no stack trace will be included."
         short,
         long,
         help = "Add a probe on the given target. Can be used multiple times. Probes should
-follow the TYPE:TARGET pattern.
+follow the [TYPE:]TARGET pattern. When TYPE is not set 'kprobe' is used.
 
 Valid TYPEs:
 - kprobe: kernel probes. Wildcards (*) can be used, eg. \"tcp_*\".
