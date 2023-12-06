@@ -251,7 +251,11 @@ impl Profile {
                     }
                     Some(collect) => collect,
                 };
-                info!("Applying profile {}: {}", self.name, collect.name);
+                if collect.name == default_name() {
+                    info!("Applying profile {}", self.name);
+                } else {
+                    info!("Applying profile {}: {}", self.name, collect.name);
+                }
                 &collect.args
             }
             "pcap" => {
