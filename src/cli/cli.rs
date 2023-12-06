@@ -3,7 +3,7 @@
 //! Cli module, providing tools for registering and accessing command line interface arguments
 //! as well as defining the subcommands that the tool supports.
 #![allow(dead_code)] // FIXME
-use std::{any::Any, collections::HashMap, env, ffi::OsString, fmt::Debug, path::PathBuf};
+use std::{any::Any, env, ffi::OsString, fmt::Debug, path::PathBuf};
 
 use anyhow::{anyhow, bail, Result};
 use clap::{
@@ -220,24 +220,26 @@ pub(crate) struct MainConfig {
 /// validation and yield a FullCli object to represent the results.
 #[derive(Debug)]
 pub(crate) struct ThinCli {
-    subcommands: HashMap<String, Box<dyn SubCommand>>,
+    subcommands: Vec<Box<dyn SubCommand>>,
 }
 
 impl ThinCli {
     /// Allocate and return a new ThinCli object that will parse the command arguments.
     pub(crate) fn new() -> Result<Self> {
         Ok(ThinCli {
-            subcommands: HashMap::new(),
+            subcommands: Vec::new(),
         })
     }
 
     /// Add a subcommand to the ThinCli object.
     pub(crate) fn add_subcommand(&mut self, sub: Box<dyn SubCommand>) -> Result<&mut Self> {
         let name = sub.name();
-        if self.subcommands.get(&name).is_some() {
+
+        if self.subcommands.iter().any(|s| s.name() == name) {
             bail!("Subcommand already registered")
         }
-        self.subcommands.insert(name, sub);
+
+        self.subcommands.push(sub);
         Ok(self)
     }
 
@@ -267,7 +269,7 @@ impl ThinCli {
             .version(version)
             .subcommand_required(true);
         // Add thin subcommands so that the main help shows them.
-        for (_, sub) in self.subcommands.iter() {
+        for sub in self.subcommands.iter() {
             command = command.subcommand(sub.thin().expect("thin command failed"));
         }
 
@@ -278,20 +280,15 @@ impl ThinCli {
             .ignore_errors(true)
             .try_get_matches_from(args.iter())?;
 
-        let ran_subcommand = matches.subcommand_name();
-
-        if ran_subcommand.is_none()
-            || self
-                .subcommands
-                .get(&ran_subcommand.unwrap().to_string())
-                .is_none()
-        {
-            // There is no subcommand or it's invalid. Re-run the match to generate
-            // the right clap error that to be printed nicely.
-            return Err(command
-                .try_get_matches_from_mut(args.iter())
-                .expect_err("clap should fail with no arguments"));
-        }
+        let ran_subcommand = matches
+            .subcommand_name()
+            .and_then(|name| self.subcommands.drain(..).find(|s| s.name() == name))
+            .ok_or_else(||
+                // There is no subcommand or it's invalid. Re-run the match to generate
+                // the right clap error that to be printed nicely.
+                command
+                    .try_get_matches_from_mut(args.iter())
+                    .expect_err("clap should fail with no arguments"))?;
 
         // Get main config.
         let mut main_config = MainConfig::default();
@@ -302,10 +299,7 @@ impl ThinCli {
             args,
             main_config,
             command,
-            subcommand: self
-                .subcommands
-                .remove(&ran_subcommand.unwrap().to_string())
-                .unwrap(),
+            subcommand: ran_subcommand,
         })
     }
 }
@@ -430,8 +424,8 @@ pub(crate) fn get_cli() -> Result<ThinCli> {
     cli.add_subcommand(Box::new(Collect::new()?))?;
     cli.add_subcommand(Box::new(Print::new()?))?;
     cli.add_subcommand(Box::new(Sort::new()?))?;
-    cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
     cli.add_subcommand(Box::new(Pcap::new()?))?;
+    cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
 
     #[cfg(feature = "benchmark")]
     cli.add_subcommand(Box::new(Benchmark::new()?))?;
