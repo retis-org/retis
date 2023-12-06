@@ -268,6 +268,7 @@ impl ThinCli {
         let mut command = MainConfig::augment_args(Command::new("retis"))
             .version(version)
             .disable_help_subcommand(true)
+            .infer_subcommands(true)
             .subcommand_required(true);
         // Add thin subcommands so that the main help shows them.
         for sub in self.subcommands.iter() {
