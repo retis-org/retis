@@ -40,7 +40,7 @@ struct {
 /* Probe stack trace map. */
 struct {
 	__uint(type, BPF_MAP_TYPE_STACK_TRACE);
-	__uint(max_entries, 256);
+	__uint(max_entries, 4096);
 	__uint(key_size, sizeof(u32));
 	/* PERF_MAX_STACK_DEPTH times u64 for value size. */
 	__uint(value_size, 127 * sizeof(u64));
