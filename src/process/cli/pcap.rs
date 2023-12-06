@@ -200,7 +200,7 @@ impl<'a, W: Write> EventParser<'a, W> {
     }
 }
 
-/// Generate a PCAP file from a collection of recorded events.
+/// Generate a PCAP file from stored events.
 #[derive(Parser, Debug, Default)]
 #[command(name = "pcap")]
 pub(crate) struct Pcap {

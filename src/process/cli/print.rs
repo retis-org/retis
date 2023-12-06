@@ -18,7 +18,7 @@ use crate::{
     process::display::PrintSingle,
 };
 
-/// Print events to stdout
+/// Print stored events to stdout
 #[derive(Parser, Debug, Default)]
 #[command(name = "print")]
 pub(crate) struct Print {

@@ -26,7 +26,7 @@ use crate::{
 /// The default size of the sorting buffer
 const DEFAULT_BUFFER: usize = 1000;
 
-/// Sort events in series based on tracking id.
+/// Sort stored events in series based on tracking id.
 ///
 /// Reads events from the INPUT file and arranges them by tracking id. The output is a number of
 /// "event sets". An event set is a list of events that share the same tracking id (i.e: belong to
