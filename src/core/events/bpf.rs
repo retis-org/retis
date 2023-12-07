@@ -34,6 +34,7 @@ const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
 #[macro_export]
 macro_rules! event_byte_array {
     ($name:ident, $size:expr) => {
+        #[repr(C)]
         struct $name([u8; $size]);
 
         impl Default for $name {
