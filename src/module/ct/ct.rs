@@ -7,7 +7,7 @@ use crate::{
     core::{
         events::EventSectionFactory,
         inspect,
-        probe::{Hook, ProbeManager},
+        probe::{Hook, ProbeBuilderManager},
     },
     module::{Module, ModuleId},
 };
@@ -50,7 +50,7 @@ impl Collector for CtModule {
         Ok(())
     }
 
-    fn init(&mut self, _cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn init(&mut self, _cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
         // Register our generic conntrack hook.
         probes.register_kernel_hook(Hook::from(ct_hook::DATA))?;
         self.init = true;
