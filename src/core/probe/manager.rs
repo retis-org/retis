@@ -29,50 +29,255 @@ use crate::core::{
 pub(crate) const PROBE_MAX: usize = 1024;
 pub(super) const HOOK_MAX: usize = 10;
 
-/// ProbeManager is the main object providing an API for consumers to register probes, hooks, maps,
-/// etc.
-pub(crate) struct ProbeManager {
-    /// Generic probes (with no hook attached) & targeted probes (with hooks
-    /// attached).
-    probes: HashMap<String, Probe>,
-
-    /// Generic hooks, meant to be attached to all probes supporting it..
-    generic_hooks: Vec<Hook>,
-
-    /// Filters, meant to be attached to all probes.
-    filters: Vec<Filter>,
-
-    /// List of global probe options to enable/disable additional probes behavior at a high level.
-    global_probes_options: Vec<ProbeOption>,
-
-    /// HashMap of map names and file descriptors, to be reused in all hooks.
-    maps: HashMap<String, RawFd>,
-
-    /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
-    #[cfg(not(test))]
-    config_map: libbpf_rs::MapHandle,
-
-    /// Global per-probe map used to report counters.
-    #[cfg(not(test))]
-    counters_map: libbpf_rs::MapHandle,
-
-    /// Global map used to pass meta filter actions.
-    #[cfg(not(test))]
-    meta_map: libbpf_rs::MapHandle,
-
-    /// Internal vec to store "used" probe builders, so we can keep a reference
-    /// on them and keep probes loaded & installed.
-    // TODO: should we change the builders to return the libbpf_rs::Link
-    // directly?
-    builders: Vec<Box<dyn ProbeBuilder>>,
+/// ProbeManager is the main object providing an API for consumers to register
+/// probes, hooks, maps, etc. It has two main states: builder and runtime.
+///
+/// The builder state is used to register probes, hooks, maps, etc for *later*
+/// use. The runtime state represents a probe manager handling probes already
+/// installed.
+///
+/// When transitioning from the builder to the runtime state all registered
+/// probes are installed. The ProbeManager can only perform the builder ->
+/// runtime transition, and can only do so once.
+///
+/// A third state, None, is representing an empty ProbeManager. This helps its
+/// use within other data structures.
+#[derive(Default)]
+pub(crate) enum ProbeManager {
+    #[default]
+    None,
+    Builder(ProbeBuilderManager),
+    Runtime(ProbeRuntimeManager),
 }
 
 impl ProbeManager {
-    pub(crate) fn new() -> Result<ProbeManager> {
+    pub(crate) fn new() -> Result<Self> {
+        Ok(Self::Builder(ProbeBuilderManager::new()?))
+    }
+
+    fn err_state(&self) -> anyhow::Error {
+        match self {
+            Self::None => anyhow!("Wrong probe manager state: none"),
+            Self::Builder(_) => anyhow!("Wrong probe manager state: builder"),
+            Self::Runtime(_) => anyhow!("Wrong probe manager state: runtime"),
+        }
+    }
+
+    pub(crate) fn builder(&self) -> Result<&ProbeBuilderManager> {
+        match self {
+            Self::Builder(builder) => Ok(builder),
+            _ => Err(self.err_state()),
+        }
+    }
+
+    pub(crate) fn builder_mut(&mut self) -> Result<&mut ProbeBuilderManager> {
+        match self {
+            Self::Builder(builder) => Ok(builder),
+            _ => Err(self.err_state()),
+        }
+    }
+
+    pub(crate) fn runtime(&self) -> Result<&ProbeRuntimeManager> {
+        match self {
+            Self::Runtime(runtime) => Ok(runtime),
+            _ => Err(self.err_state()),
+        }
+    }
+
+    pub(crate) fn runtime_mut(&mut self) -> Result<&mut ProbeRuntimeManager> {
+        match self {
+            Self::Runtime(runtime) => Ok(runtime),
+            _ => Err(self.err_state()),
+        }
+    }
+
+    /// Transition the ProbeManager from the builder state into the runtime one.
+    /// This installs all registered probes.
+    pub(crate) fn into_runtime(self) -> Result<Self> {
+        let mut builder = match self {
+            Self::Builder(builder) => builder,
+            _ => bail!("Probe manager is already at runtime state"),
+        };
+
+        // Prepare all hooks:
+        // - Reuse global maps.
+        // - Set global options.
+        builder
+            .generic_hooks
+            .iter_mut()
+            .for_each(|h| h.maps.extend(builder.maps.clone()));
+        builder.probes.values_mut().try_for_each(|p| {
+            builder
+                .maps
+                .iter()
+                .try_for_each(|(name, fd)| p.reuse_map(name, *fd))?;
+            builder
+                .global_probes_options
+                .iter()
+                .try_for_each(|o| p.set_option(o.clone()))
+        })?;
+
+        builder.setup_dyn_filters()?;
+        builder.setup_map_filters()?;
+
+        let mut builders = Vec::new();
+
+        // Handle generic probes.
+        builders.extend(Self::attach_probes(
+            &mut builder
+                .probes
+                .values_mut()
+                .filter(|p| p.is_generic())
+                .collect::<Vec<&mut Probe>>(),
+            &builder.generic_hooks,
+            &builder.filters,
+            builder.maps.clone(),
+            #[cfg(not(test))]
+            &builder.config_map,
+            #[cfg(not(test))]
+            &builder.counters_map,
+        )?);
+
+        // Then targeted ones.
+        builder
+            .probes
+            .iter_mut()
+            .filter(|(_, p)| !p.is_generic())
+            .try_for_each(|(_, p)| -> Result<()> {
+                let mut hooks = p.hooks.clone();
+                if p.supports_generic_hooks() {
+                    hooks.extend(builder.generic_hooks.clone());
+                }
+
+                builders.extend(Self::attach_probes(
+                    &mut [p],
+                    &hooks,
+                    &builder.filters,
+                    builder.maps.clone(),
+                    #[cfg(not(test))]
+                    &builder.config_map,
+                    #[cfg(not(test))]
+                    &builder.counters_map,
+                )?);
+                Ok(())
+            })?;
+
+        // All probes loaded, issue an info log.
+        info!("{} probe(s) loaded", builder.probes.len());
+
+        Ok(Self::Runtime(ProbeRuntimeManager {
+            builders,
+            config_map: builder.config_map,
+            counters_map: builder.counters_map,
+        }))
+    }
+
+    // Behind the scene logic to attach a set of probes using a common context
+    // (hooks, filters, etc).
+    //
+    // Returns a reference to the probe builders used, so the attached BPF
+    // programs don't go away.
+    fn attach_probes(
+        probes: &mut [&mut Probe],
+        hooks: &[Hook],
+        filters: &[Filter],
+        maps: HashMap<String, RawFd>,
+        #[cfg(not(test))] config_map: &libbpf_rs::MapHandle,
+        #[cfg(not(test))] counters_map: &libbpf_rs::MapHandle,
+    ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
+        let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
+        let map_fds: Vec<(String, RawFd)> = maps.into_iter().collect();
+
+        probes.iter_mut().try_for_each(|probe| {
+            // Make a new builder if none if found for the current type. Builder
+            // are shared for all probes of the same type within this set.
+            match builders.contains_key(&probe.type_key()) {
+                false => {
+                    let mut builder: Box<dyn ProbeBuilder> = match probe.r#type() {
+                        ProbeType::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
+                        ProbeType::Kretprobe(_) => Box::new(kretprobe::KretprobeBuilder::new()),
+                        ProbeType::RawTracepoint(_) => {
+                            Box::new(raw_tracepoint::RawTracepointBuilder::new())
+                        }
+                        ProbeType::Usdt(_) => Box::new(usdt::UsdtBuilder::new()),
+                    };
+
+                    // Initialize the probe builder, only once for all targets.
+                    builder.init(map_fds.clone(), hooks.to_vec(), filters.to_vec())?;
+
+                    builders.insert(probe.type_key(), builder);
+                }
+                true => (),
+            }
+            // Unwrap as we just made sure the probe builder would be available.
+            let builder = builders.get_mut(&probe.type_key()).unwrap();
+
+            #[cfg(not(test))]
+            let (counters_key, counters);
+            // First load the probe configuration.
+            #[cfg(not(test))]
+            let options = probe.options();
+            #[cfg(not(test))]
+            match probe.type_mut() {
+                ProbeType::Kprobe(ref mut kp)
+                | ProbeType::Kretprobe(ref mut kp)
+                | ProbeType::RawTracepoint(ref mut kp) => {
+                    let addr = kp.symbol.addr()?.to_ne_bytes();
+                    let config = kp.gen_config(&options)?;
+                    let config = unsafe { plain::as_bytes(&config) };
+                    config_map.update(&addr, config, libbpf_rs::MapFlags::ANY)?;
+                    (counters_key, counters) = kp.gen_counters()?;
+                }
+                ProbeType::Usdt(ref mut up) => {
+                    (counters_key, counters) = up.gen_counters()?;
+                }
+            }
+            #[cfg(not(test))]
+            counters_map.update(
+                unsafe { plain::as_bytes(&counters_key) },
+                unsafe { plain::as_bytes(&counters) },
+                libbpf_rs::MapFlags::ANY,
+            )?;
+
+            // Finally attach a probe to the target.
+            debug!("Attaching probe to {}", probe);
+            builder.attach(probe)
+        })?;
+
+        Ok(builders.drain().map(|(_, v)| v).collect())
+    }
+}
+
+/// ProbeBuilderManager holds data of the builder state of ProbeManager.
+pub(crate) struct ProbeBuilderManager {
+    /// Generic probes (with no hook attached) & targeted probes (with hooks
+    /// attached).
+    probes: HashMap<String, Probe>,
+    /// Generic hooks, meant to be attached to all probes supporting it..
+    generic_hooks: Vec<Hook>,
+    /// Filters, meant to be attached to all probes.
+    filters: Vec<Filter>,
+    /// List of global probe options to enable/disable additional probes behavior at a high level.
+    global_probes_options: Vec<ProbeOption>,
+    /// HashMap of map names and file descriptors, to be reused in all hooks.
+    maps: HashMap<String, RawFd>,
+    /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
+    #[cfg(not(test))]
+    config_map: libbpf_rs::MapHandle,
+    /// Global map used to pass meta filter actions.
+    #[cfg(not(test))]
+    meta_map: libbpf_rs::MapHandle,
+    /// Global per-probe map used to report counters.
+    #[cfg(not(test))]
+    counters_map: libbpf_rs::MapHandle,
+}
+
+impl ProbeBuilderManager {
+    pub(crate) fn new() -> Result<Self> {
         // When testing the kernel object is not modified later to reuse the
         // config map is this map is hidden.
         #[allow(unused_mut)]
-        let mut mgr = ProbeManager {
+        let mut mgr = Self {
             probes: HashMap::new(),
             generic_hooks: Vec::new(),
             filters: Vec::new(),
@@ -81,10 +286,9 @@ impl ProbeManager {
             #[cfg(not(test))]
             config_map: init_config_map()?,
             #[cfg(not(test))]
-            counters_map: init_counters_map()?,
-            #[cfg(not(test))]
             meta_map: filters::meta::filter::init_meta_map()?,
-            builders: Vec::new(),
+            #[cfg(not(test))]
+            counters_map: init_counters_map()?,
         };
 
         #[cfg(not(test))]
@@ -93,14 +297,14 @@ impl ProbeManager {
 
         #[cfg(not(test))]
         mgr.maps.insert(
-            "counters_map".to_string(),
-            mgr.counters_map.as_fd().as_raw_fd(),
+            "filter_meta_map".to_string(),
+            mgr.meta_map.as_fd().as_raw_fd(),
         );
 
         #[cfg(not(test))]
         mgr.maps.insert(
-            "filter_meta_map".to_string(),
-            mgr.meta_map.as_fd().as_raw_fd(),
+            "counters_map".to_string(),
+            mgr.counters_map.as_fd().as_raw_fd(),
         );
 
         Ok(mgr)
@@ -265,151 +469,37 @@ impl ProbeManager {
         Ok(())
     }
 
-    /// Attach all probes.
-    pub(crate) fn attach(&mut self) -> Result<()> {
-        // Prepare all hooks:
-        // - Reuse global maps.
-        // - Set global options.
-        self.generic_hooks
-            .iter_mut()
-            .for_each(|h| h.maps.extend(self.maps.clone()));
-        self.probes.iter_mut().try_for_each(|(_, p)| {
-            self.maps
-                .iter()
-                .try_for_each(|(name, fd)| p.reuse_map(name, *fd))?;
-            self.global_probes_options
-                .iter()
-                .try_for_each(|o| p.set_option(o.clone()))
-        })?;
-
-        self.setup_dyn_filters()?;
-        self.setup_map_filters()?;
-
-        // Handle generic probes.
-        self.builders.extend(Self::attach_probes(
-            &mut self
-                .probes
-                .values_mut()
-                .filter(|p| p.is_generic())
-                .collect::<Vec<&mut Probe>>(),
-            &self.generic_hooks,
-            &self.filters,
-            self.maps.clone(),
-            #[cfg(not(test))]
-            &self.config_map,
-            #[cfg(not(test))]
-            &self.counters_map,
-        )?);
-
-        // Then targeted ones.
-        self.probes
-            .iter_mut()
-            .filter(|(_, p)| !p.is_generic())
-            .try_for_each(|(_, p)| -> Result<()> {
-                let mut hooks = p.hooks.clone();
-                if p.supports_generic_hooks() {
-                    hooks.extend(self.generic_hooks.clone());
-                }
-
-                self.builders.extend(Self::attach_probes(
-                    &mut [p],
-                    &hooks,
-                    &self.filters,
-                    self.maps.clone(),
-                    #[cfg(not(test))]
-                    &self.config_map,
-                    #[cfg(not(test))]
-                    &self.counters_map,
-                )?);
-                Ok(())
-            })?;
-
-        // All probes loaded, issue an info log.
-        info!("{} probe(s) loaded", self.probes.len());
-
+    fn check_probe_max(&self) -> Result<()> {
+        if self.probes.len() >= PROBE_MAX {
+            bail!(
+                "Can't register probe, reached maximum capacity ({})",
+                PROBE_MAX
+            );
+        }
         Ok(())
     }
+}
 
+/// ProbeRuntimeManager holds data of the runtime state of ProbeManager.
+pub(crate) struct ProbeRuntimeManager {
+    /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
+    config_map: libbpf_rs::MapHandle,
+    /// Global per-probe map used to report counters.
+    counters_map: libbpf_rs::MapHandle,
+
+    /// Internal vec to store "used" probe builders, so we can keep a reference
+    /// on them and keep probes loaded & installed.
+    // TODO: should we change the builders to return the libbpf_rs::Link
+    // directly?
+    builders: Vec<Box<dyn ProbeBuilder>>,
+}
+
+impl ProbeRuntimeManager {
     /// Detach all probes.
     pub(crate) fn detach(&mut self) -> Result<()> {
         self.builders
             .iter_mut()
             .try_for_each(|builder| builder.detach())
-    }
-
-    // Behind the scene logic to attach a set of probes using a common context
-    // (hooks, filters, etc).
-    //
-    // Returns a reference to the probe builders used, so the attached BPF
-    // programs don't go away.
-    fn attach_probes(
-        probes: &mut [&mut Probe],
-        hooks: &[Hook],
-        filters: &[Filter],
-        maps: HashMap<String, RawFd>,
-        #[cfg(not(test))] config_map: &libbpf_rs::MapHandle,
-        #[cfg(not(test))] counters_map: &libbpf_rs::MapHandle,
-    ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
-        let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
-        let map_fds: Vec<(String, RawFd)> = maps.into_iter().collect();
-
-        probes.iter_mut().try_for_each(|probe| {
-            // Make a new builder if none if found for the current type. Builder
-            // are shared for all probes of the same type within this set.
-            match builders.contains_key(&probe.type_key()) {
-                false => {
-                    let mut builder: Box<dyn ProbeBuilder> = match probe.r#type() {
-                        ProbeType::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
-                        ProbeType::Kretprobe(_) => Box::new(kretprobe::KretprobeBuilder::new()),
-                        ProbeType::RawTracepoint(_) => {
-                            Box::new(raw_tracepoint::RawTracepointBuilder::new())
-                        }
-                        ProbeType::Usdt(_) => Box::new(usdt::UsdtBuilder::new()),
-                    };
-
-                    // Initialize the probe builder, only once for all targets.
-                    builder.init(map_fds.clone(), hooks.to_vec(), filters.to_vec())?;
-
-                    builders.insert(probe.type_key(), builder);
-                }
-                true => (),
-            }
-            // Unwrap as we just made sure the probe builder would be available.
-            let builder = builders.get_mut(&probe.type_key()).unwrap();
-
-            #[cfg(not(test))]
-            let (counters_key, counters);
-            // First load the probe configuration.
-            #[cfg(not(test))]
-            let options = probe.options();
-            #[cfg(not(test))]
-            match probe.type_mut() {
-                ProbeType::Kprobe(ref mut kp)
-                | ProbeType::Kretprobe(ref mut kp)
-                | ProbeType::RawTracepoint(ref mut kp) => {
-                    let addr = kp.symbol.addr()?.to_ne_bytes();
-                    let config = kp.gen_config(&options)?;
-                    let config = unsafe { plain::as_bytes(&config) };
-                    config_map.update(&addr, config, libbpf_rs::MapFlags::ANY)?;
-                    (counters_key, counters) = kp.gen_counters()?;
-                }
-                ProbeType::Usdt(ref mut up) => {
-                    (counters_key, counters) = up.gen_counters()?;
-                }
-            }
-            #[cfg(not(test))]
-            counters_map.update(
-                unsafe { plain::as_bytes(&counters_key) },
-                unsafe { plain::as_bytes(&counters) },
-                libbpf_rs::MapFlags::ANY,
-            )?;
-
-            // Finally attach a probe to the target.
-            debug!("Attaching probe to {}", probe);
-            builder.attach(probe)
-        })?;
-
-        Ok(builders.drain().map(|(_, v)| v).collect())
     }
 
     #[cfg(test)]
@@ -467,16 +557,6 @@ impl ProbeManager {
 
         Ok(())
     }
-
-    fn check_probe_max(&self) -> Result<()> {
-        if self.probes.len() >= PROBE_MAX {
-            bail!(
-                "Can't register probe, reached maximum capacity ({})",
-                PROBE_MAX
-            );
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -502,7 +582,7 @@ mod tests {
 
     #[test]
     fn register_probe() {
-        let mut mgr = ProbeManager::new().unwrap();
+        let mut mgr = ProbeBuilderManager::new().unwrap();
 
         assert!(mgr.register_probe(kprobe!("kfree_skb_reason")).is_ok());
         assert!(mgr.register_probe(kprobe!("consume_skb")).is_ok());
@@ -514,7 +594,7 @@ mod tests {
 
     #[test]
     fn register_hooks() {
-        let mut mgr = ProbeManager::new().unwrap();
+        let mut mgr = ProbeBuilderManager::new().unwrap();
 
         assert!(mgr.register_kernel_hook(Hook::from(HOOK)).is_ok());
         assert!(mgr.register_kernel_hook(Hook::from(HOOK)).is_ok());
@@ -554,7 +634,7 @@ mod tests {
 
     #[test]
     fn reuse_map() {
-        let mut mgr = ProbeManager::new().unwrap();
+        let mut mgr = ProbeBuilderManager::new().unwrap();
 
         assert!(mgr.reuse_map("config", 0).is_ok());
         assert!(mgr.reuse_map("event", 0).is_ok());

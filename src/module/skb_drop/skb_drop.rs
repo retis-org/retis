@@ -9,7 +9,7 @@ use crate::{
         events::EventSectionFactory,
         inspect::{inspector, kernel_version::KernelVersionReq},
         kernel::Symbol,
-        probe::{Hook, Probe, ProbeManager},
+        probe::{Hook, Probe, ProbeBuilderManager},
     },
     module::{Module, ModuleId},
 };
@@ -74,7 +74,7 @@ impl Collector for SkbDropModule {
         Ok(())
     }
 
-    fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn init(&mut self, _: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
         let mut probe = Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?;
         let hook = Hook::from(skb_drop_hook::DATA);
 
