@@ -30,8 +30,8 @@ use crate::{
             packets::filter::FilterPacket,
         },
         inspect::check::collection_prerequisites,
-        kernel::symbol::{matching_events_to_symbols, matching_functions_to_symbols},
-        probe::*,
+        kernel::symbol::{matching_events_to_symbols, matching_functions_to_symbols, Symbol},
+        probe::{kernel::probe_stack::ProbeStack, *},
         signals::Running,
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
@@ -184,7 +184,14 @@ impl Collectors {
             .downcast_ref::<Collect>()
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
-        if collect.args()?.stack {
+        if collect.args()?.probe_stack
+            && collect.args()?.packet_filter.is_none()
+            && collect.args()?.meta_filter.is_none()
+        {
+            bail!("Probe-stack mode requires filtering (--filter-packet and/or --filter-meta)");
+        }
+
+        if collect.args()?.stack || collect.args()?.probe_stack {
             self.probes
                 .builder_mut()?
                 .set_probe_opt(probe::ProbeOption::StackTrace)?;
@@ -249,6 +256,19 @@ impl Collectors {
             self.tracking_config_map = Some(map);
         }
         Self::setup_filters(self.probes.builder_mut()?, collect)?;
+
+        // If probe_stack is on and user hasn't provided a starting point, use
+        // skb:consume_skb & skb:kfree_skb.
+        if collect.args()?.probe_stack && collect.args()?.probes.is_empty() {
+            self.probes
+                .builder_mut()?
+                .register_probe(Probe::raw_tracepoint(Symbol::from_name(
+                    "skb:consume_skb",
+                )?)?)?;
+            self.probes
+                .builder_mut()?
+                .register_probe(Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?)?;
+        }
 
         // Setup user defined probes.
         collect
@@ -407,12 +427,24 @@ impl Collectors {
             });
         }
 
+        let mut probe_stack = ProbeStack::new(
+            collect.stack,
+            self.probes.runtime_mut()?.attached_probes(),
+            self.known_kernel_types.clone(),
+        );
+
         use EventResult::*;
         while self.run.running() {
             match self.factory.next_event(Some(Duration::from_secs(1)))? {
-                Event(event) => printers
-                    .iter_mut()
-                    .try_for_each(|p| p.process_one(&event))?,
+                Event(mut event) => {
+                    if collect.probe_stack {
+                        probe_stack.process_event(self.probes.runtime_mut()?, &mut event)?;
+                    }
+
+                    printers
+                        .iter_mut()
+                        .try_for_each(|p| p.process_one(&event))?;
+                }
                 Eof => break,
                 Timeout => continue,
             }

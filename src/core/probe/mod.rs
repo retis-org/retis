@@ -9,7 +9,7 @@ pub(crate) mod kernel;
 
 pub(crate) mod manager;
 // Re-export manager
-pub(crate) use manager::{ProbeBuilderManager, ProbeManager, PROBE_MAX};
+pub(crate) use manager::*;
 
 #[allow(clippy::module_inception)]
 pub(crate) mod probe;

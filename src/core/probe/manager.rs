@@ -515,6 +515,11 @@ impl ProbeRuntimeManager {
         Self::attach_probe(builder, &mut self.config_map, &mut self.counters_map, probe)
     }
 
+    /// Get the list of all currently attached probes.
+    pub(crate) fn attached_probes(&self) -> Vec<String> {
+        self.probes.clone().into_iter().collect()
+    }
+
     /// Detach all probes.
     pub(crate) fn detach(&mut self) -> Result<()> {
         self.generic_builders

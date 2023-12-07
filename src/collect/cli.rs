@@ -98,6 +98,24 @@ Examples of meta filters:
     #[arg(
         long,
         default_value = "false",
+        help = "When set, evaluates where Retis could add additional probes based on functions reported
+in the events stack traces (their display is still controlled by --stack). All matching
+functions are probed at runtime using kprobes.
+
+Notes:
+- Using a filter is required (--filter-packet and/or --filter-meta).
+- If no explicit probe is given, tp:skb:kfree_skb and tp:skb:consume_skb are used as a
+  starting point.
+- Additional probes are added only after events including them in their stack trace are
+  reported; this means the first packets hitting a probe won't be reported.
+- Packets will only be followed prior to the initial set of probes (as this mode uses
+  stack traces). This also means the filter must match packets as they appear in the
+  initial set of probes; packet transformation can't be automatically detected."
+    )]
+    pub(crate) probe_stack: bool,
+    #[arg(
+        long,
+        default_value = "false",
         help = r#"Allow the tool to setup all the system changes needed to make the tracing
 fully operational.
 
