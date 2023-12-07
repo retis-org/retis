@@ -158,7 +158,8 @@ impl BtfInfo {
                 }
                 Type::Volatile(t) => btf.resolve_chained_type(&t)?,
                 Type::Const(t) => btf.resolve_chained_type(&t)?,
-                Type::Array(_) => bail!("Arrays are not supported at the moment"),
+                // FIXME: arrays are not supported at the moment.
+                Type::Array(_) => return Ok(false),
                 _ => break,
             }
         }
