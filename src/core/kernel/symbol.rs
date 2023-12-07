@@ -1,6 +1,7 @@
 use std::fmt;
 
 use anyhow::{bail, Result};
+use btf_rs::Type;
 
 use crate::core::inspect::inspector;
 
@@ -188,14 +189,18 @@ impl fmt::Display for Symbol {
 }
 
 pub(crate) fn matching_functions_to_symbols(target: &str) -> Result<Vec<Symbol>> {
-    let symbols: Vec<Symbol> = inspector()?
+    let inspector = inspector()?;
+    let symbols: Vec<Symbol> = inspector
         .kernel
         .matching_functions(target)?
         .iter()
-        // We do not support <func>.isra/part for now.
-        .filter_map(|t| match t.contains('.') {
-            false => Symbol::from_name(t).ok(),
-            true => None,
+        .filter_map(|t| {
+            if let Ok(types) = inspector.kernel.btf.resolve_types_by_name(t) {
+                if types.iter().any(|(_, t)| matches!(t, Type::Func(_))) {
+                    return Symbol::from_name(t).ok();
+                }
+            }
+            None
         })
         .collect();
 
