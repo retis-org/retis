@@ -103,7 +103,7 @@ impl MetaOp {
         Ok(())
     }
 
-    fn emit_load(btf: &Btf, r#type: Type, offt: u32) -> Result<MetaOp> {
+    fn emit_load(btf: &Btf, r#type: &Type, offt: u32) -> Result<MetaOp> {
         let mut op: MetaOp = unsafe { std::mem::zeroed::<_>() };
         let lop = unsafe { &mut op.l };
         let mut t = r#type.clone();
@@ -403,12 +403,18 @@ impl FilterMeta {
             bail!("unsupported data structure {init_sym}. sk_buff must be used.")
         }
 
-        let (btf, mut r#type) = btf
-            .resolve_type_by_name(init_sym)
+        let mut types = btf
+            .resolve_types_by_name(init_sym)
             .map_err(|e| anyhow!("unable to resolve sk_buff data type {e}"))?;
 
+        let (btf, ref mut r#type) =
+            match types.iter_mut().find(|(_, t)| matches!(t, Type::Struct(_))) {
+                Some(r#struct) => r#struct,
+                None => bail!("Could not resolve {init_sym} to a struct"),
+            };
+
         for (pos, field) in fields.iter().enumerate() {
-            let sub_node = walk_btf_node(btf, &r#type, field, offt);
+            let sub_node = walk_btf_node(btf, r#type, field, offt);
             match sub_node {
                 Some((offset, snode)) => {
                     if pos < fields.len() - 1 {
@@ -435,9 +441,9 @@ impl FilterMeta {
                             _ => offt = offset,
                         }
 
-                        r#type = x.clone();
+                        *r#type = x.clone();
                     } else {
-                        r#type = snode;
+                        *r#type = snode;
                     }
 
                     stored_offset = offset;

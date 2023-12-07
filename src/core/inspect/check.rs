@@ -1,6 +1,7 @@
 use std::{fs, os::unix::fs::MetadataExt};
 
 use anyhow::{bail, Result};
+use btf_rs::Type;
 use caps::{self, CapSet, Capability};
 use log::warn;
 
@@ -50,11 +51,12 @@ pub(crate) fn collection_prerequisites() -> Result<()> {
             // get_entry_ip takes CONFIG_X86_KERNEL_IBT into account in
             // bpf_get_func_ip, if not found we might have a problem (but it
             // could have been inlined too...).
-            if inspector
-                .kernel
-                .btf
-                .resolve_type_by_name("get_entry_ip")
-                .is_err()
+            let types = inspector.kernel.btf.resolve_types_by_name("get_entry_ip");
+            if types.is_err()
+                || !types
+                    .unwrap()
+                    .iter()
+                    .any(|(_, t)| matches!(t, Type::Func(_)))
             {
                 warn!(
                     "It is possible Retis will fail to retrieve some events:

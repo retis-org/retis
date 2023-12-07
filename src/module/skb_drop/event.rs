@@ -175,16 +175,20 @@ struct BpfSkbDropEvent {
 fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<i32, String>> {
     let mut values = HashMap::new();
 
-    if let Ok((btf, Type::Enum(r#enum))) = inspector()?.kernel.btf.resolve_type_by_name(r#enum) {
-        for member in r#enum.members.iter() {
-            if (member.val() as i32) < 0 {
-                continue;
+    if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(r#enum) {
+        if let Some((btf, Type::Enum(r#enum))) =
+            types.iter().find(|(_, t)| matches!(t, Type::Enum(_)))
+        {
+            for member in r#enum.members.iter() {
+                if (member.val() as i32) < 0 {
+                    continue;
+                }
+                let mut val = btf.resolve_name(member)?;
+                trim_start
+                    .iter()
+                    .for_each(|p| val = val.trim_start_matches(p).to_string());
+                values.insert(member.val() as i32, val.to_string());
             }
-            let mut val = btf.resolve_name(member)?;
-            trim_start
-                .iter()
-                .for_each(|p| val = val.trim_start_matches(p).to_string());
-            values.insert(member.val() as i32, val.to_string());
         }
     }
 
