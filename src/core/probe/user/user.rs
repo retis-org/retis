@@ -42,6 +42,17 @@ impl UsdtProbe {
         })
     }
 
+    /// Creates a dummy UsdtProbe. Using it like a valid one is buggy.
+    pub(crate) fn dummy() -> Self {
+        Self {
+            provider: "".to_string(),
+            name: "".to_string(),
+            ksym: 0,
+            path: PathBuf::new(),
+            pid: -1,
+        }
+    }
+
     /// Return a printable name.
     pub(crate) fn name(&self) -> String {
         format!("usdt:{}:{}", self.provider, self.name)
