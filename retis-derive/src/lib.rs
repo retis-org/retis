@@ -39,6 +39,12 @@ pub fn derive_event_section(input: TokenStream) -> TokenStream {
                 self
             }
 
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any
+                where Self: Sized,
+            {
+                self
+            }
+
             fn to_json(&self) -> serde_json::Value
                 where Self: serde::Serialize,
             {
