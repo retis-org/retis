@@ -11,6 +11,9 @@ use crate::core::{
 };
 use crate::{event_section, event_section_factory};
 
+// 17 bytes of actual data + tail padding.
+const DATA_SIZE: usize = 17 + 7;
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct UsdtProbe {
     /// The provider name.
@@ -107,16 +110,16 @@ impl RawEventSectionFactory for UserEventFactory {
         // Unwrap as we just checked the vector contains 1 element.
         let raw = raw_sections.pop().unwrap();
 
-        if raw.data.len() != 17 {
+        if raw.data.len() != DATA_SIZE {
             bail!(
-                "Section data is not the expected size {} != 17",
+                "Section data is not the expected size {} != {DATA_SIZE}",
                 raw.data.len()
             );
         }
 
-        let symbol = u64::from_ne_bytes(raw.data[0..8].try_into()?);
-        let pid_tid = u64::from_ne_bytes(raw.data[8..16].try_into()?);
-        let r#type = u8::from_ne_bytes(raw.data[16..17].try_into()?);
+        let symbol = u64::from_ne_bytes(raw.data[0..=7].try_into()?);
+        let pid_tid = u64::from_ne_bytes(raw.data[8..=15].try_into()?);
+        let r#type = raw.data[16];
 
         // Split pid and tid
         let pid = (pid_tid & 0xFFFFFFFF) as i32;

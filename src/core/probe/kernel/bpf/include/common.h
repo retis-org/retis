@@ -12,13 +12,16 @@
 #include <packet_filter.h>
 #include <skb_tracking.h>
 
-/* Kernel section of the event data. */
+/* Kernel section of the event data.
+ * Note that order matters both in terms of padding and in terms of parsing.
+ * Any change MUST be reflected into its Rust counterpart.
+ */
 struct kernel_event {
 	u64 symbol;
+	long stack_id;
 	/* values from enum kernel_probe_type */
 	u8 type;
-	long stack_id;
-} __attribute__((packed));
+};
 
 /* Per-probe configuration; keep in sync with its Rust counterpart in
  * core::probe::kernel::config.
@@ -26,7 +29,7 @@ struct kernel_event {
 struct retis_probe_config {
 	struct retis_probe_offsets offsets;
 	u8 stack_trace;
-} __attribute__((packed));
+};
 
 /* Probe configuration; the key is the target symbol address */
 struct {

@@ -12,6 +12,6 @@ struct retis_filter_context {
 	unsigned int len;	/* linear length. */
 	/* Output */
 	unsigned int ret;	/* outcome of the match (zero if miss). */
-} __attribute__((packed));
+};
 
 #endif

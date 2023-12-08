@@ -25,11 +25,11 @@ struct nft_offsets {
 	s8 nft_rule;
 	s8 nft_verdict;
 	s8 nft_type;
-} __attribute__((packed));
+};
 struct nft_config {
 	u64 verdicts;
 	struct nft_offsets offsets;
-} __attribute__((packed));
+};
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(max_entries, 1);
@@ -47,7 +47,7 @@ struct nft_event {
 	s64 c_handle;
 	s64 r_handle;
 	u8 policy;
-} __attribute__((packed));
+};
 
 struct nft_rule_dp___5_17_0 {
 	u64	is_last:1,

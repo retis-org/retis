@@ -167,7 +167,7 @@ impl RawEventSectionFactory for SkbDropEventFactory {
     }
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 struct BpfSkbDropEvent {
     drop_reason: i32,
 }

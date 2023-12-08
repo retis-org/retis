@@ -20,7 +20,7 @@ struct retis_probe_offsets {
 	s8 net;	 /* netns */
 	s8 nft_pktinfo;
 	s8 nft_traceinfo;
-} __attribute__((packed));
+};
 
 /* Common representation of the register values provided to the probes, as this
  * is done in a per-probe type fashion.

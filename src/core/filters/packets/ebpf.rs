@@ -80,7 +80,7 @@ const SCRATCH_MEM_START: i16 = 16 * SCRATCH_MEM_SIZE + STACK_RESERVED;
 
 // This should be kept in sync with struct retis_filter_context in
 // src/core/filter/packets/bpf/include/packet_filter.h
-#[repr(C, packed)]
+#[repr(C)]
 struct retis_filter_ctx {
     data: *mut i8,
     len: u32,
