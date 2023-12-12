@@ -10,7 +10,7 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::SkelBuilder;
 
-use crate::core::{probe::builder::*, probe::*};
+use crate::core::{filters::Filter, probe::builder::*, probe::*};
 
 mod raw_tracepoint_bpf {
     include!("bpf/.out/raw_tracepoint.skel.rs");
@@ -20,6 +20,7 @@ use raw_tracepoint_bpf::RawTracepointSkelBuilder;
 #[derive(Default)]
 pub(crate) struct RawTracepointBuilder {
     hooks: Vec<Hook>,
+    filters: Vec<Filter>,
     links: Vec<libbpf_rs::Link>,
     obj: Option<libbpf_rs::Object>,
     map_fds: Vec<(String, RawFd)>,
@@ -30,9 +31,15 @@ impl ProbeBuilder for RawTracepointBuilder {
         RawTracepointBuilder::default()
     }
 
-    fn init(&mut self, map_fds: Vec<(String, RawFd)>, hooks: Vec<Hook>) -> Result<()> {
+    fn init(
+        &mut self,
+        map_fds: Vec<(String, RawFd)>,
+        hooks: Vec<Hook>,
+        filters: Vec<Filter>,
+    ) -> Result<()> {
         self.map_fds = map_fds;
         self.hooks = hooks;
+        self.filters = filters;
 
         Ok(())
     }
@@ -48,6 +55,12 @@ impl ProbeBuilder for RawTracepointBuilder {
         skel.rodata().ksym = probe.symbol.addr()?;
         skel.rodata().nargs = probe.symbol.nargs()?;
         skel.rodata().nhooks = self.hooks.len() as u32;
+
+        self.filters.iter().for_each(|f| {
+            if let Filter::Meta(m) = f {
+                skel.rodata().nmeta = m.0.len() as u32
+            }
+        });
 
         let open_obj = skel.obj;
         reuse_map_fds(&open_obj, &self.map_fds)?;
@@ -96,7 +109,7 @@ mod tests {
         let mut builder = RawTracepointBuilder::new();
 
         // It's for now, the probes below won't do much.
-        assert!(builder.init(Vec::new(), Vec::new()).is_ok());
+        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
         assert!(builder
             .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
             .is_ok());

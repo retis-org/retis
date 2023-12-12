@@ -5,7 +5,6 @@
 #include <common.h>
 
 #define BIT(x) (1 << (x))
-#define min(a, b) ((a) < (b) ? (a) : (b))
 
 #define ETH_P_IP	0x0800
 #define ETH_P_ARP	0x0806
@@ -413,7 +412,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		int mac_offset;
 
 		mac_offset = mac - headroom;
-		size = min(linear_len - mac_offset, PACKET_CAPTURE_SIZE);
+		size = MIN(linear_len - mac_offset, PACKET_CAPTURE_SIZE);
 		if (size <= 0)
 			return 0;
 
@@ -440,7 +439,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 			return 0;
 
 		network_offset = network - headroom;
-		size = min(linear_len - network_offset, PACKET_CAPTURE_SIZE);
+		size = MIN(linear_len - network_offset, PACKET_CAPTURE_SIZE);
 		size -= sizeof(struct ethhdr);
 		if (size <= 0)
 			return 0;
@@ -563,7 +562,7 @@ skip_netns:
 	return process_skb_l2(event, cfg, skb, head);
 }
 
-DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);

@@ -10,6 +10,7 @@
 #include <events.h>
 #include <helpers.h>
 #include <packet_filter.h>
+#include <meta_filter.h>
 #include <skb_tracking.h>
 
 /* Kernel section of the event data. */
@@ -52,12 +53,17 @@ struct {
 /* Defines the bit position for each filter */
 enum {
 	RETIS_F_PASS(PACKET, 0),
+	RETIS_F_PASS(META, 1),
 };
 
 /* Filters chain is an and */
 #define F_AND		0
 /* Filters chain is an or */
 #define F_OR		1
+
+#define RETIS_ALL_FILTERS	(RETIS_F_PACKET_PASS | RETIS_F_META_PASS)
+
+#define RETIS_TRACKABLE(mask)	(!(mask ^ RETIS_ALL_FILTERS))
 
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
@@ -140,67 +146,6 @@ HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
 
-#define FILTER_MAX_INSNS 4096
-
-#define __s(v) #v
-#define s(v) __s(v)
-
-/* Reserve FILTER_MAX_INSNS - (instruction placeholder) */
-#define RESERVE_NOP				\
-	".rept " s(FILTER_MAX_INSNS) " - 1;"	\
-	"goto +0x0;"				\
-	".endr;"
-
-/* Keep in sync with its Rust counterpart in
- * crate::core::filters::packets::ebpf
- */
-#define STACK_RESERVED		8
-#define SCRATCH_MEM_SIZE	4
-/* 8 bytes for probe_read_kernel() outcome plus 16 * 4 scratch
- * memory locations for cbpf filters. Aligned to u64 boundary.
- */
-#define SCRATCH_MEM_START	16 * SCRATCH_MEM_SIZE + STACK_RESERVED
-
-#define STACK_SIZE		SCRATCH_MEM_START
-
-/* The function defines a placeholder instruction and a nop frame that
- * will be replaced on load with the actual filtering
- * instructions. Normally, if no filter gets set, a simple mov r0,
- * 0x40000 will replace the call. 0x40000 is used as it is also used
- * by generated cBPF filters, whereas 0 means no match, instead. The
- * exceeding nops will get removed from the kernel during the load.
- * If no explicit, nor default filter gets set, call 0xdeadbeef will
- * fail to load and the verifier will report an error.
- */
-static __always_inline
-unsigned int packet_filter(struct retis_filter_context *ctx)
-{
-	register struct retis_filter_context *ctx_reg asm("r1");
-	u8 stack[STACK_SIZE] __attribute__ ((aligned (8)));
-	register u64 *fp asm("r9");
-
-	if (!ctx)
-		return 0;
-
-	ctx_reg = ctx;
-	fp = (u64 *)((void *)stack + sizeof(stack));
-
-	asm volatile (
-		"call 0xdeadbeef;"
-		RESERVE_NOP
-		"*(u32 *)%0 = r0;"
-		: /* out */
-		  "=m" (ctx->ret)
-		: /* in */
-		  "r" (ctx_reg),
-		  "r" (fp)
-		: "r0", "r1", "r2", "r3",
-		  "r4", "r5", "r6", "r7",
-		  "r8", "r9");
-
-	return ctx->ret;
-}
-
 static __always_inline char *skb_mac_header(struct sk_buff *skb)
 {
 	char *head = (char *)BPF_CORE_READ(skb, head);
@@ -214,7 +159,7 @@ static __always_inline char *skb_mac_header(struct sk_buff *skb)
 
 static __always_inline void filter(struct retis_context *ctx)
 {
-	struct retis_filter_context fctx = {};
+	struct retis_packet_filter_ctx fctx = {};
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);
@@ -227,7 +172,7 @@ static __always_inline void filter(struct retis_context *ctx)
 	 * - Filtering packets when the whole data isn't available anymore.
 	 */
 	if (skb_is_tracked(skb)) {
-		ctx->filters_ret |= RETIS_F_PACKET_PASS;
+		ctx->filters_ret |= RETIS_ALL_FILTERS;
 		return;
 	}
 
@@ -241,6 +186,7 @@ static __always_inline void filter(struct retis_context *ctx)
 	 */
 	packet_filter(&fctx);
 	ctx->filters_ret |= (!!fctx.ret) << RETIS_F_PACKET_PASS_SH;
+	ctx->filters_ret |= (!!meta_filter(skb)) << RETIS_F_META_PASS_SH;
 }
 
 /* The chaining function, which contains all our core probe logic. This is
@@ -274,7 +220,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	 * logic runs even if later ops fail: we don't want to miss information
 	 * because of non-fatal errors!
 	 */
-	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
+	if (RETIS_TRACKABLE(ctx->filters_ret))
 		track_skb_start(ctx);
 
 	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
@@ -351,7 +297,7 @@ exit:
 	/* Cleanup stage while tracking an skb. If no skb is available this is a
 	 * no-op.
 	 */
-	if (ctx->filters_ret & RETIS_F_PACKET_PASS)
+	if (RETIS_TRACKABLE(ctx->filters_ret))
 		track_skb_end(ctx);
 
 	return 0;

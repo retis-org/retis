@@ -174,7 +174,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 	return 0;
 }
 
-DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	struct nf_conn *nf_conn;
 	struct sk_buff *skb;
 	unsigned long nfct;

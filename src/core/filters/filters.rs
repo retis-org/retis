@@ -14,12 +14,15 @@ use crate::core::{
     workaround,
 };
 
+use super::meta::filter::FilterMeta;
+
 #[derive(Clone)]
 pub(crate) struct BpfFilter(pub(crate) Vec<u8>);
 
 #[derive(Clone)]
 pub(crate) enum Filter {
     Packet(BpfFilter),
+    Meta(FilterMeta),
 }
 
 static FM: Lazy<Mutex<HashMap<u32, Filter>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -65,6 +68,8 @@ pub(crate) unsafe extern "C" fn fixup_filter_load_fn(
     let f = if let Some(f) = filter {
         match f {
             Filter::Packet(bf) => bf.0,
+            // fail if non packet filter is encountered
+            _ => return -1,
         }
     } else {
         let mut default_filter = eBpfProg::new();

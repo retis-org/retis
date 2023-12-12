@@ -81,7 +81,7 @@ const SCRATCH_MEM_START: i16 = 16 * SCRATCH_MEM_SIZE + STACK_RESERVED;
 // This should be kept in sync with struct retis_filter_context in
 // src/core/filter/packets/bpf/include/packet_filter.h
 #[repr(C, packed)]
-struct retis_filter_ctx {
+struct retis_packet_filter_ctx {
     data: *mut i8,
     len: u32,
     ret: u32,
@@ -343,7 +343,7 @@ impl TryFrom<BpfProg> for eBpfProg {
             LdInfo::Reg {
                 src: BpfReg::CTX,
                 dst: BpfReg::CTXDATA,
-                off: i16::try_from(offset_of!(retis_filter_ctx, data))?,
+                off: i16::try_from(offset_of!(retis_packet_filter_ctx, data))?,
             },
             BpfSize::Double,
         ));
@@ -437,7 +437,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                             } else {
                                 BpfReg::X
                             },
-                            off: i16::try_from(offset_of!(retis_filter_ctx, len))?,
+                            off: i16::try_from(offset_of!(retis_packet_filter_ctx, len))?,
                         },
                         BpfSize::Word,
                     ));

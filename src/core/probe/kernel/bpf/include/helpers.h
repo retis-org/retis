@@ -3,6 +3,8 @@
 
 #include <bpf/bpf_tracing.h>
 
+#define MIN(a, b)	(((a) < (b)) ? (a) : (b))
+
 enum bpf_func_id___x { BPF_FUNC_get_func_ip___5_15_0 = 42 };
 
 /* The following helper retrieves the function IP in kprobes.

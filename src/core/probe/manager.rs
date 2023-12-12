@@ -56,6 +56,10 @@ pub(crate) struct ProbeManager {
     #[cfg(not(test))]
     counters_map: libbpf_rs::MapHandle,
 
+    /// Global map used to pass meta filter actions.
+    #[cfg(not(test))]
+    meta_map: libbpf_rs::MapHandle,
+
     /// Internal vec to store "used" probe builders, so we can keep a reference
     /// on them and keep probes loaded & installed.
     // TODO: should we change the builders to return the libbpf_rs::Link
@@ -78,6 +82,8 @@ impl ProbeManager {
             config_map: init_config_map()?,
             #[cfg(not(test))]
             counters_map: init_counters_map()?,
+            #[cfg(not(test))]
+            meta_map: filters::meta::filter::init_meta_map()?,
             builders: Vec::new(),
         };
 
@@ -89,6 +95,12 @@ impl ProbeManager {
         mgr.maps.insert(
             "counters_map".to_string(),
             mgr.counters_map.as_fd().as_raw_fd(),
+        );
+
+        #[cfg(not(test))]
+        mgr.maps.insert(
+            "filter_meta_map".to_string(),
+            mgr.meta_map.as_fd().as_raw_fd(),
         );
 
         Ok(mgr)
@@ -208,10 +220,8 @@ impl ProbeManager {
 
     fn setup_dyn_filters(&self) -> Result<()> {
         for filter in self.filters.iter() {
-            match filter {
-                Filter::Packet(_) => {
-                    filters::register_filter(0xdeadbeef, filter)?;
-                }
+            if let Filter::Packet(_) = filter {
+                filters::register_filter(0xdeadbeef, filter)?;
             }
         }
 
@@ -234,6 +244,24 @@ impl ProbeManager {
         Ok(())
     }
 
+    fn setup_map_filters(&mut self) -> Result<()> {
+        #[cfg(not(test))]
+        for filter in self.filters.iter() {
+            if let Filter::Meta(ops) = filter {
+                for (p, op) in ops.0.iter().enumerate() {
+                    let pos = u32::try_from(p)?.to_ne_bytes();
+                    self.meta_map.update(
+                        &pos,
+                        unsafe { plain::as_bytes(op) },
+                        libbpf_rs::MapFlags::ANY,
+                    )?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Attach all probes.
     pub(crate) fn attach(&mut self) -> Result<()> {
         // Prepare all hooks:
@@ -252,6 +280,7 @@ impl ProbeManager {
         })?;
 
         self.setup_dyn_filters()?;
+        self.setup_map_filters()?;
 
         // Handle generic probes.
         self.builders.extend(Self::attach_probes(
@@ -313,7 +342,7 @@ impl ProbeManager {
     fn attach_probes(
         probes: &mut [&mut Probe],
         hooks: &[Hook],
-        _filters: &[Filter],
+        filters: &[Filter],
         maps: HashMap<String, RawFd>,
         #[cfg(not(test))] config_map: &libbpf_rs::MapHandle,
         #[cfg(not(test))] counters_map: &libbpf_rs::MapHandle,
@@ -336,7 +365,7 @@ impl ProbeManager {
                     };
 
                     // Initialize the probe builder, only once for all targets.
-                    builder.init(map_fds.clone(), hooks.to_vec())?;
+                    builder.init(map_fds.clone(), hooks.to_vec(), filters.to_vec())?;
 
                     builders.insert(probe.type_key(), builder);
                 }
