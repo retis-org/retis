@@ -78,6 +78,36 @@ struct MetaLoad {
     offt: u16,
 }
 
+impl MetaLoad {
+    fn is_num(&self) -> bool {
+        self.is_byte() || self.is_short() || self.is_int() || self.is_long()
+    }
+
+    fn is_byte(&self) -> bool {
+        self.r#type & 0x1f == MetaType::Char as u8
+    }
+
+    fn is_short(&self) -> bool {
+        self.r#type & 0x1f == MetaType::Short as u8
+    }
+
+    fn is_int(&self) -> bool {
+        self.r#type & 0x1f == MetaType::Int as u8
+    }
+
+    fn is_long(&self) -> bool {
+        self.r#type & 0x1f == MetaType::Long as u8
+    }
+
+    fn is_ptr(&self) -> bool {
+        self.r#type & PTR_BIT > 0
+    }
+
+    fn is_arr(&self) -> bool {
+        self.nmemb > 0
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union MetaOp {
@@ -298,36 +328,6 @@ impl Rval {
         };
 
         Ok(detected)
-    }
-}
-
-impl MetaLoad {
-    fn is_num(&self) -> bool {
-        self.is_byte() || self.is_short() || self.is_int() || self.is_long()
-    }
-
-    fn is_byte(&self) -> bool {
-        self.r#type & 0x1f == MetaType::Char as u8
-    }
-
-    fn is_short(&self) -> bool {
-        self.r#type & 0x1f == MetaType::Short as u8
-    }
-
-    fn is_int(&self) -> bool {
-        self.r#type & 0x1f == MetaType::Int as u8
-    }
-
-    fn is_long(&self) -> bool {
-        self.r#type & 0x1f == MetaType::Long as u8
-    }
-
-    fn is_ptr(&self) -> bool {
-        self.r#type & PTR_BIT > 0
-    }
-
-    fn is_arr(&self) -> bool {
-        self.nmemb > 0
     }
 }
 
