@@ -126,7 +126,7 @@ struct skb_data_ref_event {
 struct skb_packet_event {
 	u32 len;
 	u32 capture_len;
-#define PACKET_CAPTURE_SIZE	256
+#define PACKET_CAPTURE_SIZE	255
 	u8 packet[PACKET_CAPTURE_SIZE];
 } __attribute__((packed));
 
@@ -403,6 +403,10 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 	network = BPF_CORE_READ(skb, network_header);
 	len = BPF_CORE_READ(skb, len);
 	linear_len = len - BPF_CORE_READ(skb, data_len); /* Linear buffer size */
+
+	/* No data in the linear len, nothing to report */
+	if (!linear_len)
+		return 0;
 
 	/* Best case: mac offset is set and valid */
 	if (is_mac_data_valid(skb)) {
