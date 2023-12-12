@@ -103,6 +103,10 @@ impl MetaLoad {
         self.r#type & PTR_BIT > 0
     }
 
+    fn is_signed(&self) -> bool {
+        self.r#type & SIGN_BIT > 0
+    }
+
     fn is_arr(&self) -> bool {
         self.nmemb > 0
     }
@@ -241,6 +245,10 @@ impl MetaOp {
             top.u.long = match rval {
                 Rval::Dec(val) => {
                     if val.starts_with('-') {
+                        if !lmo.is_signed() {
+                            bail!("invalid target value (value is signed while type is unsigned)");
+                        }
+
                         val.parse::<i64>()? as u64
                     } else {
                         val.parse::<u64>()?
