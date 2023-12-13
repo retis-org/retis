@@ -146,21 +146,12 @@ HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
 
-static __always_inline char *skb_mac_header(struct sk_buff *skb)
-{
-	char *head = (char *)BPF_CORE_READ(skb, head);
-	u16 mh = BPF_CORE_READ(skb, mac_header);
-
-	if (mh == (u16)~0)
-		return NULL;
-
-	return head + mh;
-}
-
 static __always_inline void filter(struct retis_context *ctx)
 {
 	struct retis_packet_filter_ctx fctx = {};
 	struct sk_buff *skb;
+	char *head;
+	u16 mac;
 
 	skb = retis_get_sk_buff(ctx);
 	if (!skb)
@@ -176,8 +167,13 @@ static __always_inline void filter(struct retis_context *ctx)
 		return;
 	}
 
-	fctx.data = skb_mac_header(skb);
-	if (fctx.data == NULL)
+	mac = BPF_CORE_READ(skb, mac_header);
+	if (!is_mac_valid(mac))
+		return;
+
+	head = (char *)BPF_CORE_READ(skb, head);
+	fctx.data = head + mac;
+	if (!fctx.data)
 		return;
 
 	fctx.len = BPF_CORE_READ(skb, len);
