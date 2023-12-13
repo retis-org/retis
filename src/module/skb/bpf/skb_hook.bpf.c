@@ -387,13 +387,6 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 	unsigned char *head, *data;
 	struct skb_packet_event *e;
 	u16 mac, network;
-	/* Due to verifier issues on some (old) kernel versions, namely
-	 * 5.15.0-88-generic on Ubuntu 22.04, size is limited to 0xff when
-	 * retrieving packets starting at the mac offset and to 0xef for packets
-	 * starting at the network offset. The difference in mask is due to the
-	 * fake eth header added in the later case.
-	 */
-	int size;
 
 	head = BPF_CORE_READ(skb, head);
 	headroom = BPF_CORE_READ(skb, data) - head;
@@ -409,6 +402,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 
 	/* Best case: mac offset is set and valid */
 	if (is_mac_data_valid(skb)) {
+		volatile int size;
 		int mac_offset;
 
 		mac_offset = mac - headroom;
@@ -421,9 +415,15 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		if (!e)
 			return 0;
 
+		/* Due to verifier issues on some (old) kernel versions, namely
+		 * 5.15.0-88-generic on Ubuntu 22.04, size is volatile and
+		 * limited to 0xff.
+		 */
+		size &= 0xff;
+
 		e->len = len - mac_offset;
-		e->capture_len = size & 0xff;
-		bpf_probe_read_kernel(e->packet, size & 0xff, head + mac);
+		e->capture_len = size;
+		bpf_probe_read_kernel(e->packet, size, head + mac);
 	/* Valid network offset with an unset or invalid mac offset: we can fake
 	 * the eth header.
 	 */
@@ -431,6 +431,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		u16 etype = BPF_CORE_READ(skb, protocol);
 		struct ethhdr *eth;
 		int network_offset;
+		volatile int size;
 
 		/* We do need the ethertype to be set at the skb level here,
 		 * otherwise we can't guess what kind of packet this is.
@@ -454,9 +455,16 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		__builtin_memset(eth, 0, sizeof(*eth));
 		eth->h_proto = etype;
 
+		/* Due to verifier issues on some (old) kernel versions, namely
+		 * 5.15.0-88-generic on Ubuntu 22.04, size is volatile and
+		 * limited to 0x7f. The difference in mask with the above is due
+		 * to the fake eth header added in the later case.
+		 */
+		size &= 0x7f;
+
 		e->len = len - network_offset + sizeof(*eth);
-		e->capture_len = size & 0xef;
-		bpf_probe_read_kernel(e->packet + sizeof(*eth), size & 0xef,
+		e->capture_len = size;
+		bpf_probe_read_kernel(e->packet + sizeof(*eth), size,
 				      head + network);
 	/* Can't guess any useful packet offset */
 	} else {
