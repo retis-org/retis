@@ -167,20 +167,35 @@ static __always_inline void filter(struct retis_context *ctx)
 		return;
 	}
 
-	mac = BPF_CORE_READ(skb, mac_header);
-	if (!is_mac_valid(mac))
-		return;
-
 	head = (char *)BPF_CORE_READ(skb, head);
-	fctx.data = head + mac;
-	if (!fctx.data)
+	fctx.len = BPF_CORE_READ(skb, len);
+
+	/* L3 filters require fewer loads (which means less overhead due to
+	 * memory access) and can match in the case the mac_header is not
+	 * present (i.e. early in the tx path).
+	 * Despite this peculiarity, the current approach is conservative,
+	 * favouring L2 filters over L3 when the mac_header is present.
+	 */
+	mac = BPF_CORE_READ(skb, mac_header);
+	if (is_mac_valid(mac)) {
+		fctx.data = head + mac;
+		packet_filter_l2(&fctx);
+		goto filter_outcome;
+	}
+
+	if (!is_network_data_valid(skb))
 		return;
 
-	fctx.len = BPF_CORE_READ(skb, len);
+	fctx.data = head + BPF_CORE_READ(skb, network_header);
+	/* L3 filter can be a nop, meaning the criteria are not enough to
+	 * express a match in terms of L3 only.
+	 */
+	packet_filter_l3(&fctx);
+
 	/* Due to a bug we can't use the return value of packet_filter(), but
 	 * we have to rely on the value returned into the context.
 	 */
-	packet_filter(&fctx);
+filter_outcome:
 	ctx->filters_ret |= (!!fctx.ret) << RETIS_F_PACKET_PASS_SH;
 	ctx->filters_ret |= (!!meta_filter(skb)) << RETIS_F_META_PASS_SH;
 }
