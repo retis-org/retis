@@ -14,10 +14,10 @@ use crate::core::{
     workaround,
 };
 
-use super::meta::filter::FilterMeta;
+use super::{meta::filter::FilterMeta, packets::filter::FilterPacketType};
 
 #[derive(Clone)]
-pub(crate) struct BpfFilter(pub(crate) Vec<u8>);
+pub(crate) struct BpfFilter(pub(crate) FilterPacketType, pub(crate) Vec<u8>);
 
 #[derive(Clone)]
 pub(crate) enum Filter {
@@ -62,12 +62,12 @@ pub(crate) unsafe extern "C" fn fixup_filter_load_fn(
     _opts: *mut libbpf_sys::bpf_prog_load_opts,
     _cookie: ::std::os::raw::c_long,
 ) -> std::os::raw::c_int {
-    let magic = 0xdeadbeef;
+    let magic = FilterPacketType::L2 as u32;
     let filter = get_filter(magic);
 
     let f = if let Some(f) = filter {
         match f {
-            Filter::Packet(bf) => bf.0,
+            Filter::Packet(bf) => bf.1,
             // fail if non packet filter is encountered
             _ => return -1,
         }

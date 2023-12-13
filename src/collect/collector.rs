@@ -14,7 +14,9 @@ use nix::unistd::Uid;
 
 use super::cli::Collect;
 use crate::{
-    cli::SubCommandRunner, core::filters::meta::filter::FilterMeta, process::display::PrintSingle,
+    cli::SubCommandRunner,
+    core::filters::{meta::filter::FilterMeta, packets::filter::FilterPacketType},
+    process::display::PrintSingle,
 };
 
 #[cfg(not(test))]
@@ -135,7 +137,10 @@ impl Collectors {
     fn setup_filters(probes: &mut ProbeManager, collect: &Collect) -> Result<()> {
         if let Some(f) = &collect.args()?.packet_filter {
             let fb = FilterPacket::from_string(f.to_string())?;
-            probes.register_filter(Filter::Packet(BpfFilter(fb.to_bytes()?)))?;
+            probes.register_filter(Filter::Packet(BpfFilter(
+                FilterPacketType::L2,
+                fb.to_bytes()?,
+            )))?;
         }
 
         if let Some(f) = &collect.args()?.meta_filter {

@@ -17,6 +17,12 @@ use crate::core::filters::packets::{cbpf::BpfProg, ebpf::eBpfProg};
 // src/core/probe/kernel/bpf/include/common.h
 const FILTER_MAX_INSNS: usize = 4096;
 
+#[derive(Clone, Copy)]
+#[repr(u32)]
+pub(crate) enum FilterPacketType {
+    L2 = 0xdeadbeef,
+}
+
 #[derive(Clone)]
 pub(crate) struct FilterPacket(eBpfProg);
 
