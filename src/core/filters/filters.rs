@@ -45,7 +45,6 @@ pub(crate) fn register_filter_handler(
 ) -> Result<()> {
     let opts = workaround::ProgHandlerOpts {
         prepare_load_fn: func,
-        cookie: 0xdeadbeef,
         ..Default::default()
     };
     workaround::register_prog_handler(
@@ -61,9 +60,10 @@ pub(crate) fn register_filter_handler(
 pub(crate) unsafe extern "C" fn fixup_filter_load_fn(
     prog: *mut libbpf_sys::bpf_program,
     _opts: *mut libbpf_sys::bpf_prog_load_opts,
-    cookie: ::std::os::raw::c_long,
+    _cookie: ::std::os::raw::c_long,
 ) -> std::os::raw::c_int {
-    let filter = get_filter(cookie as u32);
+    let magic = 0xdeadbeef;
+    let filter = get_filter(magic);
 
     let f = if let Some(f) = filter {
         match f {
@@ -98,7 +98,7 @@ pub(crate) unsafe extern "C" fn fixup_filter_load_fn(
     let mut prog_ext = insns.to_vec().clone();
 
     let inject_pos = match prog_ext.iter().enumerate().find_map(|(pos, insn)| {
-        (insn.code == (bpf_sys::BPF_JMP | bpf_sys::BPF_CALL) && insn.imm == cookie as i32)
+        (insn.code == (bpf_sys::BPF_JMP | bpf_sys::BPF_CALL) && insn.imm == magic as i32)
             .then_some(pos)
     }) {
         Some(p) => p,
