@@ -394,7 +394,7 @@ pub(super) fn unmarshal_task(raw_section: &BpfRawSection) -> Result<TaskEvent> {
     let mut task_event = TaskEvent::default();
     let raw = parse_raw_section::<RawTaskEvent>(raw_section)?;
 
-    (task_event.pid, task_event.tgid) = ((raw.pid & 0xFFFFFFFF) as i32, (raw.pid >> 32) as i32);
+    (task_event.tgid, task_event.pid) = ((raw.pid & 0xFFFFFFFF) as i32, (raw.pid >> 32) as i32);
     task_event.comm = raw.comm.to_string()?;
 
     Ok(task_event)
