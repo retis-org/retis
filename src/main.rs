@@ -20,7 +20,7 @@ use crate::{
 // Re-export derive macros.
 use retis_derive::*;
 
-const VERSION_NAME: &str = "pizza marinara";
+const VERSION_NAME: &str = "bredele";
 
 fn main() -> Result<()> {
     let mut cli = get_cli()?.build();
