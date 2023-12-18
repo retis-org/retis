@@ -40,7 +40,10 @@ impl FilterPacket {
         };
 
         let bpf_capture = Capture::dead(link_type)?;
-        let program = bpf_capture.compile(fstring.as_str(), true)?;
+        let program = match bpf_capture.compile(fstring.as_str(), true) {
+            Ok(program) => program,
+            Err(e) => bail!("Could not compile the filter: {e}"),
+        };
         let insns = program.get_instructions();
         let filter = BpfProg::try_from(unsafe { mem::transmute::<_, &[u8]>(insns) })?;
 
