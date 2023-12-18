@@ -179,13 +179,16 @@ impl ProbeManager {
     /// mgr.register_filter(filter)?;
     /// ```
     pub(crate) fn register_filter(&mut self, filter: Filter) -> Result<()> {
-        // Avoid duplicate filter types as any Filter variant should
-        // be present only once
-        if self
-            .filters
-            .iter()
-            .any(|f| std::mem::discriminant(f) == std::mem::discriminant(&filter))
-        {
+        // Avoid duplicate filter types as any Filter but
+        // Filter::Packet variant can be present once for each kind
+        // FilterPacketType
+        if self.filters.iter().any(|f| {
+            if let Filter::Packet(src_magic, _) = &filter {
+                matches!(f, Filter::Packet(dst_magic, _) if *src_magic as u32 == *dst_magic as u32)
+            } else {
+                std::mem::discriminant(f) == std::mem::discriminant(&filter)
+            }
+        }) {
             bail!("Tried to register multiple filters of the same type");
         }
 
@@ -220,8 +223,8 @@ impl ProbeManager {
 
     fn setup_dyn_filters(&self) -> Result<()> {
         for filter in self.filters.iter() {
-            if let Filter::Packet(_) = filter {
-                filters::register_filter(0xdeadbeef, filter)?;
+            if let Filter::Packet(magic, _) = filter {
+                filters::register_filter(*magic as u32, filter)?;
             }
         }
 

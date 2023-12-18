@@ -162,6 +162,48 @@ $ retis collect -f 'tcp port 443'
 ...
 ```
 
+Packet filtering can be of two types: L2 and L3. Retis automatically detects and
+generates L2/L3 filters based on the expression. This allows to match both packets
+fully formed and packets not having a valid L2 header yet (`sk_buff` having invalid
+`mac_header` but valid and set `network_header`). One advantage of this approach is
+the ability to match locally generated packets while still allowing matches based
+on L2 criteria.
+
+For example, the following filter:
+
+```none
+$ retis collect -f 'arp or tcp port 443'
+L2+L3 packet filter(s) loaded
+...
+```
+
+Internally generates two filters. For probes where only the `network_header`
+is valid and set in the `sk_buff` the filter would match packets with tcp
+source or destination port 443. For `sk_buff` with valid `mac_header` both arp
+and tcp packets would be matched.
+Please note that some limitations exist and they are a direct consequence of
+libpcap capabilities.
+For example filters like:
+
+```none
+$ retis collect -f 'ether broadcast or tcp port 443'
+L2 packet filter(s) loaded
+...
+```
+
+Will only generate L2 filters, that is, packets will be matched only if
+`mac_header` is set.
+For further information about the reason an L3 filter gets skipped, please
+use the `--log-level debug` option, i.e.:
+
+```none
+$ retis --log-level debug collect -f 'ether broadcast or tcp port 443'
+...
+DEBUG Skipping L3 filter generation (Could not compile the filter: libpcap error: not a broadcast link).
+INFO  L2 packet filter(s) loaded
+...
+```
+
 Metadata filtering instead allows to write filters that match packets based
 on their metadata.
 Metadata filters can match against any subfield of the `sk_buff` and subsequent
