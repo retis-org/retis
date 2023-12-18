@@ -7,7 +7,7 @@ repo_name: GitHub
 repo_url: https://github.com/retis-org/retis
 
 nav:
-  - Overview: README.md
+  - Overview: index.md
   - Profiles: profiles.md
   - Installation: install.md
   - Requirements: requirements.md
