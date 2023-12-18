@@ -11,14 +11,18 @@ use std::mem;
 use anyhow::{bail, Result};
 use pcap::{Capture, Linktype};
 
-use crate::core::filters::packets::{cbpf::BpfProg, ebpf::eBpfProg};
+use super::ebpfinsn::{eBpfInsn, MovInfo};
+
+use crate::core::filters::packets::{
+    cbpf::BpfProg,
+    ebpf::{eBpfProg, BpfReg},
+};
 
 // please keep in sync with FILTER_MAX_INSNS in
 // src/core/probe/kernel/bpf/include/common.h
 const FILTER_MAX_INSNS: usize = 4096;
 
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
 #[repr(u32)]
 pub(crate) enum FilterPacketType {
     L2 = 0xdeadbeef,
@@ -46,6 +50,19 @@ impl FilterPacket {
         }
 
         Ok(FilterPacket(ebpf_filter))
+    }
+
+    // Generate an empty eBPF filter containing only a single nop
+    // instruction.
+    pub(crate) fn reject_filter() -> Self {
+        let mut ebpf_filter = eBpfProg::new();
+
+        ebpf_filter.add(eBpfInsn::mov32(MovInfo::Imm {
+            dst: BpfReg::R0,
+            imm: 0_i32,
+        }));
+
+        FilterPacket(ebpf_filter)
     }
 
     pub(crate) fn to_bytes(&self) -> Result<Vec<u8>> {

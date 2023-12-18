@@ -136,12 +136,38 @@ impl Collectors {
     /// Setup user defined input filter.
     fn setup_filters(probes: &mut ProbeManager, collect: &Collect) -> Result<()> {
         if let Some(f) = &collect.args()?.packet_filter {
+            // L2 filter MUST always succeed. Any failure means we need to bail.
             let fb = FilterPacket::from_string_opt(f.to_string(), FilterPacketType::L2)?;
 
             probes.register_filter(Filter::Packet(
                 FilterPacketType::L2,
                 BpfFilter(fb.to_bytes()?),
             ))?;
+
+            let mut loaded_info = "L2";
+            // L3 filter is non mandatory.
+            let fb = if f.contains("ether[") {
+                debug!("Skipping L3 filter generation (ether[n:m] not allowed)");
+                FilterPacket::reject_filter()
+            } else {
+                match FilterPacket::from_string_opt(f.to_string(), FilterPacketType::L3) {
+                    Err(e) => {
+                        debug!("Skipping L3 filter generation ({e}).");
+                        FilterPacket::reject_filter()
+                    }
+                    Ok(f) => {
+                        loaded_info = "L2+L3";
+                        f
+                    }
+                }
+            };
+
+            probes.register_filter(Filter::Packet(
+                FilterPacketType::L3,
+                BpfFilter(fb.to_bytes()?),
+            ))?;
+
+            info!("{} packet filter(s) loaded", loaded_info);
         }
 
         if let Some(f) = &collect.args()?.meta_filter {
