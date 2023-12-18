@@ -645,11 +645,16 @@ mod tests {
         assert!(collectors.parse_probe("tcp_v6_*").is_ok());
         assert!(collectors.parse_probe("kprobe:tcp_v6_*").is_ok());
         assert!(collectors.parse_probe("kprobe:tcp_v6_*")?.len() > 0);
+        assert!(collectors.parse_probe("kretprobe:tcp_*").is_ok());
+        assert!(collectors.parse_probe("tp:skb:kfree_*").is_ok());
+        assert!(collectors.parse_probe("tp:*skb*").is_ok());
 
         // Invalid probe: symbol does not exist.
         assert!(collectors.parse_probe("foobar").is_err());
         assert!(collectors.parse_probe("kprobe:foobar").is_err());
         assert!(collectors.parse_probe("tp:42:foobar").is_err());
+        assert!(collectors.parse_probe("tp:kfree_*").is_err());
+        assert!(collectors.parse_probe("*foo*").is_err());
 
         // Invalid probe: wrong TYPE.
         assert!(collectors.parse_probe("kprobe:skb:kfree_skb").is_err());
@@ -662,10 +667,6 @@ mod tests {
         assert!(collectors.parse_probe("tp:").is_err());
         assert!(collectors.parse_probe("tp:skb:").is_err());
         assert!(collectors.parse_probe(":kfree_skb_reason").is_err());
-
-        // Invalid probe: wildcard not supported.
-        assert!(collectors.parse_probe("kretprobe:tcp_*").is_err());
-        assert!(collectors.parse_probe("tp:kfree_*").is_err());
 
         Ok(())
     }
