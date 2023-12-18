@@ -17,11 +17,11 @@ use crate::core::{
 use super::{meta::filter::FilterMeta, packets::filter::FilterPacketType};
 
 #[derive(Clone)]
-pub(crate) struct BpfFilter(pub(crate) FilterPacketType, pub(crate) Vec<u8>);
+pub(crate) struct BpfFilter(pub(crate) Vec<u8>);
 
 #[derive(Clone)]
 pub(crate) enum Filter {
-    Packet(BpfFilter),
+    Packet(FilterPacketType, BpfFilter),
     Meta(FilterMeta),
 }
 
@@ -67,7 +67,7 @@ pub(crate) unsafe extern "C" fn fixup_filter_load_fn(
 
     let f = if let Some(f) = filter {
         match f {
-            Filter::Packet(bf) => bf.1,
+            Filter::Packet(_, bf) => bf.0,
             // fail if non packet filter is encountered
             _ => return -1,
         }

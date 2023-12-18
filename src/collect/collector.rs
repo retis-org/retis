@@ -137,10 +137,11 @@ impl Collectors {
     fn setup_filters(probes: &mut ProbeManager, collect: &Collect) -> Result<()> {
         if let Some(f) = &collect.args()?.packet_filter {
             let fb = FilterPacket::from_string(f.to_string())?;
-            probes.register_filter(Filter::Packet(BpfFilter(
+
+            probes.register_filter(Filter::Packet(
                 FilterPacketType::L2,
-                fb.to_bytes()?,
-            )))?;
+                BpfFilter(fb.to_bytes()?),
+            ))?;
         }
 
         if let Some(f) = &collect.args()?.meta_filter {

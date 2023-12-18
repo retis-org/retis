@@ -220,8 +220,8 @@ impl ProbeManager {
 
     fn setup_dyn_filters(&self) -> Result<()> {
         for filter in self.filters.iter() {
-            if let Filter::Packet(bpf_filter) = filter {
-                filters::register_filter(bpf_filter.0 as u32, filter)?;
+            if let Filter::Packet(magic, _) = filter {
+                filters::register_filter(*magic as u32, filter)?;
             }
         }
 
