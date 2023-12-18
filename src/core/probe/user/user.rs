@@ -119,8 +119,8 @@ impl RawEventSectionFactory for UserEventFactory {
         let r#type = u8::from_ne_bytes(raw.data[16..17].try_into()?);
 
         // Split pid and tid
-        let pid = (pid_tid & 0xFFFFFFFF) as i32;
-        let tid = (pid_tid >> 32) as i32;
+        let pid = (pid_tid >> 32) as i32;
+        let tid = (pid_tid & 0xFFFFFFFF) as i32;
 
         let pid_key = format!("user_proc_{pid}");
         // Try to obtain the Process object from the Context.

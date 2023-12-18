@@ -79,53 +79,65 @@ impl BtfInfo {
         Ok(None)
     }
 
-    /// Look for a type based on its name and return both a Type object as well
-    /// as the Btf object where it was found.
+    /// Look for a type based on its name and return both a Vec of Type objects as well as
+    /// the Btf object where it was found.
     /// Subsequent lookups based on this type (such as nested types by id) must be done on
     /// the returned Btf object since type ids of different modules overlap.
     ///
     /// vmlinux is given priority in the lookups.
-    pub(crate) fn resolve_type_by_name(&self, name: &str) -> Result<(&Btf, Type)> {
-        match self.vmlinux.resolve_types_by_name(name) {
-            Ok(mut res) => Ok((
-                &self.vmlinux,
-                res.pop()
-                    .ok_or_else(|| anyhow!("failed to pop symbol {name}"))?,
-            )),
-            Err(e) => {
-                for module in self.modules.iter() {
-                    if let Ok(mut res) = module.resolve_types_by_name(name) {
-                        return Ok((
-                            module,
-                            res.pop()
-                                .ok_or_else(|| anyhow!("failed to pop symbol {name}"))?,
-                        ));
-                    }
-                }
-                Err(e)
+    pub(crate) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<(&Btf, Type)>> {
+        let mut types = Vec::new();
+
+        let mut base_types = match self.vmlinux.resolve_types_by_name(name) {
+            Ok(base_types) => base_types,
+            _ => Vec::new(), // Id not found in base.
+        };
+
+        for module in self.modules.iter() {
+            if let Ok(mut res) = module.resolve_types_by_name(name) {
+                // FIXME: We can't filter base types so they'll be reported more
+                // than once (we need some changes in btf-rs that are not
+                // released yet). Not optimal but should be fine with how we use
+                // this function for now.
+                res.drain(..).for_each(|t| types.push((module, t)));
             }
         }
+
+        // Now add types found in the base BTF.
+        base_types
+            .drain(..)
+            .for_each(|t| types.push((&self.vmlinux, t)));
+
+        if types.is_empty() {
+            bail!("No type linked to name {name}");
+        }
+
+        Ok(types)
     }
 
-    /// Look for a symbol and return its Type object as well as the Btf object where it was
-    /// found.
+    /// Look for a function symbol and return a Vec of matching Type objects as well as
+    /// the Btf object where it was found.
+    ///
     /// Subsequent lookups based on this type (such as nested types by id) must be done on
     /// the returned Btf object since type ids of different modules overlap.
     ///
     /// vmlinux is given priority in the lookups.
-    pub(crate) fn find_symbol_btf(&self, symbol: &Symbol) -> Result<(&Btf, Type)> {
-        self.resolve_type_by_name(&symbol.typedef_name())
+    pub(crate) fn resolve_types_by_symbol(&self, symbol: &Symbol) -> Result<Vec<(&Btf, Type)>> {
+        self.resolve_types_by_name(&symbol.typedef_name())
     }
 
     /// Look for symbol prototype. Return the prototype and the Btf object that contains it.
     fn find_prototype_btf(&self, symbol: &Symbol) -> Result<(&Btf, btf_rs::FuncProto)> {
-        let (btf, func) = self.find_symbol_btf(symbol)?;
-        let proto = match symbol {
-            Symbol::Func(_) => Self::get_function_prototype(btf, &func),
-            Symbol::Event(_) => Self::get_event_prototype(btf, &func),
+        for (btf, t) in self.resolve_types_by_symbol(symbol)? {
+            if let Ok(proto) = match symbol {
+                Symbol::Func(_) => Self::get_function_prototype(btf, &t),
+                Symbol::Event(_) => Self::get_event_prototype(btf, &t),
+            } {
+                return Ok((btf, proto));
+            }
         }
-        .map_err(|e| anyhow!("Failed to resolve prototype for {symbol}: {e}"))?;
-        Ok((btf, proto))
+
+        bail!("Failed to resolve prototype for {symbol}");
     }
 
     /// Determine if a parameter is from a specific type.
@@ -146,7 +158,8 @@ impl BtfInfo {
                 }
                 Type::Volatile(t) => btf.resolve_chained_type(&t)?,
                 Type::Const(t) => btf.resolve_chained_type(&t)?,
-                Type::Array(_) => bail!("Arrays are not supported at the moment"),
+                // FIXME: arrays are not supported at the moment.
+                Type::Array(_) => return Ok(false),
                 _ => break,
             }
         }

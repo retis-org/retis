@@ -94,23 +94,28 @@ impl CtEventFactory {
     }
 
     fn parse_tcp_states(&mut self) -> Result<()> {
-        if let Ok((btf, Type::Enum(r#enum))) = inspector()?
+        if let Ok(types) = inspector()?
             .kernel
             .btf
-            .resolve_type_by_name("tcp_conntrack")
+            .resolve_types_by_name("tcp_conntrack")
         {
-            for member in r#enum.members.iter() {
-                if (member.val() as i32) < 0 {
-                    continue;
+            if let Some((btf, Type::Enum(r#enum))) =
+                types.iter().find(|(_, t)| matches!(t, Type::Enum(_)))
+            {
+                for member in r#enum.members.iter() {
+                    if (member.val() as i32) < 0 {
+                        continue;
+                    }
+                    self.tcp_states.insert(
+                        member.val() as i32,
+                        btf.resolve_name(member)?
+                            .trim_start_matches("TCP_CONNTRACK_")
+                            .to_string(),
+                    );
                 }
-                self.tcp_states.insert(
-                    member.val() as i32,
-                    btf.resolve_name(member)?
-                        .trim_start_matches("TCP_CONNTRACK_")
-                        .to_string(),
-                );
             }
         }
+
         Ok(())
     }
 

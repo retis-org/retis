@@ -54,7 +54,7 @@ pub(crate) struct DropReasons {
     subsys_name: Option<String>,
     /// Sub-system custom drop reasons. Map of the drop reason values (i32) to
     /// their names.
-    reasons: HashMap<i32, String>,
+    reasons: HashMap<u32, String>,
 }
 
 impl DropReasons {
@@ -120,9 +120,10 @@ impl SkbDropEventFactory {
     fn get_reason(&self, raw_val: i32) -> (Option<String>, String) {
         // Special case when drop reasons aren't supported by the kernel. Fake a
         // core NOT_SPECIFIED reason.
-        if raw_val == -1 || self.reasons.is_none() {
+        if raw_val < 0 || self.reasons.is_none() {
             return (None, "NOT_SPECIFIED".to_string());
         }
+        let raw_val = raw_val as u32;
 
         // Retrieve the sub-system drop reason definition, if any.
         let subsys_id = (raw_val >> SKB_DROP_REASON_SUBSYS_SHIFT) as u16;
@@ -172,19 +173,20 @@ struct BpfSkbDropEvent {
     drop_reason: i32,
 }
 
-fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<i32, String>> {
+fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u32, String>> {
     let mut values = HashMap::new();
 
-    if let Ok((btf, Type::Enum(r#enum))) = inspector()?.kernel.btf.resolve_type_by_name(r#enum) {
-        for member in r#enum.members.iter() {
-            if (member.val() as i32) < 0 {
-                continue;
+    if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(r#enum) {
+        if let Some((btf, Type::Enum(r#enum))) =
+            types.iter().find(|(_, t)| matches!(t, Type::Enum(_)))
+        {
+            for member in r#enum.members.iter() {
+                let mut val = btf.resolve_name(member)?;
+                trim_start
+                    .iter()
+                    .for_each(|p| val = val.trim_start_matches(p).to_string());
+                values.insert(member.val(), val.to_string());
             }
-            let mut val = btf.resolve_name(member)?;
-            trim_start
-                .iter()
-                .for_each(|p| val = val.trim_start_matches(p).to_string());
-            values.insert(member.val() as i32, val.to_string());
         }
     }
 

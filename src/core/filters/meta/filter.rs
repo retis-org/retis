@@ -78,6 +78,40 @@ struct MetaLoad {
     offt: u16,
 }
 
+impl MetaLoad {
+    fn is_num(&self) -> bool {
+        self.is_byte() || self.is_short() || self.is_int() || self.is_long()
+    }
+
+    fn is_byte(&self) -> bool {
+        self.r#type & 0x1f == MetaType::Char as u8
+    }
+
+    fn is_short(&self) -> bool {
+        self.r#type & 0x1f == MetaType::Short as u8
+    }
+
+    fn is_int(&self) -> bool {
+        self.r#type & 0x1f == MetaType::Int as u8
+    }
+
+    fn is_long(&self) -> bool {
+        self.r#type & 0x1f == MetaType::Long as u8
+    }
+
+    fn is_ptr(&self) -> bool {
+        self.r#type & PTR_BIT > 0
+    }
+
+    fn is_signed(&self) -> bool {
+        self.r#type & SIGN_BIT > 0
+    }
+
+    fn is_arr(&self) -> bool {
+        self.nmemb > 0
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union MetaOp {
@@ -103,7 +137,7 @@ impl MetaOp {
         Ok(())
     }
 
-    fn emit_load(btf: &Btf, r#type: Type, offt: u32) -> Result<MetaOp> {
+    fn emit_load(btf: &Btf, r#type: &Type, offt: u32) -> Result<MetaOp> {
         let mut op: MetaOp = unsafe { std::mem::zeroed::<_>() };
         let lop = unsafe { &mut op.l };
         let mut t = r#type.clone();
@@ -211,6 +245,10 @@ impl MetaOp {
             top.u.long = match rval {
                 Rval::Dec(val) => {
                     if val.starts_with('-') {
+                        if !lmo.is_signed() {
+                            bail!("invalid target value (value is signed while type is unsigned)");
+                        }
+
                         val.parse::<i64>()? as u64
                     } else {
                         val.parse::<u64>()?
@@ -301,36 +339,6 @@ impl Rval {
     }
 }
 
-impl MetaLoad {
-    fn is_num(&self) -> bool {
-        self.is_byte() || self.is_short() || self.is_int() || self.is_long()
-    }
-
-    fn is_byte(&self) -> bool {
-        self.r#type & 0x1f == MetaType::Char as u8
-    }
-
-    fn is_short(&self) -> bool {
-        self.r#type & 0x1f == MetaType::Short as u8
-    }
-
-    fn is_int(&self) -> bool {
-        self.r#type & 0x1f == MetaType::Int as u8
-    }
-
-    fn is_long(&self) -> bool {
-        self.r#type & 0x1f == MetaType::Long as u8
-    }
-
-    fn is_ptr(&self) -> bool {
-        self.r#type & PTR_BIT > 0
-    }
-
-    fn is_arr(&self) -> bool {
-        self.nmemb > 0
-    }
-}
-
 #[derive(Clone)]
 pub(crate) struct FilterMeta(pub(crate) Vec<MetaOp>);
 
@@ -403,12 +411,18 @@ impl FilterMeta {
             bail!("unsupported data structure {init_sym}. sk_buff must be used.")
         }
 
-        let (btf, mut r#type) = btf
-            .resolve_type_by_name(init_sym)
+        let mut types = btf
+            .resolve_types_by_name(init_sym)
             .map_err(|e| anyhow!("unable to resolve sk_buff data type {e}"))?;
 
+        let (btf, ref mut r#type) =
+            match types.iter_mut().find(|(_, t)| matches!(t, Type::Struct(_))) {
+                Some(r#struct) => r#struct,
+                None => bail!("Could not resolve {init_sym} to a struct"),
+            };
+
         for (pos, field) in fields.iter().enumerate() {
-            let sub_node = walk_btf_node(btf, &r#type, field, offt);
+            let sub_node = walk_btf_node(btf, r#type, field, offt);
             match sub_node {
                 Some((offset, snode)) => {
                     if pos < fields.len() - 1 {
@@ -435,9 +449,9 @@ impl FilterMeta {
                             _ => offt = offset,
                         }
 
-                        r#type = x.clone();
+                        *r#type = x.clone();
                     } else {
-                        r#type = snode;
+                        *r#type = snode;
                     }
 
                     stored_offset = offset;

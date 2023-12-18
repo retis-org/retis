@@ -166,7 +166,7 @@ impl Collector for NftModule {
                 .spawn()
                 .map_err(|e| anyhow!("{NFT_BIN} binary not available: {e}"))?;
         } else {
-            info!("No system changes allowed. If no trace rule gets added, no nft events will be reported.");
+            info!("If an nft trace rule wasn't manually added nft events won't be reported: see help for --allow-system-changes");
         }
 
         Ok(())

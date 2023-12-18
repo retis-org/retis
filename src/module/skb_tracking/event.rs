@@ -18,7 +18,7 @@ use crate::{
 ///
 /// Tl;dr; the tracking unique id is `(timestamp, orig_head)` and `skb` can be
 /// used to distinguished between clones.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Copy, PartialEq)]
 #[event_section]
 #[repr(C)]
 pub(crate) struct SkbTrackingEvent {

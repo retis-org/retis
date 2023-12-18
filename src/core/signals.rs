@@ -25,9 +25,9 @@ impl Running {
     /// Register termination signals so the current Running instance will stop
     /// upon receiving one of those signals (SIGTERM, etc). This can only work
     /// from the main thread.
-    pub(crate) fn register_term_signals(&mut self) -> Result<()> {
+    pub(crate) fn register_term_signals(&self) -> Result<()> {
         let mut sigs = Signals::new(signal_hook::consts::TERM_SIGNALS)?;
-        let mut myself = self.clone();
+        let myself = self.clone();
 
         thread::spawn(move || {
             sigs.wait();
@@ -42,7 +42,7 @@ impl Running {
         !self.0.load(Ordering::Relaxed)
     }
 
-    pub(crate) fn terminate(&mut self) {
+    pub(crate) fn terminate(&self) {
         self.0.store(true, Ordering::Relaxed);
     }
 }

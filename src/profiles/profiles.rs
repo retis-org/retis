@@ -132,11 +132,11 @@ pub(crate) struct Profile {
 
 impl Profile {
     /// Supported api version
-    pub fn api_version() -> Result<ApiVersion> {
+    pub(crate) fn api_version() -> Result<ApiVersion> {
         ApiVersion::parse(API_VERSION_STR)
     }
     /// Find a profile
-    pub fn find(name: &str) -> Result<Profile> {
+    pub(crate) fn find(name: &str) -> Result<Profile> {
         for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {
             for entry in path.read_dir()? {
                 // Profile conflict is performed per-path to allow overriding
@@ -173,7 +173,7 @@ impl Profile {
 
     /// Load a profile from a path.
     /// A file can contain multiple yaml objects so we return a list of objects.
-    pub fn load(path: PathBuf) -> Result<Vec<Profile>> {
+    pub(crate) fn load(path: PathBuf) -> Result<Vec<Profile>> {
         let mut result = Vec::new();
         let contents = read_to_string(path.clone())?;
         for document in serde_yaml::Deserializer::from_str(&contents) {
@@ -203,12 +203,12 @@ impl Profile {
 
     /// Load a profile from a string.
     #[cfg(test)]
-    pub fn from_str(contents: &str) -> Result<Profile> {
+    pub(crate) fn from_str(contents: &str) -> Result<Profile> {
         Ok(serde_yaml::from_str(contents)?)
     }
 
     /// Evaluate collect profiles and return the one that matches.
-    pub fn match_collect(&self) -> Result<Option<&SubcommandProfile>> {
+    pub(crate) fn match_collect(&self) -> Result<Option<&SubcommandProfile>> {
         if self.collect.is_empty() {
             return Ok(None);
         }
@@ -222,7 +222,7 @@ impl Profile {
     }
 
     /// Evaluate pcap profiles and return the one that matches.
-    pub fn match_pcap(&self) -> Result<Option<&SubcommandProfile>> {
+    pub(crate) fn match_pcap(&self) -> Result<Option<&SubcommandProfile>> {
         if self.pcap.is_empty() {
             return Ok(None);
         }
@@ -237,7 +237,7 @@ impl Profile {
 
     /// Generate cli arguments from a profile. The result is a list of arguments that can be
     /// concatenated to the ones provided by the user.
-    pub fn cli_args(&self, subcommand: &str) -> Result<Vec<OsString>> {
+    pub(crate) fn cli_args(&self, subcommand: &str) -> Result<Vec<OsString>> {
         let mut result = Vec::new();
         let args = match subcommand {
             "collect" => {
@@ -251,7 +251,11 @@ impl Profile {
                     }
                     Some(collect) => collect,
                 };
-                info!("Applying profile {}: {}", self.name, collect.name);
+                if collect.name == default_name() {
+                    info!("Applying profile {}", self.name);
+                } else {
+                    info!("Applying profile {}: {}", self.name, collect.name);
+                }
                 &collect.args
             }
             "pcap" => {

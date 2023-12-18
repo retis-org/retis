@@ -351,7 +351,7 @@ impl Collectors {
         }
 
         if let Some(cmd) = collect.cmd.to_owned() {
-            let mut run = self.run.clone();
+            let run = self.run.clone();
             std::thread::spawn(move || {
                 match Command::new("sh")
                     .arg("-c")
@@ -390,13 +390,7 @@ impl Collectors {
     fn parse_probe(&self, probe: &str) -> Result<Vec<Probe>> {
         let (type_str, target) = match probe.split_once(':') {
             Some((type_str, target)) => (type_str, target),
-            None => {
-                info!(
-                    "Invalid probe format, no TYPE given in '{}', using 'kprobe:{}'. See the help.",
-                    probe, probe
-                );
-                ("kprobe", probe)
-            }
+            None => ("kprobe", probe),
         };
 
         // Convert the target to a list of matching ones for probe types
