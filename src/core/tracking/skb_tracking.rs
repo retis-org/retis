@@ -212,6 +212,20 @@ pub(crate) fn init_tracking(
     let cfg = unsafe { plain::as_bytes(&cfg) };
     config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
 
+    // Special case for kfree_skbmem, which can't be tracked as it is being
+    // called after skb_release_data where we have a hook removing the tracking
+    // id.
+    let symbol = Symbol::from_name("kfree_skbmem")?;
+    let key = symbol.addr()?.to_ne_bytes();
+    let cfg = TrackingConfig {
+        free: 0,
+        partial_free: 0,
+        inv_head: 0,
+        no_tracking: 1,
+    };
+    let cfg = unsafe { plain::as_bytes(&cfg) };
+    config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
+
     // As discussed in an old thread[1], the net:net_dev_xmit tracepoint can
     // access freed skbs. In such case, we don't want to generate a new tracking
     // id that won't ever be freed. Instead, we're marking this probe as
