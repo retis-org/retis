@@ -30,7 +30,7 @@ use crate::{
             packets::filter::FilterPacket,
         },
         inspect::check::collection_prerequisites,
-        kernel::{symbol::matching_functions_to_symbols, Symbol},
+        kernel::symbol::{matching_events_to_symbols, matching_functions_to_symbols},
         probe::{self, Probe, ProbeManager},
         signals::Running,
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
@@ -428,8 +428,9 @@ impl Collectors {
         // Convert the target to a list of matching ones for probe types
         // supporting it.
         let mut symbols = match type_str {
-            "kprobe" => matching_functions_to_symbols(target)?,
-            _ => vec![Symbol::from_name(target)?],
+            "kprobe" | "kretprobe" => matching_functions_to_symbols(target)?,
+            "tp" => matching_events_to_symbols(target)?,
+            x => bail!("Invalid TYPE {}. See the help.", x),
         };
 
         let mut probes = Vec::new();
@@ -644,11 +645,16 @@ mod tests {
         assert!(collectors.parse_probe("tcp_v6_*").is_ok());
         assert!(collectors.parse_probe("kprobe:tcp_v6_*").is_ok());
         assert!(collectors.parse_probe("kprobe:tcp_v6_*")?.len() > 0);
+        assert!(collectors.parse_probe("kretprobe:tcp_*").is_ok());
+        assert!(collectors.parse_probe("tp:skb:kfree_*").is_ok());
+        assert!(collectors.parse_probe("tp:*skb*").is_ok());
 
         // Invalid probe: symbol does not exist.
         assert!(collectors.parse_probe("foobar").is_err());
         assert!(collectors.parse_probe("kprobe:foobar").is_err());
         assert!(collectors.parse_probe("tp:42:foobar").is_err());
+        assert!(collectors.parse_probe("tp:kfree_*").is_err());
+        assert!(collectors.parse_probe("*foo*").is_err());
 
         // Invalid probe: wrong TYPE.
         assert!(collectors.parse_probe("kprobe:skb:kfree_skb").is_err());
@@ -661,10 +667,6 @@ mod tests {
         assert!(collectors.parse_probe("tp:").is_err());
         assert!(collectors.parse_probe("tp:skb:").is_err());
         assert!(collectors.parse_probe(":kfree_skb_reason").is_err());
-
-        // Invalid probe: wildcard not supported.
-        assert!(collectors.parse_probe("kretprobe:tcp_*").is_err());
-        assert!(collectors.parse_probe("tp:kfree_*").is_err());
 
         Ok(())
     }

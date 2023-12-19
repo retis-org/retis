@@ -298,30 +298,6 @@ impl KernelInspector {
         Some(set.as_ref().unwrap().get(name).is_some())
     }
 
-    /// Given an event name (without the group part), try to find a corresponding
-    /// event (with the group part) and return the full name.
-    ///
-    /// `assert!(inspector().unwrap().find_matching_event("kfree_skb") == Some("skb:kfree_skb"));`
-    pub(crate) fn find_matching_event(&self, name: &str) -> Option<String> {
-        let set = &self.traceable_events;
-
-        // If we can't check further, return None.
-        if set.is_none() {
-            return None;
-        }
-
-        let suffix = format!(":{name}");
-
-        // Unwrap as we checked above we have a set of valid events.
-        for event in set.as_ref().unwrap().iter() {
-            if event.ends_with(&suffix) {
-                return Some(event.clone());
-            }
-        }
-
-        None
-    }
-
     /// Get a parameter offset given a kernel function, if  any. Can be used to
     /// check a function has a given parameter by using:
     /// `inspector()?.parameter_offset()?.is_some()`
@@ -348,26 +324,36 @@ impl KernelInspector {
         ))
     }
 
-    /// Find functions matching a given pattern. So far only wildcards (*) are
-    /// supported, e.g. "tcp_v6_*".
-    pub(crate) fn matching_functions(&self, target: &str) -> Result<Vec<String>> {
-        let set = &self.traceable_funcs;
-
-        if set.is_none() {
-            bail!("Could not get matching functions as Retis can't access files in /sys/kernel/debug/tracing");
-        }
-
+    fn match_in_set(set: &HashSet<String>, target: &str) -> Result<Vec<String>> {
         let target = format!("^{}$", target.replace('*', ".*"));
         let re = Regex::new(&target)?;
 
         // Unwrap as we checked above we have a set of valid events.
-        Ok(set
-            .as_ref()
-            .unwrap()
-            .iter()
-            .filter(|f| re.is_match(f))
-            .cloned()
-            .collect())
+        Ok(set.iter().filter(|f| re.is_match(f)).cloned().collect())
+    }
+
+    /// Find events matching a given pattern. So far only wildcards (*) are
+    /// supported, e.g. "skb:*", "*:kfree_skb" or "*skb*".
+    pub(crate) fn matching_events(&self, target: &str) -> Result<Vec<String>> {
+        Self::match_in_set(
+            self
+                .traceable_events
+                .as_ref()
+                .ok_or_else(|| anyhow!("Could not get matching events as Retis can't access files in /sys/kernel/debug/tracing"))?,
+                target
+        )
+    }
+
+    /// Find functions matching a given pattern. So far only wildcards (*) are
+    /// supported, e.g. "tcp_v6_*".
+    pub(crate) fn matching_functions(&self, target: &str) -> Result<Vec<String>> {
+        Self::match_in_set(
+            self
+                .traceable_funcs
+                .as_ref()
+                .ok_or_else(|| anyhow!("Could not get matching functions as Retis can't access files in /sys/kernel/debug/tracing"))?,
+                target
+        )
     }
 }
 
