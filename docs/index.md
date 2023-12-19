@@ -110,6 +110,17 @@ $ retis pcap --probe tp:net:net_dev_start_xmit -o retis.pcap
 $ wireshark retis.pcap
 ```
 
+Some post-processing commands (eg. `print`, `sort`) can generate a long output.
+In such case a pager is automatically used in case the output is larger than the
+current terminal. By default `less` is used but the pager can be explicitly
+chosen by setting the `PAGER` environment variable, or unset by setting
+`NOPAGER`.
+
+```none
+$ PAGER=more retis sort
+$ NOPAGER=1 retis sort
+```
+
 ## Profiles and customization
 
 Retis has the concept of profiles, which are a predefined set of cli arguments

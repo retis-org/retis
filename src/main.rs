@@ -13,7 +13,7 @@ mod benchmark;
 
 use crate::{
     cli::get_cli,
-    core::{inspect::init_inspector, logger::Logger},
+    core::{helpers::pager::try_enable_pager, inspect::init_inspector, logger::Logger},
     module::get_modules,
 };
 
@@ -33,7 +33,7 @@ fn main() -> Result<()> {
         "trace" => LevelFilter::Trace,
         x => bail!("Invalid log_level: {}", x),
     };
-    Logger::init(log_level)?;
+    let logger = Logger::init(log_level)?;
     set_libbpf_rs_print_callback(log_level);
 
     // Save the --kconf option value before using the cli object to dispatch the
@@ -45,14 +45,24 @@ fn main() -> Result<()> {
 
     // Step 4: dispatch the command.
     let command = cli.get_subcommand_mut()?;
-    if command.name() == "collect" {
+
+    // Per-command early fixups.
+    match command.name().as_str() {
         // If the user provided a custom kernel config location, use it early to
         // initialize the inspector. As the inspector is only used by the
         // collect command, only initialize it there for now.
-        if let Some(kconf) = &kconf_opt {
-            init_inspector(kconf)?;
+        "collect" => {
+            if let Some(kconf) = &kconf_opt {
+                init_inspector(kconf)?;
+            }
         }
+        // Try setting up the pager for a selected subset of commands.
+        "print" | "sort" => {
+            try_enable_pager(&logger);
+        }
+        _ => (),
     }
+
     let mut runner = command.runner()?;
     runner.check_prerequisites()?;
     runner.run(cli, modules)?;
