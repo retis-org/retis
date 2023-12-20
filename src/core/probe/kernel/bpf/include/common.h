@@ -151,7 +151,6 @@ static __always_inline void filter(struct retis_context *ctx)
 	struct retis_packet_filter_ctx fctx = {};
 	struct sk_buff *skb;
 	char *head;
-	u16 mac;
 
 	skb = retis_get_sk_buff(ctx);
 	if (!skb)
@@ -176,9 +175,8 @@ static __always_inline void filter(struct retis_context *ctx)
 	 * Despite this peculiarity, the current approach is conservative,
 	 * favouring L2 filters over L3 when the mac_header is present.
 	 */
-	mac = BPF_CORE_READ(skb, mac_header);
-	if (is_mac_valid(mac)) {
-		fctx.data = head + mac;
+	if (is_mac_data_valid(skb)) {
+		fctx.data = head + BPF_CORE_READ(skb, mac_header);
 		packet_filter_l2(&fctx);
 		goto filter_outcome;
 	}
