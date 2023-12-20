@@ -423,7 +423,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 
 		e->len = len - mac_offset;
 		e->capture_len = size;
-		bpf_probe_read_kernel(e->packet, size, head + mac);
+		bpf_probe_read_kernel(e->packet, size & 0xff, head + mac);
 	/* Valid network offset with an unset or invalid mac offset: we can fake
 	 * the eth header.
 	 */
@@ -464,7 +464,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 
 		e->len = len - network_offset + sizeof(*eth);
 		e->capture_len = size;
-		bpf_probe_read_kernel(e->packet + sizeof(*eth), size,
+		bpf_probe_read_kernel(e->packet + sizeof(*eth), size & 0x7f,
 				      head + network);
 	/* Can't guess any useful packet offset */
 	} else {
