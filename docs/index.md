@@ -228,10 +228,11 @@ $ retis collect -m 'sk_buff.dev.nd_net.net.ns.inum == 4026531840'
 ```
 
 The comparison operators are:
-- "==" for *equal to*
-- "!=" for *not equal to*
-- "<" and "<=" for *less than* and *less than or equal to*
-- ">" and ">=" for *greater than* and *greater than or equal to*
+
+1. "==" for *equal to*
+2. "!=" for *not equal to*
+3. "<" and "<=" for *less than* and *less than or equal to*
+4. ">" and ">=" for *greater than* and *greater than or equal to*
 
 At the moment, only number and string comparisons are supported.
 All the comparison operators support numbers (both signed and unsigned).
