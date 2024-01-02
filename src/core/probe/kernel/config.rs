@@ -60,7 +60,6 @@ pub(crate) fn init_config_map() -> Result<libbpf_rs::MapHandle> {
     )?)
 }
 
-#[cfg(not(test))]
 pub(crate) fn init_stack_map() -> Result<libbpf_rs::MapHandle> {
     const MAX_STACKTRACE_ENTRIES: u32 = 256;
     const PERF_MAX_STACK_DEPTH: usize = 127;

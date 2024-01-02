@@ -49,15 +49,12 @@ pub(crate) struct ProbeManager {
     maps: HashMap<String, RawFd>,
 
     /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
-    #[cfg(not(test))]
     config_map: libbpf_rs::MapHandle,
 
     /// Global per-probe map used to report counters.
-    #[cfg(not(test))]
     counters_map: libbpf_rs::MapHandle,
 
     /// Global map used to pass meta filter actions.
-    #[cfg(not(test))]
     meta_map: libbpf_rs::MapHandle,
 
     /// Internal vec to store "used" probe builders, so we can keep a reference
@@ -78,26 +75,20 @@ impl ProbeManager {
             filters: Vec::new(),
             global_probes_options: Vec::new(),
             maps: HashMap::new(),
-            #[cfg(not(test))]
             config_map: init_config_map()?,
-            #[cfg(not(test))]
             counters_map: init_counters_map()?,
-            #[cfg(not(test))]
             meta_map: filters::meta::filter::init_meta_map()?,
             builders: Vec::new(),
         };
 
-        #[cfg(not(test))]
         mgr.maps
             .insert("config_map".to_string(), mgr.config_map.as_fd().as_raw_fd());
 
-        #[cfg(not(test))]
         mgr.maps.insert(
             "counters_map".to_string(),
             mgr.counters_map.as_fd().as_raw_fd(),
         );
 
-        #[cfg(not(test))]
         mgr.maps.insert(
             "filter_meta_map".to_string(),
             mgr.meta_map.as_fd().as_raw_fd(),
@@ -248,7 +239,6 @@ impl ProbeManager {
     }
 
     fn setup_map_filters(&mut self) -> Result<()> {
-        #[cfg(not(test))]
         for filter in self.filters.iter() {
             if let Filter::Meta(ops) = filter {
                 for (p, op) in ops.0.iter().enumerate() {
@@ -295,9 +285,7 @@ impl ProbeManager {
             &self.generic_hooks,
             &self.filters,
             self.maps.clone(),
-            #[cfg(not(test))]
             &self.config_map,
-            #[cfg(not(test))]
             &self.counters_map,
         )?);
 
@@ -316,9 +304,7 @@ impl ProbeManager {
                     &hooks,
                     &self.filters,
                     self.maps.clone(),
-                    #[cfg(not(test))]
                     &self.config_map,
-                    #[cfg(not(test))]
                     &self.counters_map,
                 )?);
                 Ok(())
@@ -347,8 +333,8 @@ impl ProbeManager {
         hooks: &[Hook],
         filters: &[Filter],
         maps: HashMap<String, RawFd>,
-        #[cfg(not(test))] config_map: &libbpf_rs::MapHandle,
-        #[cfg(not(test))] counters_map: &libbpf_rs::MapHandle,
+        config_map: &libbpf_rs::MapHandle,
+        counters_map: &libbpf_rs::MapHandle,
     ) -> Result<Vec<Box<dyn ProbeBuilder>>> {
         let mut builders: HashMap<usize, Box<dyn ProbeBuilder>> = HashMap::new();
         let map_fds: Vec<(String, RawFd)> = maps.into_iter().collect();
@@ -377,12 +363,9 @@ impl ProbeManager {
             // Unwrap as we just made sure the probe builder would be available.
             let builder = builders.get_mut(&probe.type_key()).unwrap();
 
-            #[cfg(not(test))]
             let (counters_key, counters);
             // First load the probe configuration.
-            #[cfg(not(test))]
             let options = probe.options();
-            #[cfg(not(test))]
             match probe.type_mut() {
                 ProbeType::Kprobe(ref mut kp)
                 | ProbeType::Kretprobe(ref mut kp)
@@ -397,7 +380,6 @@ impl ProbeManager {
                     (counters_key, counters) = up.gen_counters()?;
                 }
             }
-            #[cfg(not(test))]
             counters_map.update(
                 unsafe { plain::as_bytes(&counters_key) },
                 unsafe { plain::as_bytes(&counters) },
@@ -412,12 +394,6 @@ impl ProbeManager {
         Ok(builders.drain().map(|(_, v)| v).collect())
     }
 
-    #[cfg(test)]
-    pub(crate) fn report_counters(&self) -> Result<()> {
-        Ok(())
-    }
-
-    #[cfg(not(test))]
     pub(crate) fn report_counters(&self) -> Result<()> {
         let mut counters_key = CountersKey::default();
         let mut counters = Counters::default();

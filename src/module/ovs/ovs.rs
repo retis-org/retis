@@ -122,7 +122,6 @@ impl Collector for OvsModule {
 
     fn stop(&mut self) -> Result<()> {
         if let Some(gc) = &mut self.gc {
-            #[cfg(not(test))]
             self.running.terminate();
             gc.join()?;
         }

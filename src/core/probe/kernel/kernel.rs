@@ -15,8 +15,6 @@ use crate::core::{
 };
 use crate::{event_section, event_section_factory, event_type};
 
-// Split to exclude from tests.
-#[cfg(not(test))]
 use crate::core::inspect::inspector;
 
 /// Kernel encapsulates all the information about a kernel probe (kprobe or tracepoint) needed to attach to it.
@@ -116,14 +114,12 @@ impl EventFmt for StackTrace {
 #[derive(Default)]
 #[event_section_factory(KernelEvent)]
 pub(crate) struct KernelEventFactory {
-    #[cfg(not(test))]
     pub(crate) stack_map: Option<libbpf_rs::MapHandle>,
     // Cache of symbol addr -> name
     symbols_cache: HashMap<u64, String>,
 }
 
 impl KernelEventFactory {
-    #[cfg(not(test))]
     fn unmarshal_stackid(&self, event: &mut KernelEvent, stackid: i32) -> Result<()> {
         if stackid >= 0 {
             let mut stack_trace: Vec<String> = Vec::new();
@@ -200,7 +196,6 @@ impl RawEventSectionFactory for KernelEventFactory {
         }
         .to_string();
 
-        #[cfg(not(test))]
         self.unmarshal_stackid(
             &mut event,
             i64::from_ne_bytes(raw.data[9..17].try_into()?) as i32,

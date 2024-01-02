@@ -69,7 +69,6 @@ macro_rules! event_byte_array {
 
 /// BPF events factory retrieving and unmarshaling events coming from the BPF
 /// parts.
-#[cfg(not(test))]
 pub(crate) struct BpfEventsFactory {
     map: libbpf_rs::MapHandle,
     /// Receiver channel to retrieve events from the processing loop.
@@ -79,7 +78,6 @@ pub(crate) struct BpfEventsFactory {
     run_state: Running,
 }
 
-#[cfg(not(test))]
 impl BpfEventsFactory {
     pub(crate) fn new() -> Result<BpfEventsFactory> {
         let opts = libbpf_sys::bpf_map_create_opts {
@@ -111,7 +109,6 @@ impl BpfEventsFactory {
     }
 }
 
-#[cfg(not(test))]
 impl EventFactory for BpfEventsFactory {
     /// This starts the event polling mechanism. A dedicated thread is started
     /// for events to be retrieved and processed.
@@ -398,32 +395,6 @@ pub(super) fn unmarshal_task(raw_section: &BpfRawSection) -> Result<TaskEvent> {
     task_event.comm = raw.comm.to_string()?;
 
     Ok(task_event)
-}
-
-// We use a dummy implementation of BpfEventsFactory to allow unit tests to pass.
-// This is fine as no function in the above can really be tested.
-#[cfg(test)]
-pub(crate) struct BpfEventsFactory;
-#[cfg(test)]
-impl BpfEventsFactory {
-    pub(crate) fn new() -> Result<BpfEventsFactory> {
-        Ok(BpfEventsFactory {})
-    }
-    pub(crate) fn map_fd(&self) -> i32 {
-        0
-    }
-}
-#[cfg(test)]
-impl EventFactory for BpfEventsFactory {
-    fn start(&mut self, _: SectionFactories) -> Result<()> {
-        Ok(())
-    }
-    fn next_event(&mut self, _: Option<Duration>) -> Result<EventResult> {
-        Ok(EventResult::Event(Event::new()))
-    }
-    fn stop(&mut self) -> Result<()> {
-        Ok(())
-    }
 }
 
 /// Max number of events we can store at once in the shared map. Please keep in

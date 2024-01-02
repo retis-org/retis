@@ -1,4 +1,3 @@
-#[cfg(not(test))]
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::HashSet,
@@ -19,7 +18,6 @@ use crate::{
     process::display::PrintSingle,
 };
 
-#[cfg(not(test))]
 use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
@@ -102,10 +100,7 @@ impl Collectors {
     fn new(mut modules: Modules) -> Result<Self> {
         let factory = BpfEventsFactory::new()?;
 
-        #[cfg(not(test))]
         let mut probes = probe::ProbeManager::new()?;
-        #[cfg(test)]
-        let probes = probe::ProbeManager::new()?;
 
         Ok(Collectors {
             modules,
@@ -275,7 +270,6 @@ impl Collectors {
         #[cfg_attr(test, allow(unused_mut))]
         let mut section_factories = self.modules.section_factories()?;
 
-        #[cfg(not(test))]
         {
             let sm = init_stack_map()?;
             self.probes.reuse_map("stack_map", sm.as_fd().as_raw_fd())?;

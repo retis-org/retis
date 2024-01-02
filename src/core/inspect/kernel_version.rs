@@ -3,7 +3,6 @@
 use std::{cmp::Ordering, fmt};
 
 use anyhow::{anyhow, bail, Result};
-#[cfg(not(test))]
 use nix::sys::utsname::uname;
 use regex::Regex;
 
@@ -24,16 +23,16 @@ pub(crate) struct KernelVersion {
 
 impl KernelVersion {
     pub(super) fn new() -> Result<Self> {
-        Self::parse(
-            #[cfg(not(test))]
-            uname()
-                .map_err(|e| anyhow!("Failed to get kernel version information: {e}"))?
-                .release()
-                .to_str()
-                .ok_or_else(|| anyhow!("Could not convert kernel version to str"))?,
-            #[cfg(test)]
-            "6.2.14-300.fc38.x86_64",
-        )
+        let _kernel_version_str = uname()
+            .map_err(|e| anyhow!("Failed to get kernel version information: {e}"))?
+            .release()
+            .to_str()
+            .ok_or_else(|| anyhow!("Could not convert kernel version to str"))?;
+
+        #[cfg(test)]
+        let _kernel_version_str = "6.2.14-300.fc38.x86_64";
+
+        Self::parse(_kernel_version_str)
     }
 
     /// Parse a version string of the `$(uname -r)` form into a KernelVersion.
