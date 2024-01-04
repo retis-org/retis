@@ -147,7 +147,7 @@ impl Collector for NftModule {
                     bail!("Kernel module 'nf_tables' is not loaded");
                 }
             }
-            bail!("Could not resolve nft kernel symbol: 'nf_tables' kernel module is likely not be built-in or loaded");
+            bail!("Could not resolve nft kernel symbol: 'nf_tables' kernel module is likely not built-in or loaded");
         }
 
         self.install_chain = cli

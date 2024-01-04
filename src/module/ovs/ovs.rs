@@ -86,7 +86,7 @@ impl Collector for OvsModule {
                     bail!("Kernel module 'openvswitch' is not loaded");
                 }
             }
-            bail!("Could not resolve ovs kernel symbol: 'openvswitch' kernel module is likely not be built-in or loaded");
+            bail!("Could not resolve ovs kernel symbol: 'openvswitch' kernel module is likely not built-in or loaded");
         }
 
         Ok(())
