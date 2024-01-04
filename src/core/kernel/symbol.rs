@@ -18,19 +18,26 @@ impl Symbol {
     /// using different techniques depending on what is available.
     pub(crate) fn from_name(name: &str) -> Result<Symbol> {
         let mut debugfs = false;
+        let validate_return = |symbol| {
+            // Make sure the symbol we return has a valid BTF definition.
+            if inspector()?.kernel.function_nargs(&symbol).is_err() {
+                bail!("Could not find BTF information for symbol {symbol}");
+            }
+            Ok(symbol)
+        };
 
         // First try to see if the symbol is a traceable event.
         if let Some(traceable) = inspector()?.kernel.is_event_traceable(name) {
             debugfs = true;
             if traceable {
-                return Ok(Symbol::Event(name.to_string()));
+                return validate_return(Symbol::Event(name.to_string()));
             }
         }
 
         // Then try to see if it's a traceable function.
         if let Some(traceable) = inspector()?.kernel.is_function_traceable(name) {
             if traceable {
-                return Ok(Symbol::Func(name.to_string()));
+                return validate_return(Symbol::Func(name.to_string()));
             }
         } else {
             debugfs = false;
@@ -58,7 +65,7 @@ impl Symbol {
             bail!("Symbol {} does not exist or isn't traceable", name);
         }
 
-        Ok(Self::from_name_no_inspect(name))
+        validate_return(Self::from_name_no_inspect(name))
     }
 
     /// Create a new symbol given its name without inspecting the current
