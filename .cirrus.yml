@@ -50,9 +50,9 @@ functional_task:
   only_if: "$CIRRUS_PR != ''"
 
   matrix: &distro_matrix
-    - name: Fedora 38
+    - name: Fedora 39
       env:
-        DISTRO: f38
+        DISTRO: f39
         TEST_EXTRA_ARGS: "--ovs-track"
     - name: Fedora Rawhide
       env:
