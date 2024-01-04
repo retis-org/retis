@@ -57,6 +57,21 @@ Vagrant.configure("2") do |config|
     rawhide.vm.synced_folder ".", "/vagrant", type: "rsync"
   end
 
+  config.vm.define "c8s" do |centos|
+    centos.vm.box = "generic/centos8s"
+
+    centos.vm.provision "shell", inline: <<-SHELL
+       dnf config-manager --set-enabled powertools
+    SHELL
+    centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
+    centos.vm.provision "shell", inline: <<-SHELL
+       dnf install -y centos-release-nfv-openvswitch
+       dnf install -y openvswitch3.1
+    SHELL
+
+    centos.vm.synced_folder ".", "/vagrant", type: "rsync"
+  end
+
   config.vm.define "c9s" do |centos|
     centos.vm.box = "generic/centos9s"
 

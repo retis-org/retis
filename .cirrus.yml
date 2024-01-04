@@ -58,6 +58,10 @@ functional_task:
       env:
         DISTRO: rawhide
         TEST_EXTRA_ARGS: "--ovs-track"
+    - name: Centos 8 Stream
+      env:
+        DISTRO: c8s
+        TEST_EXTRA_ARGS: "--ignore=test_ovs.py --ignore=test_nft.py"
     - name: Centos 9 Stream
       env:
         DISTRO: c9s
