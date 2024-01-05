@@ -383,10 +383,14 @@ static __always_inline int process_skb_l2(struct retis_raw_event *event,
 static __always_inline int process_packet(struct retis_raw_event *event,
 					  struct sk_buff *skb)
 {
-	u32 len, linear_len, headroom;
+	/* Use int instead of the underlying (smaller) unsigned type to allow
+	 * signed arithmetic operations.
+	 */
+	int mac, headroom, linear_len;
 	unsigned char *head, *data;
 	struct skb_packet_event *e;
-	u16 mac, network;
+	u16 network;
+	u32 len;
 
 	head = BPF_CORE_READ(skb, head);
 	headroom = BPF_CORE_READ(skb, data) - head;
