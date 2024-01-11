@@ -19,6 +19,7 @@ use super::dynamic::DynamicCommand;
 use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
+    generate::Complete,
     module::{ModuleId, Modules},
     process::cli::*,
     profiles::{cli::ProfileCmd, Profile},
@@ -386,6 +387,10 @@ impl FullCli {
     pub(crate) fn get_subcommand_mut(&mut self) -> Result<&mut dyn SubCommand> {
         Ok(self.subcommand.as_mut())
     }
+
+    pub(crate) fn get_command(&self) -> Command {
+        self.command.clone()
+    }
 }
 
 /// CliConfig represents the result of the Full CLI parsing
@@ -421,6 +426,7 @@ pub(crate) fn get_cli() -> Result<ThinCli> {
     cli.add_subcommand(Box::new(Sort::new()?))?;
     cli.add_subcommand(Box::new(Pcap::new()?))?;
     cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
+    cli.add_subcommand(Box::new(Complete::new()?))?;
 
     #[cfg(feature = "benchmark")]
     cli.add_subcommand(Box::new(Benchmark::new()?))?;

@@ -4,6 +4,7 @@ use log::{info, trace, warn, LevelFilter};
 mod cli;
 mod collect;
 mod core;
+mod generate;
 mod module;
 mod process;
 mod profiles;
