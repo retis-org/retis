@@ -15,7 +15,11 @@ use nix::unistd::Uid;
 use super::cli::Collect;
 use crate::{
     cli::SubCommandRunner,
-    core::filters::{meta::filter::FilterMeta, packets::filter::FilterPacketType},
+    core::{
+        filters::{meta::filter::FilterMeta, packets::filter::FilterPacketType},
+        kernel::Symbol,
+        probe::kernel::utils::parse_probe,
+    },
     process::display::PrintSingle,
 };
 
@@ -30,7 +34,6 @@ use crate::{
             packets::filter::FilterPacket,
         },
         inspect::check::collection_prerequisites,
-        kernel::symbol::{matching_events_to_symbols, matching_functions_to_symbols, Symbol},
         probe::{kernel::probe_stack::ProbeStack, *},
         signals::Running,
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
@@ -257,12 +260,27 @@ impl Collectors {
         }
 
         // Setup user defined probes.
+        let filter = |symbol: &Symbol| {
+            // Skip probes not being compatible with the loaded modules.
+            let ok = self.known_kernel_types.iter().any(|t| {
+                symbol
+                    .parameter_offset(t)
+                    .is_ok_and(|offset| offset.is_some())
+            });
+            if !ok {
+                info!(
+                    "No probe was attached to {} as no collector could retrieve data from it",
+                    symbol
+                );
+            }
+            ok
+        };
         collect
             .args()?
             .probes
             .iter()
             .try_for_each(|p| -> Result<()> {
-                self.parse_probe(p)?
+                parse_probe(p, filter)?
                     .drain(..)
                     .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
                 Ok(())
@@ -439,51 +457,6 @@ impl Collectors {
         printers.iter_mut().try_for_each(|p| p.flush())?;
         self.stop()
     }
-
-    /// Parse a user defined probe (through cli parameters) and extract its type and
-    /// target.
-    fn parse_probe(&self, probe: &str) -> Result<Vec<Probe>> {
-        let (type_str, target) = match probe.split_once(':') {
-            Some((type_str, target)) => (type_str, target),
-            None => ("kprobe", probe),
-        };
-
-        // Convert the target to a list of matching ones for probe types
-        // supporting it.
-        let mut symbols = match type_str {
-            "kprobe" | "kretprobe" => matching_functions_to_symbols(target)?,
-            "tp" => matching_events_to_symbols(target)?,
-            x => bail!("Invalid TYPE {}. See the help.", x),
-        };
-
-        let mut probes = Vec::new();
-        for symbol in symbols.drain(..) {
-            // Check if the probe would be used by a collector to retrieve data.
-            let mut valid = false;
-            for r#type in self.known_kernel_types.iter() {
-                if symbol.parameter_offset(r#type)?.is_some() {
-                    valid = true;
-                    break;
-                }
-            }
-            // Skip probes which won't generate events from the collectors.
-            if !valid {
-                info!(
-                    "No probe was attached to {symbol} as no collector could retrieve data from it"
-                );
-                continue;
-            }
-
-            probes.push(match type_str {
-                "kprobe" => Probe::kprobe(symbol)?,
-                "kretprobe" => Probe::kretprobe(symbol)?,
-                "tp" => Probe::raw_tracepoint(symbol)?,
-                x => bail!("Invalid TYPE {}. See the help.", x),
-            })
-        }
-
-        Ok(probes)
-    }
 }
 
 pub(crate) struct CollectRunner {}
@@ -653,48 +626,6 @@ mod tests {
         assert!(dummy_a.start().is_ok());
         assert!(dummy_b.start().is_err());
         assert!(collectors.start().is_ok());
-        Ok(())
-    }
-
-    #[test]
-    fn parse_probe() -> Result<()> {
-        let mut group = Modules::new()?;
-        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
-
-        let mut collectors = Collectors::new(group)?;
-        let mut config = get_cli("skb")?.run()?;
-        collectors.init(&mut config)?;
-
-        // Valid probes.
-        assert!(collectors.parse_probe("consume_skb").is_ok());
-        assert!(collectors.parse_probe("kprobe:kfree_skb_reason").is_ok());
-        assert!(collectors.parse_probe("tp:skb:kfree_skb").is_ok());
-        assert!(collectors.parse_probe("tcp_v6_*").is_ok());
-        assert!(collectors.parse_probe("kprobe:tcp_v6_*").is_ok());
-        assert!(collectors.parse_probe("kprobe:tcp_v6_*")?.len() > 0);
-        assert!(collectors.parse_probe("kretprobe:tcp_*").is_ok());
-        assert!(collectors.parse_probe("tp:skb:kfree_*").is_ok());
-        assert!(collectors.parse_probe("tp:*skb*").is_ok());
-
-        // Invalid probe: symbol does not exist.
-        assert!(collectors.parse_probe("foobar").is_err());
-        assert!(collectors.parse_probe("kprobe:foobar").is_err());
-        assert!(collectors.parse_probe("tp:42:foobar").is_err());
-        assert!(collectors.parse_probe("tp:kfree_*").is_err());
-        assert!(collectors.parse_probe("*foo*").is_err());
-
-        // Invalid probe: wrong TYPE.
-        assert!(collectors.parse_probe("kprobe:skb:kfree_skb").is_err());
-        assert!(collectors.parse_probe("skb:kfree_skb").is_err());
-        assert!(collectors.parse_probe("foo:kfree_skb").is_err());
-
-        // Invalid probe: empty parts.
-        assert!(collectors.parse_probe("").is_err());
-        assert!(collectors.parse_probe("kprobe:").is_err());
-        assert!(collectors.parse_probe("tp:").is_err());
-        assert!(collectors.parse_probe("tp:skb:").is_err());
-        assert!(collectors.parse_probe(":kfree_skb_reason").is_err());
-
         Ok(())
     }
 }
