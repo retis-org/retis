@@ -20,7 +20,7 @@ where
     // supporting it.
     let mut symbols = match type_str {
         "kprobe" | "kretprobe" => matching_functions_to_symbols(target)?,
-        "tp" => matching_events_to_symbols(target)?,
+        "raw_tracepoint" | "tp" => matching_events_to_symbols(target)?,
         x => bail!("Invalid TYPE {}. See the help.", x),
     };
 
@@ -34,7 +34,7 @@ where
         probes.push(match type_str {
             "kprobe" => Probe::kprobe(symbol)?,
             "kretprobe" => Probe::kretprobe(symbol)?,
-            "tp" => Probe::raw_tracepoint(symbol)?,
+            "raw_tracepoint" | "tp" => Probe::raw_tracepoint(symbol)?,
             x => bail!("Invalid TYPE {}. See the help.", x),
         })
     }
