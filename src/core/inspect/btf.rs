@@ -127,7 +127,7 @@ impl BtfInfo {
     }
 
     /// Look for symbol prototype. Return the prototype and the Btf object that contains it.
-    fn find_prototype_btf(&self, symbol: &Symbol) -> Result<(&Btf, btf_rs::FuncProto)> {
+    pub(crate) fn find_prototype_btf(&self, symbol: &Symbol) -> Result<(&Btf, btf_rs::FuncProto)> {
         for (btf, t) in self.resolve_types_by_symbol(symbol)? {
             if let Ok(proto) = match symbol {
                 Symbol::Func(_) => Self::get_function_prototype(btf, &t),
