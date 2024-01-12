@@ -288,6 +288,12 @@ fn walk_btf_node(btf: &Btf, r#type: &Type, node_name: &str, offset: u32) -> Opti
     for member in r#type.members.iter() {
         let fname = btf.resolve_name(member).unwrap();
         if fname.eq(node_name) {
+            if let Some(bfs) = member.bitfield_size() {
+                if bfs > 0 {
+                    return None;
+                }
+            }
+
             match btf.resolve_chained_type(member).ok() {
                 Some(ty) => return Some((offset + member.bit_offset(), ty)),
                 None => return None,
@@ -456,7 +462,7 @@ impl FilterMeta {
 
                     stored_offset = offset;
                 }
-                None => bail!("{field} not found!"),
+                None => bail!("{field} not found or is a bitfield!"),
             }
         }
 
