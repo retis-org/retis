@@ -67,7 +67,7 @@ struct MetaTarget {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 struct MetaLoad {
     // Type of data we're going to load
     // bit 0-4: [char|short|int|long], bit5: reserved, bit6: is_ptr, bit7: sign
@@ -492,4 +492,99 @@ pub(crate) fn init_meta_map() -> Result<libbpf_rs::MapHandle> {
         META_OPS_MAX,
         &opts,
     )?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use test_case::test_case;
+
+    #[test]
+    fn meta_negative_generic() {
+        // sk_buff is mandatory.
+        assert!(FilterMeta::from_string("dev.mark == 0xc0de".to_string()).is_err());
+        // unsupported type (struct)
+        assert!(FilterMeta::from_string("sk_buff.dev == 0xbad".to_string()).is_err());
+        // bitfields are not supported
+        assert!(FilterMeta::from_string("sk_buff.pkt_type == 0".to_string()).is_err());
+        // pointers to int are not supported
+        assert!(FilterMeta::from_string("sk_buff.dev.pcpu_refcnt == 0xbad".to_string()).is_err());
+    }
+
+    #[test_case("==" ; "op is eq")]
+    #[test_case("!=" ; "op is neq")]
+    #[test_case("<" ; "op is lt")]
+    #[test_case("<=" ; "op is le")]
+    #[test_case(">" ; "op is gt")]
+    #[test_case(">=" ; "op is ge")]
+    fn meta_negative_filter_string(op_str: &'static str) {
+        // Target string must be quoted.
+        assert!(
+            FilterMeta::from_string(format!("sk_buff.dev.name {op_str} dummy0").to_string())
+                .is_err()
+        );
+        // Only MetaCmp::Eq is allowed for strings.
+        if op_str != "==" {
+            assert!(FilterMeta::from_string(format!("sk_buff.dev.name {op_str} 'dummy0'")).is_err())
+        }
+        // Target value must be a string.
+        assert!(FilterMeta::from_string("sk_buff.mark {op_str} 'dummy0'".to_string()).is_err());
+    }
+
+    #[test]
+    fn meta_filter_string() {
+        let filter = FilterMeta::from_string("sk_buff.dev.name == 'dummy0'".to_string()).unwrap();
+        assert_eq!(filter.0.len(), 3);
+        let meta_load = unsafe { &filter.0[1].l };
+        assert!(!meta_load.is_num());
+        assert!(!meta_load.is_arr());
+        assert!(meta_load.is_ptr());
+        assert_eq!(meta_load.offt, 16);
+
+        let meta_load = unsafe { &filter.0[2].l };
+        assert!(!meta_load.is_ptr());
+        assert!(meta_load.is_byte());
+        assert_eq!(meta_load.nmemb, 16);
+        assert_eq!(meta_load.offt, 0);
+
+        let meta_target = unsafe { &filter.0[0].t };
+        assert_eq!(meta_target.cmp, MetaCmp::Eq as u8);
+        assert_eq!(meta_target.sz, 6);
+        let target_str = std::str::from_utf8(unsafe { &meta_target.u.bin })
+            .unwrap()
+            .trim_end_matches(char::from(0));
+        assert_eq!(target_str, "dummy0");
+    }
+
+    #[test]
+    fn meta_negative_filter_u32() {
+        assert!(FilterMeta::from_string("sk_buff.mark == -1".to_string()).is_err());
+        // u32::MAX + 1 is an allowed value for u32 (user has to specify values inside the range).
+        assert!(FilterMeta::from_string("sk_buff.mark == 4294967296".to_string()).is_ok());
+    }
+
+    #[test_case("==", MetaCmp::Eq ; "op is eq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    #[test_case("<", MetaCmp::Lt ; "op is lt")]
+    #[test_case("<=", MetaCmp::Le ; "op is le")]
+    #[test_case(">", MetaCmp::Gt ; "op is gt")]
+    #[test_case(">=", MetaCmp::Ge ; "op is ge")]
+    fn meta_filter_u32(op_str: &'static str, op: MetaCmp) {
+        let filter =
+            FilterMeta::from_string(format!("sk_buff.mark {op_str} 0xc0de").to_string()).unwrap();
+        assert_eq!(filter.0.len(), 2);
+        let meta_load = unsafe { &filter.0[1].l };
+        assert!(!meta_load.is_arr());
+        assert!(!meta_load.is_ptr());
+        assert!(!meta_load.is_signed());
+        assert!(meta_load.is_int());
+        assert_eq!(meta_load.offt, 168);
+
+        let meta_target = unsafe { &filter.0[0].t };
+        assert_eq!(meta_target.cmp, op as u8);
+        assert_eq!(meta_target.sz, 4);
+        let target = unsafe { meta_target.u.long };
+        assert_eq!(target, 0xc0de);
+    }
 }
