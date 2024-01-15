@@ -83,7 +83,7 @@ impl EventSorter {
             if self.series.iter().next().unwrap().0.skb.timestamp
                 < self
                     .untracked
-                    .get(0)
+                    .front()
                     .unwrap()
                     .get_section::<CommonEvent>(ModuleId::Common)
                     .map(|c| c.timestamp)

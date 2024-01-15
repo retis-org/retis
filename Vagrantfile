@@ -24,8 +24,8 @@ SCRIPT
 Vagrant.configure("2") do |config|
   config.vm.box_check_update = false
 
-  config.vm.define "f38" do |fedora|
-    fedora.vm.box = "fedora/38-cloud-base"
+  config.vm.define "f39" do |fedora|
+    fedora.vm.box = "fedora/39-cloud-base"
 
     fedora.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     fedora.vm.provision "shell", inline: <<-SHELL
@@ -55,6 +55,21 @@ Vagrant.configure("2") do |config|
     SHELL
 
     rawhide.vm.synced_folder ".", "/vagrant", type: "rsync"
+  end
+
+  config.vm.define "c8s" do |centos|
+    centos.vm.box = "generic/centos8s"
+
+    centos.vm.provision "shell", inline: <<-SHELL
+       dnf config-manager --set-enabled powertools
+    SHELL
+    centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
+    centos.vm.provision "shell", inline: <<-SHELL
+       dnf install -y centos-release-nfv-openvswitch
+       dnf install -y openvswitch3.1
+    SHELL
+
+    centos.vm.synced_folder ".", "/vagrant", type: "rsync"
   end
 
   config.vm.define "c9s" do |centos|
