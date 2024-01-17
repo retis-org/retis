@@ -11,22 +11,22 @@ cargo_task_tempate: &cargo_task_template
       - cat Cargo.lock
   setup_script:
     - apt-get update
-    - apt-get -y install llvm clang libelf-dev libpcap-dev python3-pip
+    - apt-get -y install llvm clang libelf-dev libpcap-dev python3-pip make jq
     - rustup component add rustfmt
     - rustup component add clippy
   before_cache_script: rm -rf $CARGO_HOME/registry/index
 
 unittest_task:
   << : *cargo_task_template
-  build_script: cargo build --verbose
-  test_script: cargo test --verbose
+  build_script: make V=1 CARGO_OPTS=--verbose
+  test_script: make test V=1 CARGO_OPTS=--verbose
   check_script:
     - cargo fmt --check
     - cargo clippy -- -D warnings
 
 benchmark_task:
   << : *cargo_task_template
-  build_script: cargo build -F benchmark --verbose --release
+  build_script: make bench V=1 CARGO_OPTS=--verbose
   test_script:
     - ./target/release/retis benchmark --ci events_parsing
     - ./target/release/retis benchmark --ci events_output
@@ -115,7 +115,7 @@ functional_task:
     - ssh ${DISTRO} 'sh -exc "uname -a"'
 
   test_script: &functional_test
-    - ssh -tt ${DISTRO} 'bash --login -exc "cd /vagrant && cargo build"'
+    - ssh -tt ${DISTRO} 'bash --login -exc "cd /vagrant && make V=1"'
     - ssh -tt ${DISTRO} "cd /vagrant/tests && sudo python3 -m pytest ${TEST_EXTRA_ARGS}"
 
 # Manual trigger for non-PR branches.

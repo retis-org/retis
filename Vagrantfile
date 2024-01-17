@@ -16,7 +16,9 @@ dnf install -y \
     git \
     python3-pip \
     socat \
-    nftables
+    nftables \
+    make \
+    jq
 
     python3 -m pip install pytest pyroute2
 SCRIPT
@@ -101,7 +103,9 @@ Vagrant.configure("2") do |config|
           python3-pip \
           openvswitch-switch \
           socat \
-          nftables
+          nftables \
+          make \
+          jq
 
       su vagrant -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy"
       python3 -m pip install pytest pyroute2
