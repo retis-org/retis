@@ -77,11 +77,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 					   struct nf_conn *ct, u16 l3num,
 					   u8 protonum)
 {
-	struct nf_conntrack_tuple *orig, *reply;
-	struct nf_conntrack_zone *zone;
-	struct nf_conn *nf_conn;
 	u8 zone_dir;
-
 
 	if (bpf_core_field_exists(ct->zone)) {
 		zone_dir = (u8) BPF_CORE_READ(ct, zone.dir);
