@@ -35,9 +35,8 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	uctx.ts = ctx->timestamp;
 	uctx.cpu = upcall_event->cpu;
 
-	if (!bpf_map_update_elem(&inflight_upcalls, &tid, &uctx, BPF_ANY)) {
-		return -1;
-	}
+	if (!bpf_map_update_elem(&inflight_upcalls, &tid, &uctx, BPF_ANY))
+		return 0;
 
 	return 0;
 )

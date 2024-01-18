@@ -10,7 +10,7 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 
 	skb = retis_get_sk_buff(ctx);
 	if (!skb)
-		return -1;
+		return 0;
 
 	queue_id = queue_id_gen_skb(skb);
 
@@ -25,9 +25,9 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	bpf_map_delete_elem(&flow_exec_tracking, &queue_id);
 	ectx.skb = skb;
 
-	if (!bpf_map_update_elem(&inflight_exec, &tid, &ectx, BPF_ANY)) {
-		return -1;
-	}
+	if (!bpf_map_update_elem(&inflight_exec, &tid, &ectx, BPF_ANY))
+		return 0;
+
 	return 0;
 )
 
