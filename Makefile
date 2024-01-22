@@ -73,12 +73,27 @@ else
     CARGO_JOBS := 1
 endif
 
-all: ebpf
+all: build
+
+install: build
+	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS)
+
+build: ebpf
 	$(call out_console,CARGO,building retis ...)
 	$(Q)CARGO_BUILD_JOBS=$(CARGO_JOBS) \
 	RETIS_PKG_VERSION=$(RELEASE_VERSION) \
 	RETIS_RELEASE_NAME=$(RELEASE_NAME) \
 	$(CARGO) $(CARGO_OPTS) build $(CARGO_CMD_OPTS)
+
+test: ebpf
+	$(call out_console,CARGO,running tests ...)
+	$(Q)CARGO_BUILD_JOBS=$(CARGO_JOBS) \
+	$(CARGO) $(CARGO_OPTS) test $(CARGO_CMD_OPTS)
+
+bench: ebpf
+	$(call out_console,CARGO,building benchmarks ...)
+	$(Q)CARGO_BUILD_JOBS=$(CARGO_JOBS) \
+	$(CARGO) $(CARGO_OPTS) build -F benchmark --release $(CARGO_CMD_OPTS)
 
 ifeq ($(NOVENDOR),)
 $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
@@ -112,23 +127,27 @@ clean: clean-ebpf
 
 help:
 	$(PRINT) 'all                 --  Builds the tool (both eBPF programs and retis).'
+	$(PRINT) 'bench               --  Builds benchmarks.'
 	$(PRINT) 'clean               --  Deletes all the files generated during the build process'
 	$(PRINT) '	                  (eBPF and rust directory).'
 	$(PRINT) 'clean-ebpf          --  Deletes all the files generated during the build process'
 	$(PRINT) '	                  (eBPF only).'
 	$(PRINT) 'ebpf                --  Builds only the eBPF programs.'
+	$(PRINT) 'install             --  Installs Retis.'
+	$(PRINT) 'test                --  Builds and runs unit tests.'
 	$(PRINT)
 	$(PRINT) 'Optional variables that can be used to override the default behavior:'
 	$(PRINT) 'V                   --  If set to 1 the verbose output will be printed.'
 	$(PRINT) '                        cargo verbosity is set to default.'
-	$(PRINT) '                        To override `cargo` behavior please refer to $$(CARGO_OPTS)'
-	$(PRINT) '                        and $$(CARGO_CMD_OPTS).'
+	$(PRINT) '                        To override `cargo` behavior please refer to $$(CARGO_OPTS),'
+	$(PRINT) '                        $$(CARGO_CMD_OPTS) and for the install $$(CARGO_INSTALL_OPTS).'
 	$(PRINT) '                        For further `cargo` customization please refer to configuration'
 	$(PRINT) '                        environment variables'
 	$(PRINT) '                        (https://doc.rust-lang.org/cargo/reference/environment-variables.html).'
 	$(PRINT) 'CARGO_CMD_OPTS      --  Changes `cargo` subcommand default behavior (e.g. --release for `build`).'
+	$(PRINT) 'CARGO_INSTALL_OPTS  --  Changes `cargo` install subcommand default behavior.'
 	$(PRINT) 'CARGO_OPTS          --  Changes `cargo` default behavior (e.g. --verbose).'
 	$(PRINT) 'NOVENDOR            --  Avoid to self detect and consume the vendored headers'
 	$(PRINT) '                        shipped with libbpf-sys.'
 
-.PHONY: all clean clean-ebpf ebpf $(EBPF_PROBES) $(GENERIC_HOOKS) help $(OVS_HOOKS)
+.PHONY: all clean clean-ebpf ebpf $(EBPF_PROBES) $(GENERIC_HOOKS) help install $(OVS_HOOKS)
