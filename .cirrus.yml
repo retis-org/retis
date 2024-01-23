@@ -44,6 +44,16 @@ python_task:
     - python3 -m pip install black
     - python3 -m black --check --diff tests/*.py
 
+authors_task:
+  name: Authors file check
+  container:
+      image: debian:latest
+  setup_script:
+    - apt-get update
+    - apt-get -y install git
+  check_script:
+    - ./tools/authors.sh -c
+
 functional_task:
   # Run for PRs with a specific label
   required_pr_labels: run-functional-tests
