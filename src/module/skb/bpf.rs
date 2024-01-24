@@ -7,7 +7,7 @@
 use std::{net::Ipv6Addr, str};
 
 use anyhow::{anyhow, bail, Result};
-use pnet::packet::ethernet::*;
+use pnet::packet::{ethernet::*, ipv4::*, Packet};
 
 use super::*;
 use crate::core::{
@@ -18,7 +18,6 @@ use crate::core::{
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
 pub(super) const SECTION_ARP: u64 = 1;
-pub(super) const SECTION_IPV4: u64 = 2;
 pub(super) const SECTION_IPV6: u64 = 3;
 pub(super) const SECTION_TCP: u64 = 4;
 pub(super) const SECTION_UDP: u64 = 5;
@@ -79,47 +78,20 @@ pub(super) fn unmarshal_arp(raw_section: &BpfRawSection) -> Result<SkbArpEvent> 
     })
 }
 
-/// IPv4 data retrieved from skbs.
-#[repr(C, packed)]
-struct RawIpv4Event {
-    /// Source IP address. Stored in network order.
-    src: u32,
-    /// Destination IP address. Stored in network order.
-    dst: u32,
-    /// IP packet length in bytes. Stored in network order.
-    len: u16,
-    /// Identification. Stored in network order.
-    id: u16,
-    /// L4 protocol.
-    protocol: u8,
-    /// Time to live.
-    ttl: u8,
-    /// Type of service.
-    tos: u8,
-    /// ECN bits.
-    ecn: u8,
-    /// Fragment offset. Stored in network order.
-    offset: u16,
-    /// Flags (CE, DF, MF).
-    flags: u8,
-}
-
-pub(super) fn unmarshal_ipv4(raw_section: &BpfRawSection) -> Result<SkbIpEvent> {
-    let raw = parse_raw_section::<RawIpv4Event>(raw_section)?;
-
+pub(super) fn unmarshal_ipv4(ip: &Ipv4Packet) -> Result<SkbIpEvent> {
     Ok(SkbIpEvent {
-        saddr: helpers::net::parse_ipv4_addr(u32::from_be(raw.src))?,
-        daddr: helpers::net::parse_ipv4_addr(u32::from_be(raw.dst))?,
+        saddr: helpers::net::parse_ipv4_addr(u32::from(ip.get_source()))?,
+        daddr: helpers::net::parse_ipv4_addr(u32::from(ip.get_destination()))?,
         version: SkbIpVersion::V4(SkbIpv4Event {
-            tos: raw.tos,
-            flags: raw.flags,
-            id: u16::from_be(raw.id),
-            offset: u16::from_be(raw.offset),
+            tos: ip.get_dscp(),
+            flags: ip.get_flags(),
+            id: ip.get_identification(),
+            offset: ip.get_fragment_offset(),
         }),
-        protocol: raw.protocol,
-        len: u16::from_be(raw.len),
-        ttl: raw.ttl,
-        ecn: raw.ecn,
+        protocol: ip.get_next_level_protocol().0,
+        len: ip.get_total_length(),
+        ttl: ip.get_ttl(),
+        ecn: ip.get_ecn(),
     })
 }
 
@@ -381,6 +353,16 @@ pub(super) fn unmarshal_packet(event: &mut SkbEvent, raw_section: &BpfRawSection
         anyhow!("Could not parse Ethernet packet (buffer size less than minimal)")
     })?;
     event.eth = Some(unmarshal_eth(&eth)?);
+
+    match eth.get_ethertype() {
+        EtherTypes::Ipv4 => {
+            event.ip = Some(unmarshal_ipv4(
+                &Ipv4Packet::new(eth.payload())
+                    .ok_or_else(|| anyhow!("Could not parse IPv4 packet"))?,
+            )?)
+        }
+        _ => return Ok(()),
+    }
 
     Ok(())
 }

@@ -15,7 +15,6 @@
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
 #define COLLECT_ARP		1
-#define COLLECT_IPV4		2
 #define COLLECT_IPV6		3
 #define COLLECT_TCP		4
 #define COLLECT_UDP		5
@@ -50,18 +49,6 @@ struct skb_arp_event {
 	u32 spa;
 	u8 tha[6];
 	u32 tpa;
-} __attribute__((packed));
-struct skb_ipv4_event {
-	u32 src;
-	u32 dst;
-	u16 len;
-	u16 id;
-	u8 protocol;
-	u8 ttl;
-	u8 tos;
-	u8 ecn;
-	u16 offset;
-	u8 flags;
 } __attribute__((packed));
 struct skb_ipv6_event {
 	u128 src;
@@ -208,45 +195,6 @@ static __always_inline int process_skb_ip(struct retis_raw_event *event,
 		struct iphdr *ip4 = (struct iphdr *)(head + network);
 
 		bpf_probe_read_kernel(&protocol, sizeof(protocol), &ip4->protocol);
-
-		if (cfg->sections & BIT(COLLECT_IPV4)) {
-			u16 frag_off;
-			u8 tos;
-			struct skb_ipv4_event *e =
-				get_event_section(event, COLLECTOR_SKB,
-						  COLLECT_IPV4, sizeof(*e));
-			if (!e)
-				return 0;
-
-			e->protocol = protocol;
-			bpf_probe_read_kernel(&e->src, sizeof(e->src), &ip4->saddr);
-			bpf_probe_read_kernel(&e->dst, sizeof(e->dst), &ip4->daddr);
-			bpf_probe_read_kernel(&e->len, sizeof(e->len), &ip4->tot_len);
-			bpf_probe_read_kernel(&e->id, sizeof(e->id), &ip4->id);
-			bpf_probe_read_kernel(&e->ttl, sizeof(e->ttl), &ip4->ttl);
-
-			bpf_probe_read_kernel(&tos, sizeof(tos), &ip4->tos);
-			e->ecn = tos & 0x3;
-			e->tos = tos;
-
-/* Keep in sync with Linux's include/net/ip.h */
-#define IP_CE		0x8000
-#define IP_DF		0x4000
-#define IP_MF		0x2000
-#define IP_OFFSET	0x1fff
-			bpf_probe_read_kernel(&frag_off, sizeof(frag_off), &ip4->frag_off);
-			e->flags = !!(frag_off & bpf_htons(IP_CE));
-			e->flags |= !!(frag_off & bpf_htons(IP_DF)) << 1;
-			e->flags |= !!(frag_off & bpf_htons(IP_MF)) << 2;
-
-			e->offset = frag_off & bpf_htons(IP_OFFSET);
-
-			/* We won't be able to parse upper layer if this is a
-			 * fragment, bail out.
-			 */
-			if (e->offset > 0)
-				return 0;
-		}
 	} else if (ip_version == 6) {
 		struct ipv6hdr *ip6 = (struct ipv6hdr *)(head + network);
 
