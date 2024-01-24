@@ -14,7 +14,6 @@
  *
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
-#define COLLECT_ETH		0
 #define COLLECT_ARP		1
 #define COLLECT_IPV4		2
 #define COLLECT_IPV6		3
@@ -45,11 +44,6 @@ struct {
 /* Please keep the following structs in sync with its Rust counterpart in
  * module::skb::bpf.
  */
-struct skb_eth_event {
-	u8 dst[6];
-	u8 src[6];
-	u16 etype;
-} __attribute__((packed));
 struct skb_arp_event {
 	u16 operation;
 	u8 sha[6];
@@ -357,23 +351,6 @@ static __always_inline int process_skb_l2(struct retis_raw_event *event,
 	 */
 	if (etype == 0)
 		return 0;
-
-	if (cfg->sections & BIT(COLLECT_ETH)) {
-		struct skb_eth_event *e =
-			get_event_zsection(event, COLLECTOR_SKB, COLLECT_ETH,
-					   sizeof(*e));
-		if (!e)
-			return 0;
-
-		if (is_mac_data_valid(skb)) {
-			struct ethhdr *eth = (struct ethhdr *)(head + mac);
-
-			bpf_probe_read_kernel(e->src, sizeof(e->src), eth->h_source);
-			bpf_probe_read_kernel(e->dst, sizeof(e->dst), eth->h_dest);
-		}
-
-		e->etype = etype;
-	}
 
 	network = BPF_CORE_READ(skb, network_header);
 	if (!is_network_data_valid(skb))

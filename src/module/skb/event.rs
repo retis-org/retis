@@ -493,7 +493,6 @@ impl RawEventSectionFactory for SkbEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
-                SECTION_ETH => event.eth = Some(unmarshal_eth(section)?),
                 SECTION_ARP => event.arp = Some(unmarshal_arp(section)?),
                 SECTION_IPV4 => event.ip = Some(unmarshal_ipv4(section)?),
                 SECTION_IPV6 => event.ip = Some(unmarshal_ipv6(section)?),
@@ -505,7 +504,7 @@ impl RawEventSectionFactory for SkbEventFactory {
                 SECTION_META => event.meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
                 SECTION_GSO => event.gso = Some(unmarshal_gso(section)?),
-                SECTION_PACKET => event.packet = Some(unmarshal_packet(section)?),
+                SECTION_PACKET => unmarshal_packet(&mut event, section)?,
                 _ => bail!("Unknown data type"),
             }
         }

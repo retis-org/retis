@@ -6,7 +6,8 @@
 
 use std::{net::Ipv6Addr, str};
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
+use pnet::packet::ethernet::*;
 
 use super::*;
 use crate::core::{
@@ -16,7 +17,6 @@ use crate::core::{
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
-pub(super) const SECTION_ETH: u64 = 0;
 pub(super) const SECTION_ARP: u64 = 1;
 pub(super) const SECTION_IPV4: u64 = 2;
 pub(super) const SECTION_IPV6: u64 = 3;
@@ -38,24 +38,11 @@ pub(super) struct RawConfig {
     pub sections: u64,
 }
 
-/// Ethernet data retrieved from skbs.
-#[repr(C, packed)]
-struct RawEthEvent {
-    /// Source MAC address.
-    src: [u8; 6],
-    /// Destination MAC address.
-    dst: [u8; 6],
-    /// Ethertype. Stored in network order.
-    etype: u16,
-}
-
-pub(super) fn unmarshal_eth(raw_section: &BpfRawSection) -> Result<SkbEthEvent> {
-    let raw = parse_raw_section::<RawEthEvent>(raw_section)?;
-
+pub(super) fn unmarshal_eth(eth: &EthernetPacket) -> Result<SkbEthEvent> {
     Ok(SkbEthEvent {
-        etype: u16::from_be(raw.etype),
-        src: helpers::net::parse_eth_addr(&raw.src)?,
-        dst: helpers::net::parse_eth_addr(&raw.dst)?,
+        etype: eth.get_ethertype().0,
+        src: helpers::net::parse_eth_addr(&eth.get_source().octets())?,
+        dst: helpers::net::parse_eth_addr(&eth.get_destination().octets())?,
     })
 }
 
@@ -379,12 +366,21 @@ pub(super) struct RawPacketEvent {
     packet: [u8; 255],
 }
 
-pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<SkbPacketEvent> {
+pub(super) fn unmarshal_packet(event: &mut SkbEvent, raw_section: &BpfRawSection) -> Result<()> {
     let raw = parse_raw_section::<RawPacketEvent>(raw_section)?;
 
-    Ok(SkbPacketEvent {
+    // First add the raw packet part in the event.
+    event.packet = Some(SkbPacketEvent {
         len: raw.len,
         capture_len: raw.capture_len,
         packet: raw.packet[..(raw.capture_len as usize)].to_vec(),
-    })
+    });
+
+    // Then start parsing the raw packet to generate other sections.
+    let eth = EthernetPacket::new(&raw.packet[..(raw.capture_len as usize)]).ok_or_else(|| {
+        anyhow!("Could not parse Ethernet packet (buffer size less than minimal)")
+    })?;
+    event.eth = Some(unmarshal_eth(&eth)?);
+
+    Ok(())
 }
