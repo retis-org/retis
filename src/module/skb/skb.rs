@@ -22,9 +22,13 @@ use crate::{
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
-        value_parser=PossibleValuesParser::new(["all", "eth", "arp", "ip", "tcp", "udp", "icmp", "dev", "ns", "meta", "dataref", "gso", "packet"]),
+        value_parser=PossibleValuesParser::new([
+            "all", "eth", "dev", "ns", "meta", "dataref", "gso",
+            // Below values are deprecated.
+            "arp", "ip", "tcp", "udp", "icmp", "packet",
+        ]),
         value_delimiter=',',
-        default_value="ip,arp,tcp,udp,icmp,dev",
+        default_value="dev",
         help = "Comma separated list of data to collect from skbs"
     )]
     skb_sections: Vec<String>,
@@ -54,23 +58,29 @@ impl Collector for SkbModule {
         // First, get the cli parameters.
         let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
 
-        let mut sections: u64 = 1 << SECTION_PACKET;
+        // Default list of sections.
+        let mut sections: u64 = 1 << SECTION_PACKET
+            | 1 << SECTION_ETH  // FIXME.
+            | 1 << SECTION_ARP
+            | 1 << SECTION_IPV4
+            | 1 << SECTION_IPV6
+            | 1 << SECTION_TCP
+            | 1 << SECTION_UDP
+            | 1 << SECTION_ICMP;
+
         for category in args.skb_sections.iter() {
             match category.as_str() {
                 "all" => sections |= !0_u64,
-                "eth" => sections |= 1 << SECTION_ETH,
-                "arp" => sections |= 1 << SECTION_ARP,
-                "ip" => sections |= 1 << SECTION_IPV4 | 1 << SECTION_IPV6,
-                "tcp" => sections |= 1 << SECTION_TCP,
-                "udp" => sections |= 1 << SECTION_UDP,
-                "icmp" => sections |= 1 << SECTION_ICMP,
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
-                "packet" => {
-                    warn!("Use of 'packet' in --skb-sections is depreacted (is now always set)")
+                "packet" | "eth" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
+                    warn!(
+                        "Use of '{}' in --skb-sections is depreacted (is now always set)",
+                        category.as_str(),
+                    );
                 }
                 x => bail!("Unknown skb_collect value ({})", x),
             }
