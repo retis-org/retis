@@ -18,7 +18,7 @@ use super::{
     user::usdt,
 };
 
-use super::{common::init_counters_map, kernel::config::init_config_map};
+use super::{common::*, kernel::config::init_config_map};
 use crate::core::{
     filters::{self, fixup_filter_load_fn, register_filter_handler, Filter},
     kernel::Symbol,
@@ -183,6 +183,17 @@ impl ProbeManager {
         // All probes loaded, issue an info log.
         info!("{} probe(s) loaded", builder.probes.len());
 
+        #[cfg(not(test))]
+        {
+            // Set the global config once all probes are installed, to avoid
+            // inconsistencies.
+            let config = GlobalConfig { enabled: 1 };
+            let config = unsafe { plain::as_bytes(&config) };
+            builder
+                .global_config_map
+                .update(&[0], config, libbpf_rs::MapFlags::ANY)?;
+        }
+
         Ok(Self::Runtime(runtime))
     }
 }
@@ -200,6 +211,9 @@ pub(crate) struct ProbeBuilderManager {
     global_probes_options: Vec<ProbeOption>,
     /// HashMap of map names and file descriptors, to be reused in all hooks.
     maps: HashMap<String, RawFd>,
+    /// Common configuration for all probes.
+    #[cfg(not(test))]
+    global_config_map: libbpf_rs::MapHandle,
     /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
     #[cfg(not(test))]
     config_map: libbpf_rs::MapHandle,
@@ -223,12 +237,20 @@ impl ProbeBuilderManager {
             global_probes_options: Vec::new(),
             maps: HashMap::new(),
             #[cfg(not(test))]
+            global_config_map: init_global_config_map()?,
+            #[cfg(not(test))]
             config_map: init_config_map()?,
             #[cfg(not(test))]
             meta_map: filters::meta::filter::init_meta_map()?,
             #[cfg(not(test))]
             counters_map: init_counters_map()?,
         };
+
+        #[cfg(not(test))]
+        mgr.maps.insert(
+            "global_config_map".to_string(),
+            mgr.global_config_map.as_fd().as_raw_fd(),
+        );
 
         #[cfg(not(test))]
         mgr.maps
