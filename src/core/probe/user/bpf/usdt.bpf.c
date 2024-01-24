@@ -52,12 +52,22 @@ int probe_usdt(struct pt_regs *ctx)
 {
 	u64 pid = bpf_get_current_pid_tgid();
 	u64 sym_addr = PT_REGS_IP(ctx);
-	volatile u16 pass_threshold;
-	struct common_task_event *ti;
-	struct common_event *e;
 	struct retis_raw_event *event;
-	struct user_event *u;
+	struct common_task_event *ti;
+	static bool enabled = false;
+	volatile u16 pass_threshold;
 	struct user_ctx uctx = {};
+	struct common_event *e;
+	struct user_event *u;
+
+	/* Check if the collection is enabled, otherwise bail out. Once we have
+	 * a positive result, cache it.
+	 */
+	if (unlikely(!enabled)) {
+		enabled = collection_enabled();
+		if (!enabled)
+			return 0;
+	}
 
 	if (get_args(&uctx, ctx) != 0)
 		return -1;
