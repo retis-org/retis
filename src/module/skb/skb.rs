@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{bail, Result};
 use clap::{arg, builder::PossibleValuesParser, Parser};
+use log::warn;
 
 use super::{bpf::*, skb_hook, SkbEventFactory};
 use crate::{
@@ -53,11 +54,10 @@ impl Collector for SkbModule {
         // First, get the cli parameters.
         let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
 
-        let mut sections: u64 = 0;
+        let mut sections: u64 = 1 << SECTION_PACKET;
         for category in args.skb_sections.iter() {
             match category.as_str() {
-                // Do not include the raw packet in 'all'.
-                "all" => sections |= !(1_u64 << SECTION_PACKET),
+                "all" => sections |= !0_u64,
                 "eth" => sections |= 1 << SECTION_ETH,
                 "arp" => sections |= 1 << SECTION_ARP,
                 "ip" => sections |= 1 << SECTION_IPV4 | 1 << SECTION_IPV6,
@@ -69,7 +69,9 @@ impl Collector for SkbModule {
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
-                "packet" => sections |= 1 << SECTION_PACKET,
+                "packet" => {
+                    warn!("Use of 'packet' in --skb-sections is depreacted (is now always set)")
+                }
                 x => bail!("Unknown skb_collect value ({})", x),
             }
         }
