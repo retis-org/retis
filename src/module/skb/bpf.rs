@@ -7,7 +7,7 @@
 use std::str;
 
 use anyhow::{anyhow, Result};
-use pnet::packet::{arp::ArpPacket, ethernet::*, ipv4::*, ipv6::*, Packet};
+use pnet::packet::{arp::ArpPacket, ethernet::*, ip::*, ipv4::*, ipv6::*, tcp::TcpPacket, Packet};
 
 use super::*;
 use crate::core::{
@@ -17,7 +17,6 @@ use crate::core::{
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
-pub(super) const SECTION_TCP: u64 = 4;
 pub(super) const SECTION_UDP: u64 = 5;
 pub(super) const SECTION_ICMP: u64 = 6;
 pub(super) const SECTION_DEV: u64 = 7;
@@ -91,36 +90,15 @@ pub(super) fn unmarshal_ipv6(ip: &Ipv6Packet) -> Result<SkbIpEvent> {
     })
 }
 
-/// TCP data retrieved from skbs.
-#[repr(C, packed)]
-struct RawTcpEvent {
-    /// Source port. Stored in network order.
-    sport: u16,
-    /// Destination port. Stored in network order.
-    dport: u16,
-    /// Sequence number. Stored in network order.
-    seq: u32,
-    /// Ack sequence number. Stored in network order.
-    ack_seq: u32,
-    /// TCP window. Stored in network order.
-    window: u16,
-    /// TCP flags (from low to high): fin, syn, rst, psh, ack, urg, ece, cwr.
-    flags: u8,
-    /// TCP data offset: size of the TCP header in 32-bit words.
-    doff: u8,
-}
-
-pub(super) fn unmarshal_tcp(raw_section: &BpfRawSection) -> Result<SkbTcpEvent> {
-    let raw = parse_raw_section::<RawTcpEvent>(raw_section)?;
-
+pub(super) fn unmarshal_tcp(tcp: &TcpPacket) -> Result<SkbTcpEvent> {
     Ok(SkbTcpEvent {
-        sport: u16::from_be(raw.sport),
-        dport: u16::from_be(raw.dport),
-        seq: u32::from_be(raw.seq),
-        ack_seq: u32::from_be(raw.ack_seq),
-        window: u16::from_be(raw.window),
-        doff: raw.doff,
-        flags: raw.flags,
+        sport: tcp.get_source(),
+        dport: tcp.get_destination(),
+        seq: tcp.get_sequence(),
+        ack_seq: tcp.get_acknowledgement(),
+        window: tcp.get_window(),
+        doff: tcp.get_data_offset(),
+        flags: tcp.get_flags(),
     })
 }
 
@@ -317,24 +295,40 @@ pub(super) fn unmarshal_packet(event: &mut SkbEvent, raw_section: &BpfRawSection
 
     match eth.get_ethertype() {
         EtherTypes::Arp => {
-            event.arp = unmarshal_arp(
-                &ArpPacket::new(eth.payload())
-                    .ok_or_else(|| anyhow!("Could not parse ARP packet"))?,
-            )?;
+            if let Some(eth) = ArpPacket::new(eth.payload()) {
+                event.arp = unmarshal_arp(&eth)?;
+            };
         }
         EtherTypes::Ipv4 => {
-            event.ip = Some(unmarshal_ipv4(
-                &Ipv4Packet::new(eth.payload())
-                    .ok_or_else(|| anyhow!("Could not parse IPv4 packet"))?,
-            )?)
+            if let Some(ip) = Ipv4Packet::new(eth.payload()) {
+                event.ip = Some(unmarshal_ipv4(&ip)?);
+                unmarshal_l4(event, ip.get_next_level_protocol(), ip.payload())?;
+            };
         }
         EtherTypes::Ipv6 => {
-            event.ip = Some(unmarshal_ipv6(
-                &Ipv6Packet::new(eth.payload())
-                    .ok_or_else(|| anyhow!("Could not parse IPv6 packet"))?,
-            )?)
+            if let Some(ip) = Ipv6Packet::new(eth.payload()) {
+                event.ip = Some(unmarshal_ipv6(&ip)?);
+                unmarshal_l4(event, ip.get_next_header(), ip.payload())?;
+            };
         }
-        _ => return Ok(()),
+        _ => (),
+    }
+
+    Ok(())
+}
+
+fn unmarshal_l4(
+    event: &mut SkbEvent,
+    protocol: IpNextHeaderProtocol,
+    payload: &[u8],
+) -> Result<()> {
+    match protocol {
+        IpNextHeaderProtocols::Tcp => {
+            if let Some(tcp) = TcpPacket::new(payload) {
+                event.tcp = Some(unmarshal_tcp(&tcp)?);
+            }
+        }
+        _ => (),
     }
 
     Ok(())

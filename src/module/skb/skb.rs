@@ -59,8 +59,7 @@ impl Collector for SkbModule {
         let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
 
         // Default list of sections.
-        let mut sections: u64 =
-            1 << SECTION_PACKET | 1 << SECTION_TCP | 1 << SECTION_UDP | 1 << SECTION_ICMP;
+        let mut sections: u64 = 1 << SECTION_PACKET | 1 << SECTION_UDP | 1 << SECTION_ICMP;
 
         for category in args.skb_sections.iter() {
             match category.as_str() {
