@@ -493,7 +493,6 @@ impl RawEventSectionFactory for SkbEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
-                SECTION_ARP => event.arp = Some(unmarshal_arp(section)?),
                 SECTION_TCP => event.tcp = Some(unmarshal_tcp(section)?),
                 SECTION_UDP => event.udp = Some(unmarshal_udp(section)?),
                 SECTION_ICMP => event.icmp = Some(unmarshal_icmp(section)?),

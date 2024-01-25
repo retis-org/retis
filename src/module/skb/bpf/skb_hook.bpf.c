@@ -14,7 +14,6 @@
  *
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
-#define COLLECT_ARP		1
 #define COLLECT_TCP		4
 #define COLLECT_UDP		5
 #define COLLECT_ICMP		6
@@ -42,13 +41,6 @@ struct {
 /* Please keep the following structs in sync with its Rust counterpart in
  * module::skb::bpf.
  */
-struct skb_arp_event {
-	u16 operation;
-	u8 sha[6];
-	u32 spa;
-	u8 tha[6];
-	u32 tpa;
-} __attribute__((packed));
 struct skb_tcp_event {
 	u16 sport;
 	u16 dport;
@@ -109,64 +101,6 @@ struct skb_packet_event {
 #define PACKET_CAPTURE_SIZE	255
 	u8 packet[PACKET_CAPTURE_SIZE];
 } __attribute__((packed));
-
-/* Must be called with a valid skb pointer */
-static __always_inline int process_skb_arp(struct retis_raw_event *event,
-					   struct skb_config *cfg,
-					   struct sk_buff *skb,
-					   unsigned char *head,
-					   u16 mac, u16 network)
-{
-	struct skb_arp_event *e;
-	struct arphdr *arp;
-	unsigned char *ptr;
-
-	if (!(cfg->sections & BIT(COLLECT_ARP)))
-		return 0;
-
-	arp = (struct arphdr *)(head + network);
-
-#define ARPHRD_ETHER	1
-	/* We only support ARP for IPv4 over Ethernet */
-	if (BPF_CORE_READ(arp, ar_hrd) != bpf_htons(ARPHRD_ETHER) ||
-	    BPF_CORE_READ(arp, ar_pro) != bpf_htons(ETH_P_IP))
-		return 0;
-
-#define ARPOP_REQUEST	1
-#define ARPOP_REPLY	2
-	/* We only support ARP request & reply */
-	if (BPF_CORE_READ(arp, ar_op) != bpf_htons(ARPOP_REQUEST) &&
-	    BPF_CORE_READ(arp, ar_op) != bpf_htons(ARPOP_REPLY))
-		return 0;
-
-	/* h/w addr len must be 6 (MAC) & protocol addr len 4 (IP) */
-	if (BPF_CORE_READ(arp, ar_hln) != 6 || BPF_CORE_READ(arp, ar_pln) != 4)
-		return 0;
-
-	e = get_event_section(event, COLLECTOR_SKB, COLLECT_ARP, sizeof(*e));
-	if (!e)
-		return 0;
-
-	bpf_probe_read_kernel(&e->operation, sizeof(e->operation), &arp->ar_op);
-
-	/* Sender hardware address */
-	ptr = (unsigned char *)(arp + 1);
-	bpf_probe_read_kernel(&e->sha, sizeof(e->sha), ptr);
-
-	/* Sender protocol address */
-	ptr += 6; /* h/w addr len */
-	bpf_probe_read_kernel(&e->spa, sizeof(e->spa), ptr);
-
-	/* Target hardware address */
-	ptr += 4; /* protocol addr len */
-	bpf_probe_read_kernel(&e->tha, sizeof(e->tha), ptr);
-
-	/* Target protocol address */
-	ptr += 6; /* h/w addr len */
-	bpf_probe_read_kernel(&e->tpa, sizeof(e->tpa), ptr);
-
-	return 0;
-}
 
 /* Must be called with a valid skb pointer */
 static __always_inline int process_skb_ip(struct retis_raw_event *event,
@@ -273,9 +207,6 @@ static __always_inline int process_skb_l2(struct retis_raw_event *event,
 	/* IPv4/IPv6 and upper layers */
 	if (etype == bpf_ntohs(ETH_P_IP) || etype == bpf_ntohs(ETH_P_IPV6))
 		return process_skb_ip(event, cfg, skb, head, mac, network);
-	/* ARP */
-	else if (etype == bpf_ntohs(ETH_P_ARP))
-		return process_skb_arp(event, cfg, skb, head, mac, network);
 
 	/* Unsupported etype */
 	return 0;

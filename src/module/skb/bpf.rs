@@ -6,8 +6,8 @@
 
 use std::str;
 
-use anyhow::{anyhow, bail, Result};
-use pnet::packet::{ethernet::*, ipv4::*, ipv6::*, Packet};
+use anyhow::{anyhow, Result};
+use pnet::packet::{arp::ArpPacket, ethernet::*, ipv4::*, ipv6::*, Packet};
 
 use super::*;
 use crate::core::{
@@ -17,7 +17,6 @@ use crate::core::{
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
-pub(super) const SECTION_ARP: u64 = 1;
 pub(super) const SECTION_TCP: u64 = 4;
 pub(super) const SECTION_UDP: u64 = 5;
 pub(super) const SECTION_ICMP: u64 = 6;
@@ -44,37 +43,21 @@ pub(super) fn unmarshal_eth(eth: &EthernetPacket) -> Result<SkbEthEvent> {
     })
 }
 
-/// ARP data retrieved from skbs.
-#[repr(C, packed)]
-struct RawArpEvent {
-    /// Operation. Stored in network order.
-    operation: u16,
-    /// Sender hardware address.
-    sha: [u8; 6],
-    /// Sender protocol address.
-    spa: u32,
-    /// Target hardware address.
-    tha: [u8; 6],
-    /// Target protocol address.
-    tpa: u32,
-}
-
-pub(super) fn unmarshal_arp(raw_section: &BpfRawSection) -> Result<SkbArpEvent> {
-    let raw = parse_raw_section::<RawArpEvent>(raw_section)?;
-
-    let operation = match u16::from_be(raw.operation) {
+pub(super) fn unmarshal_arp(arp: &ArpPacket) -> Result<Option<SkbArpEvent>> {
+    let operation = match arp.get_operation().0 {
         1 => ArpOperation::Request,
         2 => ArpOperation::Reply,
-        _ => bail!("Invalid ARP operation type"),
+        // We only support ARP for IPv4 over Ethernet; request & reply */
+        _ => return Ok(None),
     };
 
-    Ok(SkbArpEvent {
+    Ok(Some(SkbArpEvent {
         operation,
-        sha: helpers::net::parse_eth_addr(&raw.sha)?,
-        spa: helpers::net::parse_ipv4_addr(u32::from_be(raw.spa))?,
-        tha: helpers::net::parse_eth_addr(&raw.tha)?,
-        tpa: helpers::net::parse_ipv4_addr(u32::from_be(raw.tpa))?,
-    })
+        sha: helpers::net::parse_eth_addr(&arp.get_sender_hw_addr().octets())?,
+        spa: helpers::net::parse_ipv4_addr(u32::from(arp.get_sender_proto_addr()))?,
+        tha: helpers::net::parse_eth_addr(&arp.get_target_hw_addr().octets())?,
+        tpa: helpers::net::parse_ipv4_addr(u32::from(arp.get_target_proto_addr()))?,
+    }))
 }
 
 pub(super) fn unmarshal_ipv4(ip: &Ipv4Packet) -> Result<SkbIpEvent> {
@@ -333,6 +316,12 @@ pub(super) fn unmarshal_packet(event: &mut SkbEvent, raw_section: &BpfRawSection
     event.eth = Some(unmarshal_eth(&eth)?);
 
     match eth.get_ethertype() {
+        EtherTypes::Arp => {
+            event.arp = unmarshal_arp(
+                &ArpPacket::new(eth.payload())
+                    .ok_or_else(|| anyhow!("Could not parse ARP packet"))?,
+            )?;
+        }
         EtherTypes::Ipv4 => {
             event.ip = Some(unmarshal_ipv4(
                 &Ipv4Packet::new(eth.payload())
