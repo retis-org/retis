@@ -254,7 +254,11 @@ pub(super) struct RawPacketEvent {
     packet: [u8; 255],
 }
 
-pub(super) fn unmarshal_packet(event: &mut SkbEvent, raw_section: &BpfRawSection) -> Result<()> {
+pub(super) fn unmarshal_packet(
+    event: &mut SkbEvent,
+    raw_section: &BpfRawSection,
+    report_eth: bool,
+) -> Result<()> {
     let raw = parse_raw_section::<RawPacketEvent>(raw_section)?;
 
     // First add the raw packet part in the event.
@@ -268,7 +272,10 @@ pub(super) fn unmarshal_packet(event: &mut SkbEvent, raw_section: &BpfRawSection
     let eth = EthernetPacket::new(&raw.packet[..(raw.capture_len as usize)]).ok_or_else(|| {
         anyhow!("Could not parse Ethernet packet (buffer size less than minimal)")
     })?;
-    event.eth = Some(unmarshal_eth(&eth)?);
+
+    if report_eth {
+        event.eth = Some(unmarshal_eth(&eth)?);
+    }
 
     match eth.get_ethertype() {
         EtherTypes::Arp => {

@@ -39,6 +39,8 @@ pub(crate) struct SkbModule {
     // Used to keep a reference to our internal config map.
     #[allow(dead_code)]
     config_map: Option<libbpf_rs::MapHandle>,
+    // Should we report the Ethernet section?
+    report_eth: bool,
 }
 
 impl Collector for SkbModule {
@@ -63,13 +65,17 @@ impl Collector for SkbModule {
 
         for category in args.skb_sections.iter() {
             match category.as_str() {
-                "all" => sections |= !0_u64,
+                "all" => {
+                    sections |= !0_u64;
+                    self.report_eth = true;
+                }
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
-                "packet" | "eth" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
+                "eth" => self.report_eth = true,
+                "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
                     warn!(
                         "Use of '{}' in --skb-sections is depreacted (is now always set)",
                         category.as_str(),
@@ -106,7 +112,9 @@ impl Module for SkbModule {
         self
     }
     fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::new(SkbEventFactory {}))
+        Ok(Box::new(SkbEventFactory {
+            report_eth: self.report_eth,
+        }))
     }
 }
 
