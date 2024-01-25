@@ -20,12 +20,12 @@ use crate::core::{
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
-pub(super) const SECTION_DEV: u64 = 7;
-pub(super) const SECTION_NS: u64 = 8;
-pub(super) const SECTION_META: u64 = 9;
-pub(super) const SECTION_DATA_REF: u64 = 10;
-pub(super) const SECTION_PACKET: u64 = 11;
-pub(super) const SECTION_GSO: u64 = 12;
+pub(super) const SECTION_PACKET: u64 = 1;
+pub(super) const SECTION_DEV: u64 = 2;
+pub(super) const SECTION_NS: u64 = 3;
+pub(super) const SECTION_META: u64 = 4;
+pub(super) const SECTION_DATA_REF: u64 = 5;
+pub(super) const SECTION_GSO: u64 = 6;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]

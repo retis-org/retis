@@ -60,7 +60,8 @@ impl Collector for SkbModule {
         // First, get the cli parameters.
         let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
 
-        // Default list of sections.
+        // Default list of sections. We set SECTION_PACKET even though it's not
+        // checked in the BPF hook (raw packet is always reported).
         let mut sections: u64 = 1 << SECTION_PACKET;
 
         for category in args.skb_sections.iter() {

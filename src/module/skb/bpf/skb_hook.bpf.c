@@ -14,12 +14,12 @@
  *
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
-#define COLLECT_DEV		7
-#define COLLECT_NS		8
-#define COLLECT_META		9
-#define COLLECT_DATA_REF	10
-#define COLLECT_PACKET		11
-#define COLLECT_GSO		12
+#define COLLECT_PACKET		1
+#define COLLECT_DEV		2
+#define COLLECT_NS		3
+#define COLLECT_META		4
+#define COLLECT_DATA_REF	5
+#define COLLECT_GSO		6
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -170,7 +170,6 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 	struct skb_shared_info *si;
 	struct skb_config *cfg;
 	struct net_device *dev;
-	unsigned char *head;
 	u32 key = 0;
 
 	cfg = bpf_map_lookup_elem(&skb_config_map, &key);
@@ -178,10 +177,9 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 		return 0;
 
 	dev = BPF_CORE_READ(skb, dev);
-	head = BPF_CORE_READ(skb, head);
 
-	if (cfg->sections & BIT(COLLECT_PACKET))
-		process_packet(event, skb);
+	/* Always retrieve the raw packet */
+	process_packet(event, skb);
 
 	if (cfg->sections & BIT(COLLECT_DEV) && dev) {
 		int ifindex = BPF_CORE_READ(dev, ifindex);
@@ -243,6 +241,7 @@ skip_netns:
 	}
 
 	if (cfg->sections & BIT(COLLECT_DATA_REF)) {
+		unsigned char *head = BPF_CORE_READ(skb, head);
 		struct skb_data_ref_event *e =
 			get_event_section(event, COLLECTOR_SKB,
 					  COLLECT_DATA_REF, sizeof(*e));
