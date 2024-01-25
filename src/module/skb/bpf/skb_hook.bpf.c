@@ -14,7 +14,6 @@
  *
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
-#define COLLECT_ICMP		6
 #define COLLECT_DEV		7
 #define COLLECT_NS		8
 #define COLLECT_META		9
@@ -39,10 +38,6 @@ struct {
 /* Please keep the following structs in sync with its Rust counterpart in
  * module::skb::bpf.
  */
-struct skb_icmp_event {
-	u8 type;
-	u8 code;
-} __attribute__((packed));
 struct skb_netdev_event {
 #define IFNAMSIZ	16
 	u8 dev_name[IFNAMSIZ];
@@ -84,81 +79,6 @@ struct skb_packet_event {
 #define PACKET_CAPTURE_SIZE	255
 	u8 packet[PACKET_CAPTURE_SIZE];
 } __attribute__((packed));
-
-/* Must be called with a valid skb pointer */
-static __always_inline int process_skb_ip(struct retis_raw_event *event,
-					  struct skb_config *cfg,
-					  struct sk_buff *skb,
-					  unsigned char *head,
-					  u16 mac, u16 network)
-{
-	u8 protocol, ip_version;
-	u16 transport;
-
-	bpf_probe_read_kernel(&ip_version, sizeof(ip_version), head + network);
-	ip_version >>= 4;
-
-	if (ip_version == 4) {
-		struct iphdr *ip4 = (struct iphdr *)(head + network);
-
-		bpf_probe_read_kernel(&protocol, sizeof(protocol), &ip4->protocol);
-	} else if (ip_version == 6) {
-		struct ipv6hdr *ip6 = (struct ipv6hdr *)(head + network);
-
-		bpf_probe_read_kernel(&protocol, sizeof(protocol), &ip6->nexthdr);
-	} else {
-		return 0;
-	}
-
-	/* L4 */
-
-	transport = BPF_CORE_READ(skb, transport_header);
-	if (!is_transport_data_valid(skb))
-		return 0;
-
-	if (protocol == IPPROTO_ICMP && cfg->sections & BIT(COLLECT_ICMP)) {
-		struct icmphdr *icmp = (struct icmphdr *)(head + transport);
-		struct skb_icmp_event *e =
-			get_event_section(event, COLLECTOR_SKB, COLLECT_ICMP,
-					  sizeof(*e));
-		if (!e)
-			return 0;
-
-		bpf_probe_read_kernel(&e->type, sizeof(e->type), &icmp->type);
-		bpf_probe_read_kernel(&e->code, sizeof(e->code), &icmp->code);
-	}
-
-	return 0;
-}
-
-/* Must be called with a valid skb pointer */
-static __always_inline int process_skb_l2(struct retis_raw_event *event,
-					  struct skb_config *cfg,
-					  struct sk_buff *skb,
-					  unsigned char *head)
-{
-	u16 mac, network, etype;
-
-	mac = BPF_CORE_READ(skb, mac_header);
-	etype = BPF_CORE_READ(skb, protocol);
-
-	/* If the ethertype isn't set, bail out early as we can't process such
-	 * packets below.
-	 */
-	if (etype == 0)
-		return 0;
-
-	network = BPF_CORE_READ(skb, network_header);
-	if (!is_network_data_valid(skb))
-		return 0;
-
-	/* IPv4/IPv6 and upper layers */
-	if (etype == bpf_ntohs(ETH_P_IP) || etype == bpf_ntohs(ETH_P_IPV6))
-		return process_skb_ip(event, cfg, skb, head, mac, network);
-
-	/* Unsupported etype */
-	return 0;
-}
 
 static __always_inline int process_packet(struct retis_raw_event *event,
 					  struct sk_buff *skb)
@@ -362,7 +282,7 @@ skip_netns:
 	}
 
 skip_gso:
-	return process_skb_l2(event, cfg, skb, head);
+	return 0;
 }
 
 DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,

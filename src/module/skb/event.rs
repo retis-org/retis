@@ -493,7 +493,6 @@ impl RawEventSectionFactory for SkbEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
-                SECTION_ICMP => event.icmp = Some(unmarshal_icmp(section)?),
                 SECTION_DEV => event.dev = unmarshal_dev(section)?,
                 SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
                 SECTION_META => event.meta = Some(unmarshal_meta(section)?),

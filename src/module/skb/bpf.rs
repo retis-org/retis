@@ -8,7 +8,8 @@ use std::str;
 
 use anyhow::{anyhow, Result};
 use pnet::packet::{
-    arp::ArpPacket, ethernet::*, ip::*, ipv4::*, ipv6::*, tcp::TcpPacket, udp::UdpPacket, Packet,
+    arp::ArpPacket, ethernet::*, icmp::IcmpPacket, ip::*, ipv4::*, ipv6::*, tcp::TcpPacket,
+    udp::UdpPacket, Packet,
 };
 
 use super::*;
@@ -19,7 +20,6 @@ use crate::core::{
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
-pub(super) const SECTION_ICMP: u64 = 6;
 pub(super) const SECTION_DEV: u64 = 7;
 pub(super) const SECTION_NS: u64 = 8;
 pub(super) const SECTION_META: u64 = 9;
@@ -111,21 +111,10 @@ pub(super) fn unmarshal_udp(udp: &UdpPacket) -> Result<SkbUdpEvent> {
     })
 }
 
-/// ICMP data retrieved from skbs.
-#[repr(C, packed)]
-struct RawIcmpEvent {
-    /// ICMP type.
-    r#type: u8,
-    /// ICMP sub-type.
-    code: u8,
-}
-
-pub(super) fn unmarshal_icmp(raw_section: &BpfRawSection) -> Result<SkbIcmpEvent> {
-    let raw = parse_raw_section::<RawIcmpEvent>(raw_section)?;
-
+pub(super) fn unmarshal_icmp(icmp: &IcmpPacket) -> Result<SkbIcmpEvent> {
     Ok(SkbIcmpEvent {
-        r#type: raw.r#type,
-        code: raw.code,
+        r#type: icmp.get_icmp_type().0,
+        code: icmp.get_icmp_code().0,
     })
 }
 
@@ -319,6 +308,11 @@ fn unmarshal_l4(
         IpNextHeaderProtocols::Udp => {
             if let Some(udp) = UdpPacket::new(payload) {
                 event.udp = Some(unmarshal_udp(&udp)?);
+            }
+        }
+        IpNextHeaderProtocols::Icmp => {
+            if let Some(icmp) = IcmpPacket::new(payload) {
+                event.icmp = Some(unmarshal_icmp(&icmp)?);
             }
         }
         _ => (),
