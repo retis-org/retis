@@ -29,7 +29,19 @@ pub(crate) struct SkbCollectorArgs {
         ]),
         value_delimiter=',',
         default_value="dev",
-        help = "Comma separated list of data to collect from skbs"
+        help = "Comma separated list of extra information to collect from skbs.
+
+Supported values:
+- eth:     include Ethernet information (src, dst, etype).
+- dev:     include network device information.
+- ns:      include network namespace information.
+- meta:    include skb metadata information (len, data_len, hash, etc).
+- dataref: include data & refcnt information (cloned, users, data refs, etc).
+- gso:     include generic segmentation offload (GSO) information.
+- all:     all of the above.
+
+The following values are now always retrieved and their use is deprecated:
+packet, arp, ip, tcp, udp, icmp."
     )]
     skb_sections: Vec<String>,
 }
