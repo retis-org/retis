@@ -61,7 +61,6 @@ impl Collector for SkbModule {
         // Default list of sections.
         let mut sections: u64 = 1 << SECTION_PACKET
             | 1 << SECTION_ARP
-            | 1 << SECTION_IPV6
             | 1 << SECTION_TCP
             | 1 << SECTION_UDP
             | 1 << SECTION_ICMP;

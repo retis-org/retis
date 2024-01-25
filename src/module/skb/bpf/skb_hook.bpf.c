@@ -15,7 +15,6 @@
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
 #define COLLECT_ARP		1
-#define COLLECT_IPV6		3
 #define COLLECT_TCP		4
 #define COLLECT_UDP		5
 #define COLLECT_ICMP		6
@@ -49,15 +48,6 @@ struct skb_arp_event {
 	u32 spa;
 	u8 tha[6];
 	u32 tpa;
-} __attribute__((packed));
-struct skb_ipv6_event {
-	u128 src;
-	u128 dst;
-	u32 flow_lbl;
-	u16 len;
-	u8 protocol;
-	u8 ttl;
-	u8 ecn;
 } __attribute__((packed));
 struct skb_tcp_event {
 	u16 sport;
@@ -199,30 +189,6 @@ static __always_inline int process_skb_ip(struct retis_raw_event *event,
 		struct ipv6hdr *ip6 = (struct ipv6hdr *)(head + network);
 
 		bpf_probe_read_kernel(&protocol, sizeof(protocol), &ip6->nexthdr);
-
-		if (cfg->sections & BIT(COLLECT_IPV6)) {
-			u8 flow_lbl[3];
-			u16 ecn;
-			struct skb_ipv6_event *e =
-				get_event_section(event, COLLECTOR_SKB,
-						  COLLECT_IPV6, sizeof(*e));
-			if (!e)
-				return 0;
-
-			e->protocol = protocol;
-			bpf_probe_read_kernel(&e->src, sizeof(e->src), &ip6->saddr);
-			bpf_probe_read_kernel(&e->dst, sizeof(e->dst), &ip6->daddr);
-			bpf_probe_read_kernel(&e->len, sizeof(e->len), &ip6->payload_len);
-			bpf_probe_read_kernel(&e->ttl, sizeof(e->ttl), &ip6->hop_limit);
-
-			bpf_probe_read_kernel(&flow_lbl, sizeof(flow_lbl), &ip6->flow_lbl);
-			e->flow_lbl = (flow_lbl[0] & 0xf) << 16 |
-				      flow_lbl[1] << 8 | flow_lbl[2];
-			e->flow_lbl &= 0xfffff;
-
-			bpf_probe_read_kernel(&ecn, sizeof(ecn), ip6);
-			e->ecn = (bpf_ntohs(ecn) >> 4) & 0x3;
-		}
 	} else {
 		return 0;
 	}

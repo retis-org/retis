@@ -4,10 +4,10 @@
 //!
 //! Please keep this file in sync with its BPF counterpart in bpf/skb_hook.bpf.c
 
-use std::{net::Ipv6Addr, str};
+use std::str;
 
 use anyhow::{anyhow, bail, Result};
-use pnet::packet::{ethernet::*, ipv4::*, Packet};
+use pnet::packet::{ethernet::*, ipv4::*, ipv6::*, Packet};
 
 use super::*;
 use crate::core::{
@@ -18,7 +18,6 @@ use crate::core::{
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
 pub(super) const SECTION_ARP: u64 = 1;
-pub(super) const SECTION_IPV6: u64 = 3;
 pub(super) const SECTION_TCP: u64 = 4;
 pub(super) const SECTION_UDP: u64 = 5;
 pub(super) const SECTION_ICMP: u64 = 6;
@@ -95,38 +94,17 @@ pub(super) fn unmarshal_ipv4(ip: &Ipv4Packet) -> Result<SkbIpEvent> {
     })
 }
 
-/// IPv6 data retrieved from skbs.
-#[repr(C, packed)]
-struct RawIpv6Event {
-    /// Source IP address. Stored in network order.
-    src: u128,
-    /// Destination IP address. Stored in network order.
-    dst: u128,
-    /// Flow label.
-    flow_label: u32,
-    /// IP packet length in bytes. Stored in network order.
-    len: u16,
-    /// L4 protocol.
-    protocol: u8,
-    /// TTL.
-    ttl: u8,
-    /// ECN bits.
-    ecn: u8,
-}
-
-pub(super) fn unmarshal_ipv6(raw_section: &BpfRawSection) -> Result<SkbIpEvent> {
-    let raw = parse_raw_section::<RawIpv6Event>(raw_section)?;
-
+pub(super) fn unmarshal_ipv6(ip: &Ipv6Packet) -> Result<SkbIpEvent> {
     Ok(SkbIpEvent {
-        saddr: Ipv6Addr::from(u128::from_be(raw.src)).to_string(),
-        daddr: Ipv6Addr::from(u128::from_be(raw.dst)).to_string(),
+        saddr: ip.get_source().to_string(),
+        daddr: ip.get_destination().to_string(),
         version: SkbIpVersion::V6(SkbIpv6Event {
-            flow_label: raw.flow_label,
+            flow_label: ip.get_flow_label(),
         }),
-        protocol: raw.protocol,
-        len: u16::from_be(raw.len),
-        ttl: raw.ttl,
-        ecn: raw.ecn,
+        protocol: ip.get_next_header().0,
+        len: ip.get_payload_length(),
+        ttl: ip.get_hop_limit(),
+        ecn: ip.get_traffic_class() & 0x3,
     })
 }
 
@@ -359,6 +337,12 @@ pub(super) fn unmarshal_packet(event: &mut SkbEvent, raw_section: &BpfRawSection
             event.ip = Some(unmarshal_ipv4(
                 &Ipv4Packet::new(eth.payload())
                     .ok_or_else(|| anyhow!("Could not parse IPv4 packet"))?,
+            )?)
+        }
+        EtherTypes::Ipv6 => {
+            event.ip = Some(unmarshal_ipv6(
+                &Ipv6Packet::new(eth.payload())
+                    .ok_or_else(|| anyhow!("Could not parse IPv6 packet"))?,
             )?)
         }
         _ => return Ok(()),
