@@ -14,7 +14,6 @@
  *
  * Please keep in sync with its Rust counterpart in module::skb::bpf.
  */
-#define COLLECT_UDP		5
 #define COLLECT_ICMP		6
 #define COLLECT_DEV		7
 #define COLLECT_NS		8
@@ -40,11 +39,6 @@ struct {
 /* Please keep the following structs in sync with its Rust counterpart in
  * module::skb::bpf.
  */
-struct skb_udp_event {
-	u16 sport;
-	u16 dport;
-	u16 len;
-} __attribute__((packed));
 struct skb_icmp_event {
 	u8 type;
 	u8 code;
@@ -122,18 +116,7 @@ static __always_inline int process_skb_ip(struct retis_raw_event *event,
 	if (!is_transport_data_valid(skb))
 		return 0;
 
-	if (protocol == IPPROTO_UDP && cfg->sections & BIT(COLLECT_UDP)) {
-		struct udphdr *udp = (struct udphdr *)(head + transport);
-		struct skb_udp_event *e =
-			get_event_section(event, COLLECTOR_SKB, COLLECT_UDP,
-					  sizeof(*e));
-		if (!e)
-			return 0;
-
-		bpf_probe_read_kernel(&e->sport, sizeof(e->sport), &udp->source);
-		bpf_probe_read_kernel(&e->dport, sizeof(e->dport), &udp->dest);
-		bpf_probe_read_kernel(&e->len, sizeof(e->len), &udp->len);
-	} else if (protocol == IPPROTO_ICMP && cfg->sections & BIT(COLLECT_ICMP)) {
+	if (protocol == IPPROTO_ICMP && cfg->sections & BIT(COLLECT_ICMP)) {
 		struct icmphdr *icmp = (struct icmphdr *)(head + transport);
 		struct skb_icmp_event *e =
 			get_event_section(event, COLLECTOR_SKB, COLLECT_ICMP,

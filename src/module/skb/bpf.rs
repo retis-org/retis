@@ -7,7 +7,9 @@
 use std::str;
 
 use anyhow::{anyhow, Result};
-use pnet::packet::{arp::ArpPacket, ethernet::*, ip::*, ipv4::*, ipv6::*, tcp::TcpPacket, Packet};
+use pnet::packet::{
+    arp::ArpPacket, ethernet::*, ip::*, ipv4::*, ipv6::*, tcp::TcpPacket, udp::UdpPacket, Packet,
+};
 
 use super::*;
 use crate::core::{
@@ -17,7 +19,6 @@ use crate::core::{
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
-pub(super) const SECTION_UDP: u64 = 5;
 pub(super) const SECTION_ICMP: u64 = 6;
 pub(super) const SECTION_DEV: u64 = 7;
 pub(super) const SECTION_NS: u64 = 8;
@@ -102,24 +103,11 @@ pub(super) fn unmarshal_tcp(tcp: &TcpPacket) -> Result<SkbTcpEvent> {
     })
 }
 
-/// UDP data retrieved from skbs.
-#[repr(C, packed)]
-struct RawUdpEvent {
-    /// Source port. Stored in network order.
-    sport: u16,
-    /// Destination port. Stored in network order.
-    dport: u16,
-    /// Lenght: length in bytes of the UDP header and UDP data. Stored in network order.
-    len: u16,
-}
-
-pub(super) fn unmarshal_udp(raw_section: &BpfRawSection) -> Result<SkbUdpEvent> {
-    let raw = parse_raw_section::<RawUdpEvent>(raw_section)?;
-
+pub(super) fn unmarshal_udp(udp: &UdpPacket) -> Result<SkbUdpEvent> {
     Ok(SkbUdpEvent {
-        sport: u16::from_be(raw.sport),
-        dport: u16::from_be(raw.dport),
-        len: u16::from_be(raw.len),
+        sport: udp.get_source(),
+        dport: udp.get_destination(),
+        len: udp.get_length(),
     })
 }
 
@@ -326,6 +314,11 @@ fn unmarshal_l4(
         IpNextHeaderProtocols::Tcp => {
             if let Some(tcp) = TcpPacket::new(payload) {
                 event.tcp = Some(unmarshal_tcp(&tcp)?);
+            }
+        }
+        IpNextHeaderProtocols::Udp => {
+            if let Some(udp) = UdpPacket::new(payload) {
+                event.udp = Some(unmarshal_udp(&udp)?);
             }
         }
         _ => (),
