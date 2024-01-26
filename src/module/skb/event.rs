@@ -502,7 +502,7 @@ impl RawEventSectionFactory for SkbEventFactory {
                 SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
                 SECTION_GSO => event.gso = Some(unmarshal_gso(section)?),
                 SECTION_PACKET => unmarshal_packet(&mut event, section, self.report_eth)?,
-                _ => bail!("Unknown data type"),
+                x => bail!("Unknown data type ({x})"),
             }
         }
 
