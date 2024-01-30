@@ -93,9 +93,6 @@ pub(crate) trait SubCommand {
     /// subcommand-specific functionality.
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
-    /// Generate the clap Command to be used for "thin" parsing.
-    fn thin(&self) -> Result<Command>;
-
     /// Generate the clap Command to be used for "full" parsing.
     ///
     /// This method should be called after all dynamic options have been registered.
@@ -158,10 +155,6 @@ where
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
-    }
-
-    fn thin(&self) -> Result<Command> {
-        Ok(<Self as clap::CommandFactory>::command())
     }
 
     fn full(&self) -> Result<Command> {
@@ -270,9 +263,9 @@ impl ThinCli {
             .disable_help_subcommand(true)
             .infer_subcommands(true)
             .subcommand_required(true);
-        // Add thin subcommands so that the main help shows them.
+        // Add full subcommands so that the main help shows them.
         for sub in self.subcommands.iter() {
-            command = command.subcommand(sub.thin().expect("thin command failed"));
+            command = command.subcommand(sub.full().expect("full command failed"));
         }
 
         // Determine the subcommand that was run while ignoring errors from yet-to-be-defined
@@ -458,9 +451,6 @@ mod tests {
         }
         fn as_any_mut(&mut self) -> &mut dyn Any {
             self
-        }
-        fn thin(&self) -> Result<Command> {
-            Ok(Command::new("sub1").about("does some things"))
         }
         fn full(&self) -> Result<Command> {
             Ok(Sub1::augment_args(
