@@ -1,4 +1,6 @@
-use anyhow::{bail, Result};
+use std::str::FromStr;
+
+use anyhow::{anyhow, Result};
 use log::{info, trace, warn, LevelFilter};
 
 mod cli;
@@ -24,15 +26,9 @@ use retis_derive::*;
 
 fn main() -> Result<()> {
     let mut cli = get_cli()?.build();
-
-    let log_level = match cli.main_config.log_level.as_str() {
-        "error" => LevelFilter::Error,
-        "warn" => LevelFilter::Warn,
-        "info" => LevelFilter::Info,
-        "debug" => LevelFilter::Debug,
-        "trace" => LevelFilter::Trace,
-        x => bail!("Invalid log_level: {}", x),
-    };
+    let log_level = cli.main_config.log_level.as_str();
+    let log_level = LevelFilter::from_str(log_level)
+        .map_err(|e| anyhow!("Invalid log_level: {log_level} ({e})"))?;
     let logger = Logger::init(log_level)?;
     set_libbpf_rs_print_callback(log_level);
 
