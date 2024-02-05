@@ -106,3 +106,10 @@ only and Retis won't be able to fully filter probes.
 $ sudo setcap cap_sys_admin,cap_bpf,cap_syslog=ep $(which retis)
 $ retis collect
 ```
+
+### Shell auto-completion
+
+Retis can generate completion files for shells (Bash, Zsh, Fish...).
+For example to enable auto-completion of Retis command in Bash, you can
+add line `source <(retis sh-complete --shell bash)` in .bashrc, then
+the command parameter could be auto-completed when pressing <Tab>.

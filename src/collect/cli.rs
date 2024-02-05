@@ -148,10 +148,6 @@ impl SubCommand for Collect {
         })
     }
 
-    fn thin(&self) -> Result<Command> {
-        Ok(Command::new("collect").about("Collect network events"))
-    }
-
     fn name(&self) -> String {
         "collect".to_string()
     }
@@ -180,7 +176,7 @@ impl SubCommand for Collect {
             .collectors
             .command()
             .to_owned()
-            .about("Collect events")
+            .about("Collect network events")
             .long_about(long_about)
             .mut_arg("collectors", |a| {
                 a.value_parser(PossibleValuesParser::new(possible_collectors.clone()))

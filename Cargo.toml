@@ -28,6 +28,7 @@ btf-rs = "1.0"
 byteorder = "1.5"
 caps = "0.5"
 clap = { version = "4.0", features = ["derive", "string"] }
+clap_complete = "4.4"
 elf = "0.7"
 flate2 = "1.0"
 libbpf-rs = "0.22"

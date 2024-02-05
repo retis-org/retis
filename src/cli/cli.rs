@@ -19,6 +19,7 @@ use super::dynamic::DynamicCommand;
 use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
+    generate::Complete,
     module::{ModuleId, Modules},
     process::cli::*,
     profiles::{cli::ProfileCmd, Profile},
@@ -93,9 +94,6 @@ pub(crate) trait SubCommand {
     /// subcommand-specific functionality.
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
-    /// Generate the clap Command to be used for "thin" parsing.
-    fn thin(&self) -> Result<Command>;
-
     /// Generate the clap Command to be used for "full" parsing.
     ///
     /// This method should be called after all dynamic options have been registered.
@@ -158,10 +156,6 @@ where
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
-    }
-
-    fn thin(&self) -> Result<Command> {
-        Ok(<Self as clap::CommandFactory>::command())
     }
 
     fn full(&self) -> Result<Command> {
@@ -270,9 +264,9 @@ impl ThinCli {
             .disable_help_subcommand(true)
             .infer_subcommands(true)
             .subcommand_required(true);
-        // Add thin subcommands so that the main help shows them.
+        // Add full subcommands so that the main help shows them.
         for sub in self.subcommands.iter() {
-            command = command.subcommand(sub.thin().expect("thin command failed"));
+            command = command.subcommand(sub.full().expect("full command failed"));
         }
 
         // Determine the subcommand that was run while ignoring errors from yet-to-be-defined
@@ -393,6 +387,10 @@ impl FullCli {
     pub(crate) fn get_subcommand_mut(&mut self) -> Result<&mut dyn SubCommand> {
         Ok(self.subcommand.as_mut())
     }
+
+    pub(crate) fn get_command(&self) -> Command {
+        self.command.clone()
+    }
 }
 
 /// CliConfig represents the result of the Full CLI parsing
@@ -428,6 +426,7 @@ pub(crate) fn get_cli() -> Result<ThinCli> {
     cli.add_subcommand(Box::new(Sort::new()?))?;
     cli.add_subcommand(Box::new(Pcap::new()?))?;
     cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
+    cli.add_subcommand(Box::new(Complete::new()?))?;
 
     #[cfg(feature = "benchmark")]
     cli.add_subcommand(Box::new(Benchmark::new()?))?;
@@ -458,9 +457,6 @@ mod tests {
         }
         fn as_any_mut(&mut self) -> &mut dyn Any {
             self
-        }
-        fn thin(&self) -> Result<Command> {
-            Ok(Command::new("sub1").about("does some things"))
         }
         fn full(&self) -> Result<Command> {
             Ok(Sub1::augment_args(
