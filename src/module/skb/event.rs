@@ -104,7 +104,7 @@ impl EventFmt for SkbEvent {
             // - IPv4: we use the fixed 20 bytes size as options are rarely used.
             // - IPv6: we do not support extension headers.
             len = match ip.version {
-                SkbIpVersion::V4(_) => ip.len - 20,
+                SkbIpVersion::V4(_) => ip.len.saturating_sub(20),
                 _ => ip.len,
             };
 
@@ -161,7 +161,13 @@ impl EventFmt for SkbEvent {
                 None => String::new(),
             };
 
-            write!(f, " len {} proto{} ({})", ip.len, protocol, ip.protocol)?;
+            // In some rare cases the IP header might not be fully filled yet,
+            // length might be unset.
+            if ip.len != 0 {
+                write!(f, " len {}", ip.len)?;
+            }
+
+            write!(f, " proto{} ({})", protocol, ip.protocol)?;
         }
 
         if let Some(tcp) = &self.tcp {
