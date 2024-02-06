@@ -4,6 +4,9 @@ export CLANG := clang
 export OBJCOPY := llvm-objcopy
 
 CARGO := cargo
+RELEASE_VERSION ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name == "retis") | .version')
+RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
+
 PRINT = echo
 
 VERBOSITY := $(filter 1,$(V))
@@ -73,27 +76,30 @@ else
     CARGO_JOBS := 1
 endif
 
-all: build
+all: debug
 
-install: build
-	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS)
+install: release
+	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS) --path=.
 
-build: ebpf
-	$(call out_console,CARGO,building retis ...)
+define build
+	$(call out_console,CARGO,$(strip $(2)) ...)
 	$(Q)CARGO_BUILD_JOBS=$(CARGO_JOBS) \
-	RETIS_PKG_VERSION=$(RELEASE_VERSION) \
+	RETIS_RELEASE_VERSION=$(RELEASE_VERSION) \
 	RETIS_RELEASE_NAME=$(RELEASE_NAME) \
-	$(CARGO) $(CARGO_OPTS) build $(CARGO_CMD_OPTS)
+	$(CARGO) $(CARGO_OPTS) $(1) $(CARGO_CMD_OPTS)
+endef
+
+debug: ebpf
+	$(call build, build, building retis (debug))
+
+release: ebpf
+	$(call build, build --release, building retis (release))
 
 test: ebpf
-	$(call out_console,CARGO,running tests ...)
-	$(Q)CARGO_BUILD_JOBS=$(CARGO_JOBS) \
-	$(CARGO) $(CARGO_OPTS) test $(CARGO_CMD_OPTS)
+	$(call build, test, building and running tests)
 
 bench: ebpf
-	$(call out_console,CARGO,building benchmarks ...)
-	$(Q)CARGO_BUILD_JOBS=$(CARGO_JOBS) \
-	$(CARGO) $(CARGO_OPTS) build -F benchmark --release $(CARGO_CMD_OPTS)
+	$(call build, build -F benchmark --release, building benchmarks)
 
 ifeq ($(NOVENDOR),)
 $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
@@ -134,6 +140,7 @@ help:
 	$(PRINT) '	                  (eBPF only).'
 	$(PRINT) 'ebpf                --  Builds only the eBPF programs.'
 	$(PRINT) 'install             --  Installs Retis.'
+	$(PRINT) 'release             --  Builds Retis with the release option.'
 	$(PRINT) 'test                --  Builds and runs unit tests.'
 	$(PRINT)
 	$(PRINT) 'Optional variables that can be used to override the default behavior:'
@@ -150,4 +157,4 @@ help:
 	$(PRINT) 'NOVENDOR            --  Avoid to self detect and consume the vendored headers'
 	$(PRINT) '                        shipped with libbpf-sys.'
 
-.PHONY: all clean clean-ebpf ebpf $(EBPF_PROBES) $(GENERIC_HOOKS) help install $(OVS_HOOKS)
+.PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(GENERIC_HOOKS) help install $(OVS_HOOKS) release test
