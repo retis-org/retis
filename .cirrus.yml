@@ -26,10 +26,10 @@ unittest_task:
 
 benchmark_task:
   << : *cargo_task_template
-  build_script: cargo build -F benchmark --verbose
+  build_script: cargo build -F benchmark --verbose --release
   test_script:
-    - ./target/debug/retis benchmark --ci events_parsing
-    - ./target/debug/retis benchmark --ci events_output
+    - ./target/release/retis benchmark --ci events_parsing
+    - ./target/release/retis benchmark --ci events_output
   check_script:
     - cargo clippy -F benchmark -- -D warnings
 
