@@ -93,8 +93,8 @@ flavor coding style for the BPF parts.
 1. Check the following commands do not return an error:
    1. `cargo fmt --check`
    1. `cargo clippy -- -D warnings`
-   1. `cargo test`, or to include runtime tests,
-      `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER='sudo' cargo test --features=test_cap_bpf`
+   1. `make test V=1`, or to include runtime tests,
+      `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=sudo CARGO_CMD_OPTS="--features=test_cap_bpf" make test V=1`
 1. Make sure commits are
    [signed off](https://www.kernel.org/doc/html/latest/process/submitting-patches.html?highlight=signed%20off#developer-s-certificate-of-origin-1-1).
 1. Use a clear, concise and descriptive title.
