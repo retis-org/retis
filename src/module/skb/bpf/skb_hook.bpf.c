@@ -80,6 +80,54 @@ struct skb_packet_event {
 	u8 packet[PACKET_CAPTURE_SIZE];
 } __attribute__((packed));
 
+/* Retrieve an skb linear len */
+static __always_inline int skb_linear_len(struct sk_buff *skb)
+{
+	return BPF_CORE_READ(skb, len) - BPF_CORE_READ(skb, data_len);
+}
+
+/* Retrieve the L3 protocol of an skb, either by looking up skb->protocol or by
+ * parsing the header of the packet.
+ */
+static __always_inline u16 skb_protocol(struct sk_buff *skb)
+{
+	u16 protocol = BPF_CORE_READ(skb, protocol);
+	int network, transport, l4hlen;
+	unsigned char *head;
+	u8 ip_version;
+
+	/* Fast path, skb->protocol was set. */
+	if (likely(protocol))
+		return protocol;
+
+	/* We're *most likely* in the Tx path; skb->protocol wasn't set yet.
+	 * Let's try to detect the protocol from the packet data.
+	 */
+
+	head = BPF_CORE_READ(skb, head);
+
+	/* L4 must be set as we derive L3 header len from it. */
+	if (!is_network_data_valid(skb) || !is_transport_data_valid(skb))
+		return 0;
+
+	network = BPF_CORE_READ(skb, network_header);
+	transport = BPF_CORE_READ(skb, transport_header);
+	l4hlen = transport - network;
+
+	/* Check if the L3 header looks like an IP one. The below is not 100%
+	 * right (no ext support), but let's stay on the safe side for now.
+	 */
+	bpf_probe_read_kernel(&ip_version, sizeof(ip_version), head + network);
+	ip_version >>= 4;
+	if (ip_version == 4 && l4hlen == sizeof(struct iphdr)) {
+		return bpf_ntohs(ETH_P_IP);
+	} else if (ip_version == 6 && l4hlen == sizeof(struct ipv6hdr)) {
+		return bpf_ntohs(ETH_P_IPV6);
+	}
+
+	return 0;
+}
+
 static __always_inline int process_packet(struct retis_raw_event *event,
 					  struct sk_buff *skb)
 {
@@ -97,8 +145,8 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 
 	mac = BPF_CORE_READ(skb, mac_header);
 	network = BPF_CORE_READ(skb, network_header);
+	linear_len = skb_linear_len(skb);
 	len = BPF_CORE_READ(skb, len);
-	linear_len = len - BPF_CORE_READ(skb, data_len); /* Linear buffer size */
 
 	/* No data in the linear len, nothing to report */
 	if (!linear_len)
@@ -125,7 +173,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 	 * the eth header.
 	 */
 	} else if (is_network_data_valid(skb)) {
-		u16 etype = BPF_CORE_READ(skb, protocol);
+		u16 etype = skb_protocol(skb);
 		long network_offset, size;
 		struct ethhdr *eth;
 
