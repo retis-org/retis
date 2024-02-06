@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cargo build --release -F benchmark
+make bench V=1
 
 time_single_single=0
 time_single_multi=0
