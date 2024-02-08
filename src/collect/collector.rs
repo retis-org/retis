@@ -30,8 +30,8 @@ use crate::{
             packets::filter::FilterPacket,
         },
         inspect::check::collection_prerequisites,
-        kernel::symbol::{matching_events_to_symbols, matching_functions_to_symbols},
-        probe::{self, Probe, ProbeManager},
+        kernel::symbol::{matching_events_to_symbols, matching_functions_to_symbols, Symbol},
+        probe::{kernel::probe_stack::ProbeStack, *},
         signals::Running,
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
@@ -73,7 +73,7 @@ pub(crate) trait Collector {
     /// will make the whole program to fail. In general collectors should try
     /// hard to run in various setups, see the `crate::collector` top
     /// documentation for more information.
-    fn init(&mut self, cli: &CliConfig, probes: &mut probe::ProbeManager) -> Result<()>;
+    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()>;
     /// Start the collector.
     fn start(&mut self) -> Result<()> {
         Ok(())
@@ -87,7 +87,7 @@ pub(crate) trait Collector {
 /// Main collectors object and API.
 pub(crate) struct Collectors {
     modules: Modules,
-    probes: probe::ProbeManager,
+    probes: ProbeManager,
     factory: BpfEventsFactory,
     known_kernel_types: HashSet<String>,
     run: Running,
@@ -98,14 +98,9 @@ pub(crate) struct Collectors {
 }
 
 impl Collectors {
-    #[allow(unused_mut)] // For tests.
-    fn new(mut modules: Modules) -> Result<Self> {
+    fn new(modules: Modules) -> Result<Self> {
         let factory = BpfEventsFactory::new()?;
-
-        #[cfg(not(test))]
-        let mut probes = probe::ProbeManager::new()?;
-        #[cfg(test)]
-        let probes = probe::ProbeManager::new()?;
+        let probes = ProbeManager::new()?;
 
         Ok(Collectors {
             modules,
@@ -134,7 +129,7 @@ impl Collectors {
     }
 
     /// Setup user defined input filter.
-    fn setup_filters(probes: &mut ProbeManager, collect: &Collect) -> Result<()> {
+    fn setup_filters(probes: &mut ProbeBuilderManager, collect: &Collect) -> Result<()> {
         if let Some(f) = &collect.args()?.packet_filter {
             // L2 filter MUST always succeed. Any failure means we need to bail.
             let fb = FilterPacket::from_string_opt(f.to_string(), FilterPacketType::L2)?;
@@ -189,8 +184,17 @@ impl Collectors {
             .downcast_ref::<Collect>()
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
-        if collect.args()?.stack {
-            self.probes.set_probe_opt(probe::ProbeOption::StackTrace)?;
+        if collect.args()?.probe_stack
+            && collect.args()?.packet_filter.is_none()
+            && collect.args()?.meta_filter.is_none()
+        {
+            bail!("Probe-stack mode requires filtering (--filter-packet and/or --filter-meta)");
+        }
+
+        if collect.args()?.stack || collect.args()?.probe_stack {
+            self.probes
+                .builder_mut()?
+                .set_probe_opt(probe::ProbeOption::StackTrace)?;
         }
 
         // --allow-system-changes requires root.
@@ -218,7 +222,7 @@ impl Collectors {
                 }
             }
 
-            if let Err(e) = c.init(cli, &mut self.probes) {
+            if let Err(e) = c.init(cli, self.probes.builder_mut()?) {
                 bail!("Could not initialize the {} collector: {}", id, e);
             }
 
@@ -247,11 +251,24 @@ impl Collectors {
 
         // Initialize tracking & filters.
         if !cfg!(test) && self.known_kernel_types.contains("struct sk_buff *") {
-            let (gc, map) = init_tracking(&mut self.probes)?;
+            let (gc, map) = init_tracking(self.probes.builder_mut()?)?;
             self.tracking_gc = Some(gc);
             self.tracking_config_map = Some(map);
         }
-        Self::setup_filters(&mut self.probes, collect)?;
+        Self::setup_filters(self.probes.builder_mut()?, collect)?;
+
+        // If probe_stack is on and user hasn't provided a starting point, use
+        // skb:consume_skb & skb:kfree_skb.
+        if collect.args()?.probe_stack && collect.args()?.probes.is_empty() {
+            self.probes
+                .builder_mut()?
+                .register_probe(Probe::raw_tracepoint(Symbol::from_name(
+                    "skb:consume_skb",
+                )?)?)?;
+            self.probes
+                .builder_mut()?
+                .register_probe(Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?)?;
+        }
 
         // Setup user defined probes.
         collect
@@ -261,7 +278,7 @@ impl Collectors {
             .try_for_each(|p| -> Result<()> {
                 self.parse_probe(p)?
                     .drain(..)
-                    .try_for_each(|p| self.probes.register_probe(p))?;
+                    .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
                 Ok(())
             })?;
 
@@ -278,8 +295,12 @@ impl Collectors {
         #[cfg(not(test))]
         {
             let sm = init_stack_map()?;
-            self.probes.reuse_map("stack_map", sm.as_fd().as_raw_fd())?;
-            self.probes.reuse_map("events_map", self.factory.map_fd())?;
+            self.probes
+                .builder_mut()?
+                .reuse_map("stack_map", sm.as_fd().as_raw_fd())?;
+            self.probes
+                .builder_mut()?
+                .reuse_map("events_map", self.factory.map_fd())?;
             match section_factories.get_mut(&ModuleId::Kernel) {
                 Some(kernel_factory) => {
                     kernel_factory
@@ -300,8 +321,12 @@ impl Collectors {
         // Start factory
         self.factory.start(section_factories)?;
 
-        // Attach probes and start collectors.
-        self.probes.attach()?;
+        // Attach probes and start collectors. We're using an open coded take &
+        // replace combination. We could use a Cell<> instead but that would
+        // complicate the use of self.probes (additional .get() calls) while
+        // behaving the same.
+        let probes = std::mem::take(&mut self.probes);
+        let _ = std::mem::replace(&mut self.probes, probes.into_runtime()?);
 
         for id in &self.loaded {
             let c = self
@@ -322,8 +347,8 @@ impl Collectors {
     /// their `stop()` function. All the collectors are in charge to clean-up
     /// their temporary side effects and exit gracefully.
     fn stop(&mut self) -> Result<()> {
-        self.probes.detach()?;
-        self.probes.report_counters()?;
+        self.probes.runtime_mut()?.detach()?;
+        self.probes.runtime_mut()?.report_counters()?;
 
         for id in &self.loaded {
             let c = self
@@ -402,12 +427,24 @@ impl Collectors {
             });
         }
 
+        let mut probe_stack = ProbeStack::new(
+            collect.stack,
+            self.probes.runtime_mut()?.attached_probes(),
+            self.known_kernel_types.clone(),
+        );
+
         use EventResult::*;
         while self.run.running() {
             match self.factory.next_event(Some(Duration::from_secs(1)))? {
-                Event(event) => printers
-                    .iter_mut()
-                    .try_for_each(|p| p.process_one(&event))?,
+                Event(mut event) => {
+                    if collect.probe_stack {
+                        probe_stack.process_event(self.probes.runtime_mut()?, &mut event)?;
+                    }
+
+                    printers
+                        .iter_mut()
+                        .try_for_each(|p| p.process_one(&event))?;
+                }
                 Eof => break,
                 Timeout => continue,
             }
@@ -486,7 +523,10 @@ impl SubCommandRunner for CollectRunner {
 mod tests {
     use super::*;
     use crate::{
-        core::events::{bpf::BpfRawSection, *},
+        core::{
+            events::{bpf::BpfRawSection, *},
+            probe::ProbeBuilderManager,
+        },
         event_section, event_section_factory,
         module::Module,
     };
@@ -504,7 +544,7 @@ mod tests {
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
             cli.register_module_noargs(ModuleId::Skb)
         }
-        fn init(&mut self, _: &CliConfig, _: &mut probe::ProbeManager) -> Result<()> {
+        fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
             Ok(())
         }
         fn start(&mut self) -> Result<()> {
@@ -531,7 +571,7 @@ mod tests {
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
             cli.register_module_noargs(ModuleId::Ovs)
         }
-        fn init(&mut self, _: &CliConfig, _: &mut probe::ProbeManager) -> Result<()> {
+        fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
             bail!("Could not initialize")
         }
         fn start(&mut self) -> Result<()> {
@@ -602,7 +642,7 @@ mod tests {
         group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         let mut collectors = Collectors::new(group)?;
-        let mut mgr = probe::ProbeManager::new()?;
+        let mut mgr = ProbeBuilderManager::new()?;
         let mut config = collectors.register_cli(get_cli()?)?;
 
         assert!(dummy_a.init(&config, &mut mgr).is_ok());

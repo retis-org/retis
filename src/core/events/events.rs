@@ -74,6 +74,17 @@ impl Event {
         }
     }
 
+    /// Get a reference to an event field by its owner and key.
+    pub(crate) fn get_section_mut<T: EventSection + 'static>(
+        &mut self,
+        owner: ModuleId,
+    ) -> Option<&mut T> {
+        match self.0.get_mut(&owner) {
+            Some(section) => section.as_any_mut().downcast_mut::<T>(),
+            None => None,
+        }
+    }
+
     pub(crate) fn to_json(&self) -> serde_json::Value {
         let mut event = serde_json::Map::new();
 
@@ -187,6 +198,7 @@ impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<
 /// There should not be a need to have per-object implementations for this.
 pub(crate) trait EventSectionInternal {
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
     fn to_json(&self) -> serde_json::Value;
 }
 
@@ -194,6 +206,10 @@ pub(crate) trait EventSectionInternal {
 // into an event could be mapped to (), e.g. serde_json::Value::Null.
 impl EventSectionInternal for () {
     fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
 

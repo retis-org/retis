@@ -95,6 +95,12 @@ impl EventFmt for KernelEvent {
 #[derive(Default)]
 pub(crate) struct StackTrace(Vec<String>);
 
+impl StackTrace {
+    pub(crate) fn raw(&self) -> &Vec<String> {
+        &self.0
+    }
+}
+
 impl EventFmt for StackTrace {
     fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
         let last = self.0.len() - 1;

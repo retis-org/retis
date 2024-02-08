@@ -92,7 +92,7 @@ use super::gc::TrackingGC;
 use crate::core::{
     kernel::Symbol,
     probe::{
-        manager::{ProbeManager, PROBE_MAX},
+        manager::{ProbeBuilderManager, PROBE_MAX},
         Probe, ProbeOption,
     },
 };
@@ -144,7 +144,7 @@ fn tracking_map() -> Result<libbpf_rs::MapHandle> {
 }
 
 pub(crate) fn init_tracking(
-    probes: &mut ProbeManager,
+    probes: &mut ProbeBuilderManager,
 ) -> Result<(TrackingGC, libbpf_rs::MapHandle)> {
     let config_map = config_map()?;
     let tracking_map = tracking_map()?;

@@ -6,7 +6,7 @@ use crate::{
     collect::Collector,
     core::{
         events::EventSectionFactory,
-        probe::{manager::ProbeManager, Hook},
+        probe::{manager::ProbeBuilderManager, Hook},
     },
     module::{Module, ModuleId},
 };
@@ -27,7 +27,7 @@ impl Collector for SkbTrackingModule {
         cmd.register_module_noargs(ModuleId::SkbTracking)
     }
 
-    fn init(&mut self, _: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn init(&mut self, _: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
         probes.register_kernel_hook(Hook::from(tracking_hook::DATA))
     }
 }

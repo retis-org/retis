@@ -17,7 +17,7 @@ use crate::{
         events::EventSectionFactory,
         inspect,
         kernel::Symbol,
-        probe::{Hook, Probe, ProbeManager},
+        probe::{Hook, Probe, ProbeBuilderManager},
     },
     module::{Module, ModuleId},
 };
@@ -172,7 +172,7 @@ impl Collector for NftModule {
         Ok(())
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
         if self.install_chain {
             // Ignore if delete fails here as the table might not exist
             let _ = self.delete_table(NFT_TRACE_TABLE.to_owned());

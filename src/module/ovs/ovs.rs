@@ -16,7 +16,7 @@ use crate::{
         events::EventSectionFactory,
         inspect,
         kernel::Symbol,
-        probe::{user::UsdtProbe, Hook, Probe, ProbeManager, ProbeOption},
+        probe::{user::UsdtProbe, Hook, Probe, ProbeBuilderManager, ProbeOption},
         signals::Running,
         tracking::gc::TrackingGC,
         user::proc::{Process, ThreadInfo},
@@ -92,7 +92,7 @@ impl Collector for OvsModule {
         Ok(())
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
         self.track = cli
             .get_section::<OvsCollectorArgs>(ModuleId::Ovs)?
             .ovs_track;
@@ -294,7 +294,7 @@ impl OvsModule {
     }
 
     /// Add upcall hooks.
-    fn add_upcall_hooks(&self, probes: &mut ProbeManager) -> Result<()> {
+    fn add_upcall_hooks(&self, probes: &mut ProbeBuilderManager) -> Result<()> {
         let inflight_upcalls_map = self
             .inflight_upcalls_map
             .as_ref()
@@ -331,7 +331,7 @@ impl OvsModule {
     }
 
     /// Add exec hooks.
-    fn add_exec_hooks(&mut self, probes: &mut ProbeManager) -> Result<()> {
+    fn add_exec_hooks(&mut self, probes: &mut ProbeBuilderManager) -> Result<()> {
         let inflight_exec_map = Self::create_inflight_exec_map()?;
 
         // ovs_execute_actions kprobe
@@ -366,7 +366,7 @@ impl OvsModule {
     }
 
     /// Add USDT hooks.
-    fn add_usdt_hooks(&mut self, probes: &mut ProbeManager) -> Result<()> {
+    fn add_usdt_hooks(&mut self, probes: &mut ProbeBuilderManager) -> Result<()> {
         let ovs = Process::from_cmd("ovs-vswitchd")?;
         if !ovs.is_usdt("main::run_start")? {
             bail!(

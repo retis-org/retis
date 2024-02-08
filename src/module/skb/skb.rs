@@ -12,7 +12,7 @@ use crate::{
     collect::Collector,
     core::{
         events::EventSectionFactory,
-        probe::{Hook, ProbeManager},
+        probe::{Hook, ProbeBuilderManager},
     },
     module::{Module, ModuleId},
 };
@@ -49,7 +49,7 @@ impl Collector for SkbModule {
         cmd.register_module::<SkbCollectorArgs>(ModuleId::Skb)
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeManager) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
         // First, get the cli parameters.
         let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
 
