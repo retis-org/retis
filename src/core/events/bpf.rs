@@ -314,7 +314,7 @@ pub(crate) fn parse_raw_section<'a, T>(raw_section: &'a BpfRawSection) -> Result
 /// section validity and parsing it into a structured type.
 pub(crate) fn parse_single_raw_section<'a, T>(
     id: ModuleId,
-    raw_sections: &'a Vec<BpfRawSection>,
+    raw_sections: &'a [BpfRawSection],
 ) -> Result<&'a T> {
     if raw_sections.len() != 1 {
         bail!("{id} event from BPF must be a single section");
