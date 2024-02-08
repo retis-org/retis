@@ -17,6 +17,8 @@ class Retis:
     """
 
     def __init__(self, target="debug"):
+        raise Exception("This is a dummy error")
+
         self.binary = join(
             dirname(dirname(abspath(__file__))), "target", target, "retis"
         )
