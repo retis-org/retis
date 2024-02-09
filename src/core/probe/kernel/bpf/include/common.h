@@ -210,9 +210,19 @@ static __always_inline int chain(struct retis_context *ctx)
 	 * event usage length read before and after the hook chain.
 	 */
 	struct common_task_event *ti;
+	static bool enabled = false;
 	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct kernel_event *k;
+
+	/* Check if the collection is enabled, otherwise bail out. Once we have
+	 * a positive result, cache it.
+	 */
+	if (unlikely(!enabled)) {
+		enabled = collection_enabled();
+		if (!enabled)
+			return 0;
+	}
 
 	cfg = bpf_map_lookup_elem(&config_map, &ctx->ksym);
 	if (!cfg)

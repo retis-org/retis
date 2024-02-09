@@ -8,6 +8,27 @@
 /* Keep in sync with its Rust counterpart in crate::core::probe */
 #define PROBE_MAX	1024
 
+/* Global probe configuration, shared between kernel and user probes. Please
+ * keep in sync with its Rust counterpart in crate::core::probe::common.
+ */
+struct retis_global_config {
+	u8 enabled;
+};
+struct {
+	__uint(type, BPF_MAP_TYPE_HASH);
+	__uint(max_entries, 1);
+	__type(key, u8);
+	__type(value, struct retis_global_config);
+} global_config_map SEC(".maps");
+
+static __always_inline bool collection_enabled() {
+	struct retis_global_config *cfg;
+	u8 key = 0;
+
+	cfg = bpf_map_lookup_elem(&global_config_map, &key);
+	return cfg && !!cfg->enabled;
+}
+
 #define COMMON_SECTION_CORE	0
 #define COMMON_SECTION_TASK	1
 
@@ -46,5 +67,13 @@ static __always_inline void err_report(u64 sym_addr, u32 pid)
 	if (err_counters)
 		__sync_fetch_and_add(&err_counters->dropped_events, 1);
 }
+
+#ifndef likely
+#define likely(x) __builtin_expect(!!(x), 1)
+#endif
+
+#ifndef unlikely
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#endif
 
 #endif /* __CORE_PROBE_COMMON_DEFS__ */
