@@ -12,6 +12,9 @@ keywords = ["tracing", "networking", "linux", "bpf", "ebpf"]
 include = ["src/", "build.rs", "retis-derive/", "profiles/", "tools/", "LICENSE"]
 edition = "2021"
 
+[package.metadata.misc]
+release_name = "bredele"
+
 [badges]
 maintenance = { status = "actively-developed" }
 

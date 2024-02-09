@@ -60,6 +60,7 @@ future use (e.g. logged events using the `-o` cli option).
 Retis depends on the following (in addition to Git and Cargo):
 - rust >= 2021
 - clang
+- jq
 - libelf
 - libpcap
 - llvm
@@ -70,21 +71,21 @@ On Fedora, one can run:
 
 ```none
 $ dnf -y install git cargo clang elfutils-libelf-devel \
-        libpcap-devel llvm make pkgconf-pkg-config
+        jq libpcap-devel llvm make pkgconf-pkg-config
 ```
 
 On Ubuntu:
 
 ```none
 $ apt update
-$ apt -y install git cargo clang libelf-dev libpcap-dev llvm make pkg-config
+$ apt -y install git cargo clang jq libelf-dev libpcap-dev llvm make pkg-config
 ```
 
 Then, to download and build Retis:
 
 ```none
 $ git clone --depth 1 https://github.com/retis-org/retis; cd retis
-$ cargo build --release
+$ make release
 $ ./target/release/retis --help
 ```
 

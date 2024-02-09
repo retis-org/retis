@@ -23,7 +23,6 @@ use crate::{
     module::{ModuleId, Modules},
     process::cli::*,
     profiles::{cli::ProfileCmd, Profile},
-    VERSION_NAME,
 };
 
 /// SubCommandRunner defines the common interface to run SubCommands.
@@ -252,10 +251,13 @@ impl ThinCli {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
+        let pkg_version = option_env!("RETIS_RELEASE_VERSION").unwrap_or("unspec");
+        let pkg_name = option_env!("RETIS_RELEASE_NAME").unwrap_or("unreleased");
+
         let version = if cfg!(debug_assertions) {
-            format!("{}-dbg (\"{VERSION_NAME}\")", env!("CARGO_PKG_VERSION"))
+            format!("{}-dbg (\"{}\")", pkg_version, pkg_name)
         } else {
-            format!("{} (\"{VERSION_NAME}\")", env!("CARGO_PKG_VERSION"))
+            format!("{} (\"{}\")", pkg_version, pkg_name)
         };
 
         let args: Vec<OsString> = args.into_iter().map(|x| x.into()).collect();

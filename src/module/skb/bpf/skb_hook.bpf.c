@@ -387,8 +387,8 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 	 * signed arithmetic operations.
 	 */
 	int mac, headroom, linear_len;
-	unsigned char *head, *data;
 	struct skb_packet_event *e;
+	unsigned char *head;
 	u16 network;
 	u32 len;
 

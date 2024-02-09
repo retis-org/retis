@@ -1,102 +1,47 @@
-use std::{
-    env,
-    fmt::Write,
-    fs::{self, create_dir_all, File},
-    path::Path,
-};
+use std::{env, fs::File, io::Write, path::Path};
 
 use libbpf_cargo::SkeletonBuilder;
 use memmap2::Mmap;
 
 const BINDGEN_HEADER: &str = "src/core/bpf_sys/include/bpf-sys.h";
-const INCLUDE_PATHS: &[&str] = &[
-    "src/core/events/bpf/include",
-    "src/core/filters/meta/bpf/include",
-    "src/core/filters/packets/bpf/include",
-    "src/core/probe/bpf/include",
-    "src/core/probe/kernel/bpf/include",
-    "src/core/probe/user/bpf/include",
-    "src/core/tracking/bpf/include",
-    // Taking errno.h from libc instead of linux headers.
-    // TODO: Remove when we fix proper header dependencies.
-    "/usr/include/x86_64-linux-gnu",
-    "vendor/linux/include",
-    "vendor/linux/asm/x86/include",
-];
-const OVS_INCLUDES: &[&str] = &["src/module/ovs/bpf/include"];
-const CLANG_ARGS: &[&str] = &["-Werror"];
-
-fn get_probe_clang_args(extra_includes: Option<&[&str]>) -> String {
-    let mut args: Vec<String> = CLANG_ARGS.iter().map(|x| x.to_string()).collect();
-    args.push(INCLUDE_PATHS.iter().fold(String::new(), |mut output, x| {
-        write!(output, "-I{x} ").unwrap();
-        output
-    }));
-
-    args.push(
-        extra_includes
-            .unwrap_or_default()
-            .iter()
-            .fold(String::new(), |mut output, x| {
-                write!(output, "-I{x} ").unwrap();
-                output
-            }),
-    );
-    args.join(" ")
-}
 
 // Not super fail safe (not using Path).
-fn get_paths(source: &str) -> (String, String) {
-    let (dir, file) = source.rsplit_once('/').unwrap();
-    let (name, _) = file.split_once('.').unwrap();
+fn get_paths(fpath: &str) -> (String, String) {
+    let (dir, file) = fpath.rsplit_once('/').unwrap();
+    let split: Vec<_> = file.split_terminator('.').collect();
 
-    let out = format!("{dir}/.out");
-    create_dir_all(out.as_str()).unwrap();
-
-    (out, name.to_string())
+    if let Some(basename) = split.first() {
+        (dir.to_string(), basename.to_string())
+    } else {
+        panic!("Failed to find base name for {}", fpath);
+    }
 }
 
-fn build_hook(source: &str, extra_includes: Option<&[&str]>) {
-    let (out, name) = get_paths(source);
-    let output = format!("{}/{}.o", out.as_str(), name);
-    let skel = format!("{}/{}.rs", out.as_str(), name);
+fn gen_hook_skel(source: &str) {
+    let (dir, base) = get_paths(source);
+    let skel = format!("{}/{}.rs", dir.as_str(), base);
+    let obj_f = File::open(source).unwrap();
+    let obj_f: &[u8] = &unsafe { Mmap::map(&obj_f).unwrap() };
 
-    if let Err(e) = SkeletonBuilder::new()
-        .source(source)
-        .obj(output.as_str())
-        .clang_args(get_probe_clang_args(extra_includes))
-        .build()
-    {
-        panic!("{:?}", e);
-    }
-
-    let obj = File::open(output).unwrap();
-    let obj: &[u8] = &unsafe { Mmap::map(&obj).unwrap() };
-    let hook_skel = format!(
-        r#" pub(crate) const
-           DATA: &[u8] = &{obj:?}; "#
-    );
-
-    if let Err(e) = fs::write(skel, hook_skel) {
-        panic!("{:?}", e);
-    }
+    let mut rs = File::create(skel).unwrap();
+    write!(
+        rs,
+        r#"
+           pub(crate) const DATA: &[u8] = &{obj_f:?};
+           "#
+    )
+    .unwrap();
 
     println!("cargo:rerun-if-changed={source}");
-    for inc in extra_includes.unwrap_or_default().iter() {
-        println!("cargo:rerun-if-changed={inc}");
-    }
 }
 
-fn build_probe(source: &str) {
-    let (out, name) = get_paths(source);
-    let output = format!("{}/{}.o", out.as_str(), name);
-    let skel = format!("{out}/{name}.skel.rs");
+fn gen_probe_skel(source: &str) {
+    let (dir, base) = get_paths(source);
 
+    let skel = format!("{}/{}.skel.rs", dir.as_str(), base);
     if let Err(e) = SkeletonBuilder::new()
-        .source(source)
-        .obj(output)
-        .clang_args(get_probe_clang_args(None))
-        .build_and_generate(skel)
+        .obj(source)
+        .generate(Path::new(&skel))
     {
         panic!("{:?}", e);
     }
@@ -126,55 +71,25 @@ fn main() {
     gen_bindings();
 
     // core::probe::kernel
-    build_probe("src/core/probe/kernel/bpf/kprobe.bpf.c");
-    build_probe("src/core/probe/kernel/bpf/kretprobe.bpf.c");
-    build_probe("src/core/probe/kernel/bpf/raw_tracepoint.bpf.c");
-    build_probe("src/core/probe/user/bpf/usdt.bpf.c");
+    gen_probe_skel("src/core/probe/kernel/bpf/.out/kprobe.bpf.o");
+    gen_probe_skel("src/core/probe/kernel/bpf/.out/kretprobe.bpf.o");
+    gen_probe_skel("src/core/probe/kernel/bpf/.out/raw_tracepoint.bpf.o");
+    gen_probe_skel("src/core/probe/user/bpf/.out/usdt.bpf.o");
 
-    build_hook("src/module/skb/bpf/skb_hook.bpf.c", None);
-    build_hook("src/module/skb_drop/bpf/skb_drop_hook.bpf.c", None);
-    build_hook("src/module/skb_tracking/bpf/tracking_hook.bpf.c", None);
-    build_hook(
-        "src/module/ovs/bpf/kernel_enqueue.bpf.c",
-        Some(OVS_INCLUDES),
-    );
-    build_hook(
-        "src/module/ovs/bpf/kernel_exec_actions.bpf.c",
-        Some(OVS_INCLUDES),
-    );
-    build_hook(
-        "src/module/ovs/bpf/kernel_exec_actions_ret.bpf.c",
-        Some(OVS_INCLUDES),
-    );
-    build_hook(
-        "src/module/ovs/bpf/kernel_exec_tp.bpf.c",
-        Some(OVS_INCLUDES),
-    );
-    build_hook(
-        "src/module/ovs/bpf/kernel_upcall_tp.bpf.c",
-        Some(OVS_INCLUDES),
-    );
-    build_hook(
-        "src/module/ovs/bpf/kernel_upcall_ret.bpf.c",
-        Some(OVS_INCLUDES),
-    );
-    build_hook(
-        "src/module/ovs/bpf/user_recv_upcall.bpf.c",
-        Some(OVS_INCLUDES),
-    );
-    build_hook("src/module/ovs/bpf/user_op_exec.bpf.c", Some(OVS_INCLUDES));
-    build_hook("src/module/ovs/bpf/user_op_put.bpf.c", Some(OVS_INCLUDES));
-    build_hook("src/module/nft/bpf/nft.bpf.c", None);
-    build_hook("src/module/ct/bpf/ct.bpf.c", None);
-
-    for inc in INCLUDE_PATHS.iter() {
-        // Useful to avoid to always rebuild on systems that don't use
-        // triplet multi-arch paths. This is harmless, but can be
-        // removed once the header dependency gets rearranged.
-        if Path::new(inc).exists() {
-            println!("cargo:rerun-if-changed={inc}");
-        }
-    }
+    gen_hook_skel("src/module/skb/bpf/.out/skb_hook.bpf.o");
+    gen_hook_skel("src/module/skb_drop/bpf/.out/skb_drop_hook.bpf.o");
+    gen_hook_skel("src/module/skb_tracking/bpf/.out/tracking_hook.bpf.o");
+    gen_hook_skel("src/module/ovs/bpf/.out/kernel_enqueue.bpf.o");
+    gen_hook_skel("src/module/ovs/bpf/.out/kernel_exec_actions.bpf.o");
+    gen_hook_skel("src/module/ovs/bpf/.out/kernel_exec_actions_ret.bpf.o");
+    gen_hook_skel("src/module/ovs/bpf/.out/kernel_exec_tp.bpf.o");
+    gen_hook_skel("src/module/ovs/bpf/.out/kernel_upcall_tp.bpf.o");
+    gen_hook_skel("src/module/ovs/bpf/.out/kernel_upcall_ret.bpf.o");
+    gen_hook_skel("src/module/ovs/bpf/.out/user_recv_upcall.bpf.o");
+    gen_hook_skel("src/module/ovs/bpf/.out/user_op_exec.bpf.o");
+    gen_hook_skel("src/module/ovs/bpf/.out/user_op_put.bpf.o");
+    gen_hook_skel("src/module/nft/bpf/.out/nft.bpf.o");
+    gen_hook_skel("src/module/ct/bpf/.out/ct.bpf.o");
 
     println!("cargo:rerun-if-changed={BINDGEN_HEADER}");
 }

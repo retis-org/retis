@@ -213,7 +213,6 @@ static __always_inline
 unsigned int meta_filter(struct sk_buff *skb)
 {
 	struct retis_meta_ctx ctx = {};
-	u8 __nmemb, __type;
 
 	/* reduce actions to load/cmp info. If no entries, return
 	 * match.
