@@ -2,6 +2,7 @@
 #define __CORE_PROBE_COMMON_DEFS__
 
 #include <vmlinux.h>
+#include <bpf/bpf_helpers.h>
 
 #include <events.h>
 
@@ -31,6 +32,34 @@ static __always_inline bool collection_enabled() {
 
 #define COMMON_SECTION_CORE	0
 #define COMMON_SECTION_TASK	1
+
+/* Aligned with the log crate. */
+enum {
+	LOG_ERROR = 1,
+	LOG_WARN,
+	LOG_INFO,
+	LOG_DEBUG,
+	LOG_TRACE,
+};
+
+/* All the log macros must be used in the {error, slow} path. */
+#define retis_log(lvl, fmt, args...)					\
+({									\
+	struct retis_log_event *__log;					\
+	__log = bpf_ringbuf_reserve(&log_map, sizeof(struct retis_log_event), 0); \
+	if (__log) {							\
+		__log->level = lvl;					\
+		BPF_SNPRINTF(__log->msg, sizeof(__log->msg), fmt, args); \
+		bpf_ringbuf_submit(__log, BPF_RB_FORCE_WAKEUP);		\
+	}								\
+	__log;								\
+})
+
+#define log_error(fmt, args...)	retis_log(LOG_ERROR, fmt, args)
+#define log_warning(fmt, args...)	retis_log(LOG_WARN, fmt, args)
+#define log_info(fmt, args...)		retis_log(LOG_INFO, fmt, args)
+#define log_debug(fmt, args...)	retis_log(LOG_DEBUG, fmt, args)
+#define log_trace(fmt, args...)	retis_log(LOG_TRACE, fmt, args)
 
 struct retis_counters_key {
 	/* Symbol address. */
