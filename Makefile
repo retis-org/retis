@@ -4,7 +4,7 @@ CLANG := clang
 OBJCOPY := llvm-objcopy
 
 CARGO := cargo
-RELEASE_VERSION = $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .version')
+RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
 
 export LLC CLANG OBJCOPY RELEASE_NAME RELEASE_VERSION

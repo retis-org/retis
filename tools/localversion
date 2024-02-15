@@ -1,0 +1,36 @@
+#!/bin/bash
+
+cargo_version="v$(cargo metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name == "retis") | .version')"
+
+# Check if we're in a git directory. If not we're most likely being built from
+# a tarball; aka a release.
+git rev-parse --is-inside-work-tree &>/dev/null
+if [ $? -ne 0 ]; then
+	echo $cargo_version
+	exit
+fi
+
+# If HEAD has a tag, use it; otherwise get latest tag from history.
+tag=$(git tag --points-at HEAD)
+if [ ! -z $tag ]; then
+	version=$tag
+else
+	tag=$(git describe --abbrev=0 --tags)
+
+	# If we still don't have a tag, there's a serious issue.
+	[ -z $tag ] && tag=$cargo_version
+
+	version="$tag-$(git log --abbrev=12 --pretty=%h -1)"
+fi
+
+# If the git tag doesn't match the cargo version, include both.
+if [ "$tag" != "$cargo_version" ]; then
+	version="$cargo_version+$version"
+fi
+
+# Check if there is any local uncommitted change.
+if [ "$(git --no-optional-locks status -uno --porcelain)" != "" ]; then
+	version="$version-dirty"
+fi
+
+echo $version
