@@ -43,6 +43,7 @@ impl ProbeBuilder for KretprobeBuilder {
 
         let mut skel = KretprobeSkelBuilder::default().open()?;
         skel.rodata_mut().nhooks = hooks.len() as u32;
+        skel.rodata_mut().log_level = log::max_level() as u8;
 
         filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {

@@ -55,6 +55,7 @@ impl ProbeBuilder for RawTracepointBuilder {
         skel.rodata_mut().ksym = probe.symbol.addr()?;
         skel.rodata_mut().nargs = probe.symbol.nargs()?;
         skel.rodata_mut().nhooks = self.hooks.len() as u32;
+        skel.rodata_mut().log_level = log::max_level() as u8;
 
         self.filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {

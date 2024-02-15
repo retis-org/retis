@@ -42,17 +42,24 @@ enum {
 	LOG_TRACE,
 };
 
-/* All the log macros must be used in the {error, slow} path. */
+/* Current log level. Actually set by user-space. */
+const volatile u8 log_level = LOG_INFO;
+
+/* Log macros must be used carefully and preferrably in the
+ * {error,slow} path.
+ * Useful exceptions must use a high log level (ideally LOG_TRACE).
+ */
 #define retis_log(lvl, fmt, args...)					\
 ({									\
-	struct retis_log_event *__log;					\
-	__log = bpf_ringbuf_reserve(&log_map, sizeof(struct retis_log_event), 0); \
-	if (__log) {							\
-		__log->level = lvl;					\
-		BPF_SNPRINTF(__log->msg, sizeof(__log->msg), fmt, args); \
-		bpf_ringbuf_submit(__log, BPF_RB_FORCE_WAKEUP);		\
+	if (lvl <= log_level) {						\
+		struct retis_log_event *__log =				\
+			bpf_ringbuf_reserve(&log_map, sizeof(struct retis_log_event), 0); \
+		if (__log) {						\
+			__log->level = lvl;				\
+			BPF_SNPRINTF(__log->msg, sizeof(__log->msg), fmt, args); \
+			bpf_ringbuf_submit(__log, BPF_RB_FORCE_WAKEUP);	\
+		}							\
 	}								\
-	__log;								\
 })
 
 #define log_error(fmt, args...)	retis_log(LOG_ERROR, fmt, args)
