@@ -3,10 +3,19 @@
 
 #include <vmlinux.h>
 
-/* Please keep both synced with its Rust counterpart. */
+/* Please keep the below in sync with its Rust counterpart. */
 #define EVENTS_MAX		8 * 1024
 #define RAW_EVENT_DATA_SIZE	1024 - 2 /* Remove the size field */
 #define RETIS_MAX_COMM		64
+
+/* Please keep the below in sync with its Rust counterpart. */
+#define LOG_MAX			127
+#define LOG_EVENTS_MAX		32
+
+struct retis_log_event {
+	u8 level;
+	u8 msg[LOG_MAX];
+} __attribute__((packed));
 
 /* Please keep in sync with its Rust counterpart in crate::core::events::raw. */
 enum retis_event_owners {
@@ -39,6 +48,12 @@ struct {
 	__uint(type, BPF_MAP_TYPE_RINGBUF);
 	__uint(max_entries, sizeof(struct retis_raw_event) * EVENTS_MAX);
 } events_map SEC(".maps");
+
+/* Please keep synced with its Rust counterpart. */
+struct {
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, sizeof(struct retis_log_event) * LOG_EVENTS_MAX);
+} log_map SEC(".maps");
 
 static __always_inline struct retis_raw_event *get_event()
 {

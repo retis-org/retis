@@ -14,7 +14,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
-use log::error;
+use log::{error, log, Level};
 use plain::Plain;
 
 use super::{Event, EventResult};
@@ -73,10 +73,12 @@ macro_rules! event_byte_array {
 #[cfg(not(test))]
 pub(crate) struct BpfEventsFactory {
     map: libbpf_rs::MapHandle,
+    log_map: libbpf_rs::MapHandle,
     /// Receiver channel to retrieve events from the processing loop.
     rxc: Option<mpsc::Receiver<Event>>,
     /// Polling thread handle.
     handle: Option<thread::JoinHandle<()>>,
+    log_handle: Option<thread::JoinHandle<()>>,
     run_state: Running,
 }
 
@@ -87,7 +89,6 @@ impl BpfEventsFactory {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
         };
-
         let map = libbpf_rs::MapHandle::create(
             libbpf_rs::MapType::RingBuf,
             Some("events_map"),
@@ -98,10 +99,26 @@ impl BpfEventsFactory {
         )
         .or_else(|e| bail!("Failed to create events map: {}", e))?;
 
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+        let log_map = libbpf_rs::MapHandle::create(
+            libbpf_rs::MapType::RingBuf,
+            Some("log_map"),
+            0,
+            0,
+            mem::size_of::<LogEvent>() as u32 * BPF_LOG_EVENTS_MAX,
+            &opts,
+        )
+        .or_else(|e| bail!("Failed to create log map: {}", e))?;
+
         Ok(BpfEventsFactory {
             map,
+            log_map,
             rxc: None,
             handle: None,
+            log_handle: None,
             run_state: Running::new(),
         })
     }
@@ -109,6 +126,42 @@ impl BpfEventsFactory {
     /// Get the events map fd for reuse.
     pub(crate) fn map_fd(&self) -> RawFd {
         self.map.as_fd().as_raw_fd()
+    }
+
+    /// Get the log map fd for reuse.
+    pub(crate) fn log_map_fd(&self) -> RawFd {
+        self.log_map.as_fd().as_raw_fd()
+    }
+
+    fn ringbuf_handler<CB>(
+        &self,
+        map: &libbpf_rs::MapHandle,
+        rb_handler: CB,
+    ) -> Result<thread::JoinHandle<()>>
+    where
+        CB: FnMut(&[u8]) -> i32 + 'static,
+    {
+        let mut rb = libbpf_rs::RingBufferBuilder::new();
+        rb.add(map, rb_handler)?;
+        let rb = rb.build()?;
+        let rs = self.run_state.clone();
+        // Start an event polling thread.
+        Ok(thread::spawn(move || {
+            while rs.running() {
+                if let Err(e) = rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS)) {
+                    match e.kind() {
+                        // Received EINTR while polling the
+                        // ringbuffer. This could normally be
+                        // triggered by an actual interruption
+                        // (signal) or artificially from the
+                        // callback. Exit without printing any error.
+                        libbpf_rs::ErrorKind::Interrupted => (),
+                        _ => error!("Unexpected error while polling ({e})"),
+                    }
+                    break;
+                }
+            }
+        }))
     }
 }
 
@@ -153,29 +206,52 @@ impl EventFactory for BpfEventsFactory {
             0
         };
 
-        // Finally make our ring buffer and associate our map to our event
-        // processing closure.
-        let mut rb = libbpf_rs::RingBufferBuilder::new();
-        rb.add(&self.map, process_event)?;
-        let rb = rb.build()?;
-        let rs = self.run_state.clone();
-        // Start an event polling thread.
-        self.handle = Some(thread::spawn(move || {
-            while rs.running() {
-                if let Err(e) = rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS)) {
-                    match e.kind() {
-                        // Received EINTR while polling the
-                        // ringbuffer. This could normally be
-                        // triggered by an actual interruption
-                        // (signal) or artificially from the
-                        // callback. Exit without printing any error.
-                        libbpf_rs::ErrorKind::Interrupted => (),
-                        _ => error!("Unexpected error while polling ({e})"),
-                    }
-                    break;
-                }
+        let run_state = self.run_state.clone();
+        // Closure to handle the log events coming from the BPF part.
+        let process_log = move |data: &[u8]| -> i32 {
+            if data.len() != mem::size_of::<LogEvent>() {
+                error!("Unexpected log event size");
+                return 0;
             }
-        }));
+            // If a termination signal got received, return (EINTR)
+            // from the callback in order to trigger the event thread
+            // termination. This is useful in the case we're
+            // processing a huge number of buffers and rb.poll() never
+            // times out.
+            if !run_state.running() {
+                return -4;
+            }
+
+            let mut log_event = LogEvent::default();
+            if let Err(e) = plain::copy_from_bytes(&mut log_event, data) {
+                error!("Can't read eBPF log event {:?}", e);
+                return 0;
+            }
+
+            let log_level = match log_event.level {
+                1 => Level::Error,
+                2 => Level::Warn,
+                3 => Level::Info,
+                4 => Level::Debug,
+                5 => Level::Trace,
+                l => {
+                    error!("Unexpected log level ({l}). Falling back to error level");
+                    Level::Error
+                }
+            };
+
+            match log_event.msg.to_string() {
+                Ok(msg) => log!(log_level, "[eBPF] {msg}"),
+                Err(e) => error!("Unable to convert eBPF log string: {e}"),
+            }
+
+            0
+        };
+
+        // Finally make our ring buffers and associate maps to their
+        // respective events processing closure.
+        self.handle = Some(self.ringbuf_handler(&self.map, process_event)?);
+        self.log_handle = Some(self.ringbuf_handler(&self.log_map, process_log)?);
 
         Ok(())
     }
@@ -183,14 +259,16 @@ impl EventFactory for BpfEventsFactory {
     /// Stops the event polling mechanism. The dedicated thread is stopped
     /// joining the execution
     fn stop(&mut self) -> Result<()> {
-        match self.handle.take() {
-            Some(th) => {
-                self.run_state.terminate();
-                th.join()
-                    .or_else(|_| bail!("while joining bpf event thread"))
-            }
-            None => Ok(()),
-        }
+        self.handle.take().map_or(Ok(()), |th| {
+            self.run_state.terminate();
+            th.join()
+                .map_err(|_| anyhow!("while joining bpf event thread"))
+        })?;
+
+        self.log_handle.take().map_or(Ok(()), |th| {
+            th.join()
+                .map_err(|_| anyhow!("while joining bpf log event thread"))
+        })
     }
 
     /// Retrieve the next event. This is a blocking call and never returns EOF.
@@ -443,6 +521,26 @@ impl EventFactory for BpfEventsFactory {
         Ok(())
     }
 }
+
+/// Size of msg for a single log event. Please keep in sync with its
+/// BPF counterpart.
+pub(super) const BPF_LOG_MAX: usize = 127;
+
+/// Max number of log events we can store at once in the shared map. Please keep in
+/// sync with its BPF counterpart.
+pub(super) const BPF_LOG_EVENTS_MAX: u32 = 32;
+
+event_byte_array!(BpfLogMsg, BPF_LOG_MAX);
+
+/// Log event. Please keep in sync with its BPF counterpart.
+#[derive(Default)]
+#[repr(C, packed)]
+pub(super) struct LogEvent {
+    level: u8,
+    msg: BpfLogMsg,
+}
+
+unsafe impl Plain for LogEvent {}
 
 /// Max number of events we can store at once in the shared map. Please keep in
 /// sync with its BPF counterpart.
