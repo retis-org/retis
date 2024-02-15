@@ -45,7 +45,8 @@ impl ProbeBuilder for UsdtBuilder {
             _ => bail!("Wrong probe type"),
         };
 
-        let skel = UsdtSkelBuilder::default().open()?;
+        let mut skel = UsdtSkelBuilder::default().open()?;
+        skel.rodata_mut().log_level = log::max_level() as u8;
         let open_obj = skel.obj;
         reuse_map_fds(&open_obj, &self.map_fds)?;
 
