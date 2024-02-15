@@ -119,7 +119,7 @@ impl KernelInspector {
             let mut set = HashSet::new();
             for line in file.lines() {
                 // functions might be formatted as "func_name [module]".
-                match line.to_string().split(' ').next() {
+                match line.split(' ').next() {
                     Some(symbol) => {
                         set.insert(symbol.to_string());
                     }
@@ -147,7 +147,7 @@ impl KernelInspector {
         }
 
         // If not, try auto-detection.
-        let paths = vec![
+        let paths = [
             "/proc/config.gz".to_string(),
             format!("/boot/config-{}", release),
             // CoreOS & friends.
