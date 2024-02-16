@@ -81,7 +81,7 @@ endif
 all: debug
 
 install: release
-	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS) --path=.
+	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS) --path=. --offline --frozen
 
 define build
 	$(call out_console,CARGO,$(strip $(2)) ...)
