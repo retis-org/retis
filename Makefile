@@ -1,11 +1,13 @@
 ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-export LLC := llc
-export CLANG := clang
-export OBJCOPY := llvm-objcopy
+LLC := llc
+CLANG := clang
+OBJCOPY := llvm-objcopy
 
 CARGO := cargo
-RELEASE_VERSION ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name == "retis") | .version')
-RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
+RELEASE_VERSION ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .version')
+RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
+
+export LLC CLANG OBJCOPY RELEASE_NAME RELEASE_VERSION
 
 PRINT = echo
 
@@ -84,8 +86,6 @@ install: release
 define build
 	$(call out_console,CARGO,$(strip $(2)) ...)
 	$(Q)CARGO_BUILD_JOBS=$(CARGO_JOBS) \
-	RETIS_RELEASE_VERSION=$(RELEASE_VERSION) \
-	RETIS_RELEASE_NAME=$(RELEASE_NAME) \
 	$(CARGO) $(CARGO_OPTS) $(1) $(CARGO_CMD_OPTS)
 endef
 

@@ -251,8 +251,8 @@ impl ThinCli {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        let pkg_version = option_env!("RETIS_RELEASE_VERSION").unwrap_or("unspec");
-        let pkg_name = option_env!("RETIS_RELEASE_NAME").unwrap_or("unreleased");
+        let pkg_version = option_env!("RELEASE_VERSION").unwrap_or("unspec");
+        let pkg_name = option_env!("RELEASE_NAME").unwrap_or("unreleased");
 
         let version = if cfg!(debug_assertions) {
             format!("{}-dbg (\"{}\")", pkg_version, pkg_name)
