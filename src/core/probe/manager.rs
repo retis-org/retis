@@ -124,6 +124,7 @@ impl ProbeManager {
                 Filter::Packet(magic, _) => {
                     filters::register_filter(*magic as u32, filter)?;
                 }
+                #[allow(unused_variables)]
                 Filter::Meta(ops) =>
                 {
                     #[cfg(not(test))]
