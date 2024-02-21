@@ -4,10 +4,11 @@ CLANG := clang
 OBJCOPY := llvm-objcopy
 
 CARGO := cargo
+RUSTFLAGS ?= -D warnings
 RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
 
-export LLC CLANG OBJCOPY RELEASE_NAME RELEASE_VERSION
+export LLC CLANG OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
 
 PRINT = echo
 
