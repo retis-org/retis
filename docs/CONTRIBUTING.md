@@ -21,6 +21,7 @@ in turn will help in reproducing, triaging and fixing those bugs.
 ### Submitting a good bug report
 
 1. Use a clear, concise and descriptive title.
+1. Include the output of `retis --version` in the description.
 1. Describe how to reproduce the bug, in clear exact steps, with examples. The
    community should not have to guess extra steps, configuration, prerequisites
    and spend a lot of time gathering this information to work on fixing a bug.
