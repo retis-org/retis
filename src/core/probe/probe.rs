@@ -128,6 +128,7 @@ impl Probe {
     }
 
     /// Is this probe generic (aimed at hosting generic hooks only)?
+    #[cfg(not(test))]
     pub(crate) fn is_generic(&self) -> bool {
         self.hooks.is_empty() && self.supports_generic_hooks()
     }
