@@ -114,20 +114,6 @@ impl Collectors {
         })
     }
 
-    // Register the dynamic commands with the cli and parse collector-specific arguments
-    fn register_cli(&mut self, mut cli: FullCli) -> Result<CliConfig> {
-        // Register all collectors' command line arguments. Cli registration
-        // errors are fatal.
-        let cmd = cli.get_subcommand_mut()?.dynamic_mut().unwrap();
-        self.modules
-            .collectors()
-            .iter()
-            .try_for_each(|(_, c)| c.register_cli(cmd))?;
-
-        // Now we can parse all parameters.
-        Ok(cli.run()?)
-    }
-
     /// Setup user defined input filter.
     fn setup_filters(probes: &mut ProbeBuilderManager, collect: &Collect) -> Result<()> {
         if let Some(f) = &collect.args()?.packet_filter {
@@ -510,7 +496,8 @@ impl SubCommandRunner for CollectRunner {
     fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
         // Initialize collectors.
         let mut collectors = Collectors::new(modules)?;
-        let cli = collectors.register_cli(cli)?;
+        // Collector arguments are arealdy registered when build FullCli
+        let cli = cli.run()?;
         collectors.init(&cli)?;
         collectors.start()?;
         // Starts a loop.
@@ -604,8 +591,8 @@ mod tests {
         }
     }
 
-    fn get_cli() -> Result<FullCli> {
-        Ok(crate::cli::get_cli()?.build_from(vec!["retis", "collect"])?)
+    fn get_cli(modules: &str) -> Result<FullCli> {
+        Ok(crate::cli::get_cli()?.build_from(vec!["retis", "collect", "-c", modules])?)
     }
 
     #[test]
@@ -643,7 +630,7 @@ mod tests {
 
         let mut collectors = Collectors::new(group)?;
         let mut mgr = ProbeBuilderManager::new()?;
-        let mut config = collectors.register_cli(get_cli()?)?;
+        let mut config = get_cli("skb,ovs")?.run()?;
 
         assert!(dummy_a.init(&config, &mut mgr).is_ok());
         assert!(dummy_b.init(&config, &mut mgr).is_err());
@@ -675,7 +662,7 @@ mod tests {
         group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
 
         let mut collectors = Collectors::new(group)?;
-        let mut config = collectors.register_cli(get_cli()?)?;
+        let mut config = get_cli("skb")?.run()?;
         collectors.init(&mut config)?;
 
         // Valid probes.

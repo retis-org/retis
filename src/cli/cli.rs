@@ -96,7 +96,7 @@ pub(crate) trait SubCommand {
     /// Generate the clap Command to be used for "full" parsing.
     ///
     /// This method should be called after all dynamic options have been registered.
-    fn full(&self) -> Result<Command>;
+    fn full(&mut self) -> Result<Command>;
 
     /// Updates internal structures with clap's ArgMatches.
     fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), ClapError>;
@@ -157,7 +157,7 @@ where
         self
     }
 
-    fn full(&self) -> Result<Command> {
+    fn full(&mut self) -> Result<Command> {
         Ok(<Self as clap::CommandFactory>::command())
     }
 
@@ -267,7 +267,7 @@ impl ThinCli {
             .infer_subcommands(true)
             .subcommand_required(true);
         // Add full subcommands so that the main help shows them.
-        for sub in self.subcommands.iter() {
+        for sub in self.subcommands.iter_mut() {
             command = command.subcommand(sub.full().expect("full command failed"));
         }
 
@@ -344,11 +344,6 @@ impl FullCli {
                 .collect::<Vec<&str>>()
                 .join(" ")
         );
-
-        // Replace the ran subcommand with the full subcommand.
-        self.command = self
-            .command
-            .mut_subcommand(self.subcommand.name(), |_| self.subcommand.full().unwrap());
 
         // Get the matches.
         let matches = match cfg!(test) {
@@ -460,7 +455,7 @@ mod tests {
         fn as_any_mut(&mut self) -> &mut dyn Any {
             self
         }
-        fn full(&self) -> Result<Command> {
+        fn full(&mut self) -> Result<Command> {
             Ok(Sub1::augment_args(
                 Command::new("sub1")
                     .about("does some things")

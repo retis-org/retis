@@ -178,7 +178,7 @@ impl SubCommand for Collect {
         Some(&mut self.collectors)
     }
 
-    fn full(&self) -> Result<Command> {
+    fn full(&mut self) -> Result<Command> {
         let long_about = "Collect events using 'collectors'.\n\n \
             Collectors are modules that extract \
             events from different places of the kernel or userspace daemons \
@@ -187,8 +187,13 @@ impl SubCommand for Collect {
 
         // Determine all registerd collectors and specify both the possible values and the default
         // value of the "collectors" argument
-        let possible_collectors =
-            Vec::from_iter(self.collectors.modules().iter().map(|x| x.to_str()));
+        let mut modules = crate::get_modules()?;
+        let collectors = modules.collectors();
+        collectors
+            .values()
+            .try_for_each(|c| c.register_cli(&mut self.collectors))?;
+        let possible_collectors: Vec<&'static str> =
+            collectors.keys().map(|m| m.to_str()).collect();
 
         let full_command = self
             .collectors
