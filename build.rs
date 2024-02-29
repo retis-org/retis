@@ -1,4 +1,4 @@
-use std::{env, fs::File, io::Write, path::Path};
+use std::{env, fs::File, io, io::ErrorKind, io::Write, path::Path};
 
 use libbpf_cargo::SkeletonBuilder;
 use memmap2::Mmap;
@@ -20,7 +20,13 @@ fn get_paths(fpath: &str) -> (String, String) {
 fn gen_hook_skel(source: &str) {
     let (dir, base) = get_paths(source);
     let skel = format!("{}/{}.rs", dir.as_str(), base);
-    let obj_f = File::open(source).unwrap();
+    let obj_f = File::open(source).unwrap_or_else(|error| {
+        if error.kind() == ErrorKind::NotFound {
+            panic!("Unable to find {source}, please try 'make ebpf' first\n");
+        } else {
+            panic!("Error opening file: {:?}", error);
+        }
+    });
     let obj_f: &[u8] = &unsafe { Mmap::map(&obj_f).unwrap() };
 
     let mut rs = File::create(skel).unwrap();
@@ -43,7 +49,14 @@ fn gen_probe_skel(source: &str) {
         .obj(source)
         .generate(Path::new(&skel))
     {
-        panic!("{:?}", e);
+        match e.downcast_ref::<io::Error>() {
+            Some(io_error) if io_error.kind() == ErrorKind::NotFound => {
+                panic!("Unable to find {skel}, please try 'make ebpf' first\n");
+            }
+            _ => {
+                panic!("{:?}", e);
+            }
+        }
     }
 
     println!("cargo:rerun-if-changed={source}");
