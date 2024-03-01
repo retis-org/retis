@@ -8,7 +8,7 @@ use crate::{
         events::{bpf::BpfRawSection, *},
         helpers,
     },
-    event_section, event_section_factory, event_type,
+    event_section, event_section_factory, event_type, event_type_no_py,
 };
 
 /// Skb event section.
@@ -309,7 +309,7 @@ pub(crate) struct SkbIpEvent {
 }
 
 /// IP version and specific fields.
-#[event_type]
+#[event_type_no_py]
 pub(crate) enum SkbIpVersion {
     #[serde(rename = "v4")]
     V4(SkbIpv4Event),

@@ -32,6 +32,7 @@ pub(crate) struct SkbTrackingEvent {
 }
 
 #[allow(dead_code)]
+#[pyo3::pymethods]
 impl SkbTrackingEvent {
     /// Get the tracking id.
     pub(crate) fn tracking_id(&self) -> u128 {

@@ -15,8 +15,23 @@ pub fn event_section(
     output.parse().expect("Invalid tokens from event_section macro")
 }
 
+// TODO get_all, once below is resolved.
 #[proc_macro_attribute]
 pub fn event_type(
+    _: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let output = format!(r#"
+        #[pyo3::pyclass]
+        #[crate::event_type_no_py]
+        {item}
+    "#);
+    output.parse().expect("Invalid tokens from event_section macro")
+}
+
+// https://github.com/PyO3/pyo3/pull/3582
+#[proc_macro_attribute]
+pub fn event_type_no_py(
     _: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
@@ -49,6 +64,30 @@ pub fn derive_event_section(input: TokenStream) -> TokenStream {
                 where Self: serde::Serialize,
             {
                 serde_json::json!(self)
+            }
+
+            fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+                use pyo3::IntoPy;
+                self.clone().into_py(py)
+            }
+        }
+
+        #[pyo3::pymethods]
+        impl #ident {
+            fn __repr__(&self, py: pyo3::Python<'_>) -> String {
+                use pyo3::PyAny;
+
+                let raw = self.raw(py);
+                let dict: &PyAny = raw.as_ref(py);
+                dict.repr().unwrap().to_string()
+            }
+
+            fn raw(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+                crate::core::events::python::to_pyobject(&self.to_json(), py)
+            }
+
+            fn show(&self) -> String {
+                format!("{}", self.display(crate::core::events::DisplayFormat::MultiLine))
             }
         }
     };
