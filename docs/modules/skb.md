@@ -111,3 +111,15 @@ skb [{csum} hash {skb hash} data_len {skb data lenght} priority {skb priority}
   status (`none`, `unnecessary`, `partial` or `complete`).
 - `flags` are a combination of `nohdr` and `cloned`.
 
+# GSO section
+
+Generic Segmentation Offload information linked to an `skb` (see
+`skb_shared_info`).
+
+```none
+gso [type {GSO type} flags {GSO flags} frags {nr of GSO frags}
+    segs {nr of GSO segs} size {GSO size}]
+```
+
+- `GSO type`, see `SKBFL_*` in the Linux kernel `include/linux/skbuff.h`.
+- `GSO flags`, see `SKB_GSO_*` in the Linux kernel `include/linux/skbuff.h`.

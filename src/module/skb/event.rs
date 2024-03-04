@@ -34,6 +34,8 @@ pub(crate) struct SkbEvent {
     pub(crate) meta: Option<SkbMetaEvent>,
     /// Skb data-related and refcnt information, if any.
     pub(crate) data_ref: Option<SkbDataRefEvent>,
+    /// GSO information.
+    pub(crate) gso: Option<SkbGsoEvent>,
     /// Raw packet and related metadata.
     pub(crate) packet: Option<SkbPacketEvent>,
 }
@@ -261,6 +263,25 @@ impl EventFmt for SkbEvent {
             write!(f, "]")?;
         }
 
+        if let Some(gso) = &self.gso {
+            space.write(f)?;
+            write!(f, "gso [type {:#x} ", gso.r#type)?;
+
+            if gso.flags != 0 {
+                write!(f, "flags {:#x} ", gso.flags)?;
+            }
+
+            if gso.frags != 0 {
+                write!(f, "frags {} ", gso.frags)?;
+            }
+
+            if gso.segs != 0 {
+                write!(f, "segs {} ", gso.segs)?;
+            }
+
+            write!(f, "size {}]", gso.size)?;
+        }
+
         Ok(())
     }
 }
@@ -436,6 +457,21 @@ pub(crate) struct SkbDataRefEvent {
     pub(crate) dataref: u8,
 }
 
+/// GSO information.
+#[event_type]
+pub(crate) struct SkbGsoEvent {
+    /// GSO flags, see `SKBFL_*` in include/linux/skbuff.h
+    pub(crate) flags: u8,
+    /// Number of fragments in `skb_shared_info->frags`.
+    pub(crate) frags: u8,
+    /// GSO size.
+    pub(crate) size: u32,
+    /// Number of GSO segments.
+    pub(crate) segs: u32,
+    /// GSO type, see `SKB_GSO_*` in include/linux/skbuff.h
+    pub(crate) r#type: u32,
+}
+
 /// Raw packet and related metadata extracted from skbs.
 #[event_type]
 pub(crate) struct SkbPacketEvent {
@@ -468,6 +504,7 @@ impl RawEventSectionFactory for SkbEventFactory {
                 SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
                 SECTION_META => event.meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
+                SECTION_GSO => event.gso = Some(unmarshal_gso(section)?),
                 SECTION_PACKET => event.packet = Some(unmarshal_packet(section)?),
                 _ => bail!("Unknown data type"),
             }
