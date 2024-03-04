@@ -103,9 +103,11 @@ Those two sections report metadata and reference counting from the socket buffer
 itself.
 
 ```none
-skb [csum {packet checksum} hash {skb hash} data_len {skb data lenght} priority {skb priority}
+skb [{csum} hash {skb hash} data_len {skb data lenght} priority {skb priority}
     {flags} fclone {fast clone count} users {user count} dataref {skb refcount}]
 ```
 
+- `csum` information, the format is slightly different depending on the checksum
+  status (`none`, `unnecessary`, `partial` or `complete`).
 - `flags` are a combination of `nohdr` and `cloned`.
 
