@@ -21,7 +21,7 @@ use crate::{
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
-        value_parser=PossibleValuesParser::new(["all", "eth", "arp", "ip", "tcp", "udp", "icmp", "dev", "ns", "meta", "dataref", "packet"]),
+        value_parser=PossibleValuesParser::new(["all", "eth", "arp", "ip", "tcp", "udp", "icmp", "dev", "ns", "meta", "dataref", "gso", "packet"]),
         value_delimiter=',',
         default_value="ip,arp,tcp,udp,icmp,dev",
         help = "Comma separated list of data to collect from skbs"
@@ -68,6 +68,7 @@ impl Collector for SkbModule {
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
+                "gso" => sections |= 1 << SECTION_GSO,
                 "packet" => sections |= 1 << SECTION_PACKET,
                 x => bail!("Unknown skb_collect value ({})", x),
             }
