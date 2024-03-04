@@ -1,6 +1,6 @@
 [package]
 name = "retis-derive"
-version = "1.3.0"
+version = "1.3.2"
 edition = "2021"
 
 [lib]
