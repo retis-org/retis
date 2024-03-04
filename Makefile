@@ -71,14 +71,6 @@ GENERIC_HOOKS := $(abspath src/module/skb/bpf \
 OVS_HOOKS := $(abspath src/module/ovs/bpf)
 OUT_NAME := HOOK
 
-JOBS := $(patsubst -j%,%,$(filter -j%,$(MAKEFLAGS)))
-
-ifneq ($(JOBS),)
-    CARGO_JOBS := $(JOBS)
-else
-    CARGO_JOBS := 1
-endif
-
 all: debug
 
 install: release
@@ -86,7 +78,8 @@ install: release
 
 define build
 	$(call out_console,CARGO,$(strip $(2)) ...)
-	$(Q)CARGO_BUILD_JOBS=$(CARGO_JOBS) \
+	jobs=$(patsubst -j%,%,$(filter -j%,$(MAKEFLAGS))); \
+	CARGO_BUILD_JOBS=$${jobs:-1} \
 	$(CARGO) $(CARGO_OPTS) $(1) $(CARGO_CMD_OPTS)
 endef
 
@@ -130,7 +123,7 @@ clean-ebpf:
 
 clean: clean-ebpf
 	$(call out_console,CLEAN,cleaning retis ...)
-	$(Q)$(CARGO) clean
+	$(CARGO) clean
 
 help:
 	$(PRINT) 'all                 --  Builds the tool (both eBPF programs and retis).'
