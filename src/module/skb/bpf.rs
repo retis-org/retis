@@ -299,7 +299,9 @@ struct RawMetaEvent {
     len: u32,
     data_len: u32,
     hash: u32,
+    ip_summed: u8,
     csum: u32,
+    csum_level: u8,
     priority: u32,
 }
 
@@ -310,7 +312,9 @@ pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent
         len: raw.len,
         data_len: raw.data_len,
         hash: raw.hash,
+        ip_summed: raw.ip_summed,
         csum: raw.csum,
+        csum_level: raw.csum_level,
         priority: raw.priority,
     })
 }

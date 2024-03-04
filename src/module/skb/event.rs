@@ -218,9 +218,19 @@ impl EventFmt for SkbEvent {
             write!(f, "skb [")?;
 
             if let Some(meta) = &self.meta {
-                if meta.csum != 0 {
-                    write!(f, "csum {:#x} ", meta.csum)?;
+                write!(f, "csum ")?;
+                match meta.ip_summed {
+                    0 => write!(f, "none ")?,
+                    1 => write!(f, "unnecessary (level {}) ", meta.csum_level)?,
+                    2 => write!(f, "complete ({:#x}) ", meta.csum)?,
+                    3 => {
+                        let start = meta.csum & 0xffff;
+                        let off = meta.csum >> 16;
+                        write!(f, "partial (start {start} off {off}) ")?;
+                    }
+                    x => write!(f, "unknown ({}) ", x)?,
                 }
+
                 if meta.hash != 0 {
                     write!(f, "hash {:#x} ", meta.hash)?;
                 }
@@ -400,8 +410,13 @@ pub(crate) struct SkbMetaEvent {
     pub(crate) data_len: u32,
     /// Packet hash (!= hash of the packet data).
     pub(crate) hash: u32,
-    /// Packet checksum.
+    /// Checksum status.
+    pub(crate) ip_summed: u8,
+    /// Packet checksum (ip_summed == CHECKSUM_COMPLETE) or checksum
+    /// (start << 16)|offset (ip_summed == CHECKSUM_PARTIAL).
     pub(crate) csum: u32,
+    /// Checksum level (ip_summed == CHECKSUM_PARTIAL)
+    pub(crate) csum_level: u8,
     /// QoS priority.
     pub(crate) priority: u32,
 }

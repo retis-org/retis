@@ -109,7 +109,9 @@ struct skb_meta_event {
 	u32 len;
 	u32 data_len;
 	u32 hash;
+	u8 ip_summed;
 	u32 csum;
+	u8 csum_level;
 	u32 priority;
 } __attribute__((packed));
 struct skb_data_ref_event {
@@ -536,7 +538,9 @@ skip_netns:
 		e->len = BPF_CORE_READ(skb, len);
 		e->data_len = BPF_CORE_READ(skb, data_len);
 		e->hash = BPF_CORE_READ(skb, hash);
+		e->ip_summed = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, ip_summed);
 		e->csum = BPF_CORE_READ(skb, csum);
+		e->csum_level = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, csum_level);
 		e->priority = BPF_CORE_READ(skb, priority);
 	}
 
