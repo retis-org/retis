@@ -104,7 +104,8 @@ static __always_inline u16 get_event_size(struct retis_raw_event *event)
 
 struct common_event {
 	u64 timestamp;
-};
+	u32 smp_id;
+} __attribute__((packed));
 
 struct common_task_event {
 	u64 pid;

@@ -259,6 +259,7 @@ static __always_inline int chain(struct retis_context *ctx)
 		goto discard_event;
 
 	e->timestamp = ctx->timestamp;
+	e->smp_id = bpf_get_smp_processor_id();
 
 	ti = get_event_zsection(event, COMMON, COMMON_SECTION_TASK, sizeof(*ti));
 	if (!ti)
