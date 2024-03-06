@@ -52,7 +52,7 @@ impl SkbTrackingEvent {
 
 impl EventFmt for SkbTrackingEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        write!(f, "#{:x} (skb {})", self.tracking_id(), self.skb)
+        write!(f, "#{:x} (skb {:x})", self.tracking_id(), self.skb)
     }
 }
 
