@@ -279,6 +279,7 @@ static __always_inline int chain(struct retis_context *ctx)
 		k->stack_id = -1;
 
 	pass_threshold = get_event_size(event);
+	barrier_var(pass_threshold);
 
 /* Defines the logic to call hooks one by one.
  *

@@ -101,6 +101,7 @@ int probe_usdt(struct pt_regs *ctx)
 	u->event_type = USDT;
 
 	pass_threshold = get_event_size(event);
+	barrier_var(pass_threshold);
 
 	/* UST only supports a single hook. */
 	hook0(&uctx, event);
