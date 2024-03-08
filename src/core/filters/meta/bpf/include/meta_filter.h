@@ -139,7 +139,7 @@ static __always_inline
 bool filter_bytes(struct retis_meta_ctx *ctx)
 {
 	char val[META_TARGET_MAX];
-	u32 sz;
+	long sz;
 
 	/* if it is an array of chars use its size. Alternatively, use
 	 * the target size (probe read could fail in this case).
@@ -157,11 +157,7 @@ bool filter_bytes(struct retis_meta_ctx *ctx)
 		return false;
 
 	const char *sp1 = ctx->data, *sp2 = val;
-	/* A redundant bound check (sz < META_OPS_MAX) here is
-	 * needed to pass the verification stage
-	 */
-	while (sz-- > 0 && sz < META_OPS_MAX &&
-	       *sp1 && *sp2 && !(*sp1 - *sp2))
+	while (sz-- > 0 && *sp1 && *sp2 && !(*sp1 - *sp2))
 		sp1++, sp2++;
 
 	return !(*sp1 - *sp2);

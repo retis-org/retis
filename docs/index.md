@@ -235,6 +235,9 @@ The comparison operators are:
 4. ">" and ">=" for *greater than* and *greater than or equal to*
 
 At the moment, only number and string comparisons are supported.
+The right-hand side (rhs) of numeric matches must be expressed as
+literal and can be represented in either base 10 or base 16, with the
+latter starting with `0x` prefix.
 All the comparison operators support numbers (both signed and unsigned).
 For strings only the operator *equal to* is supported, furthermore, the
 string must be enclosed between *quotes*.
