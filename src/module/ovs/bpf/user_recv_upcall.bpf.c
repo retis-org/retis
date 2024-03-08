@@ -45,7 +45,7 @@ DEFINE_USDT_HOOK (
 
 	batch = batch_process_recv(ctx->timestamp, queue_id, skip_event);
 	if (!batch)
-		return -1;
+		return 0;
 
 	if (skip_event)
 		return 0;
