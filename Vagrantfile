@@ -49,7 +49,7 @@ Vagrant.configure("2") do |config|
     end
 
     rawhide.vm.box = "fedora-rawhide-cloud"
-    rawhide.vm.box_url = get_box("vagrant-libvirt.box")
+    rawhide.vm.box_url = get_box("vagrant.libvirt.box")
 
     rawhide.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     rawhide.vm.provision "shell", inline: <<-SHELL
