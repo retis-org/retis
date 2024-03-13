@@ -1,6 +1,13 @@
 # Needs to be set because of PT_REGS_PARMx() and any other target
 # specific facility.
-ARCH := x86
+__ARCH := $(CARGO_CFG_TARGET_ARCH)
+x86_64 := x86
+aarch64 := arm64
+powerpc64 := powerpc
+s390x := s390
+# Mappings takes precedence over custom ARCH
+BPF_ARCH := $(if $($(__ARCH)),$($(__ARCH)),$(__ARCH))
+
 OUT_DIR := .out
 OBJS := $(patsubst %.c,$(OUT_DIR)/%.o,$(wildcard *.c))
 DEP := $(OBJS:%.o=%.d)
@@ -11,7 +18,7 @@ BPF_CFLAGS := -target bpf \
               -Wno-compare-distinct-pointer-types \
               -fno-stack-protector \
               -Werror \
-              -D __TARGET_ARCH_$(ARCH) \
+              -D__TARGET_ARCH_$(BPF_ARCH) \
 	      -O2
 
 ALL_REQ := $(OBJS)
