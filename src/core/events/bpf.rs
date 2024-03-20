@@ -50,8 +50,8 @@ macro_rules! event_byte_array {
         #[allow(dead_code)]
         impl $name {
             fn to_string(&self) -> Result<String> {
-                Ok(std::str::from_utf8(&self.0)?
-                    .trim_end_matches(char::from(0))
+                Ok(std::ffi::CStr::from_bytes_until_nul(&self.0)?
+                    .to_str()?
                     .into())
             }
 
