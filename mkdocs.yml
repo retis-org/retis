@@ -12,6 +12,7 @@ nav:
   - Installation: install.md
   - Requirements: requirements.md
   - Contributing: CONTRIBUTING.md
+  - External resources: resources.md
   - Collectors:
       - skb: modules/skb.md
       - skb-drop: modules/skb_drop.md
