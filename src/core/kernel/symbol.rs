@@ -1,7 +1,6 @@
 use std::fmt;
 
 use anyhow::{bail, Result};
-use btf_rs::Type;
 
 use crate::core::inspect::inspector;
 
@@ -14,30 +13,42 @@ pub(crate) enum Symbol {
 }
 
 impl Symbol {
+    /// Check a Symbol is valid before returning it.
+    fn check(self) -> Result<Symbol> {
+        if self.addr().is_err() {
+            bail!(
+                "Symbol {} is not supported (no corresponding symbol address)",
+                self
+            );
+        }
+
+        if inspector()?.kernel.btf.find_prototype_btf(&self).is_err() {
+            bail!(
+                "Symbol {} is not supported (no corresponding BTF definition)",
+                self
+            );
+        }
+
+        Ok(self)
+    }
+
     /// Create a new symbol given its name. We'll try hard to induce its type,
     /// using different techniques depending on what is available.
     pub(crate) fn from_name(name: &str) -> Result<Symbol> {
         let mut debugfs = false;
-        let validate_return = |symbol| {
-            // Make sure the symbol we return has a valid BTF definition.
-            if inspector()?.kernel.function_nargs(&symbol).is_err() {
-                bail!("Could not find BTF information for symbol {symbol}");
-            }
-            Ok(symbol)
-        };
 
         // First try to see if the symbol is a traceable event.
         if let Some(traceable) = inspector()?.kernel.is_event_traceable(name) {
             debugfs = true;
             if traceable {
-                return validate_return(Symbol::Event(name.to_string()));
+                return Symbol::Event(name.to_string()).check();
             }
         }
 
         // Then try to see if it's a traceable function.
         if let Some(traceable) = inspector()?.kernel.is_function_traceable(name) {
             if traceable {
-                return validate_return(Symbol::Func(name.to_string()));
+                return Symbol::Func(name.to_string()).check();
             }
         } else {
             debugfs = false;
@@ -65,7 +76,7 @@ impl Symbol {
             bail!("Symbol {} does not exist or isn't traceable", name);
         }
 
-        validate_return(Self::from_name_no_inspect(name))
+        Self::from_name_no_inspect(name).check()
     }
 
     /// Create a new symbol given its name without inspecting the current
@@ -145,6 +156,7 @@ impl Symbol {
         match self {
             Symbol::Func(name) => name.clone(),
             Symbol::Event(_) => {
+                // We only support tracepoint events.
                 format!("__tracepoint_{}", self.attach_name())
             }
         }
@@ -158,9 +170,11 @@ impl Symbol {
     pub(crate) fn typedef_name(&self) -> String {
         match self {
             Symbol::Func(name) => name.clone(),
-            // Events need to access a symbol derived from TP_PROTO(), named
-            // "btf_trace_<func>".
             Symbol::Event(_) => {
+                // We only support tracepoint events.
+                //
+                // Events need to access a symbol derived from TP_PROTO(), named
+                // "btf_trace_<func>".
                 format!("btf_trace_{}", self.attach_name())
             }
         }
@@ -200,16 +214,7 @@ pub(crate) fn matching_events_to_symbols(target: &str) -> Result<Vec<Symbol>> {
         .kernel
         .matching_events(target)?
         .iter()
-        .filter_map(|t| {
-            // Filter valid tracepoints, eg. ones where we can find an address
-            // using our Symbol logic.
-            if let Ok(sym) = Symbol::from_name(t) {
-                if sym.addr().is_ok() {
-                    return Some(sym);
-                }
-            }
-            None
-        })
+        .filter_map(|t| Symbol::from_name(t).ok())
         .collect::<Vec<Symbol>>();
 
     if symbols.is_empty() {
@@ -225,14 +230,7 @@ pub(crate) fn matching_functions_to_symbols(target: &str) -> Result<Vec<Symbol>>
         .kernel
         .matching_functions(target)?
         .iter()
-        .filter_map(|t| {
-            if let Ok(types) = inspector.kernel.btf.resolve_types_by_name(t) {
-                if types.iter().any(|(_, t)| matches!(t, Type::Func(_))) {
-                    return Symbol::from_name(t).ok();
-                }
-            }
-            None
-        })
+        .filter_map(|t| Symbol::from_name(t).ok())
         .collect::<Vec<Symbol>>();
 
     if symbols.is_empty() {

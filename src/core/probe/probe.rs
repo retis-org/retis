@@ -189,7 +189,7 @@ impl fmt::Display for Probe {
         match self.r#type() {
             ProbeType::Kprobe(symbol) => write!(f, "kprobe:{symbol}"),
             ProbeType::Kretprobe(symbol) => write!(f, "kretprobe:{symbol}"),
-            ProbeType::RawTracepoint(symbol) => write!(f, "raw_tracepoint:{symbol}"),
+            ProbeType::RawTracepoint(symbol) => write!(f, "tp:{symbol}"),
             ProbeType::Usdt(symbol) => write!(f, "usdt {symbol}"),
         }
     }

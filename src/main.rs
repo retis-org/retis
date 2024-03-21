@@ -5,6 +5,7 @@ mod cli;
 mod collect;
 mod core;
 mod generate;
+mod inspect;
 mod module;
 mod process;
 mod profiles;
