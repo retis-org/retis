@@ -62,6 +62,32 @@ fn gen_probe_skel(source: &str) {
     println!("cargo:rerun-if-changed={source}");
 }
 
+// This establishes a naming convention. eBPF objs MUST be suffixed with
+// .bpf.o.
+fn walk_gen_skels<F>(dir: &str, cb: &F)
+where
+    F: Fn(&str),
+{
+    for entry in Path::new(dir).read_dir().expect("Failed to read {dir}") {
+        let entry = entry.expect("Invalid entry in {dir}");
+        if entry.path().is_dir() {
+            walk_gen_skels(entry.path().to_str().expect("cannot convert {entry}"), cb);
+            continue;
+        }
+
+        let entry_path = entry.path();
+        let entry_str = entry_path.to_str().expect("cannot convert {entry}");
+        if entry_str.ends_with(".bpf.o") {
+            // Skip targets out of the expected directories.
+            if !entry_str.contains("/bpf/.out/") {
+                continue;
+            }
+
+            cb(entry_str);
+        }
+    }
+}
+
 fn gen_bindings() {
     let (inc_path, _) = BINDGEN_HEADER.rsplit_once('/').unwrap();
 
@@ -78,31 +104,13 @@ fn gen_bindings() {
         .expect("Failed during bindings generation")
         .write_to_file(format!("{}/bpf_gen.rs", env::var("OUT_DIR").unwrap()))
         .expect("Failed writing bindings");
+
+    println!("cargo:rerun-if-changed={BINDGEN_HEADER}");
 }
 
 fn main() {
     gen_bindings();
 
-    // core::probe::kernel
-    gen_probe_skel("src/core/probe/kernel/bpf/.out/kprobe.bpf.o");
-    gen_probe_skel("src/core/probe/kernel/bpf/.out/kretprobe.bpf.o");
-    gen_probe_skel("src/core/probe/kernel/bpf/.out/raw_tracepoint.bpf.o");
-    gen_probe_skel("src/core/probe/user/bpf/.out/usdt.bpf.o");
-
-    gen_hook_skel("src/module/skb/bpf/.out/skb_hook.bpf.o");
-    gen_hook_skel("src/module/skb_drop/bpf/.out/skb_drop_hook.bpf.o");
-    gen_hook_skel("src/module/skb_tracking/bpf/.out/tracking_hook.bpf.o");
-    gen_hook_skel("src/module/ovs/bpf/.out/kernel_enqueue.bpf.o");
-    gen_hook_skel("src/module/ovs/bpf/.out/kernel_exec_actions.bpf.o");
-    gen_hook_skel("src/module/ovs/bpf/.out/kernel_exec_actions_ret.bpf.o");
-    gen_hook_skel("src/module/ovs/bpf/.out/kernel_exec_tp.bpf.o");
-    gen_hook_skel("src/module/ovs/bpf/.out/kernel_upcall_tp.bpf.o");
-    gen_hook_skel("src/module/ovs/bpf/.out/kernel_upcall_ret.bpf.o");
-    gen_hook_skel("src/module/ovs/bpf/.out/user_recv_upcall.bpf.o");
-    gen_hook_skel("src/module/ovs/bpf/.out/user_op_exec.bpf.o");
-    gen_hook_skel("src/module/ovs/bpf/.out/user_op_put.bpf.o");
-    gen_hook_skel("src/module/nft/bpf/.out/nft.bpf.o");
-    gen_hook_skel("src/module/ct/bpf/.out/ct.bpf.o");
-
-    println!("cargo:rerun-if-changed={BINDGEN_HEADER}");
+    walk_gen_skels("src/core/probe/", &gen_probe_skel);
+    walk_gen_skels("src/module/", &gen_hook_skel);
 }

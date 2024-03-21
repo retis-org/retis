@@ -4,11 +4,14 @@ CLANG := clang
 OBJCOPY := llvm-objcopy
 
 CARGO := cargo
+DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
+CARGO_CFG_TARGET_ARCH := $(if $(ARCH),$(ARCH),$(DEFAULT_ARCH))
+
 RUSTFLAGS ?= -D warnings
 RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
 
-export LLC CLANG OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
+export LLC CLANG CARGO_CFG_TARGET_ARCH OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
 
 PRINT = echo
 
@@ -43,33 +46,17 @@ ifeq ($(NOVENDOR),)
     LIBBPF_INCLUDES := $(ROOT_DIR)/src/.out
 endif
 
-FILTER_INCLUDES := src/core/filters/packets/bpf/include \
-                   src/core/filters/meta/bpf/include
 # Taking errno.h from libc instead of linux headers.
 # TODO: Remove when we fix proper header dependencies.
-INCLUDES_ALL := $(abspath $(wildcard src/core/probe/bpf/include \
-                                     src/core/probe/kernel/bpf/include \
-                                     src/core/probe/user/bpf/include \
-                                     src/core/events/bpf/include \
-                                     src/core/tracking/bpf/include \
-                                     /usr/include/x86_64-linux-gnu \
-                                     $(FILTER_INCLUDES)))
+INCLUDES_ALL := $(abspath $(wildcard $(shell find src/core -type d -path '*/bpf/include') \
+                                     /usr/include/x86_64-linux-gnu))
 INCLUDES_ALL += $(LIBBPF_INCLUDES)
 
-OVS_INCLUDES := $(abspath src/module/ovs/bpf/include)
 INCLUDES := $(addprefix -I, $(INCLUDES_ALL))
 
-EBPF_PROBES := $(abspath src/core/probe/kernel/bpf \
-                        src/core/probe/user/bpf)
+EBPF_PROBES := $(abspath $(wildcard src/core/probe/*/bpf))
 
-GENERIC_HOOKS := $(abspath src/module/skb/bpf \
-                           src/module/skb_drop/bpf \
-                           src/module/skb_tracking/bpf \
-                           src/module/nft/bpf \
-                           src/module/ct/bpf)
-
-OVS_HOOKS := $(abspath src/module/ovs/bpf)
-OUT_NAME := HOOK
+EBPF_HOOKS := $(abspath $(wildcard src/module/*/bpf))
 
 all: debug
 
@@ -101,20 +88,18 @@ $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
 	cp $^ $(LIBBPF_INCLUDES)/bpf/
 endif
 
-$(OVS_HOOKS): INCLUDES_EXTRA := -I$(OVS_INCLUDES)
+ebpf: $(EBPF_PROBES) $(EBPF_HOOKS)
 
 $(EBPF_PROBES): OUT_NAME := PROBE
-
-ebpf: $(EBPF_PROBES) $(GENERIC_HOOKS) $(OVS_HOOKS)
-
-$(EBPF_PROBES) $(GENERIC_HOOKS) $(OVS_HOOKS): $(LIBBPF_INCLUDES)
+$(EBPF_HOOKS):  OUT_NAME := HOOK
+$(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	$(call out_console,$(OUT_NAME),building $@ ...)
-	CFLAGS="$(INCLUDES) $(INCLUDES_EXTRA)" \
+	CFLAGS="$(INCLUDES)" \
 	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@ $(TGT)
 
 clean-ebpf:
 	$(call out_console,CLEAN,cleaning ebpf progs...)
-	for i in $(EBPF_PROBES) $(GENERIC_HOOKS) $(OVS_HOOKS); do \
+	for i in $(EBPF_PROBES) $(EBPF_HOOKS); do \
 	    $(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $$i clean; \
 	done
 	-if [ -n "$(LIBBPF_INCLUDES)" ]; then \
@@ -151,4 +136,4 @@ help:
 	$(PRINT) 'NOVENDOR            --  Avoid to self detect and consume the vendored headers'
 	$(PRINT) '                        shipped with libbpf-sys.'
 
-.PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(GENERIC_HOOKS) help install $(OVS_HOOKS) release test
+.PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test
