@@ -50,7 +50,7 @@ impl SubCommand for Complete {
         self
     }
 
-    fn full(&self) -> Result<Command> {
+    fn full(&mut self) -> Result<Command> {
         Ok(<Self as clap::CommandFactory>::command())
     }
 
