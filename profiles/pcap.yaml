@@ -4,4 +4,4 @@ about: Minimum set of options to properly collect data for later PCAP generation
 collect:
   - args:
       collectors: skb
-      skb_sections: packet,dev,ns
+      skb_sections: dev,ns
