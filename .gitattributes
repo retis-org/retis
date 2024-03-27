@@ -1,2 +1,2 @@
-vmlinux.h linguist-vendored
+vmlinux*.h linguist-vendored
 src/core/bpf_sys/include/linux/bpf*.h linguist-vendored
