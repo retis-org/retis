@@ -3,6 +3,8 @@
 
 #include <vmlinux.h>
 
+#include <common_defs.h>
+
 /* Please keep the below in sync with its Rust counterpart. */
 #define EVENTS_MAX		8 * 1024
 #define RAW_EVENT_DATA_SIZE	1024 - 2 /* Remove the size field */
@@ -84,8 +86,10 @@ static __always_inline void *get_event_section(struct retis_raw_event *event,
 	u16 left = RAW_EVENT_DATA_SIZE - event->size;
 	void *section;
 
-	if (sizeof(*header) + size > left || event->size > sizeof(event->data))
+	if (sizeof(*header) + size > left || event->size > sizeof(event->data)) {
+		log_error("Failed to get event section: no space left");
 		return NULL;
+	}
 
 	header = (struct retis_raw_event_section_header *)
 			(event->data + event->size);
