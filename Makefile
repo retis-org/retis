@@ -7,7 +7,6 @@ CARGO := cargo
 DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
 CARGO_CFG_TARGET_ARCH := $(if $(ARCH),$(ARCH),$(DEFAULT_ARCH))
 
-RUSTFLAGS ?= -D warnings
 RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
 
@@ -73,6 +72,7 @@ endef
 debug: ebpf
 	$(call build, build, building retis (debug))
 
+release: RUSTFLAGS += -D warnings
 release: ebpf
 	$(call build, build --release, building retis (release))
 
