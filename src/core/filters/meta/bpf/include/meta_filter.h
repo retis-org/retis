@@ -79,8 +79,10 @@ static __always_inline long meta_process_ops(struct retis_meta_ctx *ctx)
 	u32 i;
 
 	val = bpf_map_lookup_elem(&filter_meta_map, &k);
-	if (!val)
+	if (!val) {
+		log_error("Failed to lookup meta-filter target");
 		return -1;
+	}
 
 	/* process target */
 	ctx->data = &val->t.u;
@@ -89,13 +91,16 @@ static __always_inline long meta_process_ops(struct retis_meta_ctx *ctx)
 
 	for (i = 1, k = 1; i < nmeta; k++, i++) {
 		val = bpf_map_lookup_elem(&filter_meta_map, &k);
-		if (!val)
+		if (!val) {
+			log_error("Failed to lookup meta-filter member at index %u", i);
 			return -1;
+		}
 
 		/* Load Pointer */
 		if (val->l.type == PTR_BIT) {
 			if (bpf_probe_read_kernel(&ptr, sizeof(void *),
-						  (char *)ctx->base + (val->l.offt)))
+						  (char *)ctx->base + (val->l.offt)) ||
+			    !ptr)
 				return -1;
 
 			ctx->base = (void *)ptr;
@@ -128,7 +133,7 @@ bool cmp_num(u64 operand1, u64 operand2, bool sign_bit, u8 cmp_type)
 	case RETIS_LE:
 		return sign_bit ? ((s64)operand1 <= (s64)operand2) : ((u64)operand1 <= (u64)operand2);
 	default:
-		/* FIXME: report error. */
+		log_error("Wrong comparison operator %d", cmp_type);
 		break;
 	}
 

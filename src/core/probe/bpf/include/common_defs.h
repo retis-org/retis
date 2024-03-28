@@ -4,8 +4,6 @@
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 
-#include <events.h>
-
 /* Keep in sync with its Rust counterpart in crate::core::probe */
 #define PROBE_MAX	1024
 
