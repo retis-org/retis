@@ -2,8 +2,7 @@
 #define __CORE_PROBE_COMMON_DEFS__
 
 #include <vmlinux.h>
-
-#include <events.h>
+#include <bpf/bpf_helpers.h>
 
 /* Keep in sync with its Rust counterpart in crate::core::probe */
 #define PROBE_MAX	1024
@@ -31,6 +30,41 @@ static __always_inline bool collection_enabled() {
 
 #define COMMON_SECTION_CORE	0
 #define COMMON_SECTION_TASK	1
+
+/* Aligned with the log crate. */
+enum {
+	LOG_ERROR = 1,
+	LOG_WARN,
+	LOG_INFO,
+	LOG_DEBUG,
+	LOG_TRACE,
+};
+
+/* Current log level. Actually set by user-space. */
+const volatile u8 log_level = LOG_INFO;
+
+/* Log macros must be used carefully and preferrably in the
+ * {error,slow} path.
+ * Useful exceptions must use a high log level (ideally LOG_TRACE).
+ */
+#define retis_log(lvl, fmt, args...)					\
+({									\
+	if (lvl <= log_level) {						\
+		struct retis_log_event *__log =				\
+			bpf_ringbuf_reserve(&log_map, sizeof(struct retis_log_event), 0); \
+		if (__log) {						\
+			__log->level = lvl;				\
+			BPF_SNPRINTF(__log->msg, sizeof(__log->msg), fmt, args); \
+			bpf_ringbuf_submit(__log, BPF_RB_FORCE_WAKEUP);	\
+		}							\
+	}								\
+})
+
+#define log_error(fmt, args...)	retis_log(LOG_ERROR, fmt, args)
+#define log_warning(fmt, args...)	retis_log(LOG_WARN, fmt, args)
+#define log_info(fmt, args...)		retis_log(LOG_INFO, fmt, args)
+#define log_debug(fmt, args...)	retis_log(LOG_DEBUG, fmt, args)
+#define log_trace(fmt, args...)	retis_log(LOG_TRACE, fmt, args)
 
 struct retis_counters_key {
 	/* Symbol address. */
