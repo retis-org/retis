@@ -47,7 +47,7 @@ class Retis:
 
         if self.target == "debug":
             # Debug builds take a long time to startup.
-            time.sleep(7)
+            time.sleep(40)
 
     def stop(self):
         """Stop the running retis instance."""
