@@ -4,6 +4,7 @@
 #![cfg_attr(test, allow(unused_imports))]
 
 use std::{
+    any,
     collections::HashMap,
     fmt, mem,
     os::fd::{AsFd, AsRawFd, RawFd},
@@ -304,7 +305,12 @@ pub(crate) fn parse_raw_event<'a>(
 /// Helper to check a raw section validity and parse it into a structured type.
 pub(crate) fn parse_raw_section<'a, T>(raw_section: &'a BpfRawSection) -> Result<&'a T> {
     if raw_section.data.len() != mem::size_of::<T>() {
-        bail!("Section data is not the expected size");
+        bail!(
+            "Section data {} is not the expected size ({} != {})",
+            any::type_name::<T>(),
+            raw_section.data.len(),
+            mem::size_of::<T>()
+        );
     }
 
     Ok(unsafe { mem::transmute(&raw_section.data[0]) })
