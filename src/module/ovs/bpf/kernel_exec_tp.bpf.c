@@ -54,7 +54,7 @@ struct exec_ct {
 	};
 	u16 min_port;
 	u16 max_port;
-};
+} __attribute__((packed));
 
 static __always_inline void fill_nat(struct ovs_conntrack_info *info,
 				     struct exec_ct *ct)
