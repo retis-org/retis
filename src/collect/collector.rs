@@ -305,6 +305,9 @@ impl Collectors {
             self.probes
                 .builder_mut()?
                 .reuse_map("events_map", self.factory.map_fd())?;
+            self.probes
+                .builder_mut()?
+                .reuse_map("log_map", self.factory.log_map_fd())?;
             match section_factories.get_mut(&ModuleId::Kernel) {
                 Some(kernel_factory) => {
                     kernel_factory
