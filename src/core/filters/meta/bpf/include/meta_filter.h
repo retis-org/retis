@@ -125,13 +125,21 @@ bool cmp_num(u64 operand1, u64 operand2, bool sign_bit, u8 cmp_type)
 	case RETIS_NE:
 		return (operand1 != operand2);
 	case RETIS_GT:
-		return sign_bit ? ((s64)operand1 > (s64)operand2) : ((u64)operand1 > (u64)operand2);
+		return sign_bit
+		       ? ((s64)operand1 > (s64)operand2)
+		       : ((u64)operand1 > (u64)operand2);
 	case RETIS_LT:
-		return sign_bit ? ((s64)operand1 < (s64)operand2) : ((u64)operand1 < (u64)operand2);
+		return sign_bit
+		       ? ((s64)operand1 < (s64)operand2)
+		       : ((u64)operand1 < (u64)operand2);
 	case RETIS_GE:
-		return sign_bit ? ((s64)operand1 >= (s64)operand2) : ((u64)operand1 >= (u64)operand2);
+		return sign_bit
+		       ? ((s64)operand1 >= (s64)operand2)
+		       : ((u64)operand1 >= (u64)operand2);
 	case RETIS_LE:
-		return sign_bit ? ((s64)operand1 <= (s64)operand2) : ((u64)operand1 <= (u64)operand2);
+		return sign_bit
+		       ? ((s64)operand1 <= (s64)operand2)
+		       : ((u64)operand1 <= (u64)operand2);
 	default:
 		log_error("Wrong comparison operator %d", cmp_type);
 		break;
