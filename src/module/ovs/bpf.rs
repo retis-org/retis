@@ -230,7 +230,7 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
         ipv6: u128,
     }
 
-    #[repr(C)]
+    #[repr(C, packed)]
     struct BpfConntrackAction {
         flags: u32,
         zone_id: u16,
@@ -255,7 +255,8 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
 
     let raw = parse_raw_section::<BpfConntrackAction>(raw_section)?;
     let nat = if raw.flags & R_OVS_CT_NAT != 0 {
-        let dir = match raw.flags {
+        let flags = raw.flags;
+        let dir = match flags {
             f if f & R_OVS_CT_NAT_SRC != 0 => Some(NatDirection::Src),
             f if f & R_OVS_CT_NAT_DST != 0 => Some(NatDirection::Dst),
             _ => None,
