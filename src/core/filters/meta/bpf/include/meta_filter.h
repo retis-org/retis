@@ -1,6 +1,8 @@
 #ifndef __CORE_FILTERS_META_FILTER__
 #define __CORE_FILTERS_META_FILTER__
 
+#include <common_defs.h>
+
 /* Please keep in sync with its Rust counterpart. */
 #define META_OPS_MAX	32
 #define META_TARGET_MAX	32
@@ -26,6 +28,7 @@ union retis_meta_op {
 		u8 type;
 		u8 nmemb;
 		u16 offt;
+		u8 bf_size;
 	} l;
 	struct {
 		union {
@@ -54,6 +57,8 @@ struct retis_meta_ctx {
 	u8 type;
 	/* optional */
 	u8 nmemb;
+	/* optional bitfield size. */
+	u8 bfs;
 	/* Target Info */
 	/* actual data. */
 	void *data;
@@ -111,6 +116,7 @@ static __always_inline long meta_process_ops(struct retis_meta_ctx *ctx)
 		ctx->offset = val->l.offt;
 		ctx->type = val->l.type;
 		ctx->nmemb = val->l.nmemb;
+		ctx->bfs = val->l.bf_size;
 	}
 
 	return 0;
@@ -176,7 +182,23 @@ bool filter_bytes(struct retis_meta_ctx *ctx)
 	return !(*sp1 - *sp2);
 }
 
-static __always_inline u64 fixup_signed(u64 val, u32 sz)
+/* Removes prefix and suffix bits that can be part of a potential
+ * previous or following bitfield and extracts the bitfield into a
+ * u64.
+ * Right shift on a signed negative numbers is implementation-defined.
+ * Both clang and gcc act on them by sign extension.
+ * This allows to preseve sign while extracting the bitfield.
+ */
+static __always_inline
+u64 extract_bf(u64 val, bool has_sign, u16 bit_off, u16 bit_sz)
+{
+	val <<= (64 - bit_sz) - (bit_off  % 8);
+
+	return has_sign ? (s64)val >> (64 - bit_sz) : val >> (64 - bit_sz);
+}
+
+static __always_inline
+u64 fixup_signed(u64 val, u32 sz)
 {
 	u64 ret;
 
@@ -203,17 +225,44 @@ unsigned int filter_num(struct retis_meta_ctx *ctx)
 {
 	bool sign_bit = ctx->type & SIGN_BIT;
 	u64 tval, mval = 0;
+	u16 offset;
 	u32 sz;
 
-	sz = MIN(ctx->sz, sizeof(mval));
+	if (ctx->bfs) {
+		offset = ctx->offset / 8;
+		/* Size in bytes that fits the bitfield size + the
+		 * starting offset.
+		 * The unsigned literal is required for clang's
+		 * front-end (unsupported signed div).
+		 */
+		sz = DIV_CEIL((ctx->offset - offset * 8U) + ctx->bfs, 8);
+		if (!sz)
+			return 0;
+	} else {
+		sz = ctx->sz;
+		offset = ctx->offset;
+	}
 
-	if (bpf_probe_read_kernel(&mval, sz, (char *)ctx->base + ctx->offset))
+	sz = MIN(sz, sizeof(mval));
+	if (!sz) {
+		log_error("error while calculating bytes to read (zero not allowed)");
+		return 0;
+	}
+
+	if (bpf_probe_read_kernel(&mval, sz, (char *)ctx->base + offset))
 		return 0;
 
-	tval = *((u64 *)ctx->data);
-
-	if (sign_bit)
+	/* Bitfields are handled separately as, considering they could
+	 * start at any offset (can be "packed into adjacent bits of
+	 * the same unit"), they require to be properly extracted
+	 * before proceeding with the comparison.
+	 */
+	if (ctx->bfs)
+		mval = extract_bf(mval, sign_bit, ctx->offset, ctx->bfs);
+	else if (sign_bit)
 		mval = fixup_signed(mval, sz);
+
+	tval = *((u64 *)ctx->data);
 
 	return cmp_num(mval, tval, sign_bit, ctx->cmp);
 }
