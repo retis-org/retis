@@ -519,8 +519,6 @@ mod tests {
         assert!(FilterMeta::from_string("dev.mark == 0xc0de".to_string()).is_err());
         // unsupported type (struct)
         assert!(FilterMeta::from_string("sk_buff.dev == 0xbad".to_string()).is_err());
-        // bitfields are not supported
-        assert!(FilterMeta::from_string("sk_buff.pkt_type == 0".to_string()).is_err());
         // pointers to int are not supported
         assert!(FilterMeta::from_string("sk_buff.dev.pcpu_refcnt == 0xbad".to_string()).is_err());
     }
@@ -599,5 +597,31 @@ mod tests {
         assert_eq!(meta_target.sz, 4);
         let target = unsafe { meta_target.u.long };
         assert_eq!(target, 0xc0de);
+    }
+
+    #[test_case("==", MetaCmp::Eq ; "op is eq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    #[test_case("<", MetaCmp::Lt ; "op is lt")]
+    #[test_case("<=", MetaCmp::Le ; "op is le")]
+    #[test_case(">", MetaCmp::Gt ; "op is gt")]
+    #[test_case(">=", MetaCmp::Ge ; "op is ge")]
+    fn meta_filter_bitfields(op_str: &'static str, op: MetaCmp) {
+        let filter =
+            FilterMeta::from_string(format!("sk_buff.pkt_type {op_str} 1").to_string()).unwrap();
+        assert_eq!(filter.0.len(), 2);
+        let meta_load = unsafe { &filter.0[1].l };
+        assert!(!meta_load.is_arr());
+        assert!(!meta_load.is_ptr());
+        assert!(!meta_load.is_signed());
+        assert!(meta_load.is_byte());
+        assert_eq!(meta_load.bf_size, 3);
+        // Offset in bits for bitfields
+        assert_eq!(meta_load.offt, 1024);
+
+        let meta_target = unsafe { &filter.0[0].t };
+        assert_eq!(meta_target.cmp, op as u8);
+        assert_eq!(meta_target.sz, 1);
+        let target = unsafe { meta_target.u.long };
+        assert_eq!(target, 1);
     }
 }
