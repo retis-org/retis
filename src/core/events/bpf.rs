@@ -346,12 +346,14 @@ pub(crate) struct TaskEvent {
 pub(crate) struct CommonEvent {
     /// Timestamp of when the event was generated.
     pub(crate) timestamp: u64,
+    /// SMP processor id.
+    pub(crate) smp_id: u32,
     pub(crate) task: Option<TaskEvent>,
 }
 
 impl EventFmt for CommonEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        write!(f, "{}", self.timestamp)?;
+        write!(f, "{} ({})", self.timestamp, self.smp_id)?;
 
         if let Some(current) = &self.task {
             write!(f, " [{}] ", current.comm)?;
@@ -375,7 +377,17 @@ impl RawEventSectionFactory for CommonEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
-                COMMON_SECTION_CORE => common.timestamp = *parse_raw_section::<u64>(section)?,
+                COMMON_SECTION_CORE => {
+                    if section.data.len() != 12 {
+                        bail!(
+                            "Core part of the common event is not the expected size {} != 12",
+                            section.data.len()
+                        );
+                    }
+
+                    common.timestamp = u64::from_ne_bytes(section.data[0..8].try_into()?);
+                    common.smp_id = u32::from_ne_bytes(section.data[8..12].try_into()?);
+                }
                 COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
                 _ => bail!("Unknown data type"),
             }

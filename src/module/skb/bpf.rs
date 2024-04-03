@@ -28,6 +28,7 @@ pub(super) const SECTION_NS: u64 = 8;
 pub(super) const SECTION_META: u64 = 9;
 pub(super) const SECTION_DATA_REF: u64 = 10;
 pub(super) const SECTION_PACKET: u64 = 11;
+pub(super) const SECTION_GSO: u64 = 12;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -299,7 +300,9 @@ struct RawMetaEvent {
     len: u32,
     data_len: u32,
     hash: u32,
+    ip_summed: u8,
     csum: u32,
+    csum_level: u8,
     priority: u32,
 }
 
@@ -310,7 +313,9 @@ pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent
         len: raw.len,
         data_len: raw.data_len,
         hash: raw.hash,
+        ip_summed: raw.ip_summed,
         csum: raw.csum,
+        csum_level: raw.csum_level,
         priority: raw.priority,
     })
 }
@@ -338,6 +343,28 @@ pub(super) fn unmarshal_data_ref(raw_section: &BpfRawSection) -> Result<SkbDataR
         fclone: raw.fclone,
         users: raw.users,
         dataref: raw.dataref,
+    })
+}
+
+/// GSO information.
+#[repr(C, packed)]
+struct RawGsoEvent {
+    flags: u8,
+    nr_frags: u8,
+    gso_size: u32,
+    gso_segs: u32,
+    gso_type: u32,
+}
+
+pub(super) fn unmarshal_gso(raw_section: &BpfRawSection) -> Result<SkbGsoEvent> {
+    let raw = parse_raw_section::<RawGsoEvent>(raw_section)?;
+
+    Ok(SkbGsoEvent {
+        flags: raw.flags,
+        frags: raw.nr_frags,
+        size: raw.gso_size,
+        segs: raw.gso_segs,
+        r#type: raw.gso_type,
     })
 }
 

@@ -26,6 +26,7 @@
 #define COLLECT_META		9
 #define COLLECT_DATA_REF	10
 #define COLLECT_PACKET		11
+#define COLLECT_GSO		12
 
 /* Skb hook configuration. A map is used to set the config from userspace.
  *
@@ -109,7 +110,9 @@ struct skb_meta_event {
 	u32 len;
 	u32 data_len;
 	u32 hash;
+	u8 ip_summed;
 	u32 csum;
+	u8 csum_level;
 	u32 priority;
 } __attribute__((packed));
 struct skb_data_ref_event {
@@ -118,6 +121,13 @@ struct skb_data_ref_event {
 	u8 fclone;
 	u8 users;
 	u8 dataref;
+} __attribute__((packed));
+struct skb_gso_event {
+	u8 flags;
+	u8 nr_frags;
+	u32 gso_size;
+	u32 gso_segs;
+	u32 gso_type;
 } __attribute__((packed));
 /* Please keep the following structs in sync with its Rust counterpart in
  * module::skb::event.
@@ -536,7 +546,9 @@ skip_netns:
 		e->len = BPF_CORE_READ(skb, len);
 		e->data_len = BPF_CORE_READ(skb, data_len);
 		e->hash = BPF_CORE_READ(skb, hash);
+		e->ip_summed = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, ip_summed);
 		e->csum = BPF_CORE_READ(skb, csum);
+		e->csum_level = (u8)BPF_CORE_READ_BITFIELD_PROBED(skb, csum_level);
 		e->priority = BPF_CORE_READ(skb, priority);
 	}
 
@@ -556,6 +568,30 @@ skip_netns:
 		e->dataref = (u8)BPF_CORE_READ(si, dataref.counter);
 	}
 
+	if (cfg->sections & BIT(COLLECT_GSO)) {
+		struct skb_shared_info *shinfo;
+		struct skb_gso_event *e;
+
+		/* See skb_shinfo */
+		shinfo = (void *)(BPF_CORE_READ(skb, head) + BPF_CORE_READ(skb, end));
+		/* See skb_is_gso */
+		if (!BPF_CORE_READ(shinfo, gso_size))
+			goto skip_gso;
+
+		e = get_event_section(event, COLLECTOR_SKB, COLLECT_GSO,
+				      sizeof(*e));
+		if (!e)
+			return 0;
+
+		e->flags = bpf_core_field_exists(shinfo->flags) ?
+			   BPF_CORE_READ(shinfo, flags) : 0;
+		e->nr_frags = BPF_CORE_READ(shinfo, nr_frags);
+		e->gso_size = BPF_CORE_READ(shinfo, gso_size);
+		e->gso_segs = BPF_CORE_READ(shinfo, gso_segs);
+		e->gso_type = BPF_CORE_READ(shinfo, gso_type);
+	}
+
+skip_gso:
 	return process_skb_l2(event, cfg, skb, head);
 }
 

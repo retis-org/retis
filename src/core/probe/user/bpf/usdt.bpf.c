@@ -84,6 +84,7 @@ int probe_usdt(struct pt_regs *ctx)
 
 	uctx.timestamp = bpf_ktime_get_ns();
 	e->timestamp = uctx.timestamp;
+	e->smp_id = bpf_get_smp_processor_id();
 
 	ti = get_event_zsection(event, COMMON, COMMON_SECTION_TASK, sizeof(*ti));
 	if (!ti)
