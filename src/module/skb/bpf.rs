@@ -8,8 +8,8 @@ use std::str;
 
 use anyhow::{anyhow, Result};
 use pnet::packet::{
-    arp::ArpPacket, ethernet::*, icmp::IcmpPacket, ip::*, ipv4::*, ipv6::*, tcp::TcpPacket,
-    udp::UdpPacket, Packet,
+    arp::ArpPacket, ethernet::*, icmp::IcmpPacket, icmpv6::Icmpv6Packet, ip::*, ipv4::*, ipv6::*,
+    tcp::TcpPacket, udp::UdpPacket, Packet,
 };
 
 use super::*;
@@ -115,6 +115,13 @@ pub(super) fn unmarshal_icmp(icmp: &IcmpPacket) -> Result<SkbIcmpEvent> {
     Ok(SkbIcmpEvent {
         r#type: icmp.get_icmp_type().0,
         code: icmp.get_icmp_code().0,
+    })
+}
+
+pub(super) fn unmarshal_icmpv6(icmp: &Icmpv6Packet) -> Result<SkbIcmpV6Event> {
+    Ok(SkbIcmpV6Event {
+        r#type: icmp.get_icmpv6_type().0,
+        code: icmp.get_icmpv6_code().0,
     })
 }
 
@@ -320,6 +327,11 @@ fn unmarshal_l4(
         IpNextHeaderProtocols::Icmp => {
             if let Some(icmp) = IcmpPacket::new(payload) {
                 event.icmp = Some(unmarshal_icmp(&icmp)?);
+            }
+        }
+        IpNextHeaderProtocols::Icmpv6 => {
+            if let Some(icmpv6) = Icmpv6Packet::new(payload) {
+                event.icmpv6 = Some(unmarshal_icmpv6(&icmpv6)?);
             }
         }
         _ => (),

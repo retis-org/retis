@@ -26,6 +26,8 @@ pub(crate) struct SkbEvent {
     pub(crate) udp: Option<SkbUdpEvent>,
     /// ICMP fields, if any.
     pub(crate) icmp: Option<SkbIcmpEvent>,
+    /// ICMPv6 fields, if any.
+    pub(crate) icmpv6: Option<SkbIcmpV6Event>,
     /// Net device data, if any.
     pub(crate) dev: Option<SkbDevEvent>,
     /// Net namespace data, if any.
@@ -221,6 +223,12 @@ impl EventFmt for SkbEvent {
             write!(f, "type {} code {}", icmp.r#type, icmp.code)?;
         }
 
+        if let Some(icmpv6) = &self.icmpv6 {
+            space.write(f)?;
+            // TODO: text version
+            write!(f, "type {} code {}", icmpv6.r#type, icmpv6.code)?;
+        }
+
         if self.meta.is_some() || self.data_ref.is_some() {
             space.write(f)?;
             write!(f, "skb [")?;
@@ -404,6 +412,13 @@ pub(crate) struct SkbUdpEvent {
 /// ICMP fields.
 #[event_type]
 pub(crate) struct SkbIcmpEvent {
+    pub(crate) r#type: u8,
+    pub(crate) code: u8,
+}
+
+/// ICMPv6 fields.
+#[event_type]
+pub(crate) struct SkbIcmpV6Event {
     pub(crate) r#type: u8,
     pub(crate) code: u8,
 }
