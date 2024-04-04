@@ -184,8 +184,8 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 			return 0;
 
 		network_offset = network - headroom;
-		size = MIN(linear_len - network_offset, PACKET_CAPTURE_SIZE);
-		size -= sizeof(struct ethhdr);
+		size = MIN(linear_len - network_offset,
+			   PACKET_CAPTURE_SIZE - sizeof(struct ethhdr));
 		if (size <= 0)
 			return 0;
 
@@ -200,7 +200,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		eth->h_proto = etype;
 
 		e->len = len - network_offset + sizeof(*eth);
-		e->capture_len = size;
+		e->capture_len = size + sizeof(struct ethhdr);
 		bpf_probe_read_kernel(e->packet + sizeof(*eth), size,
 				      head + network);
 	/* Can't guess any useful packet offset */
