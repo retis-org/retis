@@ -156,7 +156,7 @@ impl<'a, W: Write> EventParser<'a, W> {
                 interface_id: id,
                 timestamp: Duration::from_nanos(common.timestamp),
                 original_len: packet.len,
-                data: Cow::Borrowed(&packet.packet),
+                data: Cow::Borrowed(&packet.packet.0),
                 options: vec![EnhancedPacketOption::Comment(Cow::Owned(format!(
                     "probe={}:{}",
                     &kernel.probe_type, &kernel.symbol

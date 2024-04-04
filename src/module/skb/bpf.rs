@@ -15,7 +15,7 @@ use pnet::packet::{
 use super::*;
 use crate::core::{
     events::bpf::{parse_raw_section, BpfRawSection},
-    helpers,
+    helpers::{self, net::RawPacket},
 };
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
@@ -265,7 +265,7 @@ pub(super) fn unmarshal_packet(
     event.packet = Some(SkbPacketEvent {
         len: raw.len,
         capture_len: raw.capture_len,
-        packet: raw.packet[..(raw.capture_len as usize)].to_vec(),
+        packet: RawPacket(raw.packet[..(raw.capture_len as usize)].to_vec()),
     });
 
     // Then start parsing the raw packet to generate other sections.

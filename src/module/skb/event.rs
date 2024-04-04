@@ -6,7 +6,7 @@ use super::bpf::*;
 use crate::{
     core::{
         events::{bpf::BpfRawSection, *},
-        helpers,
+        helpers::{self, net::RawPacket},
     },
     event_section, event_section_factory, event_type,
 };
@@ -480,7 +480,7 @@ pub(crate) struct SkbPacketEvent {
     /// Lenght of the capture. <= len.
     pub(crate) capture_len: u32,
     /// Raw packet data.
-    pub(crate) packet: Vec<u8>,
+    pub(crate) packet: RawPacket,
 }
 
 #[derive(Default)]
