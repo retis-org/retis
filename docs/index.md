@@ -239,6 +239,9 @@ The right-hand side (rhs) of numeric matches must be expressed as
 literal and can be represented in either base 10 or base 16, with the
 latter starting with `0x` prefix.
 All the comparison operators support numbers (both signed and unsigned).
+Bitfields are supported as well (both signed and unsigned) and they
+are treated as regular numbers.
+
 For strings only the operator *equal to* is supported, furthermore, the
 string must be enclosed between *quotes*.
 
@@ -269,8 +272,8 @@ $ retis collect -f 'tcp port 443' -m 'sk_buff.dev.name == "eth0"'
 The above options will be concatenated, meaning that both filters must match
 in order to have a match and generate events for packets.
 
-Meta filtering has some known limitations, in particular no bitfield
-support is available and only one field at the time can be matched.
+Meta filtering has some known limitations, in particular only one
+field at the time can be matched.
 
 ## Tracking
 
