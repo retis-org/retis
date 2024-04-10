@@ -75,7 +75,10 @@ struct MetaLoad {
     // Usually zero.
     // nmemb > 0 is valid iff MetaOp::r#type == MetaType::Char
     nmemb: u8,
+    // Byte offset if bf_size is zero. Bit offset otherwise.
     offt: u16,
+    // Zero for no bitfield.
+    bf_size: u8,
 }
 
 impl MetaLoad {
@@ -137,7 +140,7 @@ impl MetaOp {
         Ok(())
     }
 
-    fn emit_load(btf: &Btf, r#type: &Type, offt: u32) -> Result<MetaOp> {
+    fn emit_load(btf: &Btf, r#type: &Type, offt: u32, bfs: u32) -> Result<MetaOp> {
         let mut op: MetaOp = unsafe { std::mem::zeroed::<_>() };
         let lop = unsafe { &mut op.l };
         let mut t = r#type.clone();
@@ -215,7 +218,12 @@ impl MetaOp {
             };
         }
 
-        lop.offt = u16::try_from(offt / 8)?;
+        lop.bf_size = u8::try_from(bfs)?;
+        lop.offt = u16::try_from(offt)?;
+
+        if bfs == 0 {
+            lop.offt /= 8;
+        }
 
         Ok(op)
     }
@@ -277,7 +285,12 @@ impl MetaOp {
     }
 }
 
-fn walk_btf_node(btf: &Btf, r#type: &Type, node_name: &str, offset: u32) -> Option<(u32, Type)> {
+fn walk_btf_node(
+    btf: &Btf,
+    r#type: &Type,
+    node_name: &str,
+    offset: u32,
+) -> Option<(u32, Option<u32>, Type)> {
     let r#type = match r#type {
         Type::Struct(r#struct) | Type::Union(r#struct) => r#struct,
         _ => {
@@ -288,14 +301,10 @@ fn walk_btf_node(btf: &Btf, r#type: &Type, node_name: &str, offset: u32) -> Opti
     for member in r#type.members.iter() {
         let fname = btf.resolve_name(member).unwrap();
         if fname.eq(node_name) {
-            if let Some(bfs) = member.bitfield_size() {
-                if bfs > 0 {
-                    return None;
-                }
-            }
-
             match btf.resolve_chained_type(member).ok() {
-                Some(ty) => return Some((offset + member.bit_offset(), ty)),
+                Some(ty) => {
+                    return Some((offset + member.bit_offset(), member.bitfield_size(), ty))
+                }
                 None => return None,
             }
         } else if fname.is_empty() {
@@ -305,7 +314,7 @@ fn walk_btf_node(btf: &Btf, r#type: &Type, node_name: &str, offset: u32) -> Opti
             match ty {
                 s @ Type::Struct(_) | s @ Type::Union(_) => {
                     match walk_btf_node(btf, s, node_name, offset + member.bit_offset()) {
-                        Some((offt, x)) => return Some((offt, x)),
+                        Some((offt, bfs, x)) => return Some((offt, bfs, x)),
                         _ => continue,
                     }
                 }
@@ -396,6 +405,7 @@ impl FilterMeta {
         let mut ops: Vec<_> = Vec::new();
         let mut offt: u32 = 0;
         let mut stored_offset: u32 = 0;
+        let mut stored_bf_size: u32 = 0;
 
         // Check the correctness, perform preliminar checks for the
         // operator type against the target (e.g. >= against number).
@@ -430,7 +440,7 @@ impl FilterMeta {
         for (pos, field) in fields.iter().enumerate() {
             let sub_node = walk_btf_node(btf, r#type, field, offt);
             match sub_node {
-                Some((offset, snode)) => {
+                Some((offset, bfs, snode)) => {
                     if pos < fields.len() - 1 {
                         // Type::Ptr needs indirect actions (Load *Ptr).
                         //   Offset need to be reset
@@ -461,12 +471,15 @@ impl FilterMeta {
                     }
 
                     stored_offset = offset;
+                    if let Some(bfs) = bfs {
+                        stored_bf_size = bfs;
+                    }
                 }
                 None => bail!("{field} not found or is a bitfield!"),
             }
         }
 
-        let lmo = MetaOp::emit_load(btf, r#type, stored_offset)?;
+        let lmo = MetaOp::emit_load(btf, r#type, stored_offset, stored_bf_size)?;
         ops.push(lmo);
 
         let op = MetaCmp::from_str(op)?;
@@ -506,8 +519,6 @@ mod tests {
         assert!(FilterMeta::from_string("dev.mark == 0xc0de".to_string()).is_err());
         // unsupported type (struct)
         assert!(FilterMeta::from_string("sk_buff.dev == 0xbad".to_string()).is_err());
-        // bitfields are not supported
-        assert!(FilterMeta::from_string("sk_buff.pkt_type == 0".to_string()).is_err());
         // pointers to int are not supported
         assert!(FilterMeta::from_string("sk_buff.dev.pcpu_refcnt == 0xbad".to_string()).is_err());
     }
@@ -586,5 +597,31 @@ mod tests {
         assert_eq!(meta_target.sz, 4);
         let target = unsafe { meta_target.u.long };
         assert_eq!(target, 0xc0de);
+    }
+
+    #[test_case("==", MetaCmp::Eq ; "op is eq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    #[test_case("<", MetaCmp::Lt ; "op is lt")]
+    #[test_case("<=", MetaCmp::Le ; "op is le")]
+    #[test_case(">", MetaCmp::Gt ; "op is gt")]
+    #[test_case(">=", MetaCmp::Ge ; "op is ge")]
+    fn meta_filter_bitfields(op_str: &'static str, op: MetaCmp) {
+        let filter =
+            FilterMeta::from_string(format!("sk_buff.pkt_type {op_str} 1").to_string()).unwrap();
+        assert_eq!(filter.0.len(), 2);
+        let meta_load = unsafe { &filter.0[1].l };
+        assert!(!meta_load.is_arr());
+        assert!(!meta_load.is_ptr());
+        assert!(!meta_load.is_signed());
+        assert!(meta_load.is_byte());
+        assert_eq!(meta_load.bf_size, 3);
+        // Offset in bits for bitfields
+        assert_eq!(meta_load.offt, 1024);
+
+        let meta_target = unsafe { &filter.0[0].t };
+        assert_eq!(meta_target.cmp, op as u8);
+        assert_eq!(meta_target.sz, 1);
+        let target = unsafe { meta_target.u.long };
+        assert_eq!(target, 1);
     }
 }
