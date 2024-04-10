@@ -172,7 +172,7 @@ future use (e.g. logged events using the `-o` cli option).
 
 ### From sources
 For details on how to build retis, visit the
-[documentation](https://retis.readthedocs.io/install).
+[documentation](https://retis.readthedocs.io/en/stable/install/).
 
 ## Limitations
 
