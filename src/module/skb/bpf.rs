@@ -4,9 +4,13 @@
 //!
 //! Please keep this file in sync with its BPF counterpart in bpf/skb_hook.bpf.c
 
-use std::{net::Ipv6Addr, str};
+use std::str;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, Result};
+use pnet::packet::{
+    arp::ArpPacket, ethernet::*, icmp::IcmpPacket, ip::*, ipv4::*, ipv6::*, tcp::TcpPacket,
+    udp::UdpPacket, Packet,
+};
 
 use super::*;
 use crate::core::{
@@ -16,19 +20,12 @@ use crate::core::{
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
 /// they are difficult to work with for bitfields and C repr conversion.
-pub(super) const SECTION_ETH: u64 = 0;
-pub(super) const SECTION_ARP: u64 = 1;
-pub(super) const SECTION_IPV4: u64 = 2;
-pub(super) const SECTION_IPV6: u64 = 3;
-pub(super) const SECTION_TCP: u64 = 4;
-pub(super) const SECTION_UDP: u64 = 5;
-pub(super) const SECTION_ICMP: u64 = 6;
-pub(super) const SECTION_DEV: u64 = 7;
-pub(super) const SECTION_NS: u64 = 8;
-pub(super) const SECTION_META: u64 = 9;
-pub(super) const SECTION_DATA_REF: u64 = 10;
-pub(super) const SECTION_PACKET: u64 = 11;
-pub(super) const SECTION_GSO: u64 = 12;
+pub(super) const SECTION_PACKET: u64 = 1;
+pub(super) const SECTION_DEV: u64 = 2;
+pub(super) const SECTION_NS: u64 = 3;
+pub(super) const SECTION_META: u64 = 4;
+pub(super) const SECTION_DATA_REF: u64 = 5;
+pub(super) const SECTION_GSO: u64 = 6;
 
 /// Global configuration passed down the BPF part.
 #[repr(C, packed)]
@@ -38,208 +35,86 @@ pub(super) struct RawConfig {
     pub sections: u64,
 }
 
-/// Ethernet data retrieved from skbs.
-#[repr(C, packed)]
-struct RawEthEvent {
-    /// Source MAC address.
-    src: [u8; 6],
-    /// Destination MAC address.
-    dst: [u8; 6],
-    /// Ethertype. Stored in network order.
-    etype: u16,
-}
-
-pub(super) fn unmarshal_eth(raw_section: &BpfRawSection) -> Result<SkbEthEvent> {
-    let raw = parse_raw_section::<RawEthEvent>(raw_section)?;
-
+pub(super) fn unmarshal_eth(eth: &EthernetPacket) -> Result<SkbEthEvent> {
     Ok(SkbEthEvent {
-        etype: u16::from_be(raw.etype),
-        src: helpers::net::parse_eth_addr(&raw.src)?,
-        dst: helpers::net::parse_eth_addr(&raw.dst)?,
+        etype: eth.get_ethertype().0,
+        src: helpers::net::parse_eth_addr(&eth.get_source().octets())?,
+        dst: helpers::net::parse_eth_addr(&eth.get_destination().octets())?,
     })
 }
 
-/// ARP data retrieved from skbs.
-#[repr(C, packed)]
-struct RawArpEvent {
-    /// Operation. Stored in network order.
-    operation: u16,
-    /// Sender hardware address.
-    sha: [u8; 6],
-    /// Sender protocol address.
-    spa: u32,
-    /// Target hardware address.
-    tha: [u8; 6],
-    /// Target protocol address.
-    tpa: u32,
-}
-
-pub(super) fn unmarshal_arp(raw_section: &BpfRawSection) -> Result<SkbArpEvent> {
-    let raw = parse_raw_section::<RawArpEvent>(raw_section)?;
-
-    let operation = match u16::from_be(raw.operation) {
+pub(super) fn unmarshal_arp(arp: &ArpPacket) -> Result<Option<SkbArpEvent>> {
+    let operation = match arp.get_operation().0 {
         1 => ArpOperation::Request,
         2 => ArpOperation::Reply,
-        _ => bail!("Invalid ARP operation type"),
+        // We only support ARP for IPv4 over Ethernet; request & reply */
+        _ => return Ok(None),
     };
 
-    Ok(SkbArpEvent {
+    Ok(Some(SkbArpEvent {
         operation,
-        sha: helpers::net::parse_eth_addr(&raw.sha)?,
-        spa: helpers::net::parse_ipv4_addr(u32::from_be(raw.spa))?,
-        tha: helpers::net::parse_eth_addr(&raw.tha)?,
-        tpa: helpers::net::parse_ipv4_addr(u32::from_be(raw.tpa))?,
-    })
+        sha: helpers::net::parse_eth_addr(&arp.get_sender_hw_addr().octets())?,
+        spa: helpers::net::parse_ipv4_addr(u32::from(arp.get_sender_proto_addr()))?,
+        tha: helpers::net::parse_eth_addr(&arp.get_target_hw_addr().octets())?,
+        tpa: helpers::net::parse_ipv4_addr(u32::from(arp.get_target_proto_addr()))?,
+    }))
 }
 
-/// IPv4 data retrieved from skbs.
-#[repr(C, packed)]
-struct RawIpv4Event {
-    /// Source IP address. Stored in network order.
-    src: u32,
-    /// Destination IP address. Stored in network order.
-    dst: u32,
-    /// IP packet length in bytes. Stored in network order.
-    len: u16,
-    /// Identification. Stored in network order.
-    id: u16,
-    /// L4 protocol.
-    protocol: u8,
-    /// Time to live.
-    ttl: u8,
-    /// Type of service.
-    tos: u8,
-    /// ECN bits.
-    ecn: u8,
-    /// Fragment offset. Stored in network order.
-    offset: u16,
-    /// Flags (CE, DF, MF).
-    flags: u8,
-}
-
-pub(super) fn unmarshal_ipv4(raw_section: &BpfRawSection) -> Result<SkbIpEvent> {
-    let raw = parse_raw_section::<RawIpv4Event>(raw_section)?;
-
+pub(super) fn unmarshal_ipv4(ip: &Ipv4Packet) -> Result<SkbIpEvent> {
     Ok(SkbIpEvent {
-        saddr: helpers::net::parse_ipv4_addr(u32::from_be(raw.src))?,
-        daddr: helpers::net::parse_ipv4_addr(u32::from_be(raw.dst))?,
+        saddr: helpers::net::parse_ipv4_addr(u32::from(ip.get_source()))?,
+        daddr: helpers::net::parse_ipv4_addr(u32::from(ip.get_destination()))?,
         version: SkbIpVersion::V4(SkbIpv4Event {
-            tos: raw.tos,
-            flags: raw.flags,
-            id: u16::from_be(raw.id),
-            offset: u16::from_be(raw.offset),
+            tos: ip.get_dscp(),
+            flags: ip.get_flags(),
+            id: ip.get_identification(),
+            offset: ip.get_fragment_offset(),
         }),
-        protocol: raw.protocol,
-        len: u16::from_be(raw.len),
-        ttl: raw.ttl,
-        ecn: raw.ecn,
+        protocol: ip.get_next_level_protocol().0,
+        len: ip.get_total_length(),
+        ttl: ip.get_ttl(),
+        ecn: ip.get_ecn(),
     })
 }
 
-/// IPv6 data retrieved from skbs.
-#[repr(C, packed)]
-struct RawIpv6Event {
-    /// Source IP address. Stored in network order.
-    src: u128,
-    /// Destination IP address. Stored in network order.
-    dst: u128,
-    /// Flow label.
-    flow_label: u32,
-    /// IP packet length in bytes. Stored in network order.
-    len: u16,
-    /// L4 protocol.
-    protocol: u8,
-    /// TTL.
-    ttl: u8,
-    /// ECN bits.
-    ecn: u8,
-}
-
-pub(super) fn unmarshal_ipv6(raw_section: &BpfRawSection) -> Result<SkbIpEvent> {
-    let raw = parse_raw_section::<RawIpv6Event>(raw_section)?;
-
+pub(super) fn unmarshal_ipv6(ip: &Ipv6Packet) -> Result<SkbIpEvent> {
     Ok(SkbIpEvent {
-        saddr: Ipv6Addr::from(u128::from_be(raw.src)).to_string(),
-        daddr: Ipv6Addr::from(u128::from_be(raw.dst)).to_string(),
+        saddr: ip.get_source().to_string(),
+        daddr: ip.get_destination().to_string(),
         version: SkbIpVersion::V6(SkbIpv6Event {
-            flow_label: raw.flow_label,
+            flow_label: ip.get_flow_label(),
         }),
-        protocol: raw.protocol,
-        len: u16::from_be(raw.len),
-        ttl: raw.ttl,
-        ecn: raw.ecn,
+        protocol: ip.get_next_header().0,
+        len: ip.get_payload_length(),
+        ttl: ip.get_hop_limit(),
+        ecn: ip.get_traffic_class() & 0x3,
     })
 }
 
-/// TCP data retrieved from skbs.
-#[repr(C, packed)]
-struct RawTcpEvent {
-    /// Source port. Stored in network order.
-    sport: u16,
-    /// Destination port. Stored in network order.
-    dport: u16,
-    /// Sequence number. Stored in network order.
-    seq: u32,
-    /// Ack sequence number. Stored in network order.
-    ack_seq: u32,
-    /// TCP window. Stored in network order.
-    window: u16,
-    /// TCP flags (from low to high): fin, syn, rst, psh, ack, urg, ece, cwr.
-    flags: u8,
-    /// TCP data offset: size of the TCP header in 32-bit words.
-    doff: u8,
-}
-
-pub(super) fn unmarshal_tcp(raw_section: &BpfRawSection) -> Result<SkbTcpEvent> {
-    let raw = parse_raw_section::<RawTcpEvent>(raw_section)?;
-
+pub(super) fn unmarshal_tcp(tcp: &TcpPacket) -> Result<SkbTcpEvent> {
     Ok(SkbTcpEvent {
-        sport: u16::from_be(raw.sport),
-        dport: u16::from_be(raw.dport),
-        seq: u32::from_be(raw.seq),
-        ack_seq: u32::from_be(raw.ack_seq),
-        window: u16::from_be(raw.window),
-        doff: raw.doff,
-        flags: raw.flags,
+        sport: tcp.get_source(),
+        dport: tcp.get_destination(),
+        seq: tcp.get_sequence(),
+        ack_seq: tcp.get_acknowledgement(),
+        window: tcp.get_window(),
+        doff: tcp.get_data_offset(),
+        flags: tcp.get_flags(),
     })
 }
 
-/// UDP data retrieved from skbs.
-#[repr(C, packed)]
-struct RawUdpEvent {
-    /// Source port. Stored in network order.
-    sport: u16,
-    /// Destination port. Stored in network order.
-    dport: u16,
-    /// Lenght: length in bytes of the UDP header and UDP data. Stored in network order.
-    len: u16,
-}
-
-pub(super) fn unmarshal_udp(raw_section: &BpfRawSection) -> Result<SkbUdpEvent> {
-    let raw = parse_raw_section::<RawUdpEvent>(raw_section)?;
-
+pub(super) fn unmarshal_udp(udp: &UdpPacket) -> Result<SkbUdpEvent> {
     Ok(SkbUdpEvent {
-        sport: u16::from_be(raw.sport),
-        dport: u16::from_be(raw.dport),
-        len: u16::from_be(raw.len),
+        sport: udp.get_source(),
+        dport: udp.get_destination(),
+        len: udp.get_length(),
     })
 }
 
-/// ICMP data retrieved from skbs.
-#[repr(C, packed)]
-struct RawIcmpEvent {
-    /// ICMP type.
-    r#type: u8,
-    /// ICMP sub-type.
-    code: u8,
-}
-
-pub(super) fn unmarshal_icmp(raw_section: &BpfRawSection) -> Result<SkbIcmpEvent> {
-    let raw = parse_raw_section::<RawIcmpEvent>(raw_section)?;
-
+pub(super) fn unmarshal_icmp(icmp: &IcmpPacket) -> Result<SkbIcmpEvent> {
     Ok(SkbIcmpEvent {
-        r#type: raw.r#type,
-        code: raw.code,
+        r#type: icmp.get_icmp_type().0,
+        code: icmp.get_icmp_code().0,
     })
 }
 
@@ -379,12 +254,76 @@ pub(super) struct RawPacketEvent {
     packet: [u8; 255],
 }
 
-pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<SkbPacketEvent> {
+pub(super) fn unmarshal_packet(
+    event: &mut SkbEvent,
+    raw_section: &BpfRawSection,
+    report_eth: bool,
+) -> Result<()> {
     let raw = parse_raw_section::<RawPacketEvent>(raw_section)?;
 
-    Ok(SkbPacketEvent {
+    // First add the raw packet part in the event.
+    event.packet = Some(SkbPacketEvent {
         len: raw.len,
         capture_len: raw.capture_len,
         packet: raw.packet[..(raw.capture_len as usize)].to_vec(),
-    })
+    });
+
+    // Then start parsing the raw packet to generate other sections.
+    let eth = EthernetPacket::new(&raw.packet[..(raw.capture_len as usize)]).ok_or_else(|| {
+        anyhow!("Could not parse Ethernet packet (buffer size less than minimal)")
+    })?;
+
+    if report_eth {
+        event.eth = Some(unmarshal_eth(&eth)?);
+    }
+
+    match eth.get_ethertype() {
+        EtherTypes::Arp => {
+            if let Some(eth) = ArpPacket::new(eth.payload()) {
+                event.arp = unmarshal_arp(&eth)?;
+            };
+        }
+        EtherTypes::Ipv4 => {
+            if let Some(ip) = Ipv4Packet::new(eth.payload()) {
+                event.ip = Some(unmarshal_ipv4(&ip)?);
+                unmarshal_l4(event, ip.get_next_level_protocol(), ip.payload())?;
+            };
+        }
+        EtherTypes::Ipv6 => {
+            if let Some(ip) = Ipv6Packet::new(eth.payload()) {
+                event.ip = Some(unmarshal_ipv6(&ip)?);
+                unmarshal_l4(event, ip.get_next_header(), ip.payload())?;
+            };
+        }
+        _ => (),
+    }
+
+    Ok(())
+}
+
+fn unmarshal_l4(
+    event: &mut SkbEvent,
+    protocol: IpNextHeaderProtocol,
+    payload: &[u8],
+) -> Result<()> {
+    match protocol {
+        IpNextHeaderProtocols::Tcp => {
+            if let Some(tcp) = TcpPacket::new(payload) {
+                event.tcp = Some(unmarshal_tcp(&tcp)?);
+            }
+        }
+        IpNextHeaderProtocols::Udp => {
+            if let Some(udp) = UdpPacket::new(payload) {
+                event.udp = Some(unmarshal_udp(&udp)?);
+            }
+        }
+        IpNextHeaderProtocols::Icmp => {
+            if let Some(icmp) = IcmpPacket::new(payload) {
+                event.icmp = Some(unmarshal_icmp(&icmp)?);
+            }
+        }
+        _ => (),
+    }
+
+    Ok(())
 }

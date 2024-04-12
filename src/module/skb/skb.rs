@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{bail, Result};
 use clap::{arg, builder::PossibleValuesParser, Parser};
+use log::warn;
 
 use super::{bpf::*, skb_hook, SkbEventFactory};
 use crate::{
@@ -21,10 +22,26 @@ use crate::{
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
-        value_parser=PossibleValuesParser::new(["all", "eth", "arp", "ip", "tcp", "udp", "icmp", "dev", "ns", "meta", "dataref", "gso", "packet"]),
+        value_parser=PossibleValuesParser::new([
+            "all", "eth", "dev", "ns", "meta", "dataref", "gso",
+            // Below values are deprecated.
+            "arp", "ip", "tcp", "udp", "icmp", "packet",
+        ]),
         value_delimiter=',',
-        default_value="ip,arp,tcp,udp,icmp,dev",
-        help = "Comma separated list of data to collect from skbs"
+        default_value="dev",
+        help = "Comma separated list of extra information to collect from skbs.
+
+Supported values:
+- eth:     include Ethernet information (src, dst, etype).
+- dev:     include network device information.
+- ns:      include network namespace information.
+- meta:    include skb metadata information (len, data_len, hash, etc).
+- dataref: include data & refcnt information (cloned, users, data refs, etc).
+- gso:     include generic segmentation offload (GSO) information.
+- all:     all of the above.
+
+The following values are now always retrieved and their use is deprecated:
+packet, arp, ip, tcp, udp, icmp."
     )]
     skb_sections: Vec<String>,
 }
@@ -34,6 +51,8 @@ pub(crate) struct SkbModule {
     // Used to keep a reference to our internal config map.
     #[allow(dead_code)]
     config_map: Option<libbpf_rs::MapHandle>,
+    // Should we report the Ethernet section?
+    report_eth: bool,
 }
 
 impl Collector for SkbModule {
@@ -53,23 +72,28 @@ impl Collector for SkbModule {
         // First, get the cli parameters.
         let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
 
-        let mut sections: u64 = 0;
+        // Default list of sections. We set SECTION_PACKET even though it's not
+        // checked in the BPF hook (raw packet is always reported).
+        let mut sections: u64 = 1 << SECTION_PACKET;
+
         for category in args.skb_sections.iter() {
             match category.as_str() {
-                // Do not include the raw packet in 'all'.
-                "all" => sections |= !(1_u64 << SECTION_PACKET),
-                "eth" => sections |= 1 << SECTION_ETH,
-                "arp" => sections |= 1 << SECTION_ARP,
-                "ip" => sections |= 1 << SECTION_IPV4 | 1 << SECTION_IPV6,
-                "tcp" => sections |= 1 << SECTION_TCP,
-                "udp" => sections |= 1 << SECTION_UDP,
-                "icmp" => sections |= 1 << SECTION_ICMP,
+                "all" => {
+                    sections |= !0_u64;
+                    self.report_eth = true;
+                }
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
-                "packet" => sections |= 1 << SECTION_PACKET,
+                "eth" => self.report_eth = true,
+                "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
+                    warn!(
+                        "Use of '{}' in --skb-sections is depreacted (is now always set)",
+                        category.as_str(),
+                    );
+                }
                 x => bail!("Unknown skb_collect value ({})", x),
             }
         }
@@ -101,7 +125,9 @@ impl Module for SkbModule {
         self
     }
     fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::new(SkbEventFactory {}))
+        Ok(Box::new(SkbEventFactory {
+            report_eth: self.report_eth,
+        }))
     }
 }
 

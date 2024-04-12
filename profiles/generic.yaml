@@ -4,7 +4,7 @@ about: Generic set of probes, meant to be used as a starting point for debugging
 collect:
   - args:
       collectors: skb,skb-drop,skb-tracking
-      skb_sections: ip,arp,tcp,udp,icmp,dev
+      skb_sections: dev
       probe:
         - tp:net:netif_receive_skb
         - tp:net:netif_rx

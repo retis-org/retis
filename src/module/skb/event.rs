@@ -485,7 +485,10 @@ pub(crate) struct SkbPacketEvent {
 
 #[derive(Default)]
 #[event_section_factory(SkbEvent)]
-pub(crate) struct SkbEventFactory {}
+pub(crate) struct SkbEventFactory {
+    // Should we report the Ethernet header.
+    pub(super) report_eth: bool,
+}
 
 impl RawEventSectionFactory for SkbEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
@@ -493,20 +496,13 @@ impl RawEventSectionFactory for SkbEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
-                SECTION_ETH => event.eth = Some(unmarshal_eth(section)?),
-                SECTION_ARP => event.arp = Some(unmarshal_arp(section)?),
-                SECTION_IPV4 => event.ip = Some(unmarshal_ipv4(section)?),
-                SECTION_IPV6 => event.ip = Some(unmarshal_ipv6(section)?),
-                SECTION_TCP => event.tcp = Some(unmarshal_tcp(section)?),
-                SECTION_UDP => event.udp = Some(unmarshal_udp(section)?),
-                SECTION_ICMP => event.icmp = Some(unmarshal_icmp(section)?),
                 SECTION_DEV => event.dev = unmarshal_dev(section)?,
                 SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
                 SECTION_META => event.meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
                 SECTION_GSO => event.gso = Some(unmarshal_gso(section)?),
-                SECTION_PACKET => event.packet = Some(unmarshal_packet(section)?),
-                _ => bail!("Unknown data type"),
+                SECTION_PACKET => unmarshal_packet(&mut event, section, self.report_eth)?,
+                x => bail!("Unknown data type ({x})"),
             }
         }
 
