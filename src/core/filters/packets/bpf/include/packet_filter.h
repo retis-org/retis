@@ -39,9 +39,14 @@ struct retis_packet_filter_ctx {
 
 #define STACK_SIZE		SCRATCH_MEM_START
 
-/* The two functions below define a placeholder instruction and a
- * nop frame (respectively for L2 and L3 filters) that will be replaced
- * on load with the actual filtering instructions.
+enum {
+	FILTER_L2 = 0xdeadbeef,
+	FILTER_L3 = 0xdeadc0de,
+};
+
+/* The function below defines a placeholder instruction and a
+ * nop frame that will be replaced on load with the actual filtering
+ * instructions.
  * Normally, if no filter gets set, a simple mov r0, 0x40000 will replace
  * the call. 0x40000 is used as it is also used by generated cBPF filters,
  * whereas 0 means no match, instead. The exceeding nops will get removed
@@ -50,7 +55,7 @@ struct retis_packet_filter_ctx {
  * fail to load and the verifier will report an error.
  */
 static __always_inline
-unsigned int packet_filter_l2(struct retis_packet_filter_ctx *ctx)
+unsigned int packet_filter(struct retis_packet_filter_ctx *ctx, u32 placeholder)
 {
 	register struct retis_packet_filter_ctx *ctx_reg asm("r1");
 	u8 stack[STACK_SIZE] __attribute__ ((aligned (8)));
@@ -63,40 +68,11 @@ unsigned int packet_filter_l2(struct retis_packet_filter_ctx *ctx)
 	fp = (u64 *)((void *)stack + sizeof(stack));
 
 	asm volatile (
-		"call 0xdeadbeef;"
+		"call %[filter];"
 		RESERVE_NOP
-		"*(u32 *)%0 = r0;"
-		: /* out */
-		  "=m" (ctx->ret)
-		: /* in */
-		  "r" (ctx_reg),
-		  "r" (fp)
-		: "r0", "r1", "r2", "r3",
-		  "r4", "r5", "r6", "r7",
-		  "r8", "r9");
-
-	return ctx->ret;
-}
-static __always_inline
-unsigned int packet_filter_l3(struct retis_packet_filter_ctx *ctx)
-{
-	register struct retis_packet_filter_ctx *ctx_reg asm("r1");
-	u8 stack[STACK_SIZE] __attribute__ ((aligned (8)));
-	register u64 *fp asm("r9");
-
-	if (!ctx)
-		return 0;
-
-	ctx_reg = ctx;
-	fp = (u64 *)((void *)stack + sizeof(stack));
-
-	asm volatile (
-		"call 0xdeadc0de;"
-		RESERVE_NOP
-		"*(u32 *)%0 = r0;"
-		: /* out */
-		  "=m" (ctx->ret)
-		: /* in */
+		"*(u32 *)%[ret] = r0;"
+		: [ret] "=m" (ctx->ret)
+		: [filter] "i" (placeholder),
 		  "r" (ctx_reg),
 		  "r" (fp)
 		: "r0", "r1", "r2", "r3",

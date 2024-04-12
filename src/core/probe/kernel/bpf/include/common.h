@@ -177,7 +177,7 @@ static __always_inline void filter(struct retis_context *ctx)
 	 */
 	if (is_mac_data_valid(skb)) {
 		fctx.data = head + BPF_CORE_READ(skb, mac_header);
-		packet_filter_l2(&fctx);
+		packet_filter(&fctx, FILTER_L2);
 		goto filter_outcome;
 	}
 
@@ -188,7 +188,7 @@ static __always_inline void filter(struct retis_context *ctx)
 	/* L3 filter can be a nop, meaning the criteria are not enough to
 	 * express a match in terms of L3 only.
 	 */
-	packet_filter_l3(&fctx);
+	packet_filter(&fctx, FILTER_L3);
 
 	/* Due to a bug we can't use the return value of packet_filter(), but
 	 * we have to rely on the value returned into the context.
