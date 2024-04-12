@@ -1,6 +1,4 @@
 cargo_task_tempate: &cargo_task_template
-  container:
-    image: rust:bookworm
   registry_cache:
     folder: $CARGO_HOME/registry
     fingerprint_script: cat Cargo.lock
@@ -18,6 +16,8 @@ cargo_task_tempate: &cargo_task_template
 
 unittest_task:
   << : *cargo_task_template
+  container:
+    image: rust:bookworm
   build_script: make V=1 CARGO_OPTS=--verbose
   test_script: make test V=1 CARGO_OPTS=--verbose
   check_script:
@@ -26,12 +26,24 @@ unittest_task:
 
 benchmark_task:
   << : *cargo_task_template
+  container:
+    image: rust:bookworm
   build_script: make bench V=1 CARGO_OPTS=--verbose
   test_script:
     - ./target/release/retis benchmark --ci events_parsing
     - ./target/release/retis benchmark --ci events_output
   check_script:
     - cargo clippy -F benchmark -- -D warnings
+
+aarch64_task:
+  << : *cargo_task_template
+  name: aarch64 build & basic tests
+  arm_container:
+    image: rust:bookworm
+  build_script:
+    - ln -s /usr/include/asm-generic /usr/include/asm
+    - make V=1 CARGO_OPTS=--verbose
+  test_script: make test V=1 CARGO_OPTS=--verbose
 
 python_task:
   name: Python lint & format
