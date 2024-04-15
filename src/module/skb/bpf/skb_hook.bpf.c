@@ -78,6 +78,7 @@ struct skb_packet_event {
 	u32 capture_len;
 #define PACKET_CAPTURE_SIZE	255
 	u8 packet[PACKET_CAPTURE_SIZE];
+	u8 fake_eth;
 } __attribute__((packed));
 
 /* Retrieve an skb linear len */
@@ -168,6 +169,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 
 		e->len = len - mac_offset;
 		e->capture_len = size;
+		e->fake_eth = 0;
 		bpf_probe_read_kernel(e->packet, size, head + mac);
 	/* Valid network offset with an unset or invalid mac offset: we can fake
 	 * the eth header.
@@ -201,6 +203,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 
 		e->len = len - network_offset + sizeof(*eth);
 		e->capture_len = size + sizeof(struct ethhdr);
+		e->fake_eth = 1;
 		bpf_probe_read_kernel(e->packet + sizeof(*eth), size,
 				      head + network);
 	/* Can't guess any useful packet offset */
