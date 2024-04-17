@@ -20,7 +20,7 @@ done
 shift $(($OPTIND - 1))
 
 authors_file=$(git rev-parse --show-toplevel)/AUTHORS.md
-authors_list="$(git log --no-merges --format='- %aN' | grep -v dependabot | sort -u)"
+authors_list="$(git log --no-merges --format='- %aN' | grep -v dependabot | sort -fu)"
 
 out=$(cat <<-EOM
 # Authors
