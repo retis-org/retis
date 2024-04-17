@@ -20,7 +20,7 @@ done
 shift $(($OPTIND - 1))
 
 authors_file=$(git rev-parse --show-toplevel)/AUTHORS.md
-authors_list="$(git log --no-merges --format='%aN' | grep -v dependabot | sort -u)"
+authors_list="$(git log --no-merges --format='- %aN' | grep -v dependabot | sort -u)"
 
 out=$(cat <<-EOM
 # Authors
@@ -28,7 +28,7 @@ out=$(cat <<-EOM
 Many thanks to everyone who contributed to Retis!
 
 In alphabetical order:
-- ${authors_list//$'\n'/\\n- }
+$authors_list
 EOM
 )
 
