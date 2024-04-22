@@ -3,6 +3,8 @@
 1. Release a new version of `retis-derive` and `btf-rs` if needed.
 1. Release a new version on GitHub.
    1. Make sure the README is up-to-date (collectors, build instructions, etc).
+   1. Add new authors to the authors file if needed, by running
+      `./tools/authors.sh` and committing the changes.
    1. Update the version in `Cargo.toml`.
    1. Update the version name in `src/main.rs`.
    1. Run `cargo publish --dry-run` to check for any issue.
