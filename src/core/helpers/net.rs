@@ -1,4 +1,9 @@
+use std::fmt;
+
 use anyhow::{anyhow, Result};
+use base64::{
+    display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
+};
 
 /// Returns a translation of some ethertypes into a readable format.
 pub(crate) fn etype_str(etype: u16) -> Option<&'static str> {
@@ -99,6 +104,51 @@ pub(crate) fn parse_ipv4_addr(raw: u32) -> Result<String> {
     u8_to_utf8(&mut addr, raw & 0xff)?;
 
     Ok(addr)
+}
+
+/// Represents a raw packet. Stored internally as a `Vec<u8>`.
+#[derive(Clone, Debug)]
+pub(crate) struct RawPacket(pub(crate) Vec<u8>);
+
+impl serde::Serialize for RawPacket {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(&Base64Display::new(&self.0, &STANDARD))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for RawPacket {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RawPacketVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for RawPacketVisitor {
+            type Value = RawPacket;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("raw packet as base64 string")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match BASE64_STANDARD.decode(value).map(RawPacket) {
+                    Ok(v) => Ok(v),
+                    Err(_) => Err(serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Str(value),
+                        &self,
+                    )),
+                }
+            }
+        }
+
+        deserializer.deserialize_str(RawPacketVisitor)
+    }
 }
 
 #[cfg(test)]

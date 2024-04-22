@@ -26,6 +26,7 @@ debug = ["dep:rbpf"]
 
 [dependencies]
 anyhow = "1.0"
+base64 = "0.22"
 bimap = "0.6"
 btf-rs = "1.1"
 byteorder = "1.5"

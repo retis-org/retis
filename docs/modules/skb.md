@@ -4,9 +4,9 @@ The `skb` collector provides insights into the `struct sk_buff` (we call
 instances of this `skb` below) kernel data structure, which holds metadata and
 data for networking packets.
 
-The `skb` collector do not install any probe itself, and is only responsible for
-gathering data whenever an `skb` is available in a probe arguments. This is done
-automatically. Eg. if the `skb` collector is enabled and a probe is added
+The `skb` collector does not install any probe itself, and is only responsible
+for gathering data whenever an `skb` is available in a probe arguments. This is
+done automatically. Eg. if the `skb` collector is enabled and a probe is added
 (manually, by a profile or by another collector) on `kfree_skb_reason`, the
 `skb` collector will generate events with data coming from the `skb` given as an
 argument to the `kfree_skb_reason` function.
@@ -15,11 +15,12 @@ argument to the `kfree_skb_reason` function.
 
 The `skb` collector has a single specific argument, `--skb-sections`. This is
 used to choose which parts of the `skb` metadata and/or data to retrieve and
-export in the events.
+export in the events. The raw start of the packet (headers), ARP, IPv4/6, TCP,
+UDP and ICMPv4/v6 information are always included. See the `retis collect
+--help` for a detailed description.
 
-A special section, `packet`, can be used to dump the packet itself, unparsed.
-It's best used in combination with the `dev` and `ns` sections, and can later be
-converted to a `pcap-ng` file for post-processing using external tools.
+When collecting event for later `pcap-ng` file generation (see `retis pcap
+--help`), it's best to collect the `dev` and `ns` sections too.
 
 ## Events
 
@@ -91,7 +92,7 @@ flags [{flags}] seq {sequence} ack {acked sequence} win {window}
 len {UDP data len}
 ```
 
-# ICMP section
+# ICMP & ICMPv6 sections
 
 ```none
 type {type number} code {code number}

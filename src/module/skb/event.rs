@@ -6,7 +6,7 @@ use super::bpf::*;
 use crate::{
     core::{
         events::{bpf::BpfRawSection, *},
-        helpers,
+        helpers::{self, net::RawPacket},
     },
     event_section, event_section_factory, event_type,
 };
@@ -26,6 +26,8 @@ pub(crate) struct SkbEvent {
     pub(crate) udp: Option<SkbUdpEvent>,
     /// ICMP fields, if any.
     pub(crate) icmp: Option<SkbIcmpEvent>,
+    /// ICMPv6 fields, if any.
+    pub(crate) icmpv6: Option<SkbIcmpV6Event>,
     /// Net device data, if any.
     pub(crate) dev: Option<SkbDevEvent>,
     /// Net namespace data, if any.
@@ -104,7 +106,7 @@ impl EventFmt for SkbEvent {
             // - IPv4: we use the fixed 20 bytes size as options are rarely used.
             // - IPv6: we do not support extension headers.
             len = match ip.version {
-                SkbIpVersion::V4(_) => ip.len - 20,
+                SkbIpVersion::V4(_) => ip.len.saturating_sub(20),
                 _ => ip.len,
             };
 
@@ -161,7 +163,13 @@ impl EventFmt for SkbEvent {
                 None => String::new(),
             };
 
-            write!(f, " len {} proto{} ({})", ip.len, protocol, ip.protocol)?;
+            // In some rare cases the IP header might not be fully filled yet,
+            // length might be unset.
+            if ip.len != 0 {
+                write!(f, " len {}", ip.len)?;
+            }
+
+            write!(f, " proto{} ({})", protocol, ip.protocol)?;
         }
 
         if let Some(tcp) = &self.tcp {
@@ -213,6 +221,12 @@ impl EventFmt for SkbEvent {
             space.write(f)?;
             // TODO: text version
             write!(f, "type {} code {}", icmp.r#type, icmp.code)?;
+        }
+
+        if let Some(icmpv6) = &self.icmpv6 {
+            space.write(f)?;
+            // TODO: text version
+            write!(f, "type {} code {}", icmpv6.r#type, icmpv6.code)?;
         }
 
         if self.meta.is_some() || self.data_ref.is_some() {
@@ -402,6 +416,13 @@ pub(crate) struct SkbIcmpEvent {
     pub(crate) code: u8,
 }
 
+/// ICMPv6 fields.
+#[event_type]
+pub(crate) struct SkbIcmpV6Event {
+    pub(crate) r#type: u8,
+    pub(crate) code: u8,
+}
+
 /// Network device fields.
 #[event_type]
 #[derive(Default)]
@@ -480,7 +501,7 @@ pub(crate) struct SkbPacketEvent {
     /// Lenght of the capture. <= len.
     pub(crate) capture_len: u32,
     /// Raw packet data.
-    pub(crate) packet: Vec<u8>,
+    pub(crate) packet: RawPacket,
 }
 
 #[derive(Default)]
