@@ -5,7 +5,11 @@ use anyhow::Result;
 use super::series::EventSeries;
 use crate::events::*;
 
-enum PrintSingleFormat {
+/// Select the format in follow when printing events with `PrintSingle`.
+/// - Text(format): display the events in a text representation following the
+///   rules defined in `format` (see `DisplayFormat`).
+/// - Json: display the event as JSON.
+pub(crate) enum PrintSingleFormat {
     Text(DisplayFormat),
     Json,
 }
@@ -17,18 +21,8 @@ pub(crate) struct PrintSingle {
 }
 
 impl PrintSingle {
-    pub(crate) fn text(writer: Box<dyn Write>, format: DisplayFormat) -> Self {
-        Self {
-            writer,
-            format: PrintSingleFormat::Text(format),
-        }
-    }
-
-    pub(crate) fn json(writer: Box<dyn Write>) -> Self {
-        Self {
-            writer,
-            format: PrintSingleFormat::Json,
-        }
+    pub(crate) fn new(writer: Box<dyn Write>, format: PrintSingleFormat) -> Self {
+        Self { writer, format }
     }
 
     /// Process events one by one (format & print).
@@ -64,18 +58,8 @@ pub(crate) struct PrintSeries {
 }
 
 impl PrintSeries {
-    pub(crate) fn text(writer: Box<dyn Write>, format: DisplayFormat) -> Self {
-        Self {
-            writer,
-            format: PrintSingleFormat::Text(format),
-        }
-    }
-
-    pub(crate) fn json(writer: Box<dyn Write>) -> Self {
-        Self {
-            writer,
-            format: PrintSingleFormat::Json,
-        }
+    pub(crate) fn new(writer: Box<dyn Write>, format: PrintSingleFormat) -> Self {
+        Self { writer, format }
     }
 
     fn indent(n_spaces: usize, lines: String) -> String {

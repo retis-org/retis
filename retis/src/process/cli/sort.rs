@@ -16,7 +16,7 @@ use crate::{
     events::{file::FileEventsFactory, *},
     helpers::signals::Running,
     module::Modules,
-    process::{display::PrintSeries, series::EventSorter, tracking::AddTracking},
+    process::{display::*, series::EventSorter, tracking::AddTracking},
 };
 
 /// The default size of the sorting buffer
@@ -85,18 +85,24 @@ impl SubCommandParserRunner for Sort {
                 bail!("Cannot sort a file in-place. Please specify an output file that's different to the input one.");
             }
 
-            printers.push(PrintSeries::json(Box::new(BufWriter::new(
-                OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(&out)
-                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-            ))));
+            printers.push(PrintSeries::new(
+                Box::new(BufWriter::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(&out)
+                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+                )),
+                PrintSingleFormat::Json,
+            ));
         }
 
         if self.out.is_none() || self.print {
-            printers.push(PrintSeries::text(Box::new(stdout()), self.format.into()));
+            printers.push(PrintSeries::new(
+                Box::new(stdout()),
+                PrintSingleFormat::Text(self.format.into()),
+            ));
         }
 
         while run.running() {

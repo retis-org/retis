@@ -21,7 +21,7 @@ use crate::{
         kernel::Symbol,
         probe::kernel::utils::parse_probe,
     },
-    process::display::PrintSingle,
+    process::display::*,
 };
 
 #[cfg(not(test))]
@@ -401,22 +401,25 @@ impl Collectors {
         // Write events to stdout if we don't write to a file (--out) or if
         // explicitly asked to (--print).
         if collect.out.is_none() || collect.print {
-            printers.push(PrintSingle::text(
+            printers.push(PrintSingle::new(
                 Box::new(io::stdout()),
-                collect.format.into(),
+                PrintSingleFormat::Text(collect.format.into()),
             ));
         }
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            printers.push(PrintSingle::json(Box::new(BufWriter::new(
-                OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(out)
-                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-            ))));
+            printers.push(PrintSingle::new(
+                Box::new(BufWriter::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(out)
+                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+                )),
+                PrintSingleFormat::Json,
+            ));
         }
 
         if let Some(cmd) = collect.cmd.to_owned() {
