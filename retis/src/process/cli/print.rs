@@ -13,7 +13,7 @@ use crate::{
     events::{file::FileEventsFactory, *},
     helpers::signals::Running,
     module::Modules,
-    process::display::PrintSingle,
+    process::display::*,
 };
 
 /// Print stored events to stdout
@@ -38,7 +38,10 @@ impl SubCommandParserRunner for Print {
         let mut factory = FileEventsFactory::new(self.input.as_path())?;
 
         // Formatter & printer for events.
-        let mut output = PrintSingle::text(Box::new(stdout()), self.format.into());
+        let mut output = PrintSingle::new(
+            Box::new(stdout()),
+            PrintSingleFormat::Text(self.format.into()),
+        );
 
         use EventResult::*;
         while run.running() {
