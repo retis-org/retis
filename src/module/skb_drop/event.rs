@@ -34,8 +34,8 @@ pub(crate) struct SkbDropEvent {
 impl EventFmt for SkbDropEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
         match &self.subsys {
-            None => write!(f, "drop ({})", self.drop_reason),
-            Some(name) => write!(f, "drop ({name}/{})", self.drop_reason),
+            None => write!(f, "drop (reason {})", self.drop_reason),
+            Some(name) => write!(f, "drop (reason {name}/{})", self.drop_reason),
         }
     }
 }

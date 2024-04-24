@@ -1,6 +1,6 @@
+#include <vmlinux.h>
 #include <bpf/bpf_core_read.h>
 
-#include <vmlinux.h>
 #include <common.h>
 #include <ovs_common.h>
 #include <ovs_uapi.h>

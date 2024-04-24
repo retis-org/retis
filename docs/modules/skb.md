@@ -92,7 +92,7 @@ flags [{flags}] seq {sequence} ack {acked sequence} win {window}
 len {UDP data len}
 ```
 
-# ICMP & ICMPv6 sections
+### ICMP & ICMPv6 sections
 
 ```none
 type {type number} code {code number}
@@ -112,7 +112,7 @@ skb [{csum} hash {skb hash} data_len {skb data lenght} priority {skb priority}
   status (`none`, `unnecessary`, `partial` or `complete`).
 - `flags` are a combination of `nohdr` and `cloned`.
 
-# GSO section
+### GSO section
 
 Generic Segmentation Offload information linked to an `skb` (see
 `skb_shared_info`).

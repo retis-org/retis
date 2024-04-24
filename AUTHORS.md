@@ -8,3 +8,4 @@ In alphabetical order:
 - Daniel Mendes
 - Hangbin Liu
 - Paolo Valerio
+- Viktor Oreshkin
