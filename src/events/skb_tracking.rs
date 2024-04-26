@@ -1,15 +1,12 @@
-use std::fmt;
-
 use anyhow::Result;
 
-use crate::{
-    event_section, event_section_factory,
-    events::{
-        bpf::{parse_single_raw_section, BpfRawSection},
-        *,
-    },
-    module::ModuleId,
+use std::{
+    cmp::{Eq, Ord, Ordering, PartialEq},
+    fmt,
 };
+
+use super::*;
+use crate::event_section;
 
 // Tracking event section. Same as the event from BPF, please keep in sync with
 // its BPF counterpart.
@@ -56,15 +53,49 @@ impl EventFmt for SkbTrackingEvent {
     }
 }
 
-#[derive(Default)]
-#[event_section_factory(SkbTrackingEvent)]
-pub(crate) struct SkbTrackingEventFactory {}
+/// Tracking event section. Generated at postprocessing with combined skb and ovs
+/// tracking information.
+#[event_section]
+pub(crate) struct TrackingInfo {
+    /// Tracking information of the original packet.
+    pub(crate) skb: SkbTrackingEvent,
+    /// The index in the event series.
+    pub(crate) idx: u32,
+}
 
-impl RawEventSectionFactory for SkbTrackingEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let event =
-            parse_single_raw_section::<SkbTrackingEvent>(ModuleId::SkbTracking, &raw_sections)?;
+impl Eq for TrackingInfo {}
 
-        Ok(Box::new(*event))
+impl PartialEq for TrackingInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.skb.tracking_id().eq(&other.skb.tracking_id())
+    }
+}
+
+impl PartialOrd for TrackingInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for TrackingInfo {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.skb
+            .timestamp
+            .cmp(&other.skb.timestamp)
+            .then_with(|| self.skb.orig_head.cmp(&other.skb.orig_head))
+    }
+}
+
+impl EventFmt for TrackingInfo {
+    fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
+        write!(f, "{} n {}", self.skb.display(format), self.idx)
+    }
+}
+
+impl TrackingInfo {
+    pub(crate) fn new(track: &SkbTrackingEvent) -> Result<Self> {
+        Ok(TrackingInfo {
+            skb: *track,
+            idx: 0,
+        })
     }
 }

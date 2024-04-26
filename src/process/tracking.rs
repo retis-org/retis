@@ -7,9 +7,8 @@
 //! inserts a new EventSection with information that identifies each event with its series.
 
 use std::{
-    cmp::{Eq, Ord, Ordering, PartialEq},
+    cmp::{Eq, PartialEq},
     collections::HashMap,
-    fmt,
     sync::{Arc, Mutex},
 };
 
@@ -20,46 +19,11 @@ use crate::{
     events::{
         bpf::{BpfRawSection, CommonEvent},
         ovs::{OvsEvent, OvsEventType},
+        skb_tracking::{SkbTrackingEvent, TrackingInfo},
         *,
     },
-    module::{skb_tracking::SkbTrackingEvent, ModuleId},
+    module::ModuleId,
 };
-
-#[event_section]
-pub(crate) struct TrackingInfo {
-    /// Tracking information of the original packet.
-    pub(crate) skb: SkbTrackingEvent,
-    /// The index in the event series.
-    pub(crate) idx: u32,
-}
-
-impl Eq for TrackingInfo {}
-
-impl PartialEq for TrackingInfo {
-    fn eq(&self, other: &Self) -> bool {
-        self.skb.tracking_id().eq(&other.skb.tracking_id())
-    }
-}
-
-impl PartialOrd for TrackingInfo {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-impl Ord for TrackingInfo {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.skb
-            .timestamp
-            .cmp(&other.skb.timestamp)
-            .then_with(|| self.skb.orig_head.cmp(&other.skb.orig_head))
-    }
-}
-
-impl EventFmt for TrackingInfo {
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
-        write!(f, "{} n {}", self.skb.display(format), self.idx)
-    }
-}
 
 #[derive(Default)]
 #[event_section_factory(TrackingInfo)]
@@ -68,15 +32,6 @@ pub(crate) struct TrackingInfoEventFactory {}
 impl RawEventSectionFactory for TrackingInfoEventFactory {
     fn from_raw(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         bail!("TrackingInfoEvents cannot be created from bpf")
-    }
-}
-
-impl TrackingInfo {
-    fn new(track: &SkbTrackingEvent) -> Result<Self> {
-        Ok(TrackingInfo {
-            skb: *track,
-            idx: 0,
-        })
     }
 }
 

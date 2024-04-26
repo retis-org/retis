@@ -7,11 +7,10 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use super::tracking::TrackingInfo;
 use anyhow::{anyhow, Result};
 
 use crate::{
-    events::{bpf::CommonEvent, Event},
+    events::{bpf::CommonEvent, skb_tracking::TrackingInfo, Event},
     module::ModuleId,
 };
 

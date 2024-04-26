@@ -1,11 +1,16 @@
 use anyhow::Result;
 
-use super::{tracking_hook, SkbTrackingEventFactory};
+use super::tracking_hook;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::probe::{manager::ProbeBuilderManager, Hook},
-    events::EventSectionFactory,
+    event_section, event_section_factory,
+    events::{
+        bpf::{parse_single_raw_section, BpfRawSection},
+        skb_tracking::SkbTrackingEvent,
+        *,
+    },
     module::{Module, ModuleId},
 };
 
@@ -36,5 +41,18 @@ impl Module for SkbTrackingModule {
     }
     fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
         Ok(Box::new(SkbTrackingEventFactory {}))
+    }
+}
+
+#[derive(Default)]
+#[event_section_factory(SkbTrackingEvent)]
+pub(crate) struct SkbTrackingEventFactory {}
+
+impl RawEventSectionFactory for SkbTrackingEventFactory {
+    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        let event =
+            parse_single_raw_section::<SkbTrackingEvent>(ModuleId::SkbTracking, &raw_sections)?;
+
+        Ok(Box::new(*event))
     }
 }
