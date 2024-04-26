@@ -1,49 +1,43 @@
-use std::{collections::HashMap, fmt};
+use std::collections::HashMap;
 
 use anyhow::{bail, Result};
 use btf_rs::Type;
 use log::warn;
 
-use crate::{
-    core::inspect::inspector,
-    event_section, event_section_factory,
-    events::{
-        bpf::{parse_single_raw_section, BpfRawSection},
-        *,
-    },
-    module::ModuleId,
-};
-
 // Keep in sync with definition in include/net/dropreason-core.h (Linux
 // sources).
 const SKB_DROP_REASON_SUBSYS_SHIFT: u32 = 16;
 
-// Skb drop event section. Same as the event from BPF, please keep in sync with
-// its BPF counterpart.
-#[event_section]
-pub(crate) struct SkbDropEvent {
-    /// Sub-system who generated the below drop reason. None for core reasons.
-    pub(crate) subsys: Option<String>,
-    /// Reason why a packet was freed/dropped. Only reported from specific
-    /// functions. See `enum skb_drop_reason` in the kernel.
-    pub(crate) drop_reason: String,
+use crate::{
+    core::inspect::inspector,
+    event_section, event_section_factory,
+    events::{bpf::*, skb_drop::SkbDropEvent, *},
+    module::ModuleId,
+};
+
+#[repr(C, packed)]
+struct BpfSkbDropEvent {
+    drop_reason: i32,
 }
 
-impl EventFmt for SkbDropEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        match &self.subsys {
-            None => write!(f, "drop (reason {})", self.drop_reason),
-            Some(name) => write!(f, "drop (reason {name}/{})", self.drop_reason),
+fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u32, String>> {
+    let mut values = HashMap::new();
+
+    if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(r#enum) {
+        if let Some((btf, Type::Enum(r#enum))) =
+            types.iter().find(|(_, t)| matches!(t, Type::Enum(_)))
+        {
+            for member in r#enum.members.iter() {
+                let mut val = btf.resolve_name(member)?;
+                trim_start
+                    .iter()
+                    .for_each(|p| val = val.trim_start_matches(p).to_string());
+                values.insert(member.val(), val.to_string());
+            }
         }
     }
-}
 
-#[event_section_factory(SkbDropEvent)]
-pub(crate) struct SkbDropEventFactory {
-    /// Map of sub-system reason ids to their custom drop reason definitions. A
-    /// `Some` value with an empty map means we couldn't retrieve the drop
-    /// reasons from the running kernel.
-    reasons: Option<HashMap<u16, DropReasons>>,
+    Ok(values)
 }
 
 /// Per-subsystem drop reason definitions.
@@ -79,6 +73,33 @@ impl DropReasons {
             },
             reasons,
         })
+    }
+}
+
+#[event_section_factory(SkbDropEvent)]
+pub(crate) struct SkbDropEventFactory {
+    /// Map of sub-system reason ids to their custom drop reason definitions. A
+    /// `Some` value with an empty map means we couldn't retrieve the drop
+    /// reasons from the running kernel.
+    reasons: Option<HashMap<u16, DropReasons>>,
+}
+
+impl RawEventSectionFactory for SkbDropEventFactory {
+    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        let raw = parse_single_raw_section::<BpfSkbDropEvent>(ModuleId::SkbDrop, &raw_sections)?;
+        let drop_reason = raw.drop_reason;
+
+        // Check if the drop reasons were correctly initialized.
+        if self.reasons.is_none() {
+            bail!("Factory was not initialized for consuming BPF events");
+        }
+
+        let (subsys, drop_reason) = self.get_reason(drop_reason);
+
+        Ok(Box::new(SkbDropEvent {
+            subsys,
+            drop_reason,
+        }))
     }
 }
 
@@ -145,48 +166,4 @@ impl SkbDropEventFactory {
             },
         )
     }
-}
-
-impl RawEventSectionFactory for SkbDropEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let raw = parse_single_raw_section::<BpfSkbDropEvent>(ModuleId::SkbDrop, &raw_sections)?;
-        let drop_reason = raw.drop_reason;
-
-        // Check if the drop reasons were correctly initialized.
-        if self.reasons.is_none() {
-            bail!("Factory was not initialized for consuming BPF events");
-        }
-
-        let (subsys, drop_reason) = self.get_reason(drop_reason);
-
-        Ok(Box::new(SkbDropEvent {
-            subsys,
-            drop_reason,
-        }))
-    }
-}
-
-#[repr(C, packed)]
-struct BpfSkbDropEvent {
-    drop_reason: i32,
-}
-
-fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u32, String>> {
-    let mut values = HashMap::new();
-
-    if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(r#enum) {
-        if let Some((btf, Type::Enum(r#enum))) =
-            types.iter().find(|(_, t)| matches!(t, Type::Enum(_)))
-        {
-            for member in r#enum.members.iter() {
-                let mut val = btf.resolve_name(member)?;
-                trim_start
-                    .iter()
-                    .for_each(|p| val = val.trim_start_matches(p).to_string());
-                values.insert(member.val(), val.to_string());
-            }
-        }
-    }
-
-    Ok(values)
 }

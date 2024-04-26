@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use log::warn;
 
-use super::{skb_drop_hook, SkbDropEventFactory};
+use super::{bpf::SkbDropEventFactory, skb_drop_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
