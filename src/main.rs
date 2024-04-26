@@ -19,8 +19,8 @@ mod benchmark;
 
 use crate::{
     cli::get_cli,
-    core::{inspect::init_inspector, logger::Logger},
-    helpers::pager::try_enable_pager,
+    core::inspect::init_inspector,
+    helpers::{logger::Logger, pager::try_enable_pager},
     module::get_modules,
 };
 

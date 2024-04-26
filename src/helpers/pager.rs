@@ -2,7 +2,7 @@ use std::{env, path::PathBuf};
 
 use pager::Pager;
 
-use crate::core::logger::Logger;
+use crate::helpers::logger::Logger;
 
 /// If successful, enables the pager for all output to stdout following this
 /// call. Useful in some commands when the output is quite long and we want to
