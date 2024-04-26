@@ -14,8 +14,8 @@ use pnet::packet::{
 
 use super::*;
 use crate::{
-    core::helpers::{self, net::RawPacket},
     events::bpf::{parse_raw_section, BpfRawSection},
+    helpers::{self, net::RawPacket},
 };
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as

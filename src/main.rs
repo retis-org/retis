@@ -8,6 +8,7 @@ mod collect;
 mod core;
 mod events;
 mod generate;
+mod helpers;
 mod inspect;
 mod module;
 mod process;
@@ -18,7 +19,8 @@ mod benchmark;
 
 use crate::{
     cli::get_cli,
-    core::{helpers::pager::try_enable_pager, inspect::init_inspector, logger::Logger},
+    core::{inspect::init_inspector, logger::Logger},
+    helpers::pager::try_enable_pager,
     module::get_modules,
 };
 

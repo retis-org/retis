@@ -5,7 +5,6 @@
 
 pub(crate) mod bpf_sys;
 pub(crate) mod filters;
-pub(crate) mod helpers;
 pub(crate) mod inspect;
 pub(crate) mod kernel;
 pub(crate) mod logger;
