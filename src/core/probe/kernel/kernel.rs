@@ -13,13 +13,13 @@ use crate::{
             ProbeOption,
         },
     },
-    events::{bpf::BpfRawSection, *},
+    events::{bpf::BpfRawSection, kernel::KernelEvent, *},
 };
-use crate::{event_section, event_section_factory, event_type};
+use crate::{event_section, event_section_factory};
 
 // Split to exclude from tests.
 #[cfg(not(test))]
-use crate::core::inspect::inspector;
+use crate::{core::inspect::inspector, events::kernel::StackTrace};
 
 /// Kernel encapsulates all the information about a kernel probe (kprobe or tracepoint) needed to attach to it.
 #[derive(Clone)]
@@ -62,62 +62,6 @@ impl KernelProbe {
 impl fmt::Display for KernelProbe {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.symbol)
-    }
-}
-
-#[event_section]
-pub(crate) struct KernelEvent {
-    /// Kernel symbol name associated with the event (i.e. which probe generated
-    /// the event).
-    pub(crate) symbol: String,
-    /// Probe type: one of "kprobe", "kretprobe" or "raw_tracepoint".
-    pub(crate) probe_type: String,
-    pub(crate) stack_trace: Option<StackTrace>,
-}
-
-impl EventFmt for KernelEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        write!(
-            f,
-            "[{}] {}",
-            match self.probe_type.as_str() {
-                "raw_tracepoint" => "tp",
-                "kprobe" => "k",
-                "kretprobe" => "kr",
-                _ => "invalid",
-            },
-            self.symbol,
-        )?;
-
-        Ok(())
-    }
-}
-
-#[event_type]
-#[derive(Default)]
-pub(crate) struct StackTrace(Vec<String>);
-
-impl StackTrace {
-    pub(crate) fn raw(&self) -> &Vec<String> {
-        &self.0
-    }
-}
-
-impl EventFmt for StackTrace {
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
-        let last = self.0.len() - 1;
-        match format {
-            DisplayFormat::SingleLine => {
-                write!(f, "[{}]", self.0.join(", "))
-            }
-            DisplayFormat::MultiLine => self.0.iter().enumerate().try_for_each(|(i, sym)| {
-                write!(f, "    {sym}")?;
-                if i != last {
-                    writeln!(f)?;
-                }
-                Ok(())
-            }),
-        }
     }
 }
 

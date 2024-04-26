@@ -10,9 +10,9 @@ use crate::{
     core::{
         inspect::inspector,
         kernel::Symbol,
-        probe::{kernel::KernelEvent, Probe, ProbeRuntimeManager},
+        probe::{Probe, ProbeRuntimeManager},
     },
-    events::Event,
+    events::{kernel::KernelEvent, Event},
     module::ModuleId,
 };
 

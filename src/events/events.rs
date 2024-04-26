@@ -38,8 +38,8 @@ use std::{any::Any, collections::HashMap, time::Duration};
 
 use anyhow::{bail, Result};
 
-use super::{bpf::BpfRawSection, DisplayFormat, EventDisplay, EventFmt};
-use crate::{core::probe::kernel::KernelEvent, module::ModuleId};
+use super::{bpf::BpfRawSection, kernel::KernelEvent, DisplayFormat, EventDisplay, EventFmt};
+use crate::module::ModuleId;
 
 /// Full event. Internal representation. The first key is the collector from
 /// which the event sections originate. The second one is the field name of a
