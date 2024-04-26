@@ -242,8 +242,8 @@ All the comparison operators support numbers (both signed and unsigned).
 Bitfields are supported as well (both signed and unsigned) and they
 are treated as regular numbers.
 
-For strings only the operator *equal to* is supported, furthermore, the
-string must be enclosed between *quotes*.
+For strings only the operators *equal to* and *not equal to* are supported,
+furthermore, the string (rhs) must be enclosed between *quotes*.
 
 ```none
 $ retis collect -m 'sk_buff.dev.name == "eth0"'
