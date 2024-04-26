@@ -22,4 +22,5 @@ pub(crate) mod bpf;
 pub(crate) mod file;
 
 pub(crate) mod ct;
+pub(crate) mod nft;
 pub(crate) mod skb;

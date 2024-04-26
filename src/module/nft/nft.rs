@@ -9,7 +9,7 @@ use clap::{arg, builder::PossibleValuesParser, Parser};
 use log::info;
 use serde_json::json;
 
-use super::{bpf::*, nft_hook, NftEventFactory};
+use super::{bpf::*, nft_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::{cli::Collect, Collector},
@@ -18,7 +18,7 @@ use crate::{
         kernel::Symbol,
         probe::{Hook, Probe, ProbeBuilderManager},
     },
-    events::EventSectionFactory,
+    events::*,
     module::{Module, ModuleId},
 };
 
