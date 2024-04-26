@@ -13,7 +13,7 @@ use clap::{
 use super::CollectRunner;
 use crate::{
     cli::{dynamic::DynamicCommand, SubCommand, *},
-    core::events::DisplayFormat,
+    events::DisplayFormat,
 };
 
 #[derive(Args, Debug, Default)]

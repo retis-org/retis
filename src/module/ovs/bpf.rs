@@ -6,9 +6,9 @@ use std::net::Ipv6Addr;
 use anyhow::{bail, Result};
 
 use super::event::*;
-use crate::core::{
+use crate::{
+    core::helpers,
     events::bpf::{parse_raw_section, BpfRawSection},
-    helpers,
 };
 
 /// Event data types supported by the ovs module.

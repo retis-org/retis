@@ -16,11 +16,11 @@ use std::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::{
-    core::events::{
+    event_section, event_section_factory,
+    events::{
         bpf::{BpfRawSection, CommonEvent},
         *,
     },
-    event_section, event_section_factory,
     module::{
         ovs::{OvsEvent, OvsEventType},
         skb_tracking::SkbTrackingEvent,

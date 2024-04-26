@@ -8,11 +8,11 @@ use log::{debug, warn};
 
 use crate::{
     core::{
-        events::Event,
         inspect::inspector,
         kernel::Symbol,
         probe::{kernel::KernelEvent, Probe, ProbeRuntimeManager},
     },
+    events::Event,
     module::ModuleId,
 };
 

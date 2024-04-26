@@ -5,14 +5,12 @@ use btf_rs::Type;
 use log::warn;
 
 use crate::{
-    core::{
-        events::{
-            bpf::{parse_single_raw_section, BpfRawSection},
-            *,
-        },
-        inspect::inspector,
-    },
+    core::inspect::inspector,
     event_section, event_section_factory,
+    events::{
+        bpf::{parse_single_raw_section, BpfRawSection},
+        *,
+    },
     module::ModuleId,
 };
 

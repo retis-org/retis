@@ -5,8 +5,8 @@ use serde::{de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer
 
 use super::bpf::*;
 use crate::{
-    core::events::{bpf::BpfRawSection, *},
     event_section, event_section_factory, event_type,
+    events::{bpf::BpfRawSection, *},
 };
 
 ///The OVS Event

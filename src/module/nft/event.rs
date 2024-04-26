@@ -3,11 +3,11 @@ use std::{fmt, str};
 use anyhow::Result;
 
 use crate::{
-    core::events::{
+    event_byte_array, event_section, event_section_factory,
+    events::{
         bpf::{parse_single_raw_section, BpfRawSection},
         *,
     },
-    event_byte_array, event_section, event_section_factory,
     module::ModuleId,
 };
 

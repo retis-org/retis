@@ -13,10 +13,8 @@ use clap::Parser;
 
 use crate::{
     cli::*,
-    core::{
-        events::{file::FileEventsFactory, *},
-        signals::Running,
-    },
+    core::signals::Running,
+    events::{file::FileEventsFactory, *},
     module::Modules,
     process::{display::PrintSeries, series::EventSorter, tracking::AddTracking},
 };

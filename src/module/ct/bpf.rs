@@ -9,15 +9,12 @@ use std::net::Ipv6Addr;
 
 use super::*;
 use crate::{
-    core::{
-        events::{
-            bpf::{parse_single_raw_section, BpfRawSection},
-            *,
-        },
-        helpers,
-        inspect::inspector,
-    },
+    core::{helpers, inspect::inspector},
     event_section_factory,
+    events::{
+        bpf::{parse_single_raw_section, BpfRawSection},
+        *,
+    },
     module::ModuleId,
 };
 

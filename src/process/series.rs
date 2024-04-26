@@ -11,7 +11,7 @@ use super::tracking::TrackingInfo;
 use anyhow::{anyhow, Result};
 
 use crate::{
-    core::events::{bpf::CommonEvent, Event},
+    events::{bpf::CommonEvent, Event},
     module::ModuleId,
 };
 

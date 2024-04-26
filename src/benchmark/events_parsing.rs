@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 
-use crate::{core::events::bpf::parse_raw_event, module::get_modules};
+use crate::{events::bpf::parse_raw_event, module::get_modules};
 
 /// Benchmark time to parse a bunch of raw events.
 pub(super) fn bench(ci: bool) -> Result<()> {

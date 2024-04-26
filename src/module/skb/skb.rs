@@ -11,10 +11,8 @@ use super::{bpf::*, skb_hook, SkbEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::{
-        events::EventSectionFactory,
-        probe::{Hook, ProbeBuilderManager},
-    },
+    core::probe::{Hook, ProbeBuilderManager},
+    events::EventSectionFactory,
     module::{Module, ModuleId},
 };
 

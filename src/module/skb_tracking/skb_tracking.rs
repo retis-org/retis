@@ -4,10 +4,8 @@ use super::{tracking_hook, SkbTrackingEventFactory};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::{
-        events::EventSectionFactory,
-        probe::{manager::ProbeBuilderManager, Hook},
-    },
+    core::probe::{manager::ProbeBuilderManager, Hook},
+    events::EventSectionFactory,
     module::{Module, ModuleId},
 };
 

@@ -5,13 +5,15 @@ use std::{collections::HashMap, fmt};
 use anyhow::{bail, Result};
 
 use super::{config::ProbeConfig, inspect::inspect_symbol};
-use crate::core::{
-    events::{bpf::BpfRawSection, *},
-    kernel::Symbol,
-    probe::{
-        common::{Counters, CountersKey},
-        ProbeOption,
+use crate::{
+    core::{
+        kernel::Symbol,
+        probe::{
+            common::{Counters, CountersKey},
+            ProbeOption,
+        },
     },
+    events::{bpf::BpfRawSection, *},
 };
 use crate::{event_section, event_section_factory, event_type};
 

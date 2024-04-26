@@ -3,7 +3,7 @@ use std::io::Write;
 use anyhow::Result;
 
 use super::series::EventSeries;
-use crate::core::events::*;
+use crate::events::*;
 
 enum PrintSingleFormat {
     Text(DisplayFormat),

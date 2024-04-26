@@ -4,10 +4,12 @@ use std::{any::Any, collections::HashMap, fmt, path::PathBuf};
 
 use anyhow::{anyhow, bail, Result};
 
-use crate::core::{
+use crate::{
+    core::{
+        probe::common::{Counters, CountersKey},
+        user::proc::Process,
+    },
     events::{bpf::BpfRawSection, *},
-    probe::common::{Counters, CountersKey},
-    user::proc::Process,
 };
 use crate::{event_section, event_section_factory};
 

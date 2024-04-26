@@ -28,7 +28,6 @@ use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFact
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
     core::{
-        events::{bpf::BpfEventsFactory, EventFactory, EventResult},
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
@@ -38,6 +37,7 @@ use crate::{
         signals::Running,
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
+    events::{bpf::BpfEventsFactory, EventFactory, EventResult},
     module::{ModuleId, Modules},
 };
 
@@ -486,11 +486,9 @@ impl SubCommandRunner for CollectRunner {
 mod tests {
     use super::*;
     use crate::{
-        core::{
-            events::{bpf::BpfRawSection, *},
-            probe::ProbeBuilderManager,
-        },
+        core::probe::ProbeBuilderManager,
         event_section, event_section_factory,
+        events::{bpf::BpfRawSection, *},
         module::Module,
     };
 

@@ -4,11 +4,9 @@ use anyhow::{bail, Result};
 
 use super::bpf::*;
 use crate::{
-    core::{
-        events::{bpf::BpfRawSection, *},
-        helpers::{self, net::RawPacket},
-    },
+    core::helpers::{self, net::RawPacket},
     event_section, event_section_factory, event_type,
+    events::{bpf::BpfRawSection, *},
 };
 
 /// Skb event section.

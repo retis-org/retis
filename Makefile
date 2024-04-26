@@ -47,7 +47,7 @@ endif
 
 # Taking errno.h from libc instead of linux headers.
 # TODO: Remove when we fix proper header dependencies.
-INCLUDES_ALL := $(abspath $(wildcard $(shell find src/core -type d -path '*/bpf/include') \
+INCLUDES_ALL := $(abspath $(wildcard $(shell find src -type d -path '*/bpf/include') \
                                      /usr/include/x86_64-linux-gnu))
 INCLUDES_ALL += $(LIBBPF_INCLUDES)
 
