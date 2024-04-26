@@ -233,8 +233,8 @@ impl MetaOp {
         let top = unsafe { &mut op.t };
 
         if lmo.is_ptr() || lmo.nmemb > 0 {
-            if cmp_op != MetaCmp::Eq {
-                bail!("wrong comparison operator. Only '==' is supported for strings.");
+            if cmp_op != MetaCmp::Eq && cmp_op != MetaCmp::Ne {
+                bail!("wrong comparison operator. Only '==' and '!=' are supported for strings.");
             }
 
             if let Rval::Str(val) = rval {
