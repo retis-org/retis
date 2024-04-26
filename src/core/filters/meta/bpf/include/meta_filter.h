@@ -104,8 +104,7 @@ static __always_inline long meta_process_ops(struct retis_meta_ctx *ctx)
 		/* Load Pointer */
 		if (val->l.type == PTR_BIT) {
 			if (bpf_probe_read_kernel(&ptr, sizeof(void *),
-						  (char *)ctx->base + (val->l.offt)) ||
-			    !ptr)
+						  (char *)ctx->base + (val->l.offt)))
 				return -1;
 
 			ctx->base = (void *)ptr;
