@@ -8,7 +8,7 @@ use std::{
 use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
 
-use super::{hooks, OvsEventFactory};
+use super::{bpf::OvsEventFactory, hooks};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,

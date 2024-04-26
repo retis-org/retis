@@ -19,13 +19,10 @@ use crate::{
     event_section, event_section_factory,
     events::{
         bpf::{BpfRawSection, CommonEvent},
+        ovs::{OvsEvent, OvsEventType},
         *,
     },
-    module::{
-        ovs::{OvsEvent, OvsEventType},
-        skb_tracking::SkbTrackingEvent,
-        ModuleId,
-    },
+    module::{skb_tracking::SkbTrackingEvent, ModuleId},
 };
 
 #[event_section]

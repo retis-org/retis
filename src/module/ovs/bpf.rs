@@ -5,9 +5,13 @@ use std::net::Ipv6Addr;
 
 use anyhow::{bail, Result};
 
-use super::event::*;
 use crate::{
-    events::bpf::{parse_raw_section, BpfRawSection},
+    event_section, event_section_factory,
+    events::{
+        bpf::{parse_raw_section, BpfRawSection},
+        ovs::*,
+        *,
+    },
     helpers,
 };
 
@@ -350,4 +354,31 @@ pub(super) fn unmarshall_upcall_return(
 
     event.event = OvsEventType::UpcallReturn(*uret);
     Ok(())
+}
+
+#[derive(Default)]
+#[event_section_factory(OvsEvent)]
+pub(crate) struct OvsEventFactory {}
+
+impl RawEventSectionFactory for OvsEventFactory {
+    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        let mut event = OvsEvent::default();
+
+        for section in raw_sections.iter() {
+            match OvsDataType::from_u8(section.header.data_type)? {
+                OvsDataType::Upcall => unmarshall_upcall(section, &mut event),
+                OvsDataType::UpcallEnqueue => unmarshall_upcall_enqueue(section, &mut event),
+                OvsDataType::UpcallReturn => unmarshall_upcall_return(section, &mut event),
+                OvsDataType::RecvUpcall => unmarshall_recv(section, &mut event),
+                OvsDataType::Operation => unmarshall_operation(section, &mut event),
+                OvsDataType::ActionExec => unmarshall_exec(section, &mut event),
+                OvsDataType::ActionExecTrack => unmarshall_exec_track(section, &mut event),
+                OvsDataType::OutputAction => unmarshall_output(section, &mut event),
+                OvsDataType::RecircAction => unmarshall_recirc(section, &mut event),
+                OvsDataType::ConntrackAction => unmarshall_ct(section, &mut event),
+            }?;
+        }
+
+        Ok(Box::new(event))
+    }
 }

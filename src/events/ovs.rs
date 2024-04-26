@@ -3,11 +3,8 @@ use std::fmt;
 use anyhow::{bail, Result};
 use serde::{de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer, Serializer};
 
-use super::bpf::*;
-use crate::{
-    event_section, event_section_factory, event_type,
-    events::{bpf::BpfRawSection, *},
-};
+use super::*;
+use crate::{event_section, event_type};
 
 ///The OVS Event
 #[derive(PartialEq)]
@@ -21,33 +18,6 @@ pub(crate) struct OvsEvent {
 impl EventFmt for OvsEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
         self.event.event_fmt(f, format)
-    }
-}
-
-#[derive(Default)]
-#[event_section_factory(OvsEvent)]
-pub(crate) struct OvsEventFactory {}
-
-impl RawEventSectionFactory for OvsEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let mut event = OvsEvent::default();
-
-        for section in raw_sections.iter() {
-            match OvsDataType::from_u8(section.header.data_type)? {
-                OvsDataType::Upcall => unmarshall_upcall(section, &mut event),
-                OvsDataType::UpcallEnqueue => unmarshall_upcall_enqueue(section, &mut event),
-                OvsDataType::UpcallReturn => unmarshall_upcall_return(section, &mut event),
-                OvsDataType::RecvUpcall => unmarshall_recv(section, &mut event),
-                OvsDataType::Operation => unmarshall_operation(section, &mut event),
-                OvsDataType::ActionExec => unmarshall_exec(section, &mut event),
-                OvsDataType::ActionExecTrack => unmarshall_exec_track(section, &mut event),
-                OvsDataType::OutputAction => unmarshall_output(section, &mut event),
-                OvsDataType::RecircAction => unmarshall_recirc(section, &mut event),
-                OvsDataType::ConntrackAction => unmarshall_ct(section, &mut event),
-            }?;
-        }
-
-        Ok(Box::new(event))
     }
 }
 
@@ -501,18 +471,18 @@ pub(crate) struct OvsActionRecirc {
 
 /// OVS conntrack flags
 // Keep in sync with their conterpart in bpf/kernel_exec_tp.bpf.c
-pub(super) const R_OVS_CT_COMMIT: u32 = 1 << 0;
-pub(super) const R_OVS_CT_FORCE: u32 = 1 << 1;
-pub(super) const R_OVS_CT_IP4: u32 = 1 << 2;
-pub(super) const R_OVS_CT_IP6: u32 = 1 << 3;
-pub(super) const R_OVS_CT_NAT: u32 = 1 << 4;
-pub(super) const R_OVS_CT_NAT_SRC: u32 = 1 << 5;
-pub(super) const R_OVS_CT_NAT_DST: u32 = 1 << 6;
-pub(super) const R_OVS_CT_NAT_RANGE_MAP_IPS: u32 = 1 << 7;
-pub(super) const R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED: u32 = 1 << 8;
-pub(super) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM: u32 = 1 << 9;
-pub(super) const R_OVS_CT_NAT_RANGE_PERSISTENT: u32 = 1 << 10;
-pub(super) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY: u32 = 1 << 11;
+pub(crate) const R_OVS_CT_COMMIT: u32 = 1 << 0;
+pub(crate) const R_OVS_CT_FORCE: u32 = 1 << 1;
+pub(crate) const R_OVS_CT_IP4: u32 = 1 << 2;
+pub(crate) const R_OVS_CT_IP6: u32 = 1 << 3;
+pub(crate) const R_OVS_CT_NAT: u32 = 1 << 4;
+pub(crate) const R_OVS_CT_NAT_SRC: u32 = 1 << 5;
+pub(crate) const R_OVS_CT_NAT_DST: u32 = 1 << 6;
+pub(crate) const R_OVS_CT_NAT_RANGE_MAP_IPS: u32 = 1 << 7;
+pub(crate) const R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED: u32 = 1 << 8;
+pub(crate) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM: u32 = 1 << 9;
+pub(crate) const R_OVS_CT_NAT_RANGE_PERSISTENT: u32 = 1 << 10;
+pub(crate) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY: u32 = 1 << 11;
 
 /// OVS conntrack action data.
 #[event_type]
