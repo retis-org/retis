@@ -12,7 +12,7 @@ use anyhow::{anyhow, Result};
 use log::{error, warn};
 use nix::time;
 
-use crate::core::signals::Running;
+use crate::helpers::signals::Running;
 
 pub(crate) struct TrackingGC {
     // Maps to track

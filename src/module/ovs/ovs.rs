@@ -16,11 +16,11 @@ use crate::{
         inspect,
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeBuilderManager, ProbeOption},
-        signals::Running,
         tracking::gc::TrackingGC,
         user::proc::{Process, ThreadInfo},
     },
     events::EventSectionFactory,
+    helpers::signals::Running,
     module::{Module, ModuleId},
 };
 

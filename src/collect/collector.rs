@@ -34,10 +34,10 @@ use crate::{
         },
         inspect::check::collection_prerequisites,
         probe::{kernel::probe_stack::ProbeStack, *},
-        signals::Running,
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
     events::{bpf::BpfEventsFactory, EventFactory, EventResult},
+    helpers::signals::Running,
     module::{ModuleId, Modules},
 };
 

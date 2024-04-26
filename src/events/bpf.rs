@@ -19,7 +19,7 @@ use plain::Plain;
 
 use super::{Event, EventResult};
 use crate::{
-    core::signals::Running, event_section, event_section_factory, event_type, events::*,
+    event_section, event_section_factory, event_type, events::*, helpers::signals::Running,
     module::ModuleId,
 };
 
