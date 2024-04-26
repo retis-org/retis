@@ -7,12 +7,12 @@ use btf_rs::Type;
 use plain::Plain;
 use std::net::Ipv6Addr;
 
-use super::*;
 use crate::{
     core::inspect::inspector,
     event_section_factory,
     events::{
         bpf::{parse_single_raw_section, BpfRawSection},
+        ct::*,
         *,
     },
     helpers,

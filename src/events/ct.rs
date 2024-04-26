@@ -1,6 +1,7 @@
 use std::fmt;
 
-use crate::{event_section, event_type, events::*};
+use super::*;
+use crate::{event_section, event_type};
 
 #[event_type]
 #[derive(Default)]
