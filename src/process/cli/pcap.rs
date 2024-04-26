@@ -24,9 +24,9 @@ use pcap_file::{
 use crate::{
     cli::*,
     core::{kernel::Symbol, probe::kernel::KernelEvent},
-    events::{bpf::CommonEvent, file::FileEventsFactory, *},
+    events::{bpf::CommonEvent, file::FileEventsFactory, skb::SkbEvent, *},
     helpers::signals::Running,
-    module::{skb::SkbEvent, ModuleId, Modules},
+    module::{ModuleId, Modules},
 };
 
 /// Statistics of the event parser about events (processed, skipped, etc).

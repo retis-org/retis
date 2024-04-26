@@ -4,6 +4,7 @@
 //!
 //! Please keep this file in sync with its BPF counterpart in bpf/skb_hook.bpf.c
 
+use anyhow::bail;
 use std::str;
 
 use anyhow::{anyhow, Result};
@@ -12,9 +13,13 @@ use pnet::packet::{
     tcp::TcpPacket, udp::UdpPacket, Packet,
 };
 
-use super::*;
 use crate::{
-    events::bpf::{parse_raw_section, BpfRawSection},
+    event_section, event_section_factory,
+    events::{
+        bpf::{parse_raw_section, BpfRawSection},
+        skb::*,
+        *,
+    },
     helpers::{self, net::RawPacket},
 };
 
@@ -340,4 +345,31 @@ fn unmarshal_l4(
     }
 
     Ok(())
+}
+
+#[derive(Default)]
+#[event_section_factory(SkbEvent)]
+pub(crate) struct SkbEventFactory {
+    // Should we report the Ethernet header.
+    pub(super) report_eth: bool,
+}
+
+impl RawEventSectionFactory for SkbEventFactory {
+    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        let mut event = SkbEvent::default();
+
+        for section in raw_sections.iter() {
+            match section.header.data_type as u64 {
+                SECTION_DEV => event.dev = unmarshal_dev(section)?,
+                SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
+                SECTION_META => event.meta = Some(unmarshal_meta(section)?),
+                SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
+                SECTION_GSO => event.gso = Some(unmarshal_gso(section)?),
+                SECTION_PACKET => unmarshal_packet(&mut event, section, self.report_eth)?,
+                x => bail!("Unknown data type ({x})"),
+            }
+        }
+
+        Ok(Box::new(event))
+    }
 }

@@ -1,11 +1,8 @@
 use std::fmt;
 
-use anyhow::{bail, Result};
-
-use super::bpf::*;
+use super::*;
 use crate::{
-    event_section, event_section_factory, event_type,
-    events::{bpf::BpfRawSection, *},
+    event_section, event_type,
     helpers::{self, net::RawPacket},
 };
 
@@ -500,31 +497,4 @@ pub(crate) struct SkbPacketEvent {
     pub(crate) capture_len: u32,
     /// Raw packet data.
     pub(crate) packet: RawPacket,
-}
-
-#[derive(Default)]
-#[event_section_factory(SkbEvent)]
-pub(crate) struct SkbEventFactory {
-    // Should we report the Ethernet header.
-    pub(super) report_eth: bool,
-}
-
-impl RawEventSectionFactory for SkbEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let mut event = SkbEvent::default();
-
-        for section in raw_sections.iter() {
-            match section.header.data_type as u64 {
-                SECTION_DEV => event.dev = unmarshal_dev(section)?,
-                SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
-                SECTION_META => event.meta = Some(unmarshal_meta(section)?),
-                SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
-                SECTION_GSO => event.gso = Some(unmarshal_gso(section)?),
-                SECTION_PACKET => unmarshal_packet(&mut event, section, self.report_eth)?,
-                x => bail!("Unknown data type ({x})"),
-            }
-        }
-
-        Ok(Box::new(event))
-    }
 }

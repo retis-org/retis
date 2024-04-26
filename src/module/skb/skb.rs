@@ -7,7 +7,7 @@ use anyhow::{bail, Result};
 use clap::{arg, builder::PossibleValuesParser, Parser};
 use log::warn;
 
-use super::{bpf::*, skb_hook, SkbEventFactory};
+use super::{bpf::*, skb_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
