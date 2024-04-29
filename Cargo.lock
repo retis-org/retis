@@ -1009,12 +1009,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "path-clean"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17359afc20d7ab31fdb42bb844c8b3bb1dabd7dcf7e68428492da7f16966fcef"
-
-[[package]]
 name = "pcap"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1286,7 +1280,6 @@ dependencies = [
  "nix 0.28.0",
  "once_cell",
  "pager",
- "path-clean",
  "pcap",
  "pcap-file",
  "plain",
