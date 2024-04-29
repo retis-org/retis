@@ -6,7 +6,7 @@
 use std::{
     any,
     collections::HashMap,
-    fmt, mem,
+    mem,
     os::fd::{AsFd, AsRawFd, RawFd},
     sync::mpsc,
     thread,
@@ -17,11 +17,11 @@ use anyhow::{anyhow, bail, Result};
 use log::{error, log, Level};
 use plain::Plain;
 
-use super::{Event, EventResult};
-use crate::{
-    event_section, event_section_factory, event_type, events::*, helpers::signals::Running,
-    module::ModuleId,
+use super::{
+    common::{CommonEvent, TaskEvent},
+    *,
 };
+use crate::{event_section, event_section_factory, helpers::signals::Running, module::ModuleId};
 
 /// Raw event sections for common.
 pub(super) const COMMON_SECTION_CORE: u64 = 0;
@@ -407,42 +407,6 @@ pub(crate) fn parse_single_raw_section<'a, T>(
     // We can access the first element safely as we just checked the vector
     // contains 1 element.
     parse_raw_section::<T>(&raw_sections[0])
-}
-
-#[event_type]
-#[derive(Default)]
-pub(crate) struct TaskEvent {
-    /// Process id.
-    pub(crate) pid: i32,
-    /// Thread group id.
-    pub(crate) tgid: i32,
-    /// Name of the current task.
-    pub(crate) comm: String,
-}
-
-#[event_section]
-pub(crate) struct CommonEvent {
-    /// Timestamp of when the event was generated.
-    pub(crate) timestamp: u64,
-    /// SMP processor id.
-    pub(crate) smp_id: u32,
-    pub(crate) task: Option<TaskEvent>,
-}
-
-impl EventFmt for CommonEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        write!(f, "{} ({})", self.timestamp, self.smp_id)?;
-
-        if let Some(current) = &self.task {
-            write!(f, " [{}] ", current.comm)?;
-            if current.tgid != current.pid {
-                write!(f, "{}/", current.pid)?;
-            }
-            write!(f, "{}", current.tgid)?;
-        }
-
-        Ok(())
-    }
 }
 
 #[derive(Default)]

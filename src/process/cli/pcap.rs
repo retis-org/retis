@@ -24,7 +24,7 @@ use pcap_file::{
 use crate::{
     cli::*,
     core::kernel::Symbol,
-    events::{bpf::CommonEvent, file::FileEventsFactory, kernel::KernelEvent, skb::SkbEvent, *},
+    events::{common::CommonEvent, file::FileEventsFactory, kernel::KernelEvent, skb::SkbEvent, *},
     helpers::signals::Running,
     module::{ModuleId, Modules},
 };

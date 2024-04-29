@@ -17,7 +17,8 @@ use anyhow::{anyhow, bail, Result};
 use crate::{
     event_section, event_section_factory,
     events::{
-        bpf::{BpfRawSection, CommonEvent},
+        bpf::BpfRawSection,
+        common::CommonEvent,
         ovs::{OvsEvent, OvsEventType},
         skb_tracking::{SkbTrackingEvent, TrackingInfo},
         *,
