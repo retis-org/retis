@@ -5,12 +5,12 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::probe::{manager::ProbeBuilderManager, Hook},
-    event_section, event_section_factory,
     events::{
         bpf::{parse_single_raw_section, BpfRawSection},
         *,
     },
     module::{Module, ModuleId},
+    EventSectionFactory,
 };
 
 #[derive(Default)]
@@ -43,8 +43,7 @@ impl Module for SkbTrackingModule {
     }
 }
 
-#[derive(Default)]
-#[event_section_factory(SkbTrackingEvent)]
+#[derive(Default, EventSectionFactory)]
 pub(crate) struct SkbTrackingEventFactory {}
 
 impl RawEventSectionFactory for SkbTrackingEventFactory {

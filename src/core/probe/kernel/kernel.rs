@@ -5,6 +5,7 @@ use std::{collections::HashMap, fmt};
 use anyhow::{bail, Result};
 
 use super::{config::ProbeConfig, inspect::inspect_symbol};
+use crate::EventSectionFactory;
 use crate::{
     core::{
         kernel::Symbol,
@@ -15,7 +16,6 @@ use crate::{
     },
     events::{bpf::BpfRawSection, *},
 };
-use crate::{event_section, event_section_factory};
 
 // Split to exclude from tests.
 #[cfg(not(test))]
@@ -65,8 +65,7 @@ impl fmt::Display for KernelProbe {
     }
 }
 
-#[derive(Default)]
-#[event_section_factory(KernelEvent)]
+#[derive(Default, EventSectionFactory)]
 pub(crate) struct KernelEventFactory {
     #[cfg(not(test))]
     pub(crate) stack_map: Option<libbpf_rs::MapHandle>,

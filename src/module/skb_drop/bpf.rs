@@ -10,9 +10,9 @@ const SKB_DROP_REASON_SUBSYS_SHIFT: u32 = 16;
 
 use crate::{
     core::inspect::inspector,
-    event_section, event_section_factory,
     events::{bpf::*, *},
     module::ModuleId,
+    EventSectionFactory,
 };
 
 #[repr(C, packed)]
@@ -76,7 +76,7 @@ impl DropReasons {
     }
 }
 
-#[event_section_factory(SkbDropEvent)]
+#[derive(EventSectionFactory)]
 pub(crate) struct SkbDropEventFactory {
     /// Map of sub-system reason ids to their custom drop reason definitions. A
     /// `Some` value with an empty map means we couldn't retrieve the drop

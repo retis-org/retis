@@ -29,14 +29,13 @@ pub(crate) struct Print {
 }
 
 impl SubCommandParserRunner for Print {
-    fn run(&mut self, modules: Modules) -> Result<()> {
+    fn run(&mut self, _: Modules) -> Result<()> {
         // Create running instance that will handle signal termination.
         let run = Running::new();
         run.register_term_signals()?;
 
         // Create event factory.
         let mut factory = FileEventsFactory::new(self.input.as_path())?;
-        factory.start(modules.section_factories()?)?;
 
         // Formatter & printer for events.
         let mut output = PrintSingle::text(Box::new(stdout()), self.format);

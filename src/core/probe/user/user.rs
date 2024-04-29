@@ -4,6 +4,7 @@ use std::{any::Any, collections::HashMap, fmt, path::PathBuf};
 
 use anyhow::{anyhow, bail, Result};
 
+use crate::EventSectionFactory;
 use crate::{
     core::{
         probe::common::{Counters, CountersKey},
@@ -11,7 +12,6 @@ use crate::{
     },
     events::{bpf::BpfRawSection, *},
 };
-use crate::{event_section, event_section_factory};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct UsdtProbe {
@@ -78,8 +78,7 @@ impl fmt::Display for UsdtProbe {
     }
 }
 
-#[derive(Default)]
-#[event_section_factory(UserEvent)]
+#[derive(Default, EventSectionFactory)]
 pub(crate) struct UserEventFactory {
     cache: HashMap<String, Box<dyn Any>>,
 }

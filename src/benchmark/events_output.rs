@@ -4,13 +4,11 @@ use anyhow::{bail, Result};
 
 use crate::{
     events::{file::FileEventsFactory, *},
-    module::get_modules,
     process::{display::*, series::EventSorter, tracking::AddTracking},
 };
 
 /// Benchmark time to output events (text, json).
 pub(super) fn bench(ci: bool) -> Result<()> {
-    let modules = get_modules()?;
     let iters = match ci {
         false => 1000000,
         true => 1,
@@ -19,7 +17,6 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     // PrintSingle benchmark
 
     let mut factory = FileEventsFactory::new("test_data/test_events.json")?;
-    factory.start(modules.section_factories()?)?;
     let event = match factory.next_event(None)? {
         EventResult::Event(event) => event,
         _ => bail!("Could not get event from test file"),
@@ -58,7 +55,6 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     // PrintSeries benchmark
 
     let mut factory = FileEventsFactory::new("test_data/test_events.json")?;
-    factory.start(modules.section_factories()?)?;
     let mut tracker = AddTracking::new();
     let mut series = EventSorter::new();
 

@@ -219,7 +219,7 @@ See `retis collect --help` for more details on the probe format."
 }
 
 impl SubCommandParserRunner for Pcap {
-    fn run(&mut self, modules: Modules) -> Result<()> {
+    fn run(&mut self, _: Modules) -> Result<()> {
         let (probe_type, target) = match self.probe.split_once(':') {
             Some((r#type, target)) => (r#type, target),
             None => ("kprobe", self.probe.as_str()),
@@ -260,7 +260,6 @@ impl SubCommandParserRunner for Pcap {
 
         handle_events(
             self.input.as_path(),
-            modules.section_factories()?,
             &filter,
             &mut EventParser::from(&mut writer),
         )
@@ -270,7 +269,6 @@ impl SubCommandParserRunner for Pcap {
 /// Internal logic to retrieve our events to feed the parser.
 fn handle_events<W>(
     input: &Path,
-    factories: SectionFactories,
     filter: &dyn Fn(&str, &str) -> bool,
     parser: &mut EventParser<W>,
 ) -> Result<()>
@@ -283,7 +281,6 @@ where
 
     // Start our events factory.
     let mut factory = FileEventsFactory::new(input)?;
-    factory.start(factories)?;
 
     // See if we matched (not processed!) at least one event.
     let mut matched = false;

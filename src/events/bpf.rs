@@ -18,7 +18,7 @@ use log::{error, log, Level};
 use plain::Plain;
 
 use super::{CommonEvent, TaskEvent, *};
-use crate::{event_section, event_section_factory, helpers::signals::Running, module::ModuleId};
+use crate::{helpers::signals::Running, module::ModuleId, EventSectionFactory};
 
 /// Raw event sections for common.
 pub(super) const COMMON_SECTION_CORE: u64 = 0;
@@ -163,10 +163,10 @@ impl BpfEventsFactory {
 }
 
 #[cfg(not(test))]
-impl EventFactory for BpfEventsFactory {
+impl BpfEventsFactory {
     /// This starts the event polling mechanism. A dedicated thread is started
     /// for events to be retrieved and processed.
-    fn start(&mut self, mut section_factories: SectionFactories) -> Result<()> {
+    pub fn start(&mut self, mut section_factories: SectionFactories) -> Result<()> {
         if section_factories.is_empty() {
             bail!("No section factory, can't parse events, aborting");
         }
@@ -255,7 +255,7 @@ impl EventFactory for BpfEventsFactory {
 
     /// Stops the event polling mechanism. The dedicated thread is stopped
     /// joining the execution
-    fn stop(&mut self) -> Result<()> {
+    pub fn stop(&mut self) -> Result<()> {
         self.handle.take().map_or(Ok(()), |th| {
             self.run_state.terminate();
             th.join()
@@ -269,7 +269,7 @@ impl EventFactory for BpfEventsFactory {
     }
 
     /// Retrieve the next event. This is a blocking call and never returns EOF.
-    fn next_event(&mut self, timeout: Option<Duration>) -> Result<EventResult> {
+    pub fn next_event(&mut self, timeout: Option<Duration>) -> Result<EventResult> {
         let rxc = match &self.rxc {
             Some(rxc) => rxc,
             None => bail!("Can't get event, no rx channel found."),
@@ -406,8 +406,7 @@ pub(crate) fn parse_single_raw_section<'a, T>(
     parse_raw_section::<T>(&raw_sections[0])
 }
 
-#[derive(Default)]
-#[event_section_factory(CommonEvent)]
+#[derive(Default, EventSectionFactory)]
 pub(crate) struct CommonEventFactory {}
 
 impl RawEventSectionFactory for CommonEventFactory {
@@ -471,14 +470,14 @@ impl BpfEventsFactory {
     }
 }
 #[cfg(test)]
-impl EventFactory for BpfEventsFactory {
-    fn start(&mut self, _: SectionFactories) -> Result<()> {
+impl BpfEventsFactory {
+    pub fn start(&mut self, _: SectionFactories) -> Result<()> {
         Ok(())
     }
-    fn next_event(&mut self, _: Option<Duration>) -> Result<EventResult> {
+    pub fn next_event(&mut self, _: Option<Duration>) -> Result<EventResult> {
         Ok(EventResult::Event(Event::new()))
     }
-    fn stop(&mut self) -> Result<()> {
+    pub fn stop(&mut self) -> Result<()> {
         Ok(())
     }
 }

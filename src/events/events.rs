@@ -34,11 +34,13 @@
 #![allow(dead_code)] // FIXME
 #![allow(clippy::wrong_self_convention)]
 
-use std::{any::Any, collections::HashMap, time::Duration};
+use std::{any::Any, collections::HashMap};
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
+use log::debug;
+use once_cell::sync::OnceCell;
 
-use super::{bpf::BpfRawSection, DisplayFormat, EventDisplay, EventFmt, KernelEvent};
+use super::{bpf::BpfRawSection, *};
 use crate::module::ModuleId;
 
 /// Full event. Internal representation. The first key is the collector from
@@ -50,6 +52,29 @@ pub(crate) struct Event(HashMap<ModuleId, Box<dyn EventSection>>);
 impl Event {
     pub(crate) fn new() -> Event {
         Event::default()
+    }
+
+    pub(crate) fn from_json(line: String) -> Result<Event> {
+        let mut event = Event::new();
+
+        let mut event_js: HashMap<String, serde_json::Value> = serde_json::from_str(line.as_str())
+            .map_err(|e| anyhow!("Failed to parse json event at line {line}: {e}"))?;
+
+        for (owner, value) in event_js.drain() {
+            let owner_mod = ModuleId::from_str(&owner)?;
+            let parser = event_sections()?
+                .get(&owner)
+                .ok_or_else(|| anyhow!("json contains an unsupported event {}", owner))?;
+
+            debug!("Unmarshaling event section {owner}: {value}");
+            event.insert_section(
+                owner_mod,
+                parser(value).map_err(|e| {
+                    anyhow!("Failed to create EventSection for owner {owner} from json: {e}")
+                })?,
+            )?;
+        }
+        Ok(event)
     }
 
     /// Insert a new event field into an event.
@@ -148,6 +173,43 @@ impl EventFmt for Event {
     }
 }
 
+type EventSectionMap = HashMap<String, fn(serde_json::Value) -> Result<Box<dyn EventSection>>>;
+static EVENT_SECTIONS: OnceCell<EventSectionMap> = OnceCell::new();
+
+fn event_sections() -> Result<&'static EventSectionMap> {
+    EVENT_SECTIONS.get_or_try_init(|| {
+        let mut events = EventSectionMap::new();
+        events.insert(CommonEvent::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<CommonEvent>(v)?))
+        });
+        events.insert(KernelEvent::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<KernelEvent>(v)?))
+        });
+        events.insert(UserEvent::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<UserEvent>(v)?))
+        });
+        events.insert(SkbTrackingEvent::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<SkbTrackingEvent>(v)?))
+        });
+        events.insert(SkbDropEvent::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<SkbDropEvent>(v)?))
+        });
+        events.insert(SkbEvent::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<SkbEvent>(v)?))
+        });
+        events.insert(OvsEvent::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<OvsEvent>(v)?))
+        });
+        events.insert(NftEvent::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<NftEvent>(v)?))
+        });
+        events.insert(CtEvent::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<CtEvent>(v)?))
+        });
+        Ok(events)
+    })
+}
+
 /// Type alias to refer to the commonly used EventSectionFactory HashMap.
 pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
 
@@ -159,22 +221,6 @@ pub(crate) enum EventResult {
     Eof,
     /// The timeout went off but a new attempt to retrieve an event might succeed.
     Timeout,
-}
-
-/// Implemented by objects generating events from a given source (BPF, file,
-/// etc).
-pub(crate) trait EventFactory {
-    /// Starts the factory events collection.
-    fn start(&mut self, section_factories: SectionFactories) -> Result<()>;
-    /// Stops the factory events collection.
-    fn stop(&mut self) -> Result<()>;
-    /// Gets the next Event.
-    ///
-    /// Either returns EOF if the underlying source is consumed, or is a
-    /// blocking call and waits for more data. Optionally a timeout can be
-    /// given, in such case None can be returned. Specific factories should
-    /// document those behaviors.
-    fn next_event(&mut self, timeout: Option<Duration>) -> Result<EventResult>;
 }
 
 /// Per-module event section, should map 1:1 with a ModuleId. Requiring specific
@@ -219,13 +265,11 @@ impl EventSectionInternal for () {
 }
 
 /// EventSection factory, providing helpers to create event sections from
-/// various formats.
+/// ebpf.
 ///
 /// Please use `#[retis_derive::event_section_factory(SectionType)]` to
 /// implement the common traits.
-pub(crate) trait EventSectionFactory:
-    RawEventSectionFactory + SerdeEventSectionFactory
-{
+pub(crate) trait EventSectionFactory: RawEventSectionFactory {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
@@ -233,12 +277,4 @@ pub(crate) trait EventSectionFactory:
 /// per-object implementation.
 pub(crate) trait RawEventSectionFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>>;
-}
-
-/// Event section factory helpers to convert from serde compatible inputs.
-///
-/// In most cases an event section object should not have to define thoses as
-/// there is an implementation for serde::Deserialize + serde::Serialize.
-pub(crate) trait SerdeEventSectionFactory {
-    fn from_json(&self, val: serde_json::Value) -> Result<Box<dyn EventSection>>;
 }

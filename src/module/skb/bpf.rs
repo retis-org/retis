@@ -14,12 +14,12 @@ use pnet::packet::{
 };
 
 use crate::{
-    event_section, event_section_factory,
     events::{
         bpf::{parse_raw_section, BpfRawSection},
         *,
     },
     helpers::{self, net::RawPacket},
+    EventSectionFactory,
 };
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
@@ -346,8 +346,7 @@ fn unmarshal_l4(
     Ok(())
 }
 
-#[derive(Default)]
-#[event_section_factory(SkbEvent)]
+#[derive(Default, EventSectionFactory)]
 pub(crate) struct SkbEventFactory {
     // Should we report the Ethernet header.
     pub(super) report_eth: bool,

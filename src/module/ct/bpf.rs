@@ -9,13 +9,13 @@ use std::net::Ipv6Addr;
 
 use crate::{
     core::inspect::inspector,
-    event_section_factory,
     events::{
         bpf::{parse_single_raw_section, BpfRawSection},
         *,
     },
     helpers,
     module::ModuleId,
+    EventSectionFactory,
 };
 
 /// Retis-specific flags.
@@ -67,8 +67,7 @@ struct RawCtEvent {
 
 unsafe impl Plain for RawCtEvent {}
 
-#[derive(Default)]
-#[event_section_factory(CtEvent)]
+#[derive(Default, EventSectionFactory)]
 pub(crate) struct CtEventFactory {
     tcp_states: HashMap<i32, String>,
 }

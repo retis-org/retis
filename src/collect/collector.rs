@@ -36,7 +36,7 @@ use crate::{
         probe::{kernel::probe_stack::ProbeStack, *},
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
-    events::{bpf::BpfEventsFactory, EventFactory, EventResult},
+    events::{bpf::BpfEventsFactory, EventResult},
     helpers::signals::Running,
     module::{ModuleId, Modules},
 };
@@ -487,9 +487,10 @@ mod tests {
     use super::*;
     use crate::{
         core::probe::ProbeBuilderManager,
-        event_section, event_section_factory,
+        event_section,
         events::{bpf::BpfRawSection, *},
         module::Module,
+        EventSectionFactory,
     };
 
     struct DummyCollectorA;
@@ -550,7 +551,7 @@ mod tests {
     }
 
     #[event_section("test")]
-    #[event_section_factory(Self)]
+    #[derive(EventSectionFactory)]
     struct TestEvent {}
 
     impl EventFmt for TestEvent {

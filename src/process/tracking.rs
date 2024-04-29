@@ -15,13 +15,12 @@ use std::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::{
-    event_section, event_section_factory,
     events::{bpf::BpfRawSection, *},
     module::ModuleId,
+    EventSectionFactory,
 };
 
-#[derive(Default)]
-#[event_section_factory(TrackingInfo)]
+#[derive(Default, EventSectionFactory)]
 pub(crate) struct TrackingInfoEventFactory {}
 
 impl RawEventSectionFactory for TrackingInfoEventFactory {
