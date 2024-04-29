@@ -4,11 +4,11 @@ use super::tracking_hook;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
-    core::probe::{manager::ProbeBuilderManager, Hook},
-    events::{
-        bpf::{parse_single_raw_section, BpfRawSection},
-        *,
+    core::{
+        events::*,
+        probe::{manager::ProbeBuilderManager, Hook},
     },
+    events::*,
     module::Module,
     EventSectionFactory,
 };

@@ -5,10 +5,11 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
+        events::EventSectionFactory,
         inspect,
         probe::{Hook, ProbeBuilderManager},
     },
-    events::{EventSectionFactory, SectionId},
+    events::SectionId,
     module::Module,
 };
 

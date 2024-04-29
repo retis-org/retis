@@ -14,6 +14,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::{cli::Collect, Collector},
     core::{
+        events::EventSectionFactory,
         inspect,
         kernel::Symbol,
         probe::{Hook, Probe, ProbeBuilderManager},

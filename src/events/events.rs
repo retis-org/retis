@@ -40,7 +40,7 @@ use anyhow::{anyhow, bail, Result};
 use log::debug;
 use once_cell::sync::OnceCell;
 
-use super::{bpf::BpfRawSection, *};
+use super::*;
 
 /// Full event. Internal representation. The first key is the collector from
 /// which the event sections originate. The second one is the field name of a
@@ -310,9 +310,6 @@ fn event_sections() -> Result<&'static EventSectionMap> {
     })
 }
 
-/// Type alias to refer to the commonly used EventSectionFactory HashMap.
-pub(crate) type SectionFactories = HashMap<SectionId, Box<dyn EventSectionFactory>>;
-
 /// The return value of EventFactory::next_event()
 pub(crate) enum EventResult {
     /// The Factory was able to create a new event.
@@ -362,19 +359,4 @@ impl EventSectionInternal for () {
     fn to_json(&self) -> serde_json::Value {
         serde_json::Value::Null
     }
-}
-
-/// EventSection factory, providing helpers to create event sections from
-/// ebpf.
-///
-/// Please use `#[retis_derive::event_section_factory(SectionType)]` to
-/// implement the common traits.
-pub(crate) trait EventSectionFactory: RawEventSectionFactory {
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-}
-
-/// Event section factory helpers to convert from BPF raw events. Requires a
-/// per-object implementation.
-pub(crate) trait RawEventSectionFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>>;
 }

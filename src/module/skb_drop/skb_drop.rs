@@ -6,11 +6,12 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
+        events::EventSectionFactory,
         inspect::{inspector, kernel_version::KernelVersionReq},
         kernel::Symbol,
         probe::{Hook, Probe, ProbeBuilderManager},
     },
-    events::{EventSectionFactory, SectionId},
+    events::SectionId,
     module::Module,
 };
 

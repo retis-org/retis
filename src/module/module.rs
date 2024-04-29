@@ -8,8 +8,11 @@ use super::{
 };
 use crate::{
     collect::Collector,
-    core::probe::{kernel::KernelEventFactory, user::UserEventFactory},
-    events::{bpf::CommonEventFactory, *},
+    core::{
+        events::{CommonEventFactory, EventSectionFactory, SectionFactories},
+        probe::{kernel::KernelEventFactory, user::UserEventFactory},
+    },
+    events::*,
     process::tracking::TrackingInfoEventFactory,
 };
 

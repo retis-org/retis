@@ -15,11 +15,11 @@ use std::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::{
-    events::{bpf::BpfRawSection, *},
-    EventSectionFactory,
+    core::events::{BpfRawSection, EventSectionFactory, RawEventSectionFactory},
+    events::*,
 };
 
-#[derive(Default, EventSectionFactory)]
+#[derive(Default, crate::EventSectionFactory)]
 pub(crate) struct TrackingInfoEventFactory {}
 
 impl RawEventSectionFactory for TrackingInfoEventFactory {

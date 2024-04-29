@@ -13,13 +13,14 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
+        events::EventSectionFactory,
         inspect,
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeBuilderManager, ProbeOption},
         tracking::gc::TrackingGC,
         user::proc::{Process, ThreadInfo},
     },
-    events::{EventSectionFactory, SectionId},
+    events::SectionId,
     helpers::signals::Running,
     module::Module,
 };

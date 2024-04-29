@@ -28,6 +28,7 @@ use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFact
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
     core::{
+        events::BpfEventsFactory,
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
@@ -36,7 +37,7 @@ use crate::{
         probe::{kernel::probe_stack::ProbeStack, *},
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
-    events::{bpf::BpfEventsFactory, EventResult, SectionId},
+    events::{EventResult, SectionId},
     helpers::signals::Running,
     module::Modules,
 };
@@ -486,11 +487,10 @@ impl SubCommandRunner for CollectRunner {
 mod tests {
     use super::*;
     use crate::{
-        core::probe::ProbeBuilderManager,
+        core::{events::bpf::*, probe::ProbeBuilderManager},
         event_section,
-        events::{bpf::BpfRawSection, *},
+        events::*,
         module::Module,
-        EventSectionFactory,
     };
 
     struct DummyCollectorA;
@@ -551,7 +551,7 @@ mod tests {
     }
 
     #[event_section("test")]
-    #[derive(EventSectionFactory)]
+    #[derive(crate::EventSectionFactory)]
     struct TestEvent {}
 
     impl EventFmt for TestEvent {

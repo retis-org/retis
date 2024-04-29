@@ -6,11 +6,9 @@ use std::net::Ipv6Addr;
 use anyhow::{bail, Result};
 
 use crate::{
-    events::{
-        bpf::{parse_raw_section, BpfRawSection},
-        *,
-    },
-    helpers, EventSectionFactory,
+    core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
+    events::*,
+    helpers,
 };
 
 /// Event data types supported by the ovs module.
@@ -354,7 +352,7 @@ pub(super) fn unmarshall_upcall_return(
     Ok(())
 }
 
-#[derive(Default, EventSectionFactory)]
+#[derive(Default, crate::EventSectionFactory)]
 pub(crate) struct OvsEventFactory {}
 
 impl RawEventSectionFactory for OvsEventFactory {

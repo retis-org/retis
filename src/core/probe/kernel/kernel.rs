@@ -8,13 +8,14 @@ use super::{config::ProbeConfig, inspect::inspect_symbol};
 use crate::EventSectionFactory;
 use crate::{
     core::{
+        events::{BpfRawSection, EventSectionFactory, RawEventSectionFactory},
         kernel::Symbol,
         probe::{
             common::{Counters, CountersKey},
             ProbeOption,
         },
     },
-    events::{bpf::BpfRawSection, *},
+    events::*,
 };
 
 // Split to exclude from tests.

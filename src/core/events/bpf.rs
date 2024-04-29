@@ -17,8 +17,10 @@ use anyhow::{anyhow, bail, Result};
 use log::{error, log, Level};
 use plain::Plain;
 
-use super::{CommonEvent, TaskEvent, *};
-use crate::{helpers::signals::Running, EventSectionFactory};
+use crate::{
+    events::{CommonEvent, TaskEvent, *},
+    helpers::signals::Running,
+};
 
 /// Raw event sections for common.
 pub(super) const COMMON_SECTION_CORE: u64 = 0;
@@ -166,7 +168,7 @@ impl BpfEventsFactory {
 impl BpfEventsFactory {
     /// This starts the event polling mechanism. A dedicated thread is started
     /// for events to be retrieved and processed.
-    pub fn start(&mut self, mut section_factories: SectionFactories) -> Result<()> {
+    pub(crate) fn start(&mut self, mut section_factories: SectionFactories) -> Result<()> {
         if section_factories.is_empty() {
             bail!("No section factory, can't parse events, aborting");
         }
@@ -255,7 +257,7 @@ impl BpfEventsFactory {
 
     /// Stops the event polling mechanism. The dedicated thread is stopped
     /// joining the execution
-    pub fn stop(&mut self) -> Result<()> {
+    pub(crate) fn stop(&mut self) -> Result<()> {
         self.handle.take().map_or(Ok(()), |th| {
             self.run_state.terminate();
             th.join()
@@ -269,7 +271,7 @@ impl BpfEventsFactory {
     }
 
     /// Retrieve the next event. This is a blocking call and never returns EOF.
-    pub fn next_event(&mut self, timeout: Option<Duration>) -> Result<EventResult> {
+    pub(crate) fn next_event(&mut self, timeout: Option<Duration>) -> Result<EventResult> {
         let rxc = match &self.rxc {
             Some(rxc) => rxc,
             None => bail!("Can't get event, no rx channel found."),
@@ -406,7 +408,7 @@ pub(crate) fn parse_single_raw_section<'a, T>(
     parse_raw_section::<T>(&raw_sections[0])
 }
 
-#[derive(Default, EventSectionFactory)]
+#[derive(Default, crate::EventSectionFactory)]
 pub(crate) struct CommonEventFactory {}
 
 impl RawEventSectionFactory for CommonEventFactory {
@@ -471,13 +473,13 @@ impl BpfEventsFactory {
 }
 #[cfg(test)]
 impl BpfEventsFactory {
-    pub fn start(&mut self, _: SectionFactories) -> Result<()> {
+    pub(crate) fn start(&mut self, _: SectionFactories) -> Result<()> {
         Ok(())
     }
-    pub fn next_event(&mut self, _: Option<Duration>) -> Result<EventResult> {
+    pub(crate) fn next_event(&mut self, _: Option<Duration>) -> Result<EventResult> {
         Ok(EventResult::Event(Event::new()))
     }
-    pub fn stop(&mut self) -> Result<()> {
+    pub(crate) fn stop(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -539,6 +541,24 @@ pub(crate) struct BpfRawSectionHeader {
 }
 
 unsafe impl Plain for BpfRawSectionHeader {}
+
+/// EventSection factory, providing helpers to create event sections from
+/// ebpf.
+///
+/// Please use `#[retis_derive::event_section_factory(SectionType)]` to
+/// implement the common traits.
+pub(crate) trait EventSectionFactory: RawEventSectionFactory {
+    fn as_any_mut(&mut self) -> &mut dyn any::Any;
+}
+
+/// Event section factory helpers to convert from BPF raw events. Requires a
+/// per-object implementation.
+pub(crate) trait RawEventSectionFactory {
+    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>>;
+}
+
+/// Type alias to refer to the commonly used EventSectionFactory HashMap.
+pub(crate) type SectionFactories = HashMap<SectionId, Box<dyn EventSectionFactory>>;
 
 #[cfg(test)]
 mod tests {

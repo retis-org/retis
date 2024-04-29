@@ -1,12 +1,11 @@
 use anyhow::Result;
 
 use crate::{
-    event_byte_array,
-    events::{
-        bpf::{parse_single_raw_section, BpfRawSection},
-        *,
+    core::events::{
+        parse_single_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory,
     },
-    EventSectionFactory,
+    event_byte_array,
+    events::*,
 };
 
 // Please keep in sync with its bpf counterpart under
@@ -85,7 +84,7 @@ struct NftBpfEvent {
     p: u8,
 }
 
-#[derive(Default, EventSectionFactory)]
+#[derive(Default, crate::EventSectionFactory)]
 pub(crate) struct NftEventFactory {}
 
 impl RawEventSectionFactory for NftEventFactory {

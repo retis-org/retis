@@ -7,10 +7,11 @@ use anyhow::{anyhow, bail, Result};
 use crate::EventSectionFactory;
 use crate::{
     core::{
+        events::{BpfRawSection, EventSectionFactory, RawEventSectionFactory},
         probe::common::{Counters, CountersKey},
         user::proc::Process,
     },
-    events::{bpf::BpfRawSection, *},
+    events::*,
 };
 
 #[derive(Debug, Clone, PartialEq)]
