@@ -7,7 +7,7 @@ use crate::{
 };
 
 /// Skb event section.
-#[event_section]
+#[event_section("skb")]
 pub(crate) struct SkbEvent {
     /// Ethernet fields, if any.
     pub(crate) eth: Option<SkbEthEvent>,

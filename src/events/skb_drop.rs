@@ -5,7 +5,7 @@ use crate::event_section;
 
 // Skb drop event section. Same as the event from BPF, please keep in sync with
 // its BPF counterpart.
-#[event_section]
+#[event_section("skb-drop")]
 pub(crate) struct SkbDropEvent {
     /// Sub-system who generated the below drop reason. None for core reasons.
     pub(crate) subsys: Option<String>,

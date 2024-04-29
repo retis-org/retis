@@ -549,7 +549,7 @@ mod tests {
         }
     }
 
-    #[event_section]
+    #[event_section("test")]
     #[event_section_factory(Self)]
     struct TestEvent {}
 

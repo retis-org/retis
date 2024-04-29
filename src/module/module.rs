@@ -74,16 +74,16 @@ impl ModuleId {
     pub(crate) fn from_str(val: &str) -> Result<ModuleId> {
         use ModuleId::*;
         Ok(match val {
-            "common" => Common,
-            "kernel" => Kernel,
-            "userspace" => Userspace,
-            "tracking" => Tracking,
-            "skb-tracking" => SkbTracking,
-            "skb-drop" => SkbDrop,
-            "skb" => Skb,
-            "ovs" => Ovs,
-            "nft" => Nft,
-            "ct" => Ct,
+            CommonEvent::SECTION_NAME => Common,
+            KernelEvent::SECTION_NAME => Kernel,
+            UserEvent::SECTION_NAME => Userspace,
+            TrackingInfo::SECTION_NAME => Tracking,
+            SkbTrackingEvent::SECTION_NAME => SkbTracking,
+            SkbDropEvent::SECTION_NAME => SkbDrop,
+            SkbEvent::SECTION_NAME => Skb,
+            OvsEvent::SECTION_NAME => Ovs,
+            NftEvent::SECTION_NAME => Nft,
+            CtEvent::SECTION_NAME => Ct,
             x => bail!("Can't construct a ModuleId from {}", x),
         })
     }
@@ -92,16 +92,16 @@ impl ModuleId {
     pub(crate) fn to_str(self) -> &'static str {
         use ModuleId::*;
         match self {
-            Common => "common",
-            Kernel => "kernel",
-            Userspace => "userspace",
-            Tracking => "tracking",
-            SkbTracking => "skb-tracking",
-            SkbDrop => "skb-drop",
-            Skb => "skb",
-            Ovs => "ovs",
-            Nft => "nft",
-            Ct => "ct",
+            Common => CommonEvent::SECTION_NAME,
+            Kernel => KernelEvent::SECTION_NAME,
+            Userspace => UserEvent::SECTION_NAME,
+            Tracking => TrackingInfo::SECTION_NAME,
+            SkbTracking => SkbTrackingEvent::SECTION_NAME,
+            SkbDrop => SkbDropEvent::SECTION_NAME,
+            Skb => SkbEvent::SECTION_NAME,
+            Ovs => OvsEvent::SECTION_NAME,
+            Nft => NftEvent::SECTION_NAME,
+            Ct => CtEvent::SECTION_NAME,
             _MAX => "_max",
         }
     }

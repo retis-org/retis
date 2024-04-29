@@ -8,7 +8,7 @@ use crate::{event_section, event_type};
 
 ///The OVS Event
 #[derive(PartialEq)]
-#[event_section]
+#[event_section("ovs")]
 pub(crate) struct OvsEvent {
     /// Event data
     #[serde(flatten)]

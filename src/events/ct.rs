@@ -100,7 +100,7 @@ pub(crate) enum CtState {
     Untracked,
 }
 /// Conntrack event
-#[event_section]
+#[event_section("ct")]
 pub(crate) struct CtEvent {
     /// Zone ID
     pub(crate) zone_id: u16,
