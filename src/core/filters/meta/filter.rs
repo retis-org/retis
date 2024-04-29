@@ -233,8 +233,8 @@ impl MetaOp {
         let top = unsafe { &mut op.t };
 
         if lmo.is_ptr() || lmo.nmemb > 0 {
-            if cmp_op != MetaCmp::Eq {
-                bail!("wrong comparison operator. Only '==' is supported for strings.");
+            if cmp_op != MetaCmp::Eq && cmp_op != MetaCmp::Ne {
+                bail!("wrong comparison operator. Only '==' and '!=' are supported for strings.");
             }
 
             if let Rval::Str(val) = rval {
@@ -535,17 +535,20 @@ mod tests {
             FilterMeta::from_string(format!("sk_buff.dev.name {op_str} dummy0").to_string())
                 .is_err()
         );
-        // Only MetaCmp::Eq is allowed for strings.
-        if op_str != "==" {
+        // Only MetaCmp::{Eq,Ne} are allowed for strings.
+        if op_str != "==" && op_str != "!=" {
             assert!(FilterMeta::from_string(format!("sk_buff.dev.name {op_str} 'dummy0'")).is_err())
         }
         // Target value must be a string.
         assert!(FilterMeta::from_string("sk_buff.mark {op_str} 'dummy0'".to_string()).is_err());
     }
 
-    #[test]
-    fn meta_filter_string() {
-        let filter = FilterMeta::from_string("sk_buff.dev.name == 'dummy0'".to_string()).unwrap();
+    #[test_case("==", MetaCmp::Eq ; "op is eq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    fn meta_filter_string(op_str: &'static str, op: MetaCmp) {
+        let filter =
+            FilterMeta::from_string(format!("sk_buff.dev.name {op_str} 'dummy0'").to_string())
+                .unwrap();
         assert_eq!(filter.0.len(), 3);
         let meta_load = unsafe { &filter.0[1].l };
         assert!(!meta_load.is_num());
@@ -560,7 +563,7 @@ mod tests {
         assert_eq!(meta_load.offt, 0);
 
         let meta_target = unsafe { &filter.0[0].t };
-        assert_eq!(meta_target.cmp, MetaCmp::Eq as u8);
+        assert_eq!(meta_target.cmp, op as u8);
         assert_eq!(meta_target.sz, 6);
         let target_str = std::str::from_utf8(unsafe { &meta_target.u.bin })
             .unwrap()

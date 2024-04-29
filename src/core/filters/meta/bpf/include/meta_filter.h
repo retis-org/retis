@@ -104,8 +104,7 @@ static __always_inline long meta_process_ops(struct retis_meta_ctx *ctx)
 		/* Load Pointer */
 		if (val->l.type == PTR_BIT) {
 			if (bpf_probe_read_kernel(&ptr, sizeof(void *),
-						  (char *)ctx->base + (val->l.offt)) ||
-			    !ptr)
+						  (char *)ctx->base + (val->l.offt)))
 				return -1;
 
 			ctx->base = (void *)ptr;
@@ -155,7 +154,7 @@ bool cmp_num(u64 operand1, u64 operand2, bool sign_bit, u8 cmp_type)
 }
 
 static __always_inline
-bool filter_bytes(struct retis_meta_ctx *ctx)
+bool cmp_bytes(struct retis_meta_ctx *ctx)
 {
 	char val[META_TARGET_MAX];
 	long sz;
@@ -180,6 +179,24 @@ bool filter_bytes(struct retis_meta_ctx *ctx)
 		sp1++, sp2++;
 
 	return !(*sp1 - *sp2);
+}
+
+static __always_inline
+bool filter_bytes(struct retis_meta_ctx *ctx)
+{
+	bool ret = cmp_bytes(ctx);
+
+	switch (ctx->cmp) {
+	case RETIS_EQ:
+		return ret;
+	case RETIS_NE:
+		return !ret;
+	default:
+		log_error("Wrong comparison operator %d", ctx->cmp);
+		break;
+	}
+
+	return false;
 }
 
 /* Removes prefix and suffix bits that can be part of a potential
