@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, VecDeque};
 use anyhow::{anyhow, Result};
 
 use crate::{
-    events::{common::CommonEvent, skb_tracking::TrackingInfo, Event},
+    events::{CommonEvent, Event, TrackingInfo},
     module::ModuleId,
 };
 

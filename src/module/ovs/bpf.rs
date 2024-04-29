@@ -9,7 +9,6 @@ use crate::{
     event_section, event_section_factory,
     events::{
         bpf::{parse_raw_section, BpfRawSection},
-        ovs::*,
         *,
     },
     helpers,

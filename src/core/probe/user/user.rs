@@ -9,7 +9,7 @@ use crate::{
         probe::common::{Counters, CountersKey},
         user::proc::Process,
     },
-    events::{bpf::BpfRawSection, user::UserEvent, *},
+    events::{bpf::BpfRawSection, *},
 };
 use crate::{event_section, event_section_factory};
 

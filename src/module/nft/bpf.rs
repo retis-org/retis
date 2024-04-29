@@ -4,7 +4,6 @@ use crate::{
     event_byte_array, event_section, event_section_factory,
     events::{
         bpf::{parse_single_raw_section, BpfRawSection},
-        nft::*,
         *,
     },
     module::ModuleId,

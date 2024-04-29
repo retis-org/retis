@@ -12,7 +12,7 @@ use crate::{
         kernel::Symbol,
         probe::{Probe, ProbeRuntimeManager},
     },
-    events::{kernel::KernelEvent, Event},
+    events::{Event, KernelEvent},
     module::ModuleId,
 };
 

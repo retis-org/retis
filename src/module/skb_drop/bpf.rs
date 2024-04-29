@@ -11,7 +11,7 @@ const SKB_DROP_REASON_SUBSYS_SHIFT: u32 = 16;
 use crate::{
     core::inspect::inspector,
     event_section, event_section_factory,
-    events::{bpf::*, skb_drop::SkbDropEvent, *},
+    events::{bpf::*, *},
     module::ModuleId,
 };
 

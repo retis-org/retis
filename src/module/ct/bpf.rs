@@ -12,7 +12,6 @@ use crate::{
     event_section_factory,
     events::{
         bpf::{parse_single_raw_section, BpfRawSection},
-        ct::*,
         *,
     },
     helpers,

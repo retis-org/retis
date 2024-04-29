@@ -38,7 +38,7 @@ use std::{any::Any, collections::HashMap, time::Duration};
 
 use anyhow::{bail, Result};
 
-use super::{bpf::BpfRawSection, kernel::KernelEvent, DisplayFormat, EventDisplay, EventFmt};
+use super::{bpf::BpfRawSection, DisplayFormat, EventDisplay, EventFmt, KernelEvent};
 use crate::module::ModuleId;
 
 /// Full event. Internal representation. The first key is the collector from

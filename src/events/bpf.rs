@@ -17,10 +17,7 @@ use anyhow::{anyhow, bail, Result};
 use log::{error, log, Level};
 use plain::Plain;
 
-use super::{
-    common::{CommonEvent, TaskEvent},
-    *,
-};
+use super::{CommonEvent, TaskEvent, *};
 use crate::{event_section, event_section_factory, helpers::signals::Running, module::ModuleId};
 
 /// Raw event sections for common.

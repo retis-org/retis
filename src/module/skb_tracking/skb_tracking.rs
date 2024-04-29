@@ -8,7 +8,6 @@ use crate::{
     event_section, event_section_factory,
     events::{
         bpf::{parse_single_raw_section, BpfRawSection},
-        skb_tracking::SkbTrackingEvent,
         *,
     },
     module::{Module, ModuleId},

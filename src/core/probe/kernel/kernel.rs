@@ -13,7 +13,7 @@ use crate::{
             ProbeOption,
         },
     },
-    events::{bpf::BpfRawSection, kernel::KernelEvent, *},
+    events::{bpf::BpfRawSection, *},
 };
 use crate::{event_section, event_section_factory};
 
