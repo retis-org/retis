@@ -19,9 +19,10 @@ use super::dynamic::DynamicCommand;
 use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
+    events::SectionId,
     generate::Complete,
     inspect::Inspect,
-    module::{ModuleId, Modules},
+    module::Modules,
     process::cli::*,
     profiles::{cli::ProfileCmd, Profile},
 };
@@ -400,7 +401,7 @@ pub(crate) struct CliConfig {
 
 impl CliConfig {
     /// Creates and returns a new instance of dynamic module argument type M
-    pub(crate) fn get_section<M>(&self, id: ModuleId) -> Result<M>
+    pub(crate) fn get_section<M>(&self, id: SectionId) -> Result<M>
     where
         M: Default + FromArgMatches,
     {

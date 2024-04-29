@@ -9,7 +9,7 @@ use std::{collections::HashSet, fmt::Debug};
 use anyhow::{bail, Result};
 use clap::{ArgMatches, Args, Command, FromArgMatches};
 
-use crate::module::ModuleId;
+use crate::events::SectionId;
 
 /// DynamicCommand is a wrapper around clap's Command that supports modules all around the code
 /// base to dynamically register arguments using clap's derive interface.
@@ -20,7 +20,7 @@ use crate::module::ModuleId;
 /// have to be set explicitly.
 #[derive(Debug)]
 pub(crate) struct DynamicCommand {
-    modules: HashSet<ModuleId>,
+    modules: HashSet<SectionId>,
     command: Command,
     heading: String,
     matches: Option<ArgMatches>,
@@ -46,10 +46,10 @@ impl DynamicCommand {
         })
     }
 
-    /// Register a set of module arguments with a `ModuleId`.
+    /// Register a set of module arguments with a `SectionId`.
     ///
     /// The module name has to be unique.
-    pub(crate) fn register_module<T>(&mut self, id: ModuleId) -> Result<()>
+    pub(crate) fn register_module<T>(&mut self, id: SectionId) -> Result<()>
     where
         T: Args,
     {
@@ -67,7 +67,7 @@ impl DynamicCommand {
     /// Register a module with no arguments
     ///
     /// A module can only be registred once.
-    pub(crate) fn register_module_noargs(&mut self, id: ModuleId) -> Result<()> {
+    pub(crate) fn register_module_noargs(&mut self, id: SectionId) -> Result<()> {
         if self.modules.contains(&id) {
             bail!("module {id} already registered");
         }
@@ -92,12 +92,12 @@ impl DynamicCommand {
     }
 
     /// Returns the module name list.
-    pub(crate) fn modules(&self) -> &HashSet<ModuleId> {
+    pub(crate) fn modules(&self) -> &HashSet<SectionId> {
         &self.modules
     }
 
     /// Creates a new instance of module arguments M based on the stored ArgMatches.
-    pub(crate) fn get_section<M>(&self, id: ModuleId) -> Result<M>
+    pub(crate) fn get_section<M>(&self, id: SectionId) -> Result<M>
     where
         M: Default + FromArgMatches,
     {
@@ -204,14 +204,14 @@ mod tests {
         assert!(cmd.is_ok());
         let mut cmd = cmd?;
 
-        assert!(cmd.register_module::<Mod1>(ModuleId::Skb).is_ok());
-        assert!(cmd.register_module::<Mod1>(ModuleId::Skb).is_err());
-        assert!(cmd.register_module::<Mod2>(ModuleId::Ovs).is_ok());
-        assert!(cmd.register_module_noargs(ModuleId::SkbTracking).is_ok());
-        assert!(cmd.register_module_noargs(ModuleId::SkbTracking).is_err());
-        assert!(cmd.modules().contains(&ModuleId::Skb));
-        assert!(cmd.modules().contains(&ModuleId::Ovs));
-        assert!(cmd.modules().contains(&ModuleId::SkbTracking));
+        assert!(cmd.register_module::<Mod1>(SectionId::Skb).is_ok());
+        assert!(cmd.register_module::<Mod1>(SectionId::Skb).is_err());
+        assert!(cmd.register_module::<Mod2>(SectionId::Ovs).is_ok());
+        assert!(cmd.register_module_noargs(SectionId::SkbTracking).is_ok());
+        assert!(cmd.register_module_noargs(SectionId::SkbTracking).is_err());
+        assert!(cmd.modules().contains(&SectionId::Skb));
+        assert!(cmd.modules().contains(&SectionId::Ovs));
+        assert!(cmd.modules().contains(&SectionId::SkbTracking));
         Ok(())
     }
 
@@ -221,8 +221,8 @@ mod tests {
         assert!(cmd.is_ok());
         let mut cmd = cmd?;
 
-        assert!(cmd.register_module::<Mod1>(ModuleId::Skb).is_ok());
-        assert!(cmd.register_module::<Mod2>(ModuleId::Ovs).is_ok());
+        assert!(cmd.register_module::<Mod1>(SectionId::Skb).is_ok());
+        assert!(cmd.register_module::<Mod2>(SectionId::Ovs).is_ok());
 
         let err = cmd
             .command_mut()
@@ -281,8 +281,8 @@ mod tests {
         assert!(cmd.is_ok());
         let mut cmd = cmd?;
 
-        assert!(cmd.register_module::<Mod1>(ModuleId::Skb).is_ok());
-        assert!(cmd.register_module::<Mod2>(ModuleId::Ovs).is_ok());
+        assert!(cmd.register_module::<Mod1>(SectionId::Skb).is_ok());
+        assert!(cmd.register_module::<Mod2>(SectionId::Ovs).is_ok());
 
         let matches = cmd.command_mut().try_get_matches_from_mut(vec![
             "mycommand",
@@ -307,8 +307,8 @@ mod tests {
         assert!(cmd.is_ok());
         let mut cmd = cmd?;
 
-        assert!(cmd.register_module::<Mod1>(ModuleId::Skb).is_ok());
-        assert!(cmd.register_module::<Mod2>(ModuleId::Ovs).is_ok());
+        assert!(cmd.register_module::<Mod1>(SectionId::Skb).is_ok());
+        assert!(cmd.register_module::<Mod2>(SectionId::Ovs).is_ok());
 
         let matches = cmd.command_mut().try_get_matches_from_mut(vec![
             "mycommand",
@@ -320,10 +320,12 @@ mod tests {
         assert!(matches.is_ok());
         let matches = matches.unwrap();
         assert!(cmd.set_matches(&matches).is_ok());
-        assert!(cmd.get_section::<Mod1>(ModuleId::Skb).is_ok());
-        assert!(cmd.get_section::<Mod1>(ModuleId::Skb).unwrap().someopt == Some("foo".to_string()));
-        assert!(cmd.get_section::<Mod1>(ModuleId::Skb).unwrap().flag == Some(true)); // default value is true.
-        assert!(cmd.get_section::<Mod2>(ModuleId::Ovs).unwrap().flag == Some(true));
+        assert!(cmd.get_section::<Mod1>(SectionId::Skb).is_ok());
+        assert!(
+            cmd.get_section::<Mod1>(SectionId::Skb).unwrap().someopt == Some("foo".to_string())
+        );
+        assert!(cmd.get_section::<Mod1>(SectionId::Skb).unwrap().flag == Some(true)); // default value is true.
+        assert!(cmd.get_section::<Mod2>(SectionId::Ovs).unwrap().flag == Some(true));
 
         Ok(())
     }

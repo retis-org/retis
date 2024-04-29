@@ -26,7 +26,7 @@ use crate::{
     core::kernel::Symbol,
     events::{file::FileEventsFactory, CommonEvent, KernelEvent, SkbEvent, *},
     helpers::signals::Running,
-    module::{ModuleId, Modules},
+    module::Modules,
 };
 
 /// Statistics of the event parser about events (processed, skipped, etc).
@@ -83,10 +83,10 @@ impl<'a, W: Write> EventParser<'a, W> {
         // Having a common & a kernel section is mandatory for now, seeing a
         // filtered event w/o one of those is bogus.
         let common = event
-            .get_section::<CommonEvent>(ModuleId::Common)
+            .get_section::<CommonEvent>(SectionId::Common)
             .ok_or_else(|| anyhow!("No common section in event"))?;
         let kernel = event
-            .get_section::<KernelEvent>(ModuleId::Kernel)
+            .get_section::<KernelEvent>(SectionId::Kernel)
             .ok_or_else(|| anyhow!("No skb section in event"))?;
 
         self.stats.processed += 1;
@@ -95,7 +95,7 @@ impl<'a, W: Write> EventParser<'a, W> {
         // events, but they might not be present in some filtered events. Stats
         // are kept here to inform the user.
         let skb = some_or_return!(
-            event.get_section::<SkbEvent>(ModuleId::Skb),
+            event.get_section::<SkbEvent>(SectionId::Skb),
             self.stats.missing_skb
         );
         let packet = some_or_return!(skb.packet.as_ref(), self.stats.missing_packet);
@@ -289,7 +289,7 @@ where
     while run.running() {
         match factory.next_event(Some(Duration::from_secs(1)))? {
             Event(event) => {
-                if let Some(kernel) = event.get_section::<KernelEvent>(ModuleId::Kernel) {
+                if let Some(kernel) = event.get_section::<KernelEvent>(SectionId::Kernel) {
                     // Check the event is matching the requested symbol.
                     if !filter(&kernel.probe_type, &kernel.symbol) {
                         continue;

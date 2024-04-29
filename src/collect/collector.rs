@@ -36,9 +36,9 @@ use crate::{
         probe::{kernel::probe_stack::ProbeStack, *},
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
-    events::{bpf::BpfEventsFactory, EventResult},
+    events::{bpf::BpfEventsFactory, EventResult, SectionId},
     helpers::signals::Running,
-    module::{ModuleId, Modules},
+    module::Modules,
 };
 
 /// Generic trait representing a collector. All collectors are required to
@@ -97,7 +97,7 @@ pub(crate) struct Collectors {
     tracking_gc: Option<TrackingGC>,
     // Keep a reference on the tracking configuration map.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
-    loaded: Vec<ModuleId>,
+    loaded: Vec<SectionId>,
 }
 
 impl Collectors {
@@ -193,7 +193,7 @@ impl Collectors {
 
         // Try initializing all collectors.
         for name in &collect.args()?.collectors {
-            let id = ModuleId::from_str(name)?;
+            let id = SectionId::from_str(name)?;
             let c = self
                 .modules
                 .get_collector(&id)
@@ -308,7 +308,7 @@ impl Collectors {
             self.probes
                 .builder_mut()?
                 .reuse_map("log_map", self.factory.log_map_fd())?;
-            match section_factories.get_mut(&ModuleId::Kernel) {
+            match section_factories.get_mut(&SectionId::Kernel) {
                 Some(kernel_factory) => {
                     kernel_factory
                         .as_any_mut()
@@ -504,7 +504,7 @@ mod tests {
             Some(vec!["struct sk_buff *", "struct net_device *"])
         }
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
-            cli.register_module_noargs(ModuleId::Skb)
+            cli.register_module_noargs(SectionId::Skb)
         }
         fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
             Ok(())
@@ -531,7 +531,7 @@ mod tests {
             None
         }
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
-            cli.register_module_noargs(ModuleId::Ovs)
+            cli.register_module_noargs(SectionId::Ovs)
         }
         fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
             bail!("Could not initialize")
@@ -574,10 +574,10 @@ mod tests {
     fn register_collectors() -> Result<()> {
         let mut group = Modules::new()?;
         assert!(group
-            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
+            .register(SectionId::Skb, Box::new(DummyCollectorA::new()?),)
             .is_ok());
         assert!(group
-            .register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?),)
+            .register(SectionId::Ovs, Box::new(DummyCollectorB::new()?),)
             .is_ok());
         Ok(())
     }
@@ -586,10 +586,10 @@ mod tests {
     fn register_uniqueness() -> Result<()> {
         let mut group = Modules::new()?;
         assert!(group
-            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
+            .register(SectionId::Skb, Box::new(DummyCollectorA::new()?),)
             .is_ok());
         assert!(group
-            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
+            .register(SectionId::Skb, Box::new(DummyCollectorA::new()?),)
             .is_err());
         Ok(())
     }
@@ -600,8 +600,8 @@ mod tests {
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
-        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
-        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
+        group.register(SectionId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(SectionId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         let mut collectors = Collectors::new(group)?;
         let mut mgr = ProbeBuilderManager::new()?;
@@ -620,8 +620,8 @@ mod tests {
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
-        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
-        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
+        group.register(SectionId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(SectionId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         let mut collectors = Collectors::new(group)?;
 

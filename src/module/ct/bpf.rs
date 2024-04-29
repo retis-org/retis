@@ -13,9 +13,7 @@ use crate::{
         bpf::{parse_single_raw_section, BpfRawSection},
         *,
     },
-    helpers,
-    module::ModuleId,
-    EventSectionFactory,
+    helpers, EventSectionFactory,
 };
 
 /// Retis-specific flags.
@@ -116,7 +114,7 @@ impl CtEventFactory {
     }
 
     pub(super) fn unmarshal_ct(&mut self, sections: Vec<BpfRawSection>) -> Result<CtEvent> {
-        let raw = parse_single_raw_section::<RawCtEvent>(ModuleId::Ct, &sections)?;
+        let raw = parse_single_raw_section::<RawCtEvent>(SectionId::Ct, &sections)?;
         let flags = raw.flags;
 
         let zone_dir = match flags {

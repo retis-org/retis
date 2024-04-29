@@ -8,8 +8,8 @@ use crate::{
         inspect,
         probe::{Hook, ProbeBuilderManager},
     },
-    events::EventSectionFactory,
-    module::{Module, ModuleId},
+    events::{EventSectionFactory, SectionId},
+    module::Module,
 };
 
 pub(crate) struct CtModule {
@@ -29,7 +29,7 @@ impl Collector for CtModule {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(ModuleId::Ct)
+        cmd.register_module_noargs(SectionId::Ct)
     }
 
     fn can_run(&mut self, _cli: &CliConfig) -> Result<()> {

@@ -9,7 +9,7 @@ use crate::{
         bpf::{parse_single_raw_section, BpfRawSection},
         *,
     },
-    module::{Module, ModuleId},
+    module::Module,
     EventSectionFactory,
 };
 
@@ -26,7 +26,7 @@ impl Collector for SkbTrackingModule {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(ModuleId::SkbTracking)
+        cmd.register_module_noargs(SectionId::SkbTracking)
     }
 
     fn init(&mut self, _: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
@@ -49,7 +49,7 @@ pub(crate) struct SkbTrackingEventFactory {}
 impl RawEventSectionFactory for SkbTrackingEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let event =
-            parse_single_raw_section::<SkbTrackingEvent>(ModuleId::SkbTracking, &raw_sections)?;
+            parse_single_raw_section::<SkbTrackingEvent>(SectionId::SkbTracking, &raw_sections)?;
 
         Ok(Box::new(*event))
     }

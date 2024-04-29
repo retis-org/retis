@@ -10,8 +10,10 @@ const SKB_DROP_REASON_SUBSYS_SHIFT: u32 = 16;
 
 use crate::{
     core::inspect::inspector,
-    events::{bpf::*, *},
-    module::ModuleId,
+    events::{
+        bpf::{parse_single_raw_section, BpfRawSection},
+        SkbDropEvent, *,
+    },
     EventSectionFactory,
 };
 
@@ -86,7 +88,7 @@ pub(crate) struct SkbDropEventFactory {
 
 impl RawEventSectionFactory for SkbDropEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let raw = parse_single_raw_section::<BpfSkbDropEvent>(ModuleId::SkbDrop, &raw_sections)?;
+        let raw = parse_single_raw_section::<BpfSkbDropEvent>(SectionId::SkbDrop, &raw_sections)?;
         let drop_reason = raw.drop_reason;
 
         // Check if the drop reasons were correctly initialized.

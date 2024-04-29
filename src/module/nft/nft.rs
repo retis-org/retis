@@ -19,7 +19,7 @@ use crate::{
         probe::{Hook, Probe, ProbeBuilderManager},
     },
     events::*,
-    module::{Module, ModuleId},
+    module::Module,
 };
 
 static NFT_BIN: &str = "nft";
@@ -133,7 +133,7 @@ impl Collector for NftModule {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<NftCollectorArgs>(ModuleId::Nft)
+        cmd.register_module::<NftCollectorArgs>(SectionId::Nft)
     }
 
     fn can_run(&mut self, cli: &CliConfig) -> Result<()> {
@@ -179,7 +179,7 @@ impl Collector for NftModule {
             self.create_table()?;
         }
 
-        let args = cli.get_section::<NftCollectorArgs>(ModuleId::Nft)?;
+        let args = cli.get_section::<NftCollectorArgs>(SectionId::Nft)?;
         let mut verdicts: u64 = 0;
         for verdict in args.nft_verdicts.iter() {
             verdicts |= match verdict.as_str() {

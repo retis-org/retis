@@ -19,9 +19,9 @@ use crate::{
         tracking::gc::TrackingGC,
         user::proc::{Process, ThreadInfo},
     },
-    events::EventSectionFactory,
+    events::{EventSectionFactory, SectionId},
     helpers::signals::Running,
-    module::{Module, ModuleId},
+    module::Module,
 };
 
 // GC runs in a thread every OVS_TRACKING_GC_INTERVAL seconds to collect and
@@ -67,7 +67,7 @@ impl Collector for OvsModule {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<OvsCollectorArgs>(ModuleId::Ovs)
+        cmd.register_module::<OvsCollectorArgs>(SectionId::Ovs)
     }
 
     // Check if the OvS collector can run. Some potential errors are silenced,
@@ -94,7 +94,7 @@ impl Collector for OvsModule {
 
     fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
         self.track = cli
-            .get_section::<OvsCollectorArgs>(ModuleId::Ovs)?
+            .get_section::<OvsCollectorArgs>(SectionId::Ovs)?
             .ovs_track;
 
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);

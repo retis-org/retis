@@ -6,7 +6,6 @@ use crate::{
         bpf::{parse_single_raw_section, BpfRawSection},
         *,
     },
-    module::ModuleId,
     EventSectionFactory,
 };
 
@@ -92,7 +91,7 @@ pub(crate) struct NftEventFactory {}
 impl RawEventSectionFactory for NftEventFactory {
     fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = NftEvent::default();
-        let raw = parse_single_raw_section::<NftBpfEvent>(ModuleId::Nft, &raw_sections)?;
+        let raw = parse_single_raw_section::<NftBpfEvent>(SectionId::Nft, &raw_sections)?;
 
         event.table_name = raw.tn.to_string()?;
         event.chain_name = raw.cn.to_string()?;

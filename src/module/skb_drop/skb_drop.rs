@@ -10,8 +10,8 @@ use crate::{
         kernel::Symbol,
         probe::{Hook, Probe, ProbeBuilderManager},
     },
-    events::EventSectionFactory,
-    module::{Module, ModuleId},
+    events::{EventSectionFactory, SectionId},
+    module::Module,
 };
 
 pub(crate) struct SkbDropModule {
@@ -37,7 +37,7 @@ impl Collector for SkbDropModule {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(ModuleId::SkbDrop)
+        cmd.register_module_noargs(SectionId::SkbDrop)
     }
 
     fn can_run(&mut self, _: &CliConfig) -> Result<()> {

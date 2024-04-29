@@ -12,8 +12,8 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::probe::{Hook, ProbeBuilderManager},
-    events::EventSectionFactory,
-    module::{Module, ModuleId},
+    events::{EventSectionFactory, SectionId},
+    module::Module,
 };
 
 #[derive(Parser, Default)]
@@ -63,12 +63,12 @@ impl Collector for SkbModule {
     }
 
     fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<SkbCollectorArgs>(ModuleId::Skb)
+        cmd.register_module::<SkbCollectorArgs>(SectionId::Skb)
     }
 
     fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
         // First, get the cli parameters.
-        let args = cli.get_section::<SkbCollectorArgs>(ModuleId::Skb)?;
+        let args = cli.get_section::<SkbCollectorArgs>(SectionId::Skb)?;
 
         // Default list of sections. We set SECTION_PACKET even though it's not
         // checked in the BPF hook (raw packet is always reported).

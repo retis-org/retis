@@ -18,7 +18,7 @@ use log::{error, log, Level};
 use plain::Plain;
 
 use super::{CommonEvent, TaskEvent, *};
-use crate::{helpers::signals::Running, module::ModuleId, EventSectionFactory};
+use crate::{helpers::signals::Running, EventSectionFactory};
 
 /// Raw event sections for common.
 pub(super) const COMMON_SECTION_CORE: u64 = 0;
@@ -340,7 +340,7 @@ pub(crate) fn parse_raw_event<'a>(
         }
 
         // Try converting the raw owner id into something we can use.
-        let owner = match ModuleId::from_u8(raw_section.header.owner) {
+        let owner = match SectionId::from_u8(raw_section.header.owner) {
             Ok(owner) => owner,
             Err(e) => {
                 // Skip the section.
@@ -394,7 +394,7 @@ pub(crate) fn parse_raw_section<'a, T>(raw_section: &'a BpfRawSection) -> Result
 /// Helper to parse a single raw section from BPF raw sections, checking the
 /// section validity and parsing it into a structured type.
 pub(crate) fn parse_single_raw_section<'a, T>(
-    id: ModuleId,
+    id: SectionId,
     raw_sections: &'a [BpfRawSection],
 ) -> Result<&'a T> {
     if raw_sections.len() != 1 {
@@ -601,7 +601,7 @@ mod tests {
     #[test]
     fn parse_raw_event() {
         let mut factories: SectionFactories = HashMap::new();
-        factories.insert(ModuleId::Common, Box::<TestEvent>::default());
+        factories.insert(SectionId::Common, Box::<TestEvent>::default());
 
         // Empty event.
         let data = [];
@@ -622,13 +622,13 @@ mod tests {
         assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event with a single empty section. Section is ignored.
-        let data = [4, 0, ModuleId::Common as u8, DATA_TYPE_U64, 0, 0];
+        let data = [4, 0, SectionId::Common as u8, DATA_TYPE_U64, 0, 0];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with a section too large. Section is ignored.
-        let data = [4, 0, ModuleId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
+        let data = [4, 0, SectionId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
-        let data = [6, 0, ModuleId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
+        let data = [6, 0, SectionId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with a section having an invalid owner.
@@ -638,20 +638,20 @@ mod tests {
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with an invalid data type.
-        let data = [4, 0, ModuleId::Common as u8, 0, 1, 0, 42];
+        let data = [4, 0, SectionId::Common as u8, 0, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
-        let data = [4, 0, ModuleId::Common as u8, 255, 1, 0, 42];
+        let data = [4, 0, SectionId::Common as u8, 255, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event but invalid section (too small).
-        let data = [5, 0, ModuleId::Common as u8, DATA_TYPE_U64, 1, 0, 42];
+        let data = [5, 0, SectionId::Common as u8, DATA_TYPE_U64, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event, single section.
         let data = [
             12,
             0,
-            ModuleId::Common as u8,
+            SectionId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -665,7 +665,7 @@ mod tests {
             0,
         ];
         let event = super::parse_raw_event(&data, &mut factories).unwrap();
-        let section = event.get_section::<TestEvent>(ModuleId::Common).unwrap();
+        let section = event.get_section::<TestEvent>(SectionId::Common).unwrap();
         assert!(section.field0 == Some(42));
 
         // Valid event, multiple sections.
@@ -673,7 +673,7 @@ mod tests {
             44,
             0,
             // Section 1
-            ModuleId::Common as u8,
+            SectionId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -686,7 +686,7 @@ mod tests {
             0,
             0,
             // Section 2
-            ModuleId::Common as u8,
+            SectionId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -699,7 +699,7 @@ mod tests {
             0,
             0,
             // Section 3
-            ModuleId::Common as u8,
+            SectionId::Common as u8,
             DATA_TYPE_U128,
             16,
             0,
@@ -721,7 +721,7 @@ mod tests {
             0,
         ];
         let event = super::parse_raw_event(&data, &mut factories).unwrap();
-        let section = event.get_section::<TestEvent>(ModuleId::Common).unwrap();
+        let section = event.get_section::<TestEvent>(SectionId::Common).unwrap();
         assert!(section.field1 == Some(42));
         assert!(section.field2 == Some(1337));
     }

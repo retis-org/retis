@@ -34,20 +34,19 @@
 #![allow(dead_code)] // FIXME
 #![allow(clippy::wrong_self_convention)]
 
-use std::{any::Any, collections::HashMap};
+use std::{any::Any, collections::HashMap, fmt};
 
 use anyhow::{anyhow, bail, Result};
 use log::debug;
 use once_cell::sync::OnceCell;
 
 use super::{bpf::BpfRawSection, *};
-use crate::module::ModuleId;
 
 /// Full event. Internal representation. The first key is the collector from
 /// which the event sections originate. The second one is the field name of a
 /// given (collector) event field.
 #[derive(Default)]
-pub(crate) struct Event(HashMap<ModuleId, Box<dyn EventSection>>);
+pub(crate) struct Event(HashMap<SectionId, Box<dyn EventSection>>);
 
 impl Event {
     pub(crate) fn new() -> Event {
@@ -61,7 +60,7 @@ impl Event {
             .map_err(|e| anyhow!("Failed to parse json event at line {line}: {e}"))?;
 
         for (owner, value) in event_js.drain() {
-            let owner_mod = ModuleId::from_str(&owner)?;
+            let owner_mod = SectionId::from_str(&owner)?;
             let parser = event_sections()?
                 .get(&owner)
                 .ok_or_else(|| anyhow!("json contains an unsupported event {}", owner))?;
@@ -80,7 +79,7 @@ impl Event {
     /// Insert a new event field into an event.
     pub(crate) fn insert_section(
         &mut self,
-        owner: ModuleId,
+        owner: SectionId,
         section: Box<dyn EventSection>,
     ) -> Result<()> {
         if self.0.contains_key(&owner) {
@@ -92,7 +91,7 @@ impl Event {
     }
 
     /// Get a reference to an event field by its owner and key.
-    pub(crate) fn get_section<T: EventSection + 'static>(&self, owner: ModuleId) -> Option<&T> {
+    pub(crate) fn get_section<T: EventSection + 'static>(&self, owner: SectionId) -> Option<&T> {
         match self.0.get(&owner) {
             Some(section) => section.as_any().downcast_ref::<T>(),
             None => None,
@@ -102,7 +101,7 @@ impl Event {
     /// Get a reference to an event field by its owner and key.
     pub(crate) fn get_section_mut<T: EventSection + 'static>(
         &mut self,
-        owner: ModuleId,
+        owner: SectionId,
     ) -> Option<&mut T> {
         match self.0.get_mut(&owner) {
             Some(section) => section.as_any_mut().downcast_mut::<T>(),
@@ -128,27 +127,27 @@ impl EventFmt for Event {
         write!(
             f,
             "{}",
-            self.0.get(&ModuleId::Common).unwrap().display(format)
+            self.0.get(&SectionId::Common).unwrap().display(format)
         )?;
-        if let Some(kernel) = self.0.get(&ModuleId::Kernel) {
+        if let Some(kernel) = self.0.get(&SectionId::Kernel) {
             write!(f, " {}", kernel.display(format))?;
-        } else if let Some(user) = self.0.get(&ModuleId::Userspace) {
+        } else if let Some(user) = self.0.get(&SectionId::Userspace) {
             write!(f, " {}", user.display(format))?;
         }
 
         // If we do have tracking and/or drop sections, put them there too.
         // Special case the global tracking information from here for now.
-        if let Some(tracking) = self.0.get(&ModuleId::Tracking) {
+        if let Some(tracking) = self.0.get(&SectionId::Tracking) {
             write!(f, " {}", tracking.display(format))?;
-        } else if let Some(skb_tracking) = self.0.get(&ModuleId::SkbTracking) {
+        } else if let Some(skb_tracking) = self.0.get(&SectionId::SkbTracking) {
             write!(f, " {}", skb_tracking.display(format))?;
         }
-        if let Some(skb_drop) = self.0.get(&ModuleId::SkbDrop) {
+        if let Some(skb_drop) = self.0.get(&SectionId::SkbDrop) {
             write!(f, " {}", skb_drop.display(format))?;
         }
 
         // If we have a stack trace, show it.
-        if let Some(kernel) = self.get_section::<KernelEvent>(ModuleId::Kernel) {
+        if let Some(kernel) = self.get_section::<KernelEvent>(SectionId::Kernel) {
             if let Some(stack) = &kernel.stack_trace {
                 match format {
                     DisplayFormat::SingleLine => write!(f, " {}", stack.display(format))?,
@@ -163,13 +162,114 @@ impl EventFmt for Event {
         };
 
         // Finally show all sections.
-        (ModuleId::Skb.to_u8()..ModuleId::_MAX.to_u8())
+        (SectionId::Skb.to_u8()..SectionId::_MAX.to_u8())
             .collect::<Vec<u8>>()
             .iter()
-            .filter_map(|id| self.0.get(&ModuleId::from_u8(*id).unwrap()))
+            .filter_map(|id| self.0.get(&SectionId::from_u8(*id).unwrap()))
             .try_for_each(|section| write!(f, "{sep}{}", section.display(format)))?;
 
         Ok(())
+    }
+}
+
+/// List of unique event sections owners.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum SectionId {
+    Common = 1,
+    Kernel = 2,
+    Userspace = 3,
+    Tracking = 4,
+    SkbTracking = 5,
+    SkbDrop = 6,
+    Skb = 7,
+    Ovs = 8,
+    Nft = 9,
+    Ct = 10,
+    // TODO: use std::mem::variant_count once in stable.
+    _MAX = 11,
+}
+
+impl SectionId {
+    /// Constructs an SectionId from a section unique identifier. Please
+    /// keep in sync with its BPF counterpart.
+    pub(crate) fn from_u8(val: u8) -> Result<SectionId> {
+        use SectionId::*;
+        Ok(match val {
+            1 => Common,
+            2 => Kernel,
+            3 => Userspace,
+            4 => Tracking,
+            5 => SkbTracking,
+            6 => SkbDrop,
+            7 => Skb,
+            8 => Ovs,
+            9 => Nft,
+            10 => Ct,
+            x => bail!("Can't construct a SectionId from {}", x),
+        })
+    }
+
+    /// Converts an SectionId to a section unique identifier. Please
+    /// keep in sync with its BPF counterpart.
+    #[allow(dead_code)]
+    pub(crate) fn to_u8(self) -> u8 {
+        use SectionId::*;
+        match self {
+            Common => 1,
+            Kernel => 2,
+            Userspace => 3,
+            Tracking => 4,
+            SkbTracking => 5,
+            SkbDrop => 6,
+            Skb => 7,
+            Ovs => 8,
+            Nft => 9,
+            Ct => 10,
+            _MAX => 11,
+        }
+    }
+
+    /// Constructs an SectionId from a section unique str identifier.
+    pub(crate) fn from_str(val: &str) -> Result<SectionId> {
+        use SectionId::*;
+        Ok(match val {
+            CommonEvent::SECTION_NAME => Common,
+            KernelEvent::SECTION_NAME => Kernel,
+            UserEvent::SECTION_NAME => Userspace,
+            TrackingInfo::SECTION_NAME => Tracking,
+            SkbTrackingEvent::SECTION_NAME => SkbTracking,
+            SkbDropEvent::SECTION_NAME => SkbDrop,
+            SkbEvent::SECTION_NAME => Skb,
+            OvsEvent::SECTION_NAME => Ovs,
+            NftEvent::SECTION_NAME => Nft,
+            CtEvent::SECTION_NAME => Ct,
+            x => bail!("Can't construct a SectionId from {}", x),
+        })
+    }
+
+    /// Converts an SectionId to a section unique str identifier.
+    pub(crate) fn to_str(self) -> &'static str {
+        use SectionId::*;
+        match self {
+            Common => CommonEvent::SECTION_NAME,
+            Kernel => KernelEvent::SECTION_NAME,
+            Userspace => UserEvent::SECTION_NAME,
+            Tracking => TrackingInfo::SECTION_NAME,
+            SkbTracking => SkbTrackingEvent::SECTION_NAME,
+            SkbDrop => SkbDropEvent::SECTION_NAME,
+            Skb => SkbEvent::SECTION_NAME,
+            Ovs => OvsEvent::SECTION_NAME,
+            Nft => NftEvent::SECTION_NAME,
+            Ct => CtEvent::SECTION_NAME,
+            _MAX => "_max",
+        }
+    }
+}
+
+// Allow using SectionId in log messages.
+impl fmt::Display for SectionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
@@ -211,7 +311,7 @@ fn event_sections() -> Result<&'static EventSectionMap> {
 }
 
 /// Type alias to refer to the commonly used EventSectionFactory HashMap.
-pub(crate) type SectionFactories = HashMap<ModuleId, Box<dyn EventSectionFactory>>;
+pub(crate) type SectionFactories = HashMap<SectionId, Box<dyn EventSectionFactory>>;
 
 /// The return value of EventFactory::next_event()
 pub(crate) enum EventResult {
@@ -223,7 +323,7 @@ pub(crate) enum EventResult {
     Timeout,
 }
 
-/// Per-module event section, should map 1:1 with a ModuleId. Requiring specific
+/// Per-module event section, should map 1:1 with a SectionId. Requiring specific
 /// traits to be implemented helps handling those sections in the core directly
 /// without requiring all modules to serialize and deserialize their events by
 /// hand (except for the special case of BPF section events as there is an n:1
