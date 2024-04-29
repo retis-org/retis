@@ -9,7 +9,9 @@ RUN dnf install -y \
     rustfmt \
     cargo \
     elfutils-libelf-devel \
-    zlib-devel 
+    zlib-devel \
+    make \
+    jq
 
 RUN cargo install rustfmt
 RUN cargo init
@@ -23,10 +25,15 @@ COPY Cargo.toml .
 RUN cargo fetch --locked
 
 # Now copy the rest of the source and build.
+COPY Makefile .
+COPY ebpf.mk .
 COPY build.rs .
 COPY src src
+COPY tools tools
 COPY profiles profiles
-RUN cargo build --release
+
+# Build Retis
+RUN make clean-ebpf && make V=1 release
 
 # Final image
 FROM quay.io/centos/centos:stream9
