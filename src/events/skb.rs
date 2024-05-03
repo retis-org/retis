@@ -1,10 +1,10 @@
 use std::fmt;
 
-use super::*;
-use crate::{
-    event_section, event_type,
-    helpers::{self, net::RawPacket},
+use super::{
+    net::{etype_str, protocol_str, RawPacket},
+    *,
 };
+use crate::{event_section, event_type};
 
 /// Skb event section.
 #[event_section("skb")]
@@ -65,7 +65,7 @@ impl EventFmt for SkbEvent {
         if let Some(eth) = &self.eth {
             space.write(f)?;
 
-            let ethertype = match helpers::net::etype_str(eth.etype) {
+            let ethertype = match etype_str(eth.etype) {
                 Some(s) => format!(" {}", s),
                 None => String::new(),
             };
@@ -153,7 +153,7 @@ impl EventFmt for SkbEvent {
                 }
             }
 
-            let protocol = match helpers::net::protocol_str(ip.protocol) {
+            let protocol = match protocol_str(ip.protocol) {
                 Some(s) => format!(" {}", s),
                 None => String::new(),
             };

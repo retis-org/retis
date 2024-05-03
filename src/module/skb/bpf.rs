@@ -15,8 +15,8 @@ use pnet::packet::{
 
 use crate::{
     core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
-    events::*,
-    helpers::{self, net::RawPacket},
+    events::{net::RawPacket, *},
+    helpers,
 };
 
 /// Valid raw event sections of the skb collector. We do not use an enum here as
