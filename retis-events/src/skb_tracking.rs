@@ -18,31 +18,31 @@ use crate::event_section;
 #[derive(Copy, PartialEq)]
 #[event_section("skb-tracking")]
 #[repr(C)]
-pub(crate) struct SkbTrackingEvent {
+pub struct SkbTrackingEvent {
     /// Head of buffer (`skb->head`) when the packet was first seen by the
     /// tracking logic.
-    pub(crate) orig_head: u64,
+    pub orig_head: u64,
     /// Timestamp of when the tracking logic first saw the packet.
-    pub(crate) timestamp: u64,
+    pub timestamp: u64,
     /// Socket buffer (`skb`) address of the current packet.
-    pub(crate) skb: u64,
+    pub skb: u64,
 }
 
 #[allow(dead_code)]
 impl SkbTrackingEvent {
     /// Get the tracking id.
-    pub(crate) fn tracking_id(&self) -> u128 {
+    pub fn tracking_id(&self) -> u128 {
         (self.timestamp as u128) << 64 | self.orig_head as u128
     }
 
     /// Check if two tracking event sections are from related skbs, including
     /// clones.
-    pub(crate) fn r#match(&self, other: &SkbTrackingEvent) -> bool {
+    pub fn r#match(&self, other: &SkbTrackingEvent) -> bool {
         self.tracking_id() == other.tracking_id()
     }
 
     /// Check if two tracking event sections are from the exact same skb.
-    pub(crate) fn strict_match(&self, other: &SkbTrackingEvent) -> bool {
+    pub fn strict_match(&self, other: &SkbTrackingEvent) -> bool {
         self.r#match(other) && self.skb == other.skb
     }
 }
@@ -56,11 +56,11 @@ impl EventFmt for SkbTrackingEvent {
 /// Tracking event section. Generated at postprocessing with combined skb and ovs
 /// tracking information.
 #[event_section("tracking")]
-pub(crate) struct TrackingInfo {
+pub struct TrackingInfo {
     /// Tracking information of the original packet.
-    pub(crate) skb: SkbTrackingEvent,
+    pub skb: SkbTrackingEvent,
     /// The index in the event series.
-    pub(crate) idx: u32,
+    pub idx: u32,
 }
 
 impl Eq for TrackingInfo {}
@@ -92,7 +92,7 @@ impl EventFmt for TrackingInfo {
 }
 
 impl TrackingInfo {
-    pub(crate) fn new(track: &SkbTrackingEvent) -> Result<Self> {
+    pub fn new(track: &SkbTrackingEvent) -> Result<Self> {
         Ok(TrackingInfo {
             skb: *track,
             idx: 0,

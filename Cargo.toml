@@ -9,7 +9,7 @@ readme = "README.md"
 keywords = ["tracing", "networking", "linux", "bpf", "ebpf"]
 # Do not publish the tests and their data to save some space. Cargo files and
 # readme are always included.
-include = ["src/", "build.rs", "retis-derive/", "profiles/", "tools/", "LICENSE"]
+include = ["src/", "build.rs", "retis-events", "retis-derive/", "profiles/", "tools/", "LICENSE"]
 edition = "2021"
 
 [package.metadata.misc]
@@ -34,6 +34,7 @@ caps = "0.5"
 clap = { version = "4.0", features = ["derive", "string"] }
 clap_complete = "4.4"
 elf = "0.7"
+events = {version = "1.4", path = "./retis-events", package="retis-events"}
 flate2 = "1.0"
 libbpf-rs = "0.22"
 libbpf-sys = "=1.2"

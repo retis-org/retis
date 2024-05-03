@@ -1,7 +1,7 @@
 use std::fmt;
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum DisplayFormat {
+pub enum DisplayFormat {
     SingleLine,
     #[default]
     MultiLine,
@@ -12,7 +12,7 @@ pub(crate) enum DisplayFormat {
 /// implementation of the std::fmt::Display trait, which can be used later to
 /// provide different formats. It is also interesting as those helpers can take
 /// arguments, unlike a plain std::fmt::Display implementation.
-pub(crate) trait EventDisplay<'a>: EventFmt {
+pub trait EventDisplay<'a>: EventFmt {
     /// Display the event using the default event format.
     fn display(&'a self, format: DisplayFormat) -> Box<dyn fmt::Display + 'a>;
 }
@@ -24,7 +24,7 @@ pub(crate) trait EventDisplay<'a>: EventFmt {
 /// all event sections and custom types thanks to the following generic
 /// implementation and 2) access `self` directly allowing to access its private
 /// members if any.
-pub(crate) trait EventFmt {
+pub trait EventFmt {
     /// Default formatting of an event.
     fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result;
 }
@@ -78,19 +78,19 @@ where
 ///     }
 /// }
 /// ```
-pub(crate) struct DelimWriter {
+pub struct DelimWriter {
     delim: char,
     first: bool,
 }
 
 impl DelimWriter {
     /// Create a new DelimWriter
-    pub(crate) fn new(delim: char) -> Self {
+    pub fn new(delim: char) -> Self {
         DelimWriter { delim, first: true }
     }
 
     /// If it's not the first time it's called, write the delimiter.
-    pub(crate) fn write(&mut self, f: &mut fmt::Formatter) -> fmt::Result {
+    pub fn write(&mut self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.first {
             true => self.first = false,
             false => write!(f, "{}", self.delim)?,

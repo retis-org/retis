@@ -13,12 +13,12 @@ use super::{Event, EventResult};
 
 /// File events factory retrieving and unmarshaling events
 /// parts.
-pub(crate) struct FileEventsFactory {
+pub struct FileEventsFactory {
     reader: BufReader<File>,
 }
 
 impl FileEventsFactory {
-    pub(crate) fn new<P>(file: P) -> Result<Self>
+    pub fn new<P>(file: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {

@@ -54,7 +54,7 @@ pub(crate) fn protocol_str(protocol: u8) -> Option<&'static str> {
 
 /// Represents a raw packet. Stored internally as a `Vec<u8>`.
 #[derive(Clone, Debug)]
-pub(crate) struct RawPacket(pub(crate) Vec<u8>);
+pub struct RawPacket(pub Vec<u8>);
 
 impl serde::Serialize for RawPacket {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

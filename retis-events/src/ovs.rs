@@ -9,10 +9,10 @@ use crate::{event_section, event_type};
 ///The OVS Event
 #[derive(PartialEq)]
 #[event_section("ovs")]
-pub(crate) struct OvsEvent {
+pub struct OvsEvent {
     /// Event data
     #[serde(flatten)]
-    pub(crate) event: OvsEventType,
+    pub event: OvsEventType,
 }
 
 impl EventFmt for OvsEvent {
@@ -24,7 +24,7 @@ impl EventFmt for OvsEvent {
 #[event_type]
 #[serde(tag = "event_type")]
 #[derive(Default, PartialEq)]
-pub(crate) enum OvsEventType {
+pub enum OvsEventType {
     /// Upcall event. It indicates the begining of an upcall. An upcall can have multiple enqueue
     /// events.
     #[serde(rename = "upcall")]
@@ -91,17 +91,17 @@ fn fmt_upcall_cmd(cmd: u8) -> &'static str {
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 #[repr(C)]
-pub(crate) struct UpcallEvent {
+pub struct UpcallEvent {
     /// Upcall command. Holds OVS_PACKET_CMD:
     ///   OVS_PACKET_CMD_UNSPEC   = 0
     ///   OVS_PACKET_CMD_MISS     = 1
     ///   OVS_PACKET_CMD_ACTION   = 2
     ///   OVS_PACKET_CMD_EXECUTE  = 3
-    pub(crate) cmd: u8,
+    pub cmd: u8,
     /// Upcall port.
-    pub(crate) port: u32,
+    pub port: u32,
     /// Cpu ID
-    pub(crate) cpu: u32,
+    pub cpu: u32,
 }
 
 impl EventFmt for UpcallEvent {
@@ -123,20 +123,20 @@ impl EventFmt for UpcallEvent {
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 #[repr(C)]
-pub(crate) struct UpcallEnqueueEvent {
+pub struct UpcallEnqueueEvent {
     /// Return code. Any value different from zero indicates the upcall enqueue
     /// failed probably indicating a packet drop.
-    pub(crate) ret: i32,
+    pub ret: i32,
     /// Upcall command executed.
-    pub(crate) cmd: u8,
+    pub cmd: u8,
     /// Upcall port id.
-    pub(crate) port: u32,
+    pub port: u32,
     /// Timestamp of the associated UpcallEvent.
-    pub(crate) upcall_ts: u64,
+    pub upcall_ts: u64,
     /// CPU id of the associated UpcallEvent.
-    pub(crate) upcall_cpu: u32,
+    pub upcall_cpu: u32,
     /// Enqueue id used for tracking.
-    pub(crate) queue_id: u32,
+    pub queue_id: u32,
 }
 
 impl EventFmt for UpcallEnqueueEvent {
@@ -160,10 +160,10 @@ impl EventFmt for UpcallEnqueueEvent {
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 #[repr(C)]
-pub(crate) struct UpcallReturnEvent {
-    pub(crate) upcall_ts: u64,
-    pub(crate) upcall_cpu: u32,
-    pub(crate) ret: i32,
+pub struct UpcallReturnEvent {
+    pub upcall_ts: u64,
+    pub upcall_cpu: u32,
+    pub ret: i32,
 }
 
 impl EventFmt for UpcallReturnEvent {
@@ -183,19 +183,19 @@ impl EventFmt for UpcallReturnEvent {
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 #[repr(C)]
-pub(crate) struct OperationEvent {
+pub struct OperationEvent {
     /// Operation type ("put" or "exec")
     #[serde(
         deserialize_with = "OperationEvent::deserialize_op",
         serialize_with = "OperationEvent::serialize_op"
     )]
-    pub(crate) op_type: u8,
+    pub op_type: u8,
     /// Queue id used for tracking
-    pub(crate) queue_id: u32,
+    pub queue_id: u32,
     /// Timestamp of the begining of batch
-    pub(crate) batch_ts: u64,
+    pub batch_ts: u64,
     /// Index within the batch
-    pub(crate) batch_idx: u8,
+    pub batch_idx: u8,
 }
 
 impl OperationEvent {
@@ -249,19 +249,19 @@ impl EventFmt for OperationEvent {
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 #[repr(C)]
-pub(crate) struct RecvUpcallEvent {
+pub struct RecvUpcallEvent {
     /// Type of upcall
-    pub(crate) r#type: u32,
+    pub r#type: u32,
     /// Packet size
-    pub(crate) pkt_size: u32,
+    pub pkt_size: u32,
     /// Key size
-    pub(crate) key_size: u64,
+    pub key_size: u64,
     /// Queue id used for tracking
-    pub(crate) queue_id: u32,
+    pub queue_id: u32,
     /// Timestamp of the begining of batch
-    pub(crate) batch_ts: u64,
+    pub batch_ts: u64,
     /// Index within the batch
-    pub(crate) batch_idx: u8,
+    pub batch_idx: u8,
 }
 
 impl EventFmt for RecvUpcallEvent {
@@ -278,16 +278,16 @@ impl EventFmt for RecvUpcallEvent {
 /// OVS output action data.
 #[event_type]
 #[derive(Default, PartialEq)]
-pub(crate) struct ActionEvent {
+pub struct ActionEvent {
     /// Action to be executed.
     #[serde(flatten)]
-    pub(crate) action: OvsAction,
+    pub action: OvsAction,
     /// Recirculation id.
-    pub(crate) recirc_id: u32,
+    pub recirc_id: u32,
     /// Queue id used for tracking. None if not tracking or if the output event did not come from
     /// an upcall.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) queue_id: Option<u32>,
+    pub queue_id: Option<u32>,
 }
 
 impl EventFmt for ActionEvent {
@@ -397,7 +397,7 @@ impl EventFmt for ActionEvent {
 #[event_type]
 #[serde(tag = "action")]
 #[derive(Default, PartialEq)]
-pub(crate) enum OvsAction {
+pub enum OvsAction {
     #[serde(rename = "unspecified")]
     #[default]
     Unspecified,
@@ -454,9 +454,9 @@ pub(crate) enum OvsAction {
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 #[repr(C)]
-pub(crate) struct OvsActionOutput {
+pub struct OvsActionOutput {
     /// Output port.
-    pub(crate) port: u32,
+    pub port: u32,
 }
 
 // Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
@@ -464,68 +464,68 @@ pub(crate) struct OvsActionOutput {
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 #[repr(C)]
-pub(crate) struct OvsActionRecirc {
+pub struct OvsActionRecirc {
     /// Recirculation id.
-    pub(crate) id: u32,
+    pub id: u32,
 }
 
 /// OVS conntrack flags
 // Keep in sync with their conterpart in bpf/kernel_exec_tp.bpf.c
-pub(crate) const R_OVS_CT_COMMIT: u32 = 1 << 0;
-pub(crate) const R_OVS_CT_FORCE: u32 = 1 << 1;
-pub(crate) const R_OVS_CT_IP4: u32 = 1 << 2;
-pub(crate) const R_OVS_CT_IP6: u32 = 1 << 3;
-pub(crate) const R_OVS_CT_NAT: u32 = 1 << 4;
-pub(crate) const R_OVS_CT_NAT_SRC: u32 = 1 << 5;
-pub(crate) const R_OVS_CT_NAT_DST: u32 = 1 << 6;
-pub(crate) const R_OVS_CT_NAT_RANGE_MAP_IPS: u32 = 1 << 7;
-pub(crate) const R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED: u32 = 1 << 8;
-pub(crate) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM: u32 = 1 << 9;
-pub(crate) const R_OVS_CT_NAT_RANGE_PERSISTENT: u32 = 1 << 10;
-pub(crate) const R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY: u32 = 1 << 11;
+pub const R_OVS_CT_COMMIT: u32 = 1 << 0;
+pub const R_OVS_CT_FORCE: u32 = 1 << 1;
+pub const R_OVS_CT_IP4: u32 = 1 << 2;
+pub const R_OVS_CT_IP6: u32 = 1 << 3;
+pub const R_OVS_CT_NAT: u32 = 1 << 4;
+pub const R_OVS_CT_NAT_SRC: u32 = 1 << 5;
+pub const R_OVS_CT_NAT_DST: u32 = 1 << 6;
+pub const R_OVS_CT_NAT_RANGE_MAP_IPS: u32 = 1 << 7;
+pub const R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED: u32 = 1 << 8;
+pub const R_OVS_CT_NAT_RANGE_PROTO_RANDOM: u32 = 1 << 9;
+pub const R_OVS_CT_NAT_RANGE_PERSISTENT: u32 = 1 << 10;
+pub const R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY: u32 = 1 << 11;
 
 /// OVS conntrack action data.
 #[event_type]
 #[derive(Default, PartialEq)]
-pub(crate) struct OvsActionCt {
+pub struct OvsActionCt {
     /// Flags
-    pub(crate) flags: u32,
+    pub flags: u32,
     /// Conntrack zone
-    pub(crate) zone_id: u16,
+    pub zone_id: u16,
     /// NAT
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) nat: Option<OvsActionCtNat>,
+    pub nat: Option<OvsActionCtNat>,
 }
 
 impl OvsActionCt {
-    pub(crate) fn is_commit(&self) -> bool {
+    pub fn is_commit(&self) -> bool {
         self.flags & R_OVS_CT_COMMIT != 0
     }
-    pub(crate) fn is_force(&self) -> bool {
+    pub fn is_force(&self) -> bool {
         self.flags & R_OVS_CT_FORCE != 0
     }
     #[allow(dead_code)]
-    pub(crate) fn is_ipv4(&self) -> bool {
+    pub fn is_ipv4(&self) -> bool {
         self.flags & R_OVS_CT_IP4 != 0
     }
     #[allow(dead_code)]
-    pub(crate) fn is_ipv6(&self) -> bool {
+    pub fn is_ipv6(&self) -> bool {
         self.flags & R_OVS_CT_IP6 != 0
     }
-    pub(crate) fn is_persistent(&self) -> bool {
+    pub fn is_persistent(&self) -> bool {
         self.flags & R_OVS_CT_NAT_RANGE_PERSISTENT != 0
     }
-    pub(crate) fn is_hash(&self) -> bool {
+    pub fn is_hash(&self) -> bool {
         self.flags & R_OVS_CT_NAT_RANGE_PROTO_RANDOM != 0
     }
-    pub(crate) fn is_random(&self) -> bool {
+    pub fn is_random(&self) -> bool {
         self.flags & R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY != 0
     }
 }
 
 #[event_type]
 #[derive(Default, PartialEq)]
-pub(crate) enum NatDirection {
+pub enum NatDirection {
     #[default]
     #[serde(rename = "src")]
     Src,
@@ -535,17 +535,17 @@ pub(crate) enum NatDirection {
 /// OVS NAT action data.
 #[event_type]
 #[derive(Default, PartialEq)]
-pub(crate) struct OvsActionCtNat {
+pub struct OvsActionCtNat {
     /// NAT direction, if any
-    pub(crate) dir: Option<NatDirection>,
+    pub dir: Option<NatDirection>,
     /// Minimum address in address range, if any
-    pub(crate) min_addr: Option<String>,
+    pub min_addr: Option<String>,
     /// Maximum address in address range, if any
-    pub(crate) max_addr: Option<String>,
+    pub max_addr: Option<String>,
     /// Minimum port in port range, if any
-    pub(crate) min_port: Option<u16>,
+    pub min_port: Option<u16>,
     /// Maximum port in port range, if any
-    pub(crate) max_port: Option<u16>,
+    pub max_port: Option<u16>,
 }
 
 #[cfg(test)]

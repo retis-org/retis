@@ -5,7 +5,7 @@ use crate::{event_section, event_type};
 
 #[event_type]
 #[derive(Default)]
-pub(crate) enum ZoneDir {
+pub enum ZoneDir {
     Original,
     Reply,
     Default,
@@ -15,36 +15,36 @@ pub(crate) enum ZoneDir {
 
 #[event_type]
 #[derive(Default)]
-pub(crate) struct CtTcp {
+pub struct CtTcp {
     /// TCP source port
-    pub(crate) sport: u16,
+    pub sport: u16,
     /// TCP destination port
-    pub(crate) dport: u16,
+    pub dport: u16,
 }
 
 #[event_type]
 #[derive(Default)]
-pub(crate) struct CtUdp {
+pub struct CtUdp {
     /// UDP source port
-    pub(crate) sport: u16,
+    pub sport: u16,
     /// UDP destination port
-    pub(crate) dport: u16,
+    pub dport: u16,
 }
 
 #[event_type]
 #[derive(Default)]
-pub(crate) struct CtIcmp {
+pub struct CtIcmp {
     /// ICMP code
-    pub(crate) code: u8,
+    pub code: u8,
     /// ICMP type
-    pub(crate) r#type: u8,
+    pub r#type: u8,
     /// ICMP ID
-    pub(crate) id: u16,
+    pub id: u16,
 }
 
 #[event_type]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum CtProto {
+pub enum CtProto {
     Tcp(CtTcp),
     Udp(CtUdp),
     Icmp(CtIcmp),
@@ -58,7 +58,7 @@ impl Default for CtProto {
 #[event_type]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
-pub(crate) enum CtIpVersion {
+pub enum CtIpVersion {
     #[default]
     V4,
     V6,
@@ -66,30 +66,30 @@ pub(crate) enum CtIpVersion {
 
 #[event_type]
 #[derive(Default)]
-pub(crate) struct CtIp {
+pub struct CtIp {
     /// Source IP address
-    pub(crate) src: String,
+    pub src: String,
     /// Destination IP address
-    pub(crate) dst: String,
+    pub dst: String,
     /// IP version
-    pub(crate) version: CtIpVersion,
+    pub version: CtIpVersion,
 }
 
 /// Conntrack tuple.
 #[event_type]
 #[derive(Default)]
-pub(crate) struct CtTuple {
+pub struct CtTuple {
     /// IP address
-    pub(crate) ip: CtIp,
+    pub ip: CtIp,
     /// Protocol information
-    pub(crate) proto: CtProto,
+    pub proto: CtProto,
 }
 
 /// Conntrack state
 #[event_type]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
-pub(crate) enum CtState {
+pub enum CtState {
     Established,
     Related,
     New,
@@ -101,19 +101,19 @@ pub(crate) enum CtState {
 }
 /// Conntrack event
 #[event_section("ct")]
-pub(crate) struct CtEvent {
+pub struct CtEvent {
     /// Zone ID
-    pub(crate) zone_id: u16,
+    pub zone_id: u16,
     /// Zone direction
-    pub(crate) zone_dir: ZoneDir,
+    pub zone_dir: ZoneDir,
     /// Original tuple
-    pub(crate) orig: CtTuple,
+    pub orig: CtTuple,
     /// Reply tuple
-    pub(crate) reply: CtTuple,
+    pub reply: CtTuple,
     /// Packet's conntrack state
-    pub(crate) state: CtState,
+    pub state: CtState,
     /// TCP state; if any
-    pub(crate) tcp_state: Option<String>,
+    pub tcp_state: Option<String>,
 }
 
 impl EventFmt for CtEvent {

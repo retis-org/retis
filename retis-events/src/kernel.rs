@@ -4,13 +4,13 @@ use super::*;
 use crate::{event_section, event_type};
 
 #[event_section("kernel")]
-pub(crate) struct KernelEvent {
+pub struct KernelEvent {
     /// Kernel symbol name associated with the event (i.e. which probe generated
     /// the event).
-    pub(crate) symbol: String,
+    pub symbol: String,
     /// Probe type: one of "kprobe", "kretprobe" or "raw_tracepoint".
-    pub(crate) probe_type: String,
-    pub(crate) stack_trace: Option<StackTrace>,
+    pub probe_type: String,
+    pub stack_trace: Option<StackTrace>,
 }
 
 impl EventFmt for KernelEvent {
@@ -33,10 +33,10 @@ impl EventFmt for KernelEvent {
 
 #[event_type]
 #[derive(Default)]
-pub(crate) struct StackTrace(pub(crate) Vec<String>);
+pub struct StackTrace(pub Vec<String>);
 
 impl StackTrace {
-    pub(crate) fn raw(&self) -> &Vec<String> {
+    pub fn raw(&self) -> &Vec<String> {
         &self.0
     }
 }

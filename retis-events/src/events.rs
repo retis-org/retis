@@ -40,20 +40,20 @@ use anyhow::{anyhow, bail, Result};
 use log::debug;
 use once_cell::sync::OnceCell;
 
-use super::*;
+use crate::{display::*, *};
 
 /// Full event. Internal representation. The first key is the collector from
 /// which the event sections originate. The second one is the field name of a
 /// given (collector) event field.
 #[derive(Default)]
-pub(crate) struct Event(HashMap<SectionId, Box<dyn EventSection>>);
+pub struct Event(HashMap<SectionId, Box<dyn EventSection>>);
 
 impl Event {
-    pub(crate) fn new() -> Event {
+    pub fn new() -> Event {
         Event::default()
     }
 
-    pub(crate) fn from_json(line: String) -> Result<Event> {
+    pub fn from_json(line: String) -> Result<Event> {
         let mut event = Event::new();
 
         let mut event_js: HashMap<String, serde_json::Value> = serde_json::from_str(line.as_str())
@@ -77,7 +77,7 @@ impl Event {
     }
 
     /// Insert a new event field into an event.
-    pub(crate) fn insert_section(
+    pub fn insert_section(
         &mut self,
         owner: SectionId,
         section: Box<dyn EventSection>,
@@ -91,7 +91,7 @@ impl Event {
     }
 
     /// Get a reference to an event field by its owner and key.
-    pub(crate) fn get_section<T: EventSection + 'static>(&self, owner: SectionId) -> Option<&T> {
+    pub fn get_section<T: EventSection + 'static>(&self, owner: SectionId) -> Option<&T> {
         match self.0.get(&owner) {
             Some(section) => section.as_any().downcast_ref::<T>(),
             None => None,
@@ -99,7 +99,7 @@ impl Event {
     }
 
     /// Get a reference to an event field by its owner and key.
-    pub(crate) fn get_section_mut<T: EventSection + 'static>(
+    pub fn get_section_mut<T: EventSection + 'static>(
         &mut self,
         owner: SectionId,
     ) -> Option<&mut T> {
@@ -109,7 +109,7 @@ impl Event {
         }
     }
 
-    pub(crate) fn to_json(&self) -> serde_json::Value {
+    pub fn to_json(&self) -> serde_json::Value {
         let mut event = serde_json::Map::new();
 
         for (owner, section) in self.0.iter() {
@@ -174,7 +174,7 @@ impl EventFmt for Event {
 
 /// List of unique event sections owners.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) enum SectionId {
+pub enum SectionId {
     Common = 1,
     Kernel = 2,
     Userspace = 3,
@@ -192,7 +192,7 @@ pub(crate) enum SectionId {
 impl SectionId {
     /// Constructs an SectionId from a section unique identifier. Please
     /// keep in sync with its BPF counterpart.
-    pub(crate) fn from_u8(val: u8) -> Result<SectionId> {
+    pub fn from_u8(val: u8) -> Result<SectionId> {
         use SectionId::*;
         Ok(match val {
             1 => Common,
@@ -212,7 +212,7 @@ impl SectionId {
     /// Converts an SectionId to a section unique identifier. Please
     /// keep in sync with its BPF counterpart.
     #[allow(dead_code)]
-    pub(crate) fn to_u8(self) -> u8 {
+    pub fn to_u8(self) -> u8 {
         use SectionId::*;
         match self {
             Common => 1,
@@ -230,7 +230,7 @@ impl SectionId {
     }
 
     /// Constructs an SectionId from a section unique str identifier.
-    pub(crate) fn from_str(val: &str) -> Result<SectionId> {
+    pub fn from_str(val: &str) -> Result<SectionId> {
         use SectionId::*;
         Ok(match val {
             CommonEvent::SECTION_NAME => Common,
@@ -248,7 +248,7 @@ impl SectionId {
     }
 
     /// Converts an SectionId to a section unique str identifier.
-    pub(crate) fn to_str(self) -> &'static str {
+    pub fn to_str(self) -> &'static str {
         use SectionId::*;
         match self {
             Common => CommonEvent::SECTION_NAME,
@@ -311,7 +311,7 @@ fn event_sections() -> Result<&'static EventSectionMap> {
 }
 
 /// The return value of EventFactory::next_event()
-pub(crate) enum EventResult {
+pub enum EventResult {
     /// The Factory was able to create a new event.
     Event(Event),
     /// The source has been consumed.
@@ -332,14 +332,14 @@ pub(crate) enum EventResult {
 /// having a proper structure is encouraged as it allows easier consumption at
 /// post-processing. Those objects can also define their own specialized
 /// helpers.
-pub(crate) trait EventSection: EventSectionInternal + for<'a> EventDisplay<'a> {}
+pub trait EventSection: EventSectionInternal + for<'a> EventDisplay<'a> {}
 impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<'a> {}
 
 /// EventSection helpers defined in the core for all events. Common definition
 /// needs Sized but that is a requirement for all EventSection.
 ///
 /// There should not be a need to have per-object implementations for this.
-pub(crate) trait EventSectionInternal {
+pub trait EventSectionInternal {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn to_json(&self) -> serde_json::Value;

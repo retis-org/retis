@@ -8,33 +8,33 @@ use crate::{event_section, event_type};
 
 /// Skb event section.
 #[event_section("skb")]
-pub(crate) struct SkbEvent {
+pub struct SkbEvent {
     /// Ethernet fields, if any.
-    pub(crate) eth: Option<SkbEthEvent>,
+    pub eth: Option<SkbEthEvent>,
     /// ARP fields, if any.
-    pub(crate) arp: Option<SkbArpEvent>,
+    pub arp: Option<SkbArpEvent>,
     /// IPv4 or IPv6 fields, if any.
-    pub(crate) ip: Option<SkbIpEvent>,
+    pub ip: Option<SkbIpEvent>,
     /// TCP fields, if any.
-    pub(crate) tcp: Option<SkbTcpEvent>,
+    pub tcp: Option<SkbTcpEvent>,
     /// UDP fields, if any.
-    pub(crate) udp: Option<SkbUdpEvent>,
+    pub udp: Option<SkbUdpEvent>,
     /// ICMP fields, if any.
-    pub(crate) icmp: Option<SkbIcmpEvent>,
+    pub icmp: Option<SkbIcmpEvent>,
     /// ICMPv6 fields, if any.
-    pub(crate) icmpv6: Option<SkbIcmpV6Event>,
+    pub icmpv6: Option<SkbIcmpV6Event>,
     /// Net device data, if any.
-    pub(crate) dev: Option<SkbDevEvent>,
+    pub dev: Option<SkbDevEvent>,
     /// Net namespace data, if any.
-    pub(crate) ns: Option<SkbNsEvent>,
+    pub ns: Option<SkbNsEvent>,
     /// Skb metadata, if any.
-    pub(crate) meta: Option<SkbMetaEvent>,
+    pub meta: Option<SkbMetaEvent>,
     /// Skb data-related and refcnt information, if any.
-    pub(crate) data_ref: Option<SkbDataRefEvent>,
+    pub data_ref: Option<SkbDataRefEvent>,
     /// GSO information.
-    pub(crate) gso: Option<SkbGsoEvent>,
+    pub gso: Option<SkbGsoEvent>,
     /// Raw packet and related metadata.
-    pub(crate) packet: Option<SkbPacketEvent>,
+    pub packet: Option<SkbPacketEvent>,
 }
 
 impl EventFmt for SkbEvent {
@@ -297,60 +297,60 @@ impl EventFmt for SkbEvent {
 
 /// Ethernet fields.
 #[event_type]
-pub(crate) struct SkbEthEvent {
+pub struct SkbEthEvent {
     /// Ethertype.
-    pub(crate) etype: u16,
+    pub etype: u16,
     /// Source MAC address.
-    pub(crate) src: String,
+    pub src: String,
     /// Destination MAC address.
-    pub(crate) dst: String,
+    pub dst: String,
 }
 
 /// ARP fields.
 #[event_type]
-pub(crate) struct SkbArpEvent {
+pub struct SkbArpEvent {
     /// Operation type.
-    pub(crate) operation: ArpOperation,
+    pub operation: ArpOperation,
     /// Sender hardware address.
-    pub(crate) sha: String,
+    pub sha: String,
     /// Sender protocol address.
-    pub(crate) spa: String,
+    pub spa: String,
     /// Target hardware address.
-    pub(crate) tha: String,
+    pub tha: String,
     /// Target protocol address.
-    pub(crate) tpa: String,
+    pub tpa: String,
 }
 
 /// ARP operation type.
 #[event_type]
-pub(crate) enum ArpOperation {
+pub enum ArpOperation {
     Request,
     Reply,
 }
 
 /// IPv4/IPv6 fields.
 #[event_type]
-pub(crate) struct SkbIpEvent {
+pub struct SkbIpEvent {
     /// Source IP address.
-    pub(crate) saddr: String,
+    pub saddr: String,
     /// Destination IP address.
-    pub(crate) daddr: String,
+    pub daddr: String,
     /// IP version: 4 or 6.
     #[serde(flatten)]
-    pub(crate) version: SkbIpVersion,
+    pub version: SkbIpVersion,
     /// L4 protocol, from IPv4 "protocol" field or IPv6 "next header" one.
-    pub(crate) protocol: u8,
+    pub protocol: u8,
     /// "total len" from the IPv4 header or "payload length" from the IPv6 one.
-    pub(crate) len: u16,
+    pub len: u16,
     /// TTL in the IPv4 header and hop limit in the IPv6 one.
-    pub(crate) ttl: u8,
+    pub ttl: u8,
     /// ECN.
-    pub(crate) ecn: u8,
+    pub ecn: u8,
 }
 
 /// IP version and specific fields.
 #[event_type]
-pub(crate) enum SkbIpVersion {
+pub enum SkbIpVersion {
     #[serde(rename = "v4")]
     V4(SkbIpv4Event),
     #[serde(rename = "v6")]
@@ -361,140 +361,140 @@ pub(crate) enum SkbIpVersion {
 #[event_type]
 pub struct SkbIpv4Event {
     /// Type of service.
-    pub(crate) tos: u8,
+    pub tos: u8,
     /// Identification.
-    pub(crate) id: u16,
+    pub id: u16,
     /// Flags (CE, DF, MF).
-    pub(crate) flags: u8,
+    pub flags: u8,
     /// Fragment offset.
-    pub(crate) offset: u16,
+    pub offset: u16,
 }
 
 /// IPv6 specific fields.
 #[event_type]
 pub struct SkbIpv6Event {
     /// Flow label.
-    pub(crate) flow_label: u32,
+    pub flow_label: u32,
 }
 
 /// TCP fields.
 #[event_type]
-pub(crate) struct SkbTcpEvent {
+pub struct SkbTcpEvent {
     /// Source port.
-    pub(crate) sport: u16,
+    pub sport: u16,
     /// Destination port.
-    pub(crate) dport: u16,
-    pub(crate) seq: u32,
-    pub(crate) ack_seq: u32,
-    pub(crate) window: u16,
+    pub dport: u16,
+    pub seq: u32,
+    pub ack_seq: u32,
+    pub window: u16,
     /// Data offset.
-    pub(crate) doff: u8,
+    pub doff: u8,
     /// Bitfield of TCP flags as defined in `struct tcphdr` in the kernel.
-    pub(crate) flags: u8,
+    pub flags: u8,
 }
 
 /// UDP fields.
 #[event_type]
-pub(crate) struct SkbUdpEvent {
+pub struct SkbUdpEvent {
     /// Source port.
-    pub(crate) sport: u16,
+    pub sport: u16,
     /// Destination port.
-    pub(crate) dport: u16,
+    pub dport: u16,
     /// Length from the UDP header.
-    pub(crate) len: u16,
+    pub len: u16,
 }
 
 /// ICMP fields.
 #[event_type]
-pub(crate) struct SkbIcmpEvent {
-    pub(crate) r#type: u8,
-    pub(crate) code: u8,
+pub struct SkbIcmpEvent {
+    pub r#type: u8,
+    pub code: u8,
 }
 
 /// ICMPv6 fields.
 #[event_type]
-pub(crate) struct SkbIcmpV6Event {
-    pub(crate) r#type: u8,
-    pub(crate) code: u8,
+pub struct SkbIcmpV6Event {
+    pub r#type: u8,
+    pub code: u8,
 }
 
 /// Network device fields.
 #[event_type]
 #[derive(Default)]
-pub(crate) struct SkbDevEvent {
+pub struct SkbDevEvent {
     /// Net device name associated with the packet, from `skb->dev->name`.
-    pub(crate) name: String,
+    pub name: String,
     /// Net device ifindex associated with the packet, from `skb->dev->ifindex`.
-    pub(crate) ifindex: u32,
+    pub ifindex: u32,
     /// Index if the net device the packet arrived on, from `skb->skb_iif`.
-    pub(crate) rx_ifindex: Option<u32>,
+    pub rx_ifindex: Option<u32>,
 }
 
 /// Network namespace fields.
 #[event_type]
-pub(crate) struct SkbNsEvent {
+pub struct SkbNsEvent {
     /// Id of the network namespace associated with the packet, from the device
     /// or the associated socket (in that order).
-    pub(crate) netns: u32,
+    pub netns: u32,
 }
 
 /// Skb metadata & releated fields.
 #[event_type]
-pub(crate) struct SkbMetaEvent {
+pub struct SkbMetaEvent {
     /// Total number of bytes in the packet.
-    pub(crate) len: u32,
+    pub len: u32,
     /// Total number of bytes in the page buffer area.
-    pub(crate) data_len: u32,
+    pub data_len: u32,
     /// Packet hash (!= hash of the packet data).
-    pub(crate) hash: u32,
+    pub hash: u32,
     /// Checksum status.
-    pub(crate) ip_summed: u8,
+    pub ip_summed: u8,
     /// Packet checksum (ip_summed == CHECKSUM_COMPLETE) or checksum
     /// (start << 16)|offset (ip_summed == CHECKSUM_PARTIAL).
-    pub(crate) csum: u32,
+    pub csum: u32,
     /// Checksum level (ip_summed == CHECKSUM_PARTIAL)
-    pub(crate) csum_level: u8,
+    pub csum_level: u8,
     /// QoS priority.
-    pub(crate) priority: u32,
+    pub priority: u32,
 }
 
 /// Skb data & refcnt fields.
 #[event_type]
-pub(crate) struct SkbDataRefEvent {
+pub struct SkbDataRefEvent {
     /// Payload reference only.
-    pub(crate) nohdr: bool,
+    pub nohdr: bool,
     /// Is the skb a clone?
-    pub(crate) cloned: bool,
+    pub cloned: bool,
     /// Skb fast clone information.
-    pub(crate) fclone: u8,
+    pub fclone: u8,
     /// Users count.
-    pub(crate) users: u8,
+    pub users: u8,
     /// Data refcount.
-    pub(crate) dataref: u8,
+    pub dataref: u8,
 }
 
 /// GSO information.
 #[event_type]
-pub(crate) struct SkbGsoEvent {
+pub struct SkbGsoEvent {
     /// GSO flags, see `SKBFL_*` in include/linux/skbuff.h
-    pub(crate) flags: u8,
+    pub flags: u8,
     /// Number of fragments in `skb_shared_info->frags`.
-    pub(crate) frags: u8,
+    pub frags: u8,
     /// GSO size.
-    pub(crate) size: u32,
+    pub size: u32,
     /// Number of GSO segments.
-    pub(crate) segs: u32,
+    pub segs: u32,
     /// GSO type, see `SKB_GSO_*` in include/linux/skbuff.h
-    pub(crate) r#type: u32,
+    pub r#type: u32,
 }
 
 /// Raw packet and related metadata extracted from skbs.
 #[event_type]
-pub(crate) struct SkbPacketEvent {
+pub struct SkbPacketEvent {
     /// Length of the packet.
-    pub(crate) len: u32,
+    pub len: u32,
     /// Lenght of the capture. <= len.
-    pub(crate) capture_len: u32,
+    pub capture_len: u32,
     /// Raw packet data.
-    pub(crate) packet: RawPacket,
+    pub packet: RawPacket,
 }

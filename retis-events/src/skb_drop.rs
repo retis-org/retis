@@ -6,12 +6,12 @@ use crate::event_section;
 // Skb drop event section. Same as the event from BPF, please keep in sync with
 // its BPF counterpart.
 #[event_section("skb-drop")]
-pub(crate) struct SkbDropEvent {
+pub struct SkbDropEvent {
     /// Sub-system who generated the below drop reason. None for core reasons.
-    pub(crate) subsys: Option<String>,
+    pub subsys: Option<String>,
     /// Reason why a packet was freed/dropped. Only reported from specific
     /// functions. See `enum skb_drop_reason` in the kernel.
-    pub(crate) drop_reason: String,
+    pub drop_reason: String,
 }
 
 impl EventFmt for SkbDropEvent {

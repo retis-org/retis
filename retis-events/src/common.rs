@@ -1,27 +1,26 @@
 use std::fmt;
 
-use super::*;
-use crate::{event_section, event_type};
+use crate::{event_section, event_type, *};
 
 #[event_type]
 #[derive(Default)]
-pub(crate) struct TaskEvent {
+pub struct TaskEvent {
     /// Process id.
-    pub(crate) pid: i32,
+    pub pid: i32,
     /// Thread group id.
-    pub(crate) tgid: i32,
+    pub tgid: i32,
     /// Name of the current task.
-    pub(crate) comm: String,
+    pub comm: String,
 }
 
 /// Common event section.
 #[event_section("common")]
-pub(crate) struct CommonEvent {
+pub struct CommonEvent {
     /// Timestamp of when the event was generated.
-    pub(crate) timestamp: u64,
+    pub timestamp: u64,
     /// SMP processor id.
-    pub(crate) smp_id: u32,
-    pub(crate) task: Option<TaskEvent>,
+    pub smp_id: u32,
+    pub task: Option<TaskEvent>,
 }
 
 impl EventFmt for CommonEvent {

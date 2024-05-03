@@ -6,7 +6,6 @@ use log::{info, trace, warn, LevelFilter};
 mod cli;
 mod collect;
 mod core;
-mod events;
 mod generate;
 mod helpers;
 mod inspect;
@@ -24,6 +23,10 @@ use crate::{
     module::get_modules,
 };
 
+// Re-export events crate. It's not really an import but a re-export so events appear as module
+// inside the crate rather than an external crate. However, clippy doesn't like it.
+#[allow(clippy::single_component_path_imports)]
+use events;
 // Re-export derive macros.
 use retis_derive::*;
 

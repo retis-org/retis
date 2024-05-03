@@ -4,20 +4,20 @@ use super::*;
 use crate::event_section;
 
 #[event_section("userspace")]
-pub(crate) struct UserEvent {
+pub struct UserEvent {
     /// Probe type: for now only "usdt" is supported.
-    pub(crate) probe_type: String,
+    pub probe_type: String,
     /// Symbol name associated with the event (i.e. which probe generated the
     /// event).
-    pub(crate) symbol: String,
+    pub symbol: String,
     /// Instruction pointer: address of the symbol associted with the event.
-    pub(crate) ip: u64,
+    pub ip: u64,
     /// Path of the binary associated with the event.
-    pub(crate) path: String,
+    pub path: String,
     /// Process id.
-    pub(crate) pid: i32,
+    pub pid: i32,
     /// Thread id.
-    pub(crate) tid: i32,
+    pub tid: i32,
 }
 
 impl EventFmt for UserEvent {
