@@ -400,7 +400,10 @@ impl Collectors {
         // Write events to stdout if we don't write to a file (--out) or if
         // explicitly asked to (--print).
         if collect.out.is_none() || collect.print {
-            printers.push(PrintSingle::text(Box::new(io::stdout()), collect.format));
+            printers.push(PrintSingle::text(
+                Box::new(io::stdout()),
+                collect.format.into(),
+            ));
         }
 
         // Write the events to a file if asked to.

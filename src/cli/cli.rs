@@ -3,14 +3,14 @@
 //! Cli module, providing tools for registering and accessing command line interface arguments
 //! as well as defining the subcommands that the tool supports.
 #![allow(dead_code)] // FIXME
-use std::{any::Any, env, ffi::OsString, fmt::Debug, path::PathBuf};
+use std::{any::Any, convert::From, env, ffi::OsString, fmt::Debug, path::PathBuf};
 
 use anyhow::{anyhow, bail, Result};
 use clap::{
     builder::PossibleValuesParser,
     error::Error as ClapError,
     error::ErrorKind,
-    {ArgMatches, Args, Command, FromArgMatches},
+    {ArgMatches, Args, Command, FromArgMatches, ValueEnum},
 };
 use log::debug;
 
@@ -19,7 +19,7 @@ use super::dynamic::DynamicCommand;
 use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
-    events::SectionId,
+    events::{DisplayFormat, SectionId},
     generate::Complete,
     inspect::Inspect,
     module::Modules,
@@ -414,6 +414,24 @@ impl CliConfig {
                 ))
             })?
             .get_section::<M>(id)
+    }
+}
+
+/// Type of the "format" argument.
+// It is an enum that maps 1:1 with the formats defined in events library.
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, ValueEnum)]
+pub(crate) enum CliDisplayFormat {
+    SingleLine,
+    #[default]
+    MultiLine,
+}
+
+impl From<CliDisplayFormat> for DisplayFormat {
+    fn from(val: CliDisplayFormat) -> Self {
+        match val {
+            CliDisplayFormat::SingleLine => DisplayFormat::SingleLine,
+            CliDisplayFormat::MultiLine => DisplayFormat::MultiLine,
+        }
     }
 }
 

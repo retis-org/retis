@@ -11,10 +11,7 @@ use clap::{
 };
 
 use super::CollectRunner;
-use crate::{
-    cli::{dynamic::DynamicCommand, SubCommand, *},
-    events::DisplayFormat,
-};
+use crate::cli::{dynamic::DynamicCommand, SubCommand, *};
 
 #[derive(Args, Debug, Default)]
 pub(crate) struct CollectArgs {
@@ -69,8 +66,8 @@ defaults to \"retis.data\"."
     )]
     pub(super) print: bool,
     #[arg(long, help = "Format used when printing an event.")]
-    #[clap(value_enum, default_value_t=DisplayFormat::MultiLine)]
-    pub(super) format: DisplayFormat,
+    #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
+    pub(super) format: CliDisplayFormat,
     #[arg(
         id = "filter-packet",
         short,

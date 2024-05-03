@@ -24,8 +24,8 @@ pub(crate) struct Print {
     #[arg(default_value = "retis.data")]
     pub(super) input: PathBuf,
     #[arg(long, help = "Format used when printing an event.")]
-    #[clap(value_enum, default_value_t=DisplayFormat::MultiLine)]
-    pub(super) format: DisplayFormat,
+    #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
+    pub(super) format: CliDisplayFormat,
 }
 
 impl SubCommandParserRunner for Print {
@@ -38,7 +38,7 @@ impl SubCommandParserRunner for Print {
         let mut factory = FileEventsFactory::new(self.input.as_path())?;
 
         // Formatter & printer for events.
-        let mut output = PrintSingle::text(Box::new(stdout()), self.format);
+        let mut output = PrintSingle::text(Box::new(stdout()), self.format.into());
 
         use EventResult::*;
         while run.running() {

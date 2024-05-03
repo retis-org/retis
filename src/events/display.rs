@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, clap::ValueEnum)]
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum DisplayFormat {
     SingleLine,
     #[default]
