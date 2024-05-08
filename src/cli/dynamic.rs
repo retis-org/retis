@@ -68,7 +68,7 @@ impl DynamicCommand {
     ///
     /// A module can only be registred once.
     pub(crate) fn register_module_noargs(&mut self, id: ModuleId) -> Result<()> {
-        if self.modules.get(&id).is_some() {
+        if self.modules.contains(&id) {
             bail!("module {id} already registered");
         }
         self.modules.insert(id);
@@ -101,7 +101,7 @@ impl DynamicCommand {
     where
         M: Default + FromArgMatches,
     {
-        if self.modules.get(&id).is_none() {
+        if !self.modules.contains(&id) {
             bail!("module {id} not registered");
         }
         let mut target = M::default();
