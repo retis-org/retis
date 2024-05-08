@@ -152,7 +152,7 @@ impl Modules {
     pub(crate) fn register(&mut self, id: ModuleId, module: Box<dyn Module>) -> Result<&mut Self> {
         // Ensure uniqueness of the module name. This is important as their
         // name is used as a key.
-        if self.modules.get(&id).is_some() {
+        if self.modules.contains_key(&id) {
             bail!("Could not insert module '{}'; name already registered", id,);
         }
 

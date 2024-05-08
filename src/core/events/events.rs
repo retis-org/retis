@@ -58,7 +58,7 @@ impl Event {
         owner: ModuleId,
         section: Box<dyn EventSection>,
     ) -> Result<()> {
-        if self.0.get(&owner).is_some() {
+        if self.0.contains_key(&owner) {
             bail!("Section for {} already found in the event", owner);
         }
 
