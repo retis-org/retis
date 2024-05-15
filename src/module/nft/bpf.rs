@@ -101,7 +101,7 @@ impl RawEventSectionFactory for NftEventFactory {
             -1 => None,
             _ => Some(raw.rh),
         };
-        event.verdict = match raw.v {
+        match raw.v {
             -1 => "continue",
             -2 => "break",
             -3 => "jump",
@@ -116,7 +116,7 @@ impl RawEventSectionFactory for NftEventFactory {
             5 => "stop",
             _ => "unknown",
         }
-        .to_owned();
+        .clone_into(&mut event.verdict);
 
         // Destination chain is only valid for NFT_JUMP/NFT_GOTO.
         if raw.v == -3 || raw.v == -4 {
