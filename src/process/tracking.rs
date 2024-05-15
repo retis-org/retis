@@ -23,7 +23,7 @@ use crate::{
 pub(crate) struct TrackingInfoEventFactory {}
 
 impl RawEventSectionFactory for TrackingInfoEventFactory {
-    fn from_raw(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         bail!("TrackingInfoEvents cannot be created from bpf")
     }
 }

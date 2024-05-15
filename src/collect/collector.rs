@@ -561,7 +561,7 @@ mod tests {
     }
 
     impl RawEventSectionFactory for TestEvent {
-        fn from_raw(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        fn create(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
             Ok(Box::<TestEvent>::default())
         }
     }

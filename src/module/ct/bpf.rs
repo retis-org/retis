@@ -73,7 +73,7 @@ pub(crate) struct CtEventFactory {
 }
 
 impl RawEventSectionFactory for CtEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         Ok(Box::new(self.unmarshal_ct(raw_sections)?))
     }
 }

@@ -371,7 +371,7 @@ pub(crate) fn parse_raw_event<'a>(
         event.insert_section(
             owner,
             factory
-                .from_raw(sections)
+                .create(sections)
                 .map_err(|e| anyhow!("Failed to parse section {}: {e}", &owner))?,
         )
     })?;
@@ -412,7 +412,7 @@ pub(crate) fn parse_single_raw_section<'a, T>(
 pub(crate) struct CommonEventFactory {}
 
 impl RawEventSectionFactory for CommonEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut common = CommonEvent::default();
 
         for section in raw_sections.iter() {
@@ -554,7 +554,7 @@ pub(crate) trait EventSectionFactory: RawEventSectionFactory {
 /// Event section factory helpers to convert from BPF raw events. Requires a
 /// per-object implementation.
 pub(crate) trait RawEventSectionFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>>;
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>>;
 }
 
 /// Type alias to refer to the commonly used EventSectionFactory HashMap.
@@ -588,7 +588,7 @@ mod tests {
     }
 
     impl RawEventSectionFactory for TestEvent {
-        fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
             let mut event = TestEvent::default();
 
             for raw in raw_sections.iter() {

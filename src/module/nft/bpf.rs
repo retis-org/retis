@@ -88,7 +88,7 @@ struct NftBpfEvent {
 pub(crate) struct NftEventFactory {}
 
 impl RawEventSectionFactory for NftEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = NftEvent::default();
         let raw = parse_single_raw_section::<NftBpfEvent>(SectionId::Nft, &raw_sections)?;
 

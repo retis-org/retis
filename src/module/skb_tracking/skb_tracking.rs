@@ -47,7 +47,7 @@ impl Module for SkbTrackingModule {
 pub(crate) struct SkbTrackingEventFactory {}
 
 impl RawEventSectionFactory for SkbTrackingEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let event =
             parse_single_raw_section::<SkbTrackingEvent>(SectionId::SkbTracking, &raw_sections)?;
 

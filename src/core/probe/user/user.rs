@@ -85,7 +85,7 @@ pub(crate) struct UserEventFactory {
 }
 
 impl RawEventSectionFactory for UserEventFactory {
-    fn from_raw(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         if raw_sections.len() != 1 {
             bail!("User event from BPF must be a single section")
         }

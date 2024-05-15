@@ -88,7 +88,7 @@ pub(crate) struct SkbDropEventFactory {
 }
 
 impl RawEventSectionFactory for SkbDropEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let raw = parse_single_raw_section::<BpfSkbDropEvent>(SectionId::SkbDrop, &raw_sections)?;
         let drop_reason = raw.drop_reason;
 

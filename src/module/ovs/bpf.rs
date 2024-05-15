@@ -356,7 +356,7 @@ pub(super) fn unmarshall_upcall_return(
 pub(crate) struct OvsEventFactory {}
 
 impl RawEventSectionFactory for OvsEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = OvsEvent::default();
 
         for section in raw_sections.iter() {

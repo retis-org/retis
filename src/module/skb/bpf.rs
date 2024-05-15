@@ -350,7 +350,7 @@ pub(crate) struct SkbEventFactory {
 }
 
 impl RawEventSectionFactory for SkbEventFactory {
-    fn from_raw(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = SkbEvent::default();
 
         for section in raw_sections.iter() {
