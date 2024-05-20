@@ -4,7 +4,8 @@
 #include <common.h>
 #include <skb_tracking.h>
 
-/* Please keep in sync with its Rust counterpart */
+/* Please keep in sync with its Rust counterpart in
+ * retis-events::skb_tracking. */
 struct skb_tracking_event {
 	u64 orig_head;
 	u64 timestamp;

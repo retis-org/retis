@@ -17,17 +17,17 @@ struct exec_track_event {
 	u32 queue_id;
 };
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::event.rs. */
+/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct exec_output {
 	u32 port;
 };
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::event.rs. */
+/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct exec_recirc {
 	u32 id;
 };
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::event.rs. */
+/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 #define R_OVS_CT_COMMIT				(1 << 0)
 #define R_OVS_CT_FORCE				(1 << 1)
 #define R_OVS_CT_IP4				(1 << 2)

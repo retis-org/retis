@@ -19,7 +19,8 @@ struct retis_log_event {
 	u8 msg[LOG_MAX];
 } __attribute__((packed));
 
-/* Please keep in sync with its Rust counterpart in crate::core::events::raw. */
+/* We're using the section identifiers defined in retis-events.
+ * Please keep in sync. */
 enum retis_event_owners {
 	COMMON = 1,
 	KERNEL = 2,

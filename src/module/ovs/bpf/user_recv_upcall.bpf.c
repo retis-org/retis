@@ -5,7 +5,7 @@
 #include <ovs_common.h>
 #include <ovs_operation.h>
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
+/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct recv_upcall_event {
 	u32 type;
 	u32 pkt_size;

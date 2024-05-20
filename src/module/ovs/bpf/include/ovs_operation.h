@@ -3,13 +3,13 @@
 
 #include "ovs_common.h"
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
+/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 enum ovs_operation_type {
 	OVS_OP_EXEC = 0,
 	OVS_OP_PUT = 1,
 };
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
+/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct ovs_operation_event {
 	/* enum ovs_operation_type */
 	u8 type;

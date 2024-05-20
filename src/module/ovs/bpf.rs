@@ -1,5 +1,6 @@
 //! Rust<>BPF types definitions for the ovs module.
-//! Please keep this file in sync with its BPF counterpart in bpf/.
+//! Many parts of the OvsEvent (defined in retis-events) are used directly to parse
+//! the bpf raw event. Please keep them in sync.
 
 use std::net::Ipv6Addr;
 

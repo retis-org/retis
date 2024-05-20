@@ -84,9 +84,6 @@ fn fmt_upcall_cmd(cmd: u8) -> &'static str {
     }
 }
 
-// This struct is also used for ebpf decoding.
-// Please keep it sync with its ebpf counterpart in
-// "bpf/kernel_upcall_tp.bpf.c".
 /// OVS upcall event
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
@@ -116,9 +113,6 @@ impl EventFmt for UpcallEvent {
     }
 }
 
-// This struct is also used for ebpf decoding.
-// Please keep it sync with its ebpf counterpart in
-// "bpf/kernel_enqueue.bpf.c".
 /// Upcall enqueue event.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
@@ -153,9 +147,6 @@ impl EventFmt for UpcallEnqueueEvent {
     }
 }
 
-// This struct is also used for ebpf decoding.
-// Please keep it sync with its ebpf counterpart in
-// "bpf/kernel_upcall_ret.bpf.c".
 /// Upcall return event
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
@@ -176,9 +167,6 @@ impl EventFmt for UpcallReturnEvent {
     }
 }
 
-// This struct is also used for ebpf decoding.
-// Please keep it sync with its ebpf counterpart in
-// "bpf/include/ovs_operation.h".
 /// Operation event.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
@@ -242,9 +230,6 @@ impl EventFmt for OperationEvent {
     }
 }
 
-// This struct is also used for ebpf decoding.
-// Please keep it sync with its ebpf counterpart in
-// "bpf/user_recv_upcall.bpf.c".
 /// OVS Receive Event
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
@@ -449,7 +434,6 @@ pub enum OvsAction {
     DecTtl,
 }
 
-// Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
 /// OVS output action data.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
@@ -459,7 +443,6 @@ pub struct OvsActionOutput {
     pub port: u32,
 }
 
-// Please keep it sync with its ebpf counterpart in "bpf/kernel_exec_tp.bpf.c".
 /// OVS recirc action data.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
@@ -470,7 +453,6 @@ pub struct OvsActionRecirc {
 }
 
 /// OVS conntrack flags
-// Keep in sync with their conterpart in bpf/kernel_exec_tp.bpf.c
 pub const R_OVS_CT_COMMIT: u32 = 1 << 0;
 pub const R_OVS_CT_FORCE: u32 = 1 << 1;
 pub const R_OVS_CT_IP4: u32 = 1 << 2;

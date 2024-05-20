@@ -4,7 +4,7 @@
 #include <common.h>
 #include <ovs_common.h>
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
+/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct upcall_enqueue_event {
 	s32 ret;
 	u8 cmd;

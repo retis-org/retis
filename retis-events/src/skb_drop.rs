@@ -3,8 +3,7 @@ use std::fmt;
 use super::*;
 use crate::event_section;
 
-// Skb drop event section. Same as the event from BPF, please keep in sync with
-// its BPF counterpart.
+/// Skb drop event section.
 #[event_section("skb-drop")]
 pub struct SkbDropEvent {
     /// Sub-system who generated the below drop reason. None for core reasons.

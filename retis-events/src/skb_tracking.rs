@@ -8,8 +8,7 @@ use std::{
 use super::*;
 use crate::event_section;
 
-// Tracking event section. Same as the event from BPF, please keep in sync with
-// its BPF counterpart.
+/// Tracking event section.
 /// For more information of how the tracking logic is designed and how it can be
 /// used, please see `module::skb_tracking` documentation.
 ///

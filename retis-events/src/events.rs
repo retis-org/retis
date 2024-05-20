@@ -190,8 +190,7 @@ pub enum SectionId {
 }
 
 impl SectionId {
-    /// Constructs an SectionId from a section unique identifier. Please
-    /// keep in sync with its BPF counterpart.
+    /// Constructs an SectionId from a section unique identifier
     pub fn from_u8(val: u8) -> Result<SectionId> {
         use SectionId::*;
         Ok(match val {
@@ -209,8 +208,7 @@ impl SectionId {
         })
     }
 
-    /// Converts an SectionId to a section unique identifier. Please
-    /// keep in sync with its BPF counterpart.
+    /// Converts an SectionId to a section unique identifier.
     #[allow(dead_code)]
     pub fn to_u8(self) -> u8 {
         use SectionId::*;
