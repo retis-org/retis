@@ -34,7 +34,7 @@
 #![allow(dead_code)] // FIXME
 #![allow(clippy::wrong_self_convention)]
 
-use std::{any::Any, collections::HashMap, fmt};
+use std::{any::Any, collections::HashMap, fmt, str::FromStr};
 
 use anyhow::{anyhow, bail, Result};
 use log::debug;
@@ -189,6 +189,28 @@ pub enum SectionId {
     _MAX = 11,
 }
 
+impl FromStr for SectionId {
+    type Err = anyhow::Error;
+
+    /// Constructs an SectionId from a section unique str identifier.
+    fn from_str(val: &str) -> Result<Self> {
+        use SectionId::*;
+        Ok(match val {
+            CommonEvent::SECTION_NAME => Common,
+            KernelEvent::SECTION_NAME => Kernel,
+            UserEvent::SECTION_NAME => Userspace,
+            TrackingInfo::SECTION_NAME => Tracking,
+            SkbTrackingEvent::SECTION_NAME => SkbTracking,
+            SkbDropEvent::SECTION_NAME => SkbDrop,
+            SkbEvent::SECTION_NAME => Skb,
+            OvsEvent::SECTION_NAME => Ovs,
+            NftEvent::SECTION_NAME => Nft,
+            CtEvent::SECTION_NAME => Ct,
+            x => bail!("Can't construct a SectionId from {}", x),
+        })
+    }
+}
+
 impl SectionId {
     /// Constructs an SectionId from a section unique identifier
     pub fn from_u8(val: u8) -> Result<SectionId> {
@@ -225,24 +247,6 @@ impl SectionId {
             Ct => 10,
             _MAX => 11,
         }
-    }
-
-    /// Constructs an SectionId from a section unique str identifier.
-    pub fn from_str(val: &str) -> Result<SectionId> {
-        use SectionId::*;
-        Ok(match val {
-            CommonEvent::SECTION_NAME => Common,
-            KernelEvent::SECTION_NAME => Kernel,
-            UserEvent::SECTION_NAME => Userspace,
-            TrackingInfo::SECTION_NAME => Tracking,
-            SkbTrackingEvent::SECTION_NAME => SkbTracking,
-            SkbDropEvent::SECTION_NAME => SkbDrop,
-            SkbEvent::SECTION_NAME => Skb,
-            OvsEvent::SECTION_NAME => Ovs,
-            NftEvent::SECTION_NAME => Nft,
-            CtEvent::SECTION_NAME => Ct,
-            x => bail!("Can't construct a SectionId from {}", x),
-        })
     }
 
     /// Converts an SectionId to a section unique str identifier.

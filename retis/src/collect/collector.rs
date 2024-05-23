@@ -5,6 +5,7 @@ use std::{
     fs::OpenOptions,
     io::{self, BufWriter},
     process::{Command, Stdio},
+    str::FromStr,
     time::Duration,
 };
 
