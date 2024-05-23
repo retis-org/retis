@@ -42,20 +42,20 @@ ifeq ($(NOVENDOR),)
 
     LIBBPF_SYS_LIBBPF_BASE_PATH := $(dir $(shell cargo metadata --format-version=1 | jq -r '.packages | .[] | select(.name == "libbpf-sys") | .manifest_path'))
     LIBBPF_SYS_LIBBPF_INCLUDES :=  $(wildcard $(addprefix $(LIBBPF_SYS_LIBBPF_BASE_PATH)/libbpf/src/, $(LIBBPF_API_HEADERS)))
-    LIBBPF_INCLUDES := $(ROOT_DIR)/src/.out
+    LIBBPF_INCLUDES := $(ROOT_DIR)/retis/src/.out
 endif
 
 # Taking errno.h from libc instead of linux headers.
 # TODO: Remove when we fix proper header dependencies.
-INCLUDES_ALL := $(abspath $(wildcard $(shell find src -type d -path '*/bpf/include') \
+INCLUDES_ALL := $(abspath $(wildcard $(shell find retis/src -type d -path '*/bpf/include') \
                                      /usr/include/x86_64-linux-gnu))
 INCLUDES_ALL += $(LIBBPF_INCLUDES)
 
 INCLUDES := $(addprefix -I, $(INCLUDES_ALL))
 
-EBPF_PROBES := $(abspath $(wildcard src/core/probe/*/bpf))
+EBPF_PROBES := $(abspath $(wildcard retis/src/core/probe/*/bpf))
 
-EBPF_HOOKS := $(abspath $(wildcard src/module/*/bpf))
+EBPF_HOOKS := $(abspath $(wildcard retis/src/module/*/bpf))
 
 all: debug
 

@@ -57,6 +57,7 @@ where
 ///
 /// ```
 /// use std::fmt;
+/// use retis_events::DelimWriter;
 ///
 /// struct Flags {
 ///     opt1: bool,
