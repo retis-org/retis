@@ -17,10 +17,10 @@ const PTR_BIT: u8 = 1 << 6;
 const SIGN_BIT: u8 = 1 << 7;
 
 #[derive(Default)]
-#[allow(dead_code)]
 struct LhsNode<'a> {
     member: &'a str,
     mask: u64,
+    tgt_type: Option<&'a str>,
 }
 
 #[derive(Eq, PartialEq)]
@@ -394,8 +394,13 @@ impl Rval {
 pub(crate) struct FilterMeta(pub(crate) Vec<MetaOp>);
 
 impl FilterMeta {
-    fn check_one_walkable(t: &Type, ind: &mut u8) -> Result<bool> {
+    fn check_one_walkable(t: &Type, ind: &mut u8, casted: bool) -> Result<bool> {
         match t {
+            Type::Int(i)
+                if i.size() == std::mem::size_of::<*const std::ffi::c_void>() && casted =>
+            {
+                *ind += 1
+            }
             Type::Ptr(_) => *ind += 1,
             Type::Struct(_) | Type::Union(_) => {
                 return Ok(true);
@@ -417,13 +422,15 @@ impl FilterMeta {
 
     // Return all comparable and walkable types Ptr, Int, Array, Enum[64],
     // Struct, Union
-    fn next_walkable(btf: &Btf, r#type: Type) -> Result<(u8, Type)> {
+    fn next_walkable(btf: &Btf, r#type: Type, casted: bool) -> Result<(u8, Type)> {
         let btf_type = r#type.as_btf_type();
         let mut ind = 0;
 
         // Return early if r#type is already walkable
-        if Self::check_one_walkable(&r#type, &mut ind)? {
+        if Self::check_one_walkable(&r#type, &mut ind, casted)? {
             return Ok((0, r#type));
+        } else if casted {
+            return Ok((ind, r#type));
         }
 
         let btf_type = btf_type.ok_or_else(|| {
@@ -431,7 +438,7 @@ impl FilterMeta {
         })?;
 
         for x in btf.type_iter(btf_type) {
-            if Self::check_one_walkable(&x, &mut ind)? {
+            if Self::check_one_walkable(&x, &mut ind, casted)? {
                 return Ok((ind, x));
             }
         }
@@ -504,7 +511,20 @@ impl FilterMeta {
                     0x0
                 };
 
-                Ok(LhsNode { member, mask })
+                // tgt_type is optional.
+                let tgt_type = elem.next();
+
+                if elem.next().is_some() {
+                    bail!(
+                        "unexpected field expression (must be under the form field[:mask[:type]])"
+                    );
+                }
+
+                Ok(LhsNode {
+                    member,
+                    mask,
+                    tgt_type,
+                })
             })
             .collect::<Result<Vec<LhsNode<'_>>>>()?;
 
@@ -516,7 +536,7 @@ impl FilterMeta {
     }
 
     pub(crate) fn from_string(fstring: String) -> Result<Self> {
-        let btf = &inspector()?.kernel.btf;
+        let btf_info = &inspector()?.kernel.btf;
         let mut ops: Vec<_> = Vec::new();
         let mut offt: u32 = 0;
         let mut stored_offset: u32 = 0;
@@ -528,11 +548,11 @@ impl FilterMeta {
         // At least two elements are present
         let init_sym = fields.remove(0).member;
 
-        let mut types = btf
+        let mut types = btf_info
             .resolve_types_by_name(init_sym)
             .map_err(|e| anyhow!("unable to resolve sk_buff data type {e}"))?;
 
-        let (btf, ref mut r#type) =
+        let (mut btf, ref mut r#type) =
             match types.iter_mut().find(|(_, t)| matches!(t, Type::Struct(_))) {
                 Some(r#struct) => r#struct,
                 None => bail!("Could not resolve {init_sym} to a struct"),
@@ -548,7 +568,7 @@ impl FilterMeta {
                         // Named Structs or Union return (level matched) but are
                         //   still part of the parent Struct, so the offset has to
                         //   be preserved.
-                        let (ind, x) = Self::next_walkable(btf, snode)?;
+                        let (ind, x) = Self::next_walkable(btf, snode, field.tgt_type.is_some())?;
                         let one = 1;
 
                         match ind.cmp(&one) {
@@ -572,8 +592,36 @@ impl FilterMeta {
                             }
                         }
 
-                        *r#type = x.clone();
+                        if let Some(tgt) = field.tgt_type {
+                            let mut types = btf_info
+                                .resolve_types_by_name(tgt)
+                                .map_err(|e| anyhow!("unable to resolve data type: {e}"))?;
+
+                            (btf, *r#type) = match types.iter_mut().find(|(_, t)| {
+                                matches!(t, Type::Union(_))
+                                    || matches!(t, Type::Struct(_))
+                                    || matches!(t, Type::Typedef(_))
+                            }) {
+                                Some((ref btf, r#type)) => {
+                                    let nw = Self::next_walkable(btf, r#type.clone(), false)?;
+                                    if nw.0 > 0 {
+                                        bail!(
+                                            "cast type ({tgt}: {}) cannot be an alias to a pointer",
+                                            r#type.name()
+                                        );
+                                    }
+                                    (btf, nw.1)
+                                }
+                                None => bail!("Could not resolve {tgt} to a struct or typedef"),
+                            };
+                        } else {
+                            *r#type = x.clone();
+                        }
                     } else {
+                        if let Some(tgt) = field.tgt_type {
+                            bail!("trying to cast a leaf member into {tgt}");
+                        }
+
                         *r#type = snode;
                         mask = field.mask;
                     }
