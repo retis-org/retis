@@ -496,7 +496,7 @@ impl FilterMeta {
                         stored_bf_size = bfs;
                     }
                 }
-                None => bail!("{field} not found or is a bitfield!"),
+                None => bail!("{field} not found!"),
             }
         }
 
