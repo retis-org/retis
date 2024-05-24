@@ -7,13 +7,11 @@
 use anyhow::{anyhow, bail, Result};
 use btf_rs::*;
 use plain::Plain;
-use regex::Regex;
 
 use crate::core::inspect::inspector;
 
 const META_OPS_MAX: u32 = 32;
 const META_TARGET_MAX: usize = 32;
-const MF_RE: &str = r#"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*){1,})[\s]{1,}(==|!=|>=|<=|<|>)[\s]{1,}(0x[0-9a-fA-F]+|-?[0-9]+|"[ -~]*"|'[ -~]*'|[a-zA-Z_][a-zA-Z0-9_]*){1}"#;
 
 const PTR_BIT: u8 = 1 << 6;
 const SIGN_BIT: u8 = 1 << 7;
@@ -424,6 +422,19 @@ impl FilterMeta {
         bail!("failed to retrieve next walkable object.")
     }
 
+    // Parse (in a very simple way) the filter string splitting it
+    // into rhs op and lhs.
+    // Requires spaces as separator among elements.
+    fn parse_filter(filter: &str) -> Result<(&str, MetaCmp, &str)> {
+        let Ok([lhs, op, rhs]): Result<[&str; 3], _> =
+            filter.split(' ').collect::<Vec<_>>().try_into()
+        else {
+            bail!("invalid filter format");
+        };
+
+        Ok((lhs, MetaCmp::from_str(op)?, rhs))
+    }
+
     pub(crate) fn from_string(fstring: String) -> Result<Self> {
         let btf = &inspector()?.kernel.btf;
         let mut ops: Vec<_> = Vec::new();
@@ -431,16 +442,7 @@ impl FilterMeta {
         let mut stored_offset: u32 = 0;
         let mut stored_bf_size: u32 = 0;
 
-        // Check the correctness, perform preliminar checks for the
-        // operator type against the target (e.g. >= against number).
-        //
-        // Once the lmo type is known, compare the rval against the
-        // lmo type (e.g. INT against LONG, sign)
-        let re = Regex::new(MF_RE)?;
-
-        let Some((_, [lval, op, rval])) = re.captures(&fstring).map(|caps| caps.extract()) else {
-            bail!("Invalid filter expression.")
-        };
+        let (lval, op, rval) = Self::parse_filter(&fstring)?;
 
         let mut fields: Vec<_> = lval.split('.').collect();
 
@@ -506,7 +508,6 @@ impl FilterMeta {
         let lmo = MetaOp::emit_load(btf, r#type, stored_offset, stored_bf_size)?;
         ops.push(lmo);
 
-        let op = MetaCmp::from_str(op)?;
         let rval = Rval::from_str(rval)?;
 
         ops.insert(0, MetaOp::emit_target(lmo.load_ref(), rval, op)?);
