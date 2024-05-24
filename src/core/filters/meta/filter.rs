@@ -16,6 +16,13 @@ const META_TARGET_MAX: usize = 32;
 const PTR_BIT: u8 = 1 << 6;
 const SIGN_BIT: u8 = 1 << 7;
 
+#[derive(Default)]
+#[allow(dead_code)]
+struct LhsNode<'a> {
+    member: &'a str,
+    mask: u64,
+}
+
 #[derive(Eq, PartialEq)]
 enum MetaCmp {
     Eq = 0,
@@ -77,6 +84,8 @@ struct MetaLoad {
     offt: u16,
     // Zero for no bitfield.
     bf_size: u8,
+    // Mask to apply. Only numbers are supported.
+    mask: u64,
 }
 
 impl MetaLoad {
@@ -138,7 +147,7 @@ impl MetaOp {
         Ok(())
     }
 
-    fn emit_load(btf: &Btf, r#type: &Type, offt: u32, bfs: u32) -> Result<MetaOp> {
+    fn emit_load(btf: &Btf, r#type: &Type, offt: u32, bfs: u32, mask: u64) -> Result<MetaOp> {
         let mut op: MetaOp = unsafe { std::mem::zeroed::<_>() };
         let lop = unsafe { &mut op.l };
         let mut t = r#type.clone();
@@ -214,6 +223,12 @@ impl MetaOp {
                 Some(x) => x,
                 None => break,
             };
+        }
+
+        if lop.is_num() && !lop.is_signed() {
+            lop.mask = mask;
+        } else {
+            bail!("mask is only supported for unsigned numeric comparisons");
         }
 
         lop.bf_size = u8::try_from(bfs)?;
@@ -398,19 +413,50 @@ impl FilterMeta {
         bail!("failed to retrieve next walkable object.")
     }
 
+    fn parse_mask(el: &str) -> Result<u64> {
+        let (el, not) = match el.strip_prefix('~') {
+            Some(num) => (num, true),
+            None => (el, false),
+        };
+
+        if let Some(hex) = el.strip_prefix("0x") {
+            let num = u64::from_str_radix(hex, 16)?;
+            Ok(if not { !num } else { num })
+        } else {
+            bail!("invalid mask format");
+        }
+    }
+
     // Parse (in a very simple way) the filter string splitting it
     // into rhs op and lhs.
     // Requires spaces as separator among elements.
-    fn parse_filter(filter: &str) -> Result<(Vec<&str>, MetaCmp, &str)> {
+    fn parse_filter(filter: &str) -> Result<(Vec<LhsNode>, MetaCmp, &str)> {
         let Ok([lhs, op, rhs]): Result<[&str; 3], _> =
             filter.split(' ').collect::<Vec<_>>().try_into()
         else {
             bail!("invalid filter format");
         };
 
-        let lhs: Vec<_> = lhs.split('.').collect();
+        let lhs: Vec<_> = lhs
+            .split('.')
+            .map(|x| {
+                let mut elem = x.split(':');
+                // member is mandatory.
+                let member = elem.next().ok_or_else(|| anyhow!("member is mandatory"))?;
 
-        if lhs.len() <= 1 || lhs[0] != "sk_buff" {
+                // mask is optional and must be a number.
+                // Can be under the form [~]hex_num
+                let mask = if let Some(el) = elem.next() {
+                    Self::parse_mask(el)?
+                } else {
+                    0x0
+                };
+
+                Ok(LhsNode { member, mask })
+            })
+            .collect::<Result<Vec<LhsNode<'_>>>>()?;
+
+        if lhs.len() <= 1 || lhs[0].member != "sk_buff" {
             bail!("invalid lhs");
         }
 
@@ -423,11 +469,12 @@ impl FilterMeta {
         let mut offt: u32 = 0;
         let mut stored_offset: u32 = 0;
         let mut stored_bf_size: u32 = 0;
+        let mut mask = 0;
 
         let (mut fields, op, rval) = Self::parse_filter(&fstring)?;
 
         // At least two elements are present
-        let init_sym = fields.remove(0);
+        let init_sym = fields.remove(0).member;
 
         let mut types = btf
             .resolve_types_by_name(init_sym)
@@ -440,10 +487,13 @@ impl FilterMeta {
             };
 
         for (pos, field) in fields.iter().enumerate() {
-            let sub_node = walk_btf_node(btf, r#type, field, offt);
+            let sub_node = walk_btf_node(btf, r#type, field.member, offt);
             match sub_node {
                 Some((offset, bfs, snode)) => {
                     if pos < fields.len() - 1 {
+                        if field.mask != 0 {
+                            bail!("mask for intermediate members is not supported");
+                        }
                         // Type::Ptr needs indirect actions (Load *Ptr).
                         //   Offset need to be reset
                         // Named Structs or Union return (level matched) but are
@@ -470,6 +520,7 @@ impl FilterMeta {
                         *r#type = x.clone();
                     } else {
                         *r#type = snode;
+                        mask = field.mask;
                     }
 
                     stored_offset = offset;
@@ -477,11 +528,11 @@ impl FilterMeta {
                         stored_bf_size = bfs;
                     }
                 }
-                None => bail!("{field} not found!"),
+                None => bail!("{} not found!", field.member),
             }
         }
 
-        let lmo = MetaOp::emit_load(btf, r#type, stored_offset, stored_bf_size)?;
+        let lmo = MetaOp::emit_load(btf, r#type, stored_offset, stored_bf_size, mask)?;
         ops.push(lmo);
 
         let rval = Rval::from_str(rval)?;
