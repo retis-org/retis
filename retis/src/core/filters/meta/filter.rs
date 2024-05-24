@@ -425,12 +425,22 @@ impl FilterMeta {
     // Parse (in a very simple way) the filter string splitting it
     // into rhs op and lhs.
     // Requires spaces as separator among elements.
-    fn parse_filter(filter: &str) -> Result<(&str, MetaCmp, &str)> {
+    fn parse_filter(filter: &str) -> Result<(Vec<&str>, MetaCmp, &str)> {
         let Ok([lhs, op, rhs]): Result<[&str; 3], _> =
             filter.split(' ').collect::<Vec<_>>().try_into()
         else {
             bail!("invalid filter format");
         };
+
+        let lhs: Vec<_> = lhs.split('.').collect();
+
+        if lhs.len() <= 1 {
+            bail!("expression does not point to a member");
+        }
+
+        if lhs[0] != "sk_buff" {
+            bail!("starting struct isn't supported (!= sk_buff)");
+        }
 
         Ok((lhs, MetaCmp::from_str(op)?, rhs))
     }
@@ -442,16 +452,10 @@ impl FilterMeta {
         let mut stored_offset: u32 = 0;
         let mut stored_bf_size: u32 = 0;
 
-        let (lval, op, rval) = Self::parse_filter(&fstring)?;
+        let (mut fields, op, rval) = Self::parse_filter(&fstring)?;
 
-        let mut fields: Vec<_> = lval.split('.').collect();
-
-        // The captures ensure at least two elements are present
+        // At least two elements are present
         let init_sym = fields.remove(0);
-
-        if !init_sym.eq("sk_buff") {
-            bail!("unsupported data structure {init_sym}. sk_buff must be used.")
-        }
 
         let mut types = btf
             .resolve_types_by_name(init_sym)
