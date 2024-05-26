@@ -225,7 +225,7 @@ impl MetaOp {
             };
         }
 
-        if lop.is_num() && !lop.is_signed() {
+        if lop.is_ptr() || (lop.is_num() && !lop.is_signed()) {
             lop.mask = mask;
         } else {
             bail!("mask is only supported for unsigned numeric comparisons");
@@ -495,9 +495,6 @@ impl FilterMeta {
             match sub_node {
                 Some((offset, bfs, snode)) => {
                     if pos < fields.len() - 1 {
-                        if field.mask != 0 {
-                            bail!("mask for intermediate members is not supported");
-                        }
                         // Type::Ptr needs indirect actions (Load *Ptr).
                         //   Offset need to be reset
                         // Named Structs or Union return (level matched) but are
@@ -518,7 +515,12 @@ impl FilterMeta {
                             std::cmp::Ordering::Greater => {
                                 bail!("pointers of pointers are not supported")
                             }
-                            _ => offt = offset,
+                            _ => {
+                                if field.mask != 0 {
+                                    bail!("mask for non-ptr intermediate members is not supported");
+                                }
+                                offt = offset
+                            }
                         }
 
                         *r#type = x.clone();
