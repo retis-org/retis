@@ -370,7 +370,7 @@ impl FilterMeta {
             | Type::Restrict(_)
             | Type::DeclTag(_)
             | Type::TypeTag(_) => (),
-            _ => bail!("unexpected type ({})", t.name()),
+            _ => bail!("unexpected ({}) while walking types", t.name()),
         };
 
         Ok(false)
