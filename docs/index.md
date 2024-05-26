@@ -221,6 +221,21 @@ Metadata filters can match against any subfield of the `sk_buff` and subsequent
 inner data structures.
 Meta filtering also automatically follows struct pointers, so indirect access to
 structures pointed by an `sk_buff` field is possible.
+A filter expression is represented by the pseudo EBNF grammar below:
+
+```none
+EXPR ::= LHS ' ' OP ' ' RHS | LHS
+LHS ::= 'sk_buff' MEMBER
+MEMBER ::= IDENTIFIER MEMBER | IDENTIFIER
+IDENTIFIER ::= '.' #'[a-zA-Z_][a-zA-Z0-9_]*'
+OP ::= '==' | '!=' | '<' | '<=' | '>' | '>='
+RHS ::= STRING | NUMBER
+STRING ::= '"' ASCII '"' | '\'' ASCII '\''
+ASCII ::= #'[:ascii:]*'
+NUMBER ::= #'0x[a-zA-Z0-9]+' | #'[0-9]+'
+```
+
+An example of filter that respect a previous definition is:
 
 ```none
 $ retis collect -m 'sk_buff.dev.nd_net.net.ns.inum == 4026531840'
@@ -233,6 +248,8 @@ The comparison operators are:
 2. "!=" for *not equal to*
 3. "<" and "<=" for *less than* and *less than or equal to*
 4. ">" and ">=" for *greater than* and *greater than or equal to*
+5. if OP and RHS are omitted, a *not equal to* zero numeric comparison is assumed
+
 
 At the moment, only number and string comparisons are supported.
 The right-hand side (rhs) of numeric matches must be expressed as
