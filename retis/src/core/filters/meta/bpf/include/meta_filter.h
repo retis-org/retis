@@ -107,7 +107,8 @@ static __always_inline long meta_process_ops(struct retis_meta_ctx *ctx)
 						  (char *)ctx->base + (val->l.offt)))
 				return -1;
 
-			ctx->base = (void *)ptr;
+			ctx->base = val->l.mask ? (void *)(ptr & val->l.mask)
+				                : (void *)ptr;
 			continue;
 		}
 
