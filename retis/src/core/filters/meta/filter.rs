@@ -391,7 +391,10 @@ impl FilterMeta {
             | Type::Restrict(_)
             | Type::DeclTag(_)
             | Type::TypeTag(_) => (),
-            _ => bail!("unexpected type ({})", t.name()),
+            _ => bail!(
+                "unexpected type ({}) while walking struct members",
+                t.name()
+            ),
         };
 
         Ok(false)
