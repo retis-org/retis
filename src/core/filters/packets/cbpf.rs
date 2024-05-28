@@ -230,7 +230,8 @@ impl TryFrom<&[u8]> for BpfProg {
 
     fn try_from(insns: &[u8]) -> Result<Self> {
         let mut bpf = Self::new();
-        bpf.prog.extend_from_slice(unsafe { mem::transmute(insns) });
+        bpf.prog
+            .extend_from_slice(unsafe { mem::transmute::<&[u8], &[BpfInsn]>(insns) });
 
         Ok(bpf)
     }
