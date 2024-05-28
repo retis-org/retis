@@ -43,7 +43,7 @@ memoffset = "0.9"
 nix = { version = "0.28", features = ["feature", "time", "user"] }
 once_cell = "1.15"
 pager = "0.16"
-pcap = "2.0"
+pcap = "1.3"
 pcap-file = "2.0"
 plain = "0.2"
 pnet = "0.34"
