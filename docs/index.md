@@ -227,12 +227,15 @@ A filter expression is represented by the pseudo EBNF grammar below:
 EXPR ::= LHS ' ' OP ' ' RHS | LHS
 LHS ::= 'sk_buff' MEMBER
 MEMBER ::= IDENTIFIER MEMBER | IDENTIFIER
-IDENTIFIER ::= '.' #'[a-zA-Z_][a-zA-Z0-9_]*'
+IDENTIFIER ::= '.' #'[a-zA-Z_][a-zA-Z0-9_]*' (':' MASK)?
 OP ::= '==' | '!=' | '<' | '<=' | '>' | '>='
 RHS ::= STRING | NUMBER
+MASK ::= ('~')? HEX
 STRING ::= '"' ASCII '"' | '\'' ASCII '\''
 ASCII ::= #'[:ascii:]*'
-NUMBER ::= #'0x[a-zA-Z0-9]+' | #'[0-9]+'
+NUMBER ::= HEX | DEC
+HEX ::= #'0x[a-zA-Z0-9]+'
+DEC ::= #'[0-9]+'
 ```
 
 An example of filter that respect a previous definition is:
@@ -258,6 +261,20 @@ latter starting with `0x` prefix.
 All the comparison operators support numbers (both signed and unsigned).
 Bitfields are supported as well (both signed and unsigned) and they
 are treated as regular numbers.
+For numeric comparisons, an additional bitwise AND operation can be
+performed by specifying a mask. The following example demonstrates
+this approach:
+
+```
+$ retis collect -m 'sk_buff._nfct:0x7 == 0x2'
+...
+```
+
+which is equivalent to the following:
+
+```none
+(sk_buff->_nfct & NFCT_INFOMASK) == IP_CT_NEW
+```
 
 For strings only the operators *equal to* and *not equal to* are supported,
 furthermore, the string (rhs) must be enclosed between *quotes*.
