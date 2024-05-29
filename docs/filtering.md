@@ -80,8 +80,9 @@ A filter expression is represented by the pseudo EBNF grammar below:
 EXPR ::= LHS ' ' OP_RHS | LHS
 OP_RHS ::= OP ' ' RHS_NUM | EQ_NE ' ' RHS_STR
 LHS ::= 'sk_buff' MEMBER
-MEMBER ::= IDENTIFIER MEMBER | IDENTIFIER
-IDENTIFIER ::= '.' #'[a-zA-Z_][a-zA-Z0-9_]*' (':' MASK)?
+MEMBER ::= NEXTIDENT MEMBER | NEXTIDENT
+NEXTIDENT ::= '.' IDENT (':' MASK (':' IDENT)?)?
+IDENT ::= #'[a-zA-Z_][a-zA-Z0-9_]*'
 OP ::= EQ_NE | '<' | '<=' | '>' | '>='
 EQ_NE ::= '==' | '!='
 MASK ::= ('~')? MASK_NUM
@@ -146,6 +147,21 @@ $ retis collect -m 'sk_buff.dev.name == "eth0"'
 
 The example above shows how strings can be matched and how they are
 required to be quoted.
+
+Another useful feature meta filtering expose is the ability to follow
+pointers embedded in members with a different defined type.
+For example, the filter below:
+
+```none
+$ retis collect -m sk_buff._nfct:~0x7:nf_conn.mark
+...
+```
+
+is equivalent to the following:
+
+```none
+(nf_conn *)(skb->_nfct & NFCT_PTRMASK)->mark != 0
+```
 
 Metadata filtering, being a BTF-based way of filtering, is theoretically
 not limited to `sk_buff`, so from a generic point of view it can support
