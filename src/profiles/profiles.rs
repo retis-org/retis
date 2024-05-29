@@ -333,7 +333,7 @@ mod tests {
                 .pop()
                 .unwrap()
             {
-                ProfileCondition::Version(v) => return v,
+                ProfileCondition::Version(v) => v,
                 _ => panic!("Wrong condition type"),
             }
         }
@@ -538,9 +538,9 @@ collect:
         )
         .expect("parsing")
         .cli_args("collect")
-        .and_then(|e| {
+        .map(|e| {
             println!("{:?}", e);
-            Ok(e)
+            e
         })
         .unwrap()
         .eq(&vec![
@@ -572,9 +572,9 @@ collect:
         )
         .expect("parsing")
         .cli_args("collect")
-        .and_then(|e| {
+        .map(|e| {
             println!("{:?}", e);
-            Ok(e)
+            e
         })
         .unwrap()
         .eq(&vec![

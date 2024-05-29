@@ -264,7 +264,7 @@ mod tests {
     use anyhow::{anyhow, Result};
     use serde_json::Value;
 
-    static EVENTS: [(&'static str, TrackingInfo); 1] = [
+    static EVENTS: [(&str, TrackingInfo); 1] = [
         // Upcall event
         (
             r#"{"idx":9,"skb":{"orig_head":18446616575029637120,"skb":18446616575340381184,"timestamp":689436955471671}}"#,
@@ -287,7 +287,7 @@ mod tests {
             // Comparing json strings is error prone. Convert them to Values and compare those.
             assert_eq!(
                 serde_json::from_str::<Value>(json.as_str()).unwrap(),
-                serde_json::from_str::<Value>(*event_json).unwrap()
+                serde_json::from_str::<Value>(event_json).unwrap()
             );
         }
         Ok(())
@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn test_json_to_event() -> Result<()> {
         for (event_json, event) in EVENTS.iter() {
-            let parsed: TrackingInfo = serde_json::from_str(*event_json)
+            let parsed: TrackingInfo = serde_json::from_str(event_json)
                 .map_err(|e| anyhow!("Failed to convert json '{event_json}' to event: {e}"))?;
             assert_eq!(&parsed, event);
         }

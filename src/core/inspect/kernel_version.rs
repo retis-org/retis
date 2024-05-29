@@ -312,58 +312,58 @@ mod tests {
         let version = KernelVersion::parse("6.2.14-300.fc38.x86_64").unwrap();
 
         let req = KernelVersionReq::parse("= 6.2.14-300").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("= 6.2.14").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("= 6.2.15").unwrap();
-        assert_eq!(req.matches(&version), false);
+        assert!(!req.matches(&version));
         let req = KernelVersionReq::parse("= 6.2").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("= 6").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("= 7").unwrap();
-        assert_eq!(req.matches(&version), false);
+        assert!(!req.matches(&version));
 
         let req = KernelVersionReq::parse("!= 6.2.14-301").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("!= 6.3").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("!= 5").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("!= 6.2.14").unwrap();
-        assert_eq!(req.matches(&version), false);
+        assert!(!req.matches(&version));
 
         let req = KernelVersionReq::parse("> 6.2.14-200").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("> 6.1").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("> 5").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse("> 6.2").unwrap();
-        assert_eq!(req.matches(&version), false);
+        assert!(!req.matches(&version));
 
         let req = KernelVersionReq::parse(">= 6.2.14-200").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse(">= 6.2.14-300").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse(">= 6.2.14").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse(">= 6.2.10").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse(">= 6.2").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse(">= 5.14").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse(">= 6").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
         let req = KernelVersionReq::parse(">= 5").unwrap();
-        assert_eq!(req.matches(&version), true);
+        assert!(req.matches(&version));
     }
 
     #[test]
     fn deserialize_version_req() {
         let req: KernelVersionReq = serde_json::from_str("\"= 6.2\"").unwrap();
-        let cmp = req.0.get(0).unwrap();
+        let cmp = req.0.first().unwrap();
 
         assert_eq!(cmp.op, Operator::Eq);
         assert_eq!(cmp.major, 6);

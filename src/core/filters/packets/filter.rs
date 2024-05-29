@@ -45,7 +45,8 @@ impl FilterPacket {
             Err(e) => bail!("Could not compile the filter: {e}"),
         };
         let insns = program.get_instructions();
-        let filter = BpfProg::try_from(unsafe { mem::transmute::<_, &[u8]>(insns) })?;
+        let filter =
+            BpfProg::try_from(unsafe { mem::transmute::<&[pcap::BpfInstruction], &[u8]>(insns) })?;
 
         let ebpf_filter = eBpfProg::try_from(filter)?;
         if ebpf_filter.len() > FILTER_MAX_INSNS {

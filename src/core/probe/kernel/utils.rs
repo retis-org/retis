@@ -54,7 +54,9 @@ mod tests {
         assert!(super::parse_probe("tp:skb:kfree_skb", filter).is_ok());
         assert!(super::parse_probe("tcp_v6_*", filter).is_ok());
         assert!(super::parse_probe("kprobe:tcp_v6_*", filter).is_ok());
-        assert!(super::parse_probe("kprobe:tcp_v6_*", filter).unwrap().len() > 0);
+        assert!(!super::parse_probe("kprobe:tcp_v6_*", filter)
+            .unwrap()
+            .is_empty());
         assert!(super::parse_probe("kretprobe:tcp_*", filter).is_ok());
         assert!(super::parse_probe("tp:skb:kfree_*", filter).is_ok());
         assert!(super::parse_probe("tp:*skb*", filter).is_ok());

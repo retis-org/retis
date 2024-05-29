@@ -491,7 +491,7 @@ mod tests {
     fn cli_register_subcommands() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
+        assert!(cli.add_subcommand(Box::<Sub2>::default()).is_ok());
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_err());
         Ok(())
     }
@@ -500,7 +500,7 @@ mod tests {
     fn cli_build() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
+        assert!(cli.add_subcommand(Box::<Sub2>::default()).is_ok());
 
         let err = cli.build_from(vec!["retis", "--help"]);
         assert!(err.is_err() && err.unwrap_err().kind() == ErrorKind::DisplayHelp);
@@ -512,7 +512,7 @@ mod tests {
     fn cli_full_help() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
+        assert!(cli.add_subcommand(Box::<Sub2>::default()).is_ok());
 
         let cli = cli.build_from(vec!["retis", "sub1", "--help"]);
         assert!(cli.is_ok());
@@ -527,7 +527,7 @@ mod tests {
     fn cli_sub_args() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
+        assert!(cli.add_subcommand(Box::<Sub2>::default()).is_ok());
 
         let cli = cli.build_from(vec!["retis", "sub1", "--sub1-arg", "foo"]);
         assert!(cli.is_ok());
@@ -549,7 +549,7 @@ mod tests {
     fn cli_sub_args_err() -> Result<()> {
         let mut cli = ThinCli::new()?;
         assert!(cli.add_subcommand(Box::new(Sub1::new()?)).is_ok());
-        assert!(cli.add_subcommand(Box::new(Sub2::default())).is_ok());
+        assert!(cli.add_subcommand(Box::<Sub2>::default()).is_ok());
 
         let cli = cli.build_from(vec!["retis", "sub1", "--noexists", "foo"]);
         assert!(cli.is_ok());

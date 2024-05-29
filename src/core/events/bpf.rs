@@ -391,7 +391,7 @@ pub(crate) fn parse_raw_section<'a, T>(raw_section: &'a BpfRawSection) -> Result
         );
     }
 
-    Ok(unsafe { mem::transmute(&raw_section.data[0]) })
+    Ok(unsafe { mem::transmute::<&u8, &T>(&raw_section.data[0]) })
 }
 
 /// Helper to parse a single raw section from BPF raw sections, checking the

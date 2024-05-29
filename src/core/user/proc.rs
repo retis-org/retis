@@ -717,7 +717,7 @@ mod tests {
         assert!(threads.first().unwrap().pid == std::process::id() as i32);
 
         // Find test thread
-        assert!(threads.iter().find(|t| t.comm.eq("test_thread")).is_some());
+        assert!(threads.iter().any(|t| t.comm.eq("test_thread")));
 
         done.wait();
         Ok(())

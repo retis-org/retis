@@ -563,7 +563,7 @@ mod tests {
 
     impl RawEventSectionFactory for TestEvent {
         fn from_raw(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-            Ok(Box::new(TestEvent::default()))
+            Ok(Box::<TestEvent>::default())
         }
     }
 
@@ -606,12 +606,12 @@ mod tests {
 
         let mut collectors = Collectors::new(group)?;
         let mut mgr = ProbeBuilderManager::new()?;
-        let mut config = get_cli("skb,ovs")?.run()?;
+        let config = get_cli("skb,ovs")?.run()?;
 
         assert!(dummy_a.init(&config, &mut mgr).is_ok());
         assert!(dummy_b.init(&config, &mut mgr).is_err());
 
-        assert!(collectors.init(&mut config).is_err());
+        assert!(collectors.init(&config).is_err());
         Ok(())
     }
 

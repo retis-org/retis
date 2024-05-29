@@ -687,10 +687,10 @@ mod tests {
             // Comparing json strings is error prone. Convert them to Values and compare those.
             assert_eq!(
                 serde_json::from_str::<Value>(json.as_str()).unwrap(),
-                serde_json::from_str::<Value>(*event_json).unwrap()
+                serde_json::from_str::<Value>(event_json).unwrap()
             );
 
-            let parsed: OvsEvent = serde_json::from_str(*event_json)
+            let parsed: OvsEvent = serde_json::from_str(event_json)
                 .map_err(|e| anyhow!("Failed to convert json '{event_json}' to event: {e}"))?;
             assert_eq!(&parsed, event);
         }
