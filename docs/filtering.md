@@ -70,8 +70,8 @@ INFO  L2 packet filter(s) loaded
 
 Metadata filtering instead allows to write filters that match packets based
 on their metadata.
-These filters can match against any subfield of the `sk_buff` and
-subsequent inner data structures.
+These filters can match against any subfield of the `sk_buff` and subsequent
+inner data structures.
 Meta filtering also automatically follows struct pointers, so indirect access to
 structures pointed by an `sk_buff` field is possible.
 A filter expression is represented by the pseudo EBNF grammar below:
@@ -81,12 +81,17 @@ EXPR ::= LHS ' ' OP_RHS | LHS
 OP_RHS ::= OP ' ' RHS_NUM | EQ_NE ' ' RHS_STR
 LHS ::= 'sk_buff' MEMBER
 MEMBER ::= IDENTIFIER MEMBER | IDENTIFIER
-IDENTIFIER ::= '.' #'[a-zA-Z_][a-zA-Z0-9_]*'
+IDENTIFIER ::= '.' #'[a-zA-Z_][a-zA-Z0-9_]*' (':' MASK)?
 OP ::= EQ_NE | '<' | '<=' | '>' | '>='
 EQ_NE ::= '==' | '!='
+MASK ::= ('~')? MASK_NUM
+MASK_NUM ::= HEX | DEC | BIN
 RHS_STR ::= '"' ASCII '"' | '\'' ASCII '\''
 ASCII ::= #'[:ascii:]*'
-RHS_NUM ::= #'0x[a-fA-F0-9]+' | ('-')? #'[0-9]+'
+RHS_NUM ::= HEX | ('-')? DEC
+HEX ::= #'0x[a-fA-F0-9]+'
+DEC ::= #'[0-9]+'
+BIN ::= #'0b[0-1]+'
 ```
 
 An example of filter that respect a previous definition is:
@@ -111,6 +116,25 @@ latter starting with `0x` prefix.
 All the comparison operators support numbers (both signed and unsigned).
 Bitfields are supported as well (both signed and unsigned) and they
 are treated as regular numbers.
+For numeric comparisons, an additional bitwise AND operation can be
+performed by specifying a *mask*.
+A *mask* can be expressed as a hexadecimal number (e.g. *0xdeaf*), a
+binary number (e.g. *0b01010101*), and a regular decimal number.
+The filtering engine allows you to specify masks up to **u64::MAX**
+with any target. While this approach is safe, ensuring consistency is
+the user's responsibility.
+The following example demonstrates this approach:
+
+```
+$ retis collect -m 'sk_buff._nfct:0x7 == 0x2'
+...
+```
+
+which is equivalent to the following:
+
+```none
+(sk_buff->_nfct & NFCT_INFOMASK) == IP_CT_NEW
+```
 
 For strings only the operators *equal to* and *not equal to* are supported,
 furthermore, the string (rhs) must be enclosed between *quotes*.
