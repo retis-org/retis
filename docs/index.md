@@ -221,6 +221,25 @@ Metadata filters can match against any subfield of the `sk_buff` and subsequent
 inner data structures.
 Meta filtering also automatically follows struct pointers, so indirect access to
 structures pointed by an `sk_buff` field is possible.
+A filter expression is represented by the pseudo EBNF grammar below:
+
+```none
+EXPR ::= LHS ' ' OP ' ' RHS | LHS
+LHS ::= 'sk_buff' MEMBER
+MEMBER ::= NEXTIDENT MEMBER | NEXTIDENT
+NEXTIDENT ::= '.' IDENT (':' MASK (':' IDENT)?)?
+IDENT ::= #'[a-zA-Z_][a-zA-Z0-9_]*'
+OP ::= '==' | '!=' | '<' | '<=' | '>' | '>='
+RHS ::= STRING | NUMBER
+MASK ::= ('~')? HEX
+STRING ::= '"' ASCII '"' | '\'' ASCII '\''
+ASCII ::= #'[:ascii:]*'
+NUMBER ::= HEX | DEC
+HEX ::= #'0x[a-zA-Z0-9]+'
+DEC ::= #'[0-9]+'
+```
+
+An example of filter that respect a previous definition is:
 
 ```none
 $ retis collect -m 'sk_buff.dev.nd_net.net.ns.inum == 4026531840'
@@ -233,6 +252,8 @@ The comparison operators are:
 2. "!=" for *not equal to*
 3. "<" and "<=" for *less than* and *less than or equal to*
 4. ">" and ">=" for *greater than* and *greater than or equal to*
+5. if OP and RHS are omitted, a *not equal to* zero numeric comparison is assumed
+
 
 At the moment, only number and string comparisons are supported.
 The right-hand side (rhs) of numeric matches must be expressed as
@@ -241,6 +262,20 @@ latter starting with `0x` prefix.
 All the comparison operators support numbers (both signed and unsigned).
 Bitfields are supported as well (both signed and unsigned) and they
 are treated as regular numbers.
+For numeric comparisons, an additional bitwise AND operation can be
+performed by specifying a mask. The following example demonstrates
+this approach:
+
+```
+$ retis collect -m 'sk_buff._nfct:0x7 == 0x2'
+...
+```
+
+which is equivalent to the following:
+
+```none
+(sk_buff->_nfct & NFCT_INFOMASK) == IP_CT_NEW
+```
 
 For strings only the operators *equal to* and *not equal to* are supported,
 furthermore, the string (rhs) must be enclosed between *quotes*.
@@ -252,6 +287,21 @@ $ retis collect -m 'sk_buff.dev.name == "eth0"'
 
 The example above shows how strings can be matched and how they are
 required to be quoted.
+
+Another useful feature meta filtering expose is the ability to follow
+pointers embedded in members with a different defined type.
+For example, the filter below:
+
+```none
+$ retis collect -m sk_buff._nfct:~0x7:nf_conn.mark
+...
+```
+
+is equivalent to the follow:
+
+```none
+(nf_conn *)(skb->_nfct & NFCT_PTRMASK)->mark != 0
+```
 
 Metadata filtering, being a BTF-based way of filtering, is theoretically
 not limited to `sk_buff`, so from a generic point of view it can support
