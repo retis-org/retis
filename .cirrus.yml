@@ -62,25 +62,25 @@ functional_task:
   only_if: "$CIRRUS_PR != ''"
 
   matrix: &distro_matrix
-    - name: Fedora 39
+    - name: Fedora 39 (x86_64)
       env:
-        DISTRO: f39
+        DISTRO: x86_64-f40
         TEST_EXTRA_ARGS: "--ovs-track"
-    - name: Fedora Rawhide
+    - name: Fedora Rawhide (x86_64)
       env:
-        DISTRO: rawhide
+        DISTRO: x86_64-rawhide
         TEST_EXTRA_ARGS: "--ovs-track"
-    - name: Centos 8 Stream
+    - name: Centos 8 Stream (x86_64)
       env:
-        DISTRO: c8s
+        DISTRO: x86_64-c8s
         TEST_EXTRA_ARGS: "--ignore=test_ovs.py --ignore=test_nft.py"
-    - name: Centos 9 Stream
+    - name: Centos 9 Stream (x86_64)
       env:
-        DISTRO: c9s
+        DISTRO: x86_64-c9s
         TEST_EXTRA_ARGS: "--ovs-track"
-    - name: Ubuntu Jammy
+    - name: Ubuntu Jammy (x86_64)
       env:
-        DISTRO: jammy
+        DISTRO: x86_64-jammy
 
   compute_engine_instance: &nestedvm
     image_project: cirrus-images
