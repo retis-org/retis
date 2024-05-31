@@ -471,10 +471,14 @@ impl FilterMeta {
     // into rhs op and lhs.
     // Requires spaces as separator among elements.
     fn parse_filter(filter: &str) -> Result<(Vec<LhsNode>, MetaCmp, &str)> {
-        let Ok([lhs, op, rhs]): Result<[&str; 3], _> =
-            filter.split(' ').collect::<Vec<_>>().try_into()
-        else {
-            bail!("invalid filter format");
+        let expr = filter.split(' ').collect::<Vec<_>>();
+
+        let [lhs, op, rhs]: [&str; 3] = match expr.len() {
+            3 => expr
+                .try_into()
+                .map_err(|_| anyhow!("cannot split filter ({filter})"))?,
+            1 => [expr[0], "!=", "0"],
+            _ => bail!("invalid filter ({filter})"),
         };
 
         let lhs: Vec<_> = lhs
