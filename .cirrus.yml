@@ -62,7 +62,7 @@ functional_task:
   only_if: "$CIRRUS_PR != ''"
 
   matrix: &distro_matrix
-    - name: Fedora 39 (x86_64)
+    - name: Fedora 40 (x86_64)
       env:
         DISTRO: x86_64-f40
         TEST_EXTRA_ARGS: "--ovs-track"

@@ -26,8 +26,8 @@ SCRIPT
 Vagrant.configure("2") do |config|
   config.vm.box_check_update = false
 
-  config.vm.define "x86_64-f39" do |fedora|
-    fedora.vm.box = "fedora/39-cloud-base"
+  config.vm.define "x86_64-f40" do |fedora|
+    fedora.vm.box = "fedora/40-cloud-base"
 
     fedora.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     fedora.vm.provision "shell", inline: <<-SHELL
