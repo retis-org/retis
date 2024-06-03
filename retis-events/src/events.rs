@@ -181,18 +181,22 @@ impl EventFmt for Event {
 /// List of unique event sections owners.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum SectionId {
+    // Special sections, eg. core ones.
     Common = 1,
     Kernel = 2,
     Userspace = 3,
     Tracking = 4,
     SkbTracking = 5,
+    // Collector sections, generated and handled entirely by collectors.
     SkbDrop = 6,
     Skb = 7,
     Ovs = 8,
     Nft = 9,
     Ct = 10,
+    // Metadata event sections.
+    MdGlobal = 11,
     // TODO: use std::mem::variant_count once in stable.
-    _MAX = 11,
+    _MAX = 12,
 }
 
 impl FromStr for SectionId {
@@ -212,6 +216,7 @@ impl FromStr for SectionId {
             OvsEvent::SECTION_NAME => Ovs,
             NftEvent::SECTION_NAME => Nft,
             CtEvent::SECTION_NAME => Ct,
+            GlobalEventMd::SECTION_NAME => MdGlobal,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -232,6 +237,7 @@ impl SectionId {
             8 => Ovs,
             9 => Nft,
             10 => Ct,
+            11 => MdGlobal,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -251,7 +257,8 @@ impl SectionId {
             Ovs => 8,
             Nft => 9,
             Ct => 10,
-            _MAX => 11,
+            MdGlobal => 11,
+            _MAX => 12,
         }
     }
 
@@ -269,13 +276,14 @@ impl SectionId {
             Ovs => OvsEvent::SECTION_NAME,
             Nft => NftEvent::SECTION_NAME,
             Ct => CtEvent::SECTION_NAME,
+            MdGlobal => GlobalEventMd::SECTION_NAME,
             _MAX => "_max",
         }
     }
 
     /// Is the section a metadata one?
     pub fn is_metadata(&self) -> bool {
-        false
+        self.to_u8() >= SectionId::MdGlobal.to_u8()
     }
 }
 
@@ -318,6 +326,9 @@ fn event_sections() -> Result<&'static EventSectionMap> {
         });
         events.insert(CtEvent::SECTION_NAME.to_string(), |v| {
             Ok(Box::new(serde_json::from_value::<CtEvent>(v)?))
+        });
+        events.insert(GlobalEventMd::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<GlobalEventMd>(v)?))
         });
         Ok(events)
     })

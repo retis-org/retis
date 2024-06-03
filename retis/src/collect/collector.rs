@@ -202,12 +202,20 @@ impl Collectors {
             bail!("Retis needs to be run as root when --allow-system-changes is used");
         }
 
-        // Set common event section.
+        // Set common & global md event sections.
         self.md_event.insert_section(
             SectionId::Common,
             Box::new(CommonEvent {
                 timestamp: monotonic_timestamp()?,
                 ..Default::default()
+            }),
+        )?;
+        self.md_event.insert_section(
+            SectionId::MdGlobal,
+            Box::new(GlobalEventMd {
+                retis_version: option_env!("RELEASE_VERSION")
+                    .unwrap_or("unspec")
+                    .to_string(),
             }),
         )?;
 

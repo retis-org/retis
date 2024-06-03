@@ -368,9 +368,10 @@ def test_ovs_tracking(two_port_ovs):
     series = retis.sort()
     # All events from the same direction must belong to the same packet (same
     # global tracking id).
-    assert len(series) == 2
-    assert len(series[0]) == len(expected_events) / 2
+    # 2 series + the initial md.
+    assert len(series) == 3
     assert len(series[1]) == len(expected_events) / 2
+    assert len(series[2]) == len(expected_events) / 2
 
 
 @pytest.mark.ovs_track

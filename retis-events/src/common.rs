@@ -2,6 +2,20 @@ use std::fmt;
 
 use crate::{event_section, event_type, *};
 
+/// Global metadata event section. Contains global information about a
+/// collection as a whole.
+#[event_section("md_global")]
+pub struct GlobalEventMd {
+    /// Retis version used while collecting events.
+    pub retis_version: String,
+}
+
+impl EventFmt for GlobalEventMd {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(f, "Retis version {}", self.retis_version)
+    }
+}
+
 #[event_type]
 #[derive(Default)]
 pub struct TaskEvent {
