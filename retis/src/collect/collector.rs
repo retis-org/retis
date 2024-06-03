@@ -204,6 +204,18 @@ impl Collectors {
             bail!("Retis needs to be run as root when --allow-system-changes is used");
         }
 
+        // Generate an initial event with the startup section.
+        self.events_factory.add_event(|event| {
+            event.insert_section(
+                SectionId::Startup,
+                Box::new(StartupEvent {
+                    retis_version: option_env!("RELEASE_VERSION")
+                        .unwrap_or("unspec")
+                        .to_string(),
+                }),
+            )
+        })?;
+
         // Try initializing all collectors.
         for name in &collect.args()?.collectors {
             let id = SectionId::from_str(name)?;

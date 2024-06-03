@@ -2,6 +2,20 @@ use std::fmt;
 
 use crate::{event_section, event_type, *};
 
+/// Startup event section. Contains global information about a collection as a
+/// whole, with data gathered at collection startup time.
+#[event_section("startup")]
+pub struct StartupEvent {
+    /// Retis version used while collecting events.
+    pub retis_version: String,
+}
+
+impl EventFmt for StartupEvent {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+        write!(f, "Retis version {}", self.retis_version)
+    }
+}
+
 #[event_type]
 #[derive(Default)]
 pub struct TaskEvent {
