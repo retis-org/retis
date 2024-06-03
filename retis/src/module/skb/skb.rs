@@ -1,6 +1,7 @@
 use std::{
     mem,
     os::fd::{AsFd, AsRawFd},
+    sync::Arc,
 };
 
 use anyhow::{bail, Result};
@@ -12,7 +13,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        events::EventSectionFactory,
+        events::*,
         probe::{Hook, ProbeBuilderManager},
     },
     events::SectionId,
@@ -69,7 +70,12 @@ impl Collector for SkbModule {
         cmd.register_module::<SkbCollectorArgs>(SectionId::Skb)
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn init(
+        &mut self,
+        cli: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        _: Arc<RetisEventsFactory>,
+    ) -> Result<()> {
         // First, get the cli parameters.
         let args = cli.get_section::<SkbCollectorArgs>(SectionId::Skb)?;
 

@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     mem,
     os::fd::{AsFd, AsRawFd},
+    sync::Arc,
     time::Duration,
 };
 
@@ -13,7 +14,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        events::EventSectionFactory,
+        events::*,
         inspect,
         kernel::Symbol,
         probe::{user::UsdtProbe, Hook, Probe, ProbeBuilderManager, ProbeOption},
@@ -93,7 +94,12 @@ impl Collector for OvsModule {
         Ok(())
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn init(
+        &mut self,
+        cli: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        _: Arc<RetisEventsFactory>,
+    ) -> Result<()> {
         self.track = cli
             .get_section::<OvsCollectorArgs>(SectionId::Ovs)?
             .ovs_track;
