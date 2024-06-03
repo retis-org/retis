@@ -21,6 +21,7 @@ use crate::{
         kernel::Symbol,
         probe::kernel::utils::parse_probe,
     },
+    events::*,
     process::display::*,
 };
 
@@ -39,7 +40,7 @@ use crate::{
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
     events::{EventResult, SectionId},
-    helpers::signals::Running,
+    helpers::{signals::Running, time::*},
     module::Modules,
 };
 
@@ -78,7 +79,12 @@ pub(crate) trait Collector {
     /// will make the whole program to fail. In general collectors should try
     /// hard to run in various setups, see the `crate::collector` top
     /// documentation for more information.
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()>;
+    fn init(
+        &mut self,
+        cli: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        md_event: &mut Event,
+    ) -> Result<()>;
     /// Start the collector.
     fn start(&mut self) -> Result<()> {
         Ok(())
@@ -100,6 +106,8 @@ pub(crate) struct Collectors {
     // Keep a reference on the tracking configuration map.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
     loaded: Vec<SectionId>,
+    // Metadata event.
+    md_event: Event,
 }
 
 impl Collectors {
@@ -116,6 +124,7 @@ impl Collectors {
             tracking_gc: None,
             tracking_config_map: None,
             loaded: Vec::new(),
+            md_event: Event::new(),
         })
     }
 
@@ -193,6 +202,15 @@ impl Collectors {
             bail!("Retis needs to be run as root when --allow-system-changes is used");
         }
 
+        // Set common event section.
+        self.md_event.insert_section(
+            SectionId::Common,
+            Box::new(CommonEvent {
+                timestamp: monotonic_timestamp()?,
+                ..Default::default()
+            }),
+        )?;
+
         // Try initializing all collectors.
         for name in &collect.args()?.collectors {
             let id = SectionId::from_str(name)?;
@@ -213,7 +231,7 @@ impl Collectors {
                 }
             }
 
-            if let Err(e) = c.init(cli, self.probes.builder_mut()?) {
+            if let Err(e) = c.init(cli, self.probes.builder_mut()?, &mut self.md_event) {
                 bail!("Could not initialize the {} collector: {}", id, e);
             }
 
@@ -409,7 +427,7 @@ impl Collectors {
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            printers.push(PrintSingle::new(
+            let mut printer = PrintSingle::new(
                 Box::new(BufWriter::new(
                     OpenOptions::new()
                         .create(true)
@@ -419,7 +437,12 @@ impl Collectors {
                         .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
                 )),
                 PrintSingleFormat::Json,
-            ));
+            );
+
+            // Store "metadata events" first.
+            printer.process_one(&self.md_event)?;
+
+            printers.push(printer);
         }
 
         if let Some(cmd) = collect.cmd.to_owned() {
@@ -496,7 +519,6 @@ mod tests {
     use crate::{
         core::{events::bpf::*, probe::ProbeBuilderManager},
         event_section,
-        events::*,
         module::Module,
     };
 
@@ -513,7 +535,12 @@ mod tests {
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
             cli.register_module_noargs(SectionId::Skb)
         }
-        fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
+        fn init(
+            &mut self,
+            _: &CliConfig,
+            _: &mut ProbeBuilderManager,
+            _: &mut Event,
+        ) -> Result<()> {
             Ok(())
         }
         fn start(&mut self) -> Result<()> {
@@ -540,7 +567,12 @@ mod tests {
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
             cli.register_module_noargs(SectionId::Ovs)
         }
-        fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
+        fn init(
+            &mut self,
+            _: &CliConfig,
+            _: &mut ProbeBuilderManager,
+            _: &mut Event,
+        ) -> Result<()> {
             bail!("Could not initialize")
         }
         fn start(&mut self) -> Result<()> {
@@ -612,10 +644,11 @@ mod tests {
 
         let mut collectors = Collectors::new(group)?;
         let mut mgr = ProbeBuilderManager::new()?;
+        let mut md_event = Event::new();
         let config = get_cli("skb,ovs")?.run()?;
 
-        assert!(dummy_a.init(&config, &mut mgr).is_ok());
-        assert!(dummy_b.init(&config, &mut mgr).is_err());
+        assert!(dummy_a.init(&config, &mut mgr, &mut md_event).is_ok());
+        assert!(dummy_b.init(&config, &mut mgr, &mut md_event).is_err());
 
         assert!(collectors.init(&config).is_err());
         Ok(())
