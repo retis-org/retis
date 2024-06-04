@@ -29,11 +29,14 @@ impl PrintSingle {
     pub(crate) fn process_one(&mut self, e: &Event) -> Result<()> {
         match self.format {
             PrintSingleFormat::Text(format) => {
-                let event = match format {
-                    DisplayFormat::SingleLine => format!("{}\n", e.display(format)),
-                    DisplayFormat::MultiLine => format!("\n{}\n", e.display(format)),
-                };
-                self.writer.write_all(event.as_bytes())?;
+                let event = format!("{}", e.display(format));
+                if !event.is_empty() {
+                    self.writer.write_all(event.as_bytes())?;
+                    match format {
+                        DisplayFormat::SingleLine => self.writer.write_all(b"\n")?,
+                        DisplayFormat::MultiLine => self.writer.write_all(b"\n\n")?,
+                    }
+                }
             }
             PrintSingleFormat::Json => {
                 let mut event = serde_json::to_vec(&e.to_json())?;
@@ -63,11 +66,18 @@ impl PrintSeries {
     }
 
     fn indent(n_spaces: usize, lines: String) -> String {
-        lines
-            .split('\n')
-            .map(|line| format!("{}{}", " ".repeat(n_spaces), line))
-            .collect::<Vec<String>>()
-            .join("\n")
+        if n_spaces == 0 || lines.is_empty() {
+            return lines;
+        }
+
+        let mut res = Vec::new();
+        let mut delim = "+ ";
+        for line in lines.split('\n') {
+            res.push(format!("{}{}{}", " ".repeat(n_spaces), delim, line));
+            delim = "  ";
+        }
+
+        res.join("\n")
     }
 
     /// Process events one by one (format & print).
@@ -75,31 +85,19 @@ impl PrintSeries {
         let mut content = String::new();
         match self.format {
             PrintSingleFormat::Text(format) => {
-                match format {
-                    DisplayFormat::SingleLine => {
-                        if let Some(first) = series.events.first() {
-                            content.push_str(&format!("\n{}\n", first.display(format)));
-                        }
-                        for event in series.events.iter().skip(1) {
-                            content
-                                .push_str(&Self::indent(2, format!("+ {}", event.display(format))));
-                            content.push('\n');
-                        }
-                    }
-                    DisplayFormat::MultiLine => {
-                        if let Some(first) = series.events.first() {
-                            content.push('\n');
-                            content.push_str(&format!("{}", first.display(format)));
-                            content.push('\n');
-                        }
-                        for event in series.events.iter().skip(1) {
-                            content
-                                .push_str(&Self::indent(2, format!("+ {}", event.display(format))));
-                            content.push('\n');
-                        }
+                let mut indent = 0;
+                for event in series.events.iter() {
+                    content.push_str(&Self::indent(indent, format!("{}", event.display(format))));
+                    if !content.is_empty() {
+                        content.push('\n');
+                        indent = 2;
                     }
                 }
-                self.writer.write_all(content.as_bytes())?;
+
+                if !content.is_empty() {
+                    content.push('\n');
+                    self.writer.write_all(content.as_bytes())?;
+                }
             }
             PrintSingleFormat::Json => {
                 let mut event = serde_json::to_vec(&series.to_json())?;
