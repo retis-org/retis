@@ -3,6 +3,7 @@ use std::fs;
 use anyhow::{anyhow, bail, Result};
 use btf_rs::{Btf, Type};
 
+use super::BASE_TEST_DIR;
 use crate::core::kernel::Symbol;
 
 /// Btf provides multi-module Btf lookups.
@@ -17,12 +18,12 @@ impl BtfInfo {
     /// Parse kernel BTF files and create a Btf object.
     pub(super) fn new() -> Result<BtfInfo> {
         let vmlinux = match cfg!(test) || cfg!(feature = "benchmark") {
-            false => "/sys/kernel/btf/vmlinux",
-            true => "test_data/vmlinux",
+            false => "/sys/kernel/btf/vmlinux".to_owned(),
+            true => BASE_TEST_DIR.to_owned() + "/test_data/vmlinux",
         };
 
-        let vmlinux =
-            Btf::from_file(vmlinux).map_err(|e| anyhow!("Could not open {vmlinux}: {e}"))?;
+        let vmlinux = Btf::from_file(vmlinux.clone())
+            .map_err(|e| anyhow!("Could not open {vmlinux}: {e}"))?;
 
         // Load module btf files if possible.
         let modules = match cfg!(test) || cfg!(feature = "benchmark") {
@@ -30,7 +31,10 @@ impl BtfInfo {
                 .filter(|f| f.is_ok() && f.as_ref().unwrap().file_name().ne("vmlinux"))
                 .map(|f| Btf::from_split_file(f.as_ref().unwrap().path(), &vmlinux))
                 .collect::<Result<Vec<Btf>>>()?,
-            true => vec![Btf::from_split_file("test_data/openvswitch", &vmlinux)?],
+            true => vec![Btf::from_split_file(
+                BASE_TEST_DIR.to_owned() + "/test_data/openvswitch",
+                &vmlinux,
+            )?],
         };
 
         Ok(BtfInfo { vmlinux, modules })

@@ -2,6 +2,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     fs,
     io::Read,
     ops::Bound::{Included, Unbounded},
@@ -15,7 +16,7 @@ use flate2::bufread::GzDecoder;
 use log::warn;
 use regex::Regex;
 
-use super::{btf::BtfInfo, kernel_version::KernelVersion};
+use super::{btf::BtfInfo, kernel_version::KernelVersion, BASE_TEST_DIR};
 use crate::core::kernel::Symbol;
 
 /// Provides helpers to inspect probe related information in the kernel.
@@ -46,16 +47,16 @@ impl KernelInspector {
         let (symbols_file, events_file, funcs_file, modules_file) =
             match cfg!(test) || cfg!(feature = "benchmark") {
                 false => (
-                    "/proc/kallsyms",
-                    "/sys/kernel/debug/tracing/available_events",
-                    "/sys/kernel/debug/tracing/available_filter_functions",
-                    "/proc/modules",
+                    "/proc/kallsyms".to_owned(),
+                    "/sys/kernel/debug/tracing/available_events".to_owned(),
+                    "/sys/kernel/debug/tracing/available_filter_functions".to_owned(),
+                    "/proc/modules".to_owned(),
                 ),
                 true => (
-                    "test_data/kallsyms",
-                    "test_data/available_events",
-                    "test_data/available_filter_functions",
-                    "test_data/modules",
+                    BASE_TEST_DIR.to_owned() + "/test_data/kallsyms",
+                    BASE_TEST_DIR.to_owned() + "/test_data/available_events",
+                    BASE_TEST_DIR.to_owned() + "/test_data/available_filter_functions",
+                    BASE_TEST_DIR.to_owned() + "/test_data/modules",
                 ),
             };
         let btf = BtfInfo::new()?;
@@ -114,8 +115,11 @@ impl KernelInspector {
 
     /// Convert a file containing a list of str (one per line) into a HashSet.
     /// Returns None if the file can't be read.
-    fn file_to_hashset(target: &str) -> Option<HashSet<String>> {
-        if let Ok(file) = fs::read_to_string(target) {
+    fn file_to_hashset<P>(target: P) -> Option<HashSet<String>>
+    where
+        P: AsRef<Path> + Display + Clone,
+    {
+        if let Ok(file) = fs::read_to_string(target.clone()) {
             let mut set = HashSet::new();
             for line in file.lines() {
                 // functions might be formatted as "func_name [module]".
