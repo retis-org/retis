@@ -223,9 +223,12 @@ def test_ovs_conntrack(two_port_ovs):
 
     # Only interested in TCP OVS execute actions.
     def interested(e):
-        return e["kernel"]["symbol"] == "openvswitch:ovs_do_execute_action" and e[
-            "skb"
-        ].get("ip")
+        return (
+            "kernel" in e
+            and e["kernel"]["symbol"] == "openvswitch:ovs_do_execute_action"
+            and "skb" in e
+            and e["skb"].get("ip")
+        )
 
     events = list(filter(interested, events))
     assert_events_present(events, expected_events)
