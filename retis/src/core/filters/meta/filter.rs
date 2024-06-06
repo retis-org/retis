@@ -51,17 +51,15 @@ enum MetaType {
     Long = 4,
 }
 
-#[repr(C)]
-#[derive(Copy, Clone)]
-union MetaData {
-    bin: [u8; META_TARGET_MAX],
-    long: u64,
-}
-
-#[repr(C)]
+// In Rust alignment can only be specified at struct level whereas in
+// C you can easily do it on different levels. This means md must be
+// kept first to honour the layout contract between user and eBPF.
+// C representation, although allows more flexibility, follows the
+// one below.
+#[repr(C, align(8))]
 #[derive(Copy, Clone)]
 struct MetaTarget {
-    u: MetaData,
+    md: [u8; META_TARGET_MAX],
     sz: u8,
     cmp: u8,
 }
@@ -260,18 +258,18 @@ impl MetaOp {
 
             if let Rval::Str(val) = rval {
                 let rval_len = val.len();
-                let bin = unsafe { &mut top.u.bin };
-                if rval_len >= bin.len() {
-                    bail!("invalid rval size (max {}).", bin.len() - 1);
+                let md = &mut top.md;
+                if rval_len >= md.len() {
+                    bail!("invalid rval size (max {}).", md.len() - 1);
                 }
 
-                bin[..rval_len].copy_from_slice(val.as_bytes());
+                md[..rval_len].copy_from_slice(val.as_bytes());
                 top.sz = rval_len as u8;
             } else {
                 bail!("invalid target value for array or ptr type. Only strings are supported.");
             }
         } else if lmo.is_num() {
-            top.u.long = match rval {
+            let long = match rval {
                 Rval::Dec(val) => {
                     if val.starts_with('-') {
                         if !lmo.is_signed() {
@@ -286,6 +284,8 @@ impl MetaOp {
                 Rval::Hex(val) => u64::from_str_radix(&val, 16)?,
                 _ => bail!("invalid target value (neither decimal nor hex)."),
             };
+
+            top.md[..std::mem::size_of_val(&long)].copy_from_slice(&long.to_ne_bytes());
 
             top.sz = if lmo.is_byte() {
                 1
@@ -586,7 +586,7 @@ mod tests {
         let meta_target = &filter.0[0].target_ref();
         assert_eq!(meta_target.cmp, op as u8);
         assert_eq!(meta_target.sz, 6);
-        let target_str = std::str::from_utf8(unsafe { &meta_target.u.bin })
+        let target_str = std::str::from_utf8(&meta_target.md)
             .unwrap()
             .trim_end_matches(char::from(0));
         assert_eq!(target_str, "dummy0");
@@ -619,7 +619,11 @@ mod tests {
         let meta_target = filter.0[0].target_ref();
         assert_eq!(meta_target.cmp, op as u8);
         assert_eq!(meta_target.sz, 4);
-        let target = unsafe { meta_target.u.long };
+        let target = u64::from_ne_bytes(
+            meta_target.md[..std::mem::size_of::<u64>()]
+                .try_into()
+                .unwrap(),
+        );
         assert_eq!(target, 0xc0de);
     }
 
@@ -645,7 +649,11 @@ mod tests {
         let meta_target = filter.0[0].target_ref();
         assert_eq!(meta_target.cmp, op as u8);
         assert_eq!(meta_target.sz, 1);
-        let target = unsafe { meta_target.u.long };
+        let target = u64::from_ne_bytes(
+            meta_target.md[..std::mem::size_of::<u64>()]
+                .try_into()
+                .unwrap(),
+        );
         assert_eq!(target, 1);
     }
 }

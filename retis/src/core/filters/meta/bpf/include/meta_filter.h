@@ -31,13 +31,10 @@ union retis_meta_op {
 		u8 bf_size;
 	} l;
 	struct {
-		union {
-			u8 bin[META_TARGET_MAX];
-			u64 num;
-		} u;
+		u8 md[META_TARGET_MAX];
 		u8 sz;
 		u8 cmp;
-	} t;
+	} t __attribute__((aligned(8)));
 };
 
 /* Probe configuration; the key is the target symbol address */
@@ -90,7 +87,7 @@ static __always_inline long meta_process_ops(struct retis_meta_ctx *ctx)
 	}
 
 	/* process target */
-	ctx->data = &val->t.u;
+	ctx->data = &val->t.md;
 	ctx->cmp = val->t.cmp;
 	ctx->sz = val->t.sz;
 
