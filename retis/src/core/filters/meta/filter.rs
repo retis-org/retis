@@ -739,4 +739,23 @@ mod tests {
         );
         assert_eq!(target, 1);
     }
+
+    // Only validates for what type of targets lhs-only expressions
+    // are allowed. The offset extraction is not required as it is
+    // already performed by previous tests.
+    #[test_case("dev" => matches Err(_); "pointer")]
+    #[test_case("dev.name" => matches Err(_); "string failure")]
+    #[test_case("headers" => matches Err(_); "named struct failure")]
+    #[test_case("mark" => matches Ok(_); "u32")]
+    #[test_case("headers.skb_iif" => matches Ok(_); "signed int")]
+    #[test_case("cloned" => matches Ok(_); "unsigned bitfield")]
+    fn meta_filter_lhs_only(field: &'static str) -> Result<()> {
+        let filter = FilterMeta::from_string(format!("sk_buff.{field}").to_string())?;
+        let meta_target = filter.0[0].target_ref();
+
+        assert_eq!(meta_target.cmp, MetaCmp::Ne as u8);
+        assert!(meta_target.md.iter().all(|&x| x == 0));
+
+        Ok(())
+    }
 }
