@@ -124,6 +124,27 @@ pub(crate) union MetaOp {
 unsafe impl Plain for MetaOp {}
 
 impl MetaOp {
+    fn new() -> MetaOp {
+        unsafe { std::mem::zeroed::<_>() }
+    }
+
+    fn load_ref(&self) -> &MetaLoad {
+        unsafe { &self.l }
+    }
+
+    fn load_ref_mut(&mut self) -> &mut MetaLoad {
+        unsafe { &mut self.l }
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    fn target_ref(&self) -> &MetaTarget {
+        unsafe { &self.t }
+    }
+
+    pub(self) fn target_ref_mut(&mut self) -> &mut MetaTarget {
+        unsafe { &mut self.t }
+    }
+
     fn bail_on_arr(load: &MetaLoad, tn: &str) -> Result<()> {
         if load.is_arr() {
             bail!("array of {tn} are not supported.");
@@ -141,8 +162,8 @@ impl MetaOp {
     }
 
     fn emit_load(btf: &Btf, r#type: &Type, offt: u32, bfs: u32) -> Result<MetaOp> {
-        let mut op: MetaOp = unsafe { std::mem::zeroed::<_>() };
-        let lop = unsafe { &mut op.l };
+        let mut op: MetaOp = MetaOp::new();
+        let lop = op.load_ref_mut();
         let mut t = r#type.clone();
         let mut type_iter = btf.type_iter(
             r#type
@@ -228,9 +249,9 @@ impl MetaOp {
         Ok(op)
     }
 
-    fn emit_target(lmo: MetaLoad, rval: Rval, cmp_op: MetaCmp) -> Result<MetaOp> {
-        let mut op: MetaOp = unsafe { std::mem::zeroed::<_>() };
-        let top = unsafe { &mut op.t };
+    fn emit_target(lmo: &MetaLoad, rval: Rval, cmp_op: MetaCmp) -> Result<MetaOp> {
+        let mut op: MetaOp = MetaOp::new();
+        let top = op.target_ref_mut();
 
         if lmo.is_ptr() || lmo.nmemb > 0 {
             if cmp_op != MetaCmp::Eq && cmp_op != MetaCmp::Ne {
@@ -454,7 +475,7 @@ impl FilterMeta {
                             std::cmp::Ordering::Equal => {
                                 offt = 0;
                                 // Emit load Ptr
-                                let mut op: MetaOp = unsafe { std::mem::zeroed::<_>() };
+                                let mut op: MetaOp = MetaOp::new();
                                 op.l.offt = u16::try_from(offset / 8)?;
                                 op.l.r#type = PTR_BIT;
                                 ops.push(op);
@@ -485,7 +506,7 @@ impl FilterMeta {
         let op = MetaCmp::from_str(op)?;
         let rval = Rval::from_str(rval)?;
 
-        ops.insert(0, MetaOp::emit_target(unsafe { lmo.l }, rval, op)?);
+        ops.insert(0, MetaOp::emit_target(lmo.load_ref(), rval, op)?);
         Ok(FilterMeta(ops))
     }
 }
@@ -550,19 +571,19 @@ mod tests {
             FilterMeta::from_string(format!("sk_buff.dev.name {op_str} 'dummy0'").to_string())
                 .unwrap();
         assert_eq!(filter.0.len(), 3);
-        let meta_load = unsafe { &filter.0[1].l };
+        let meta_load = &filter.0[1].load_ref();
         assert!(!meta_load.is_num());
         assert!(!meta_load.is_arr());
         assert!(meta_load.is_ptr());
         assert_eq!(meta_load.offt, 16);
 
-        let meta_load = unsafe { &filter.0[2].l };
+        let meta_load = &filter.0[2].load_ref();
         assert!(!meta_load.is_ptr());
         assert!(meta_load.is_byte());
         assert_eq!(meta_load.nmemb, 16);
         assert_eq!(meta_load.offt, 0);
 
-        let meta_target = unsafe { &filter.0[0].t };
+        let meta_target = &filter.0[0].target_ref();
         assert_eq!(meta_target.cmp, op as u8);
         assert_eq!(meta_target.sz, 6);
         let target_str = std::str::from_utf8(unsafe { &meta_target.u.bin })
@@ -588,14 +609,14 @@ mod tests {
         let filter =
             FilterMeta::from_string(format!("sk_buff.mark {op_str} 0xc0de").to_string()).unwrap();
         assert_eq!(filter.0.len(), 2);
-        let meta_load = unsafe { &filter.0[1].l };
+        let meta_load = filter.0[1].load_ref();
         assert!(!meta_load.is_arr());
         assert!(!meta_load.is_ptr());
         assert!(!meta_load.is_signed());
         assert!(meta_load.is_int());
         assert_eq!(meta_load.offt, 168);
 
-        let meta_target = unsafe { &filter.0[0].t };
+        let meta_target = filter.0[0].target_ref();
         assert_eq!(meta_target.cmp, op as u8);
         assert_eq!(meta_target.sz, 4);
         let target = unsafe { meta_target.u.long };
@@ -612,7 +633,7 @@ mod tests {
         let filter =
             FilterMeta::from_string(format!("sk_buff.pkt_type {op_str} 1").to_string()).unwrap();
         assert_eq!(filter.0.len(), 2);
-        let meta_load = unsafe { &filter.0[1].l };
+        let meta_load = filter.0[1].load_ref();
         assert!(!meta_load.is_arr());
         assert!(!meta_load.is_ptr());
         assert!(!meta_load.is_signed());
@@ -621,7 +642,7 @@ mod tests {
         // Offset in bits for bitfields
         assert_eq!(meta_load.offt, 1024);
 
-        let meta_target = unsafe { &filter.0[0].t };
+        let meta_target = filter.0[0].target_ref();
         assert_eq!(meta_target.cmp, op as u8);
         assert_eq!(meta_target.sz, 1);
         let target = unsafe { meta_target.u.long };
