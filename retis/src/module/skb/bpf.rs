@@ -8,7 +8,7 @@ use anyhow::bail;
 use std::str;
 
 use anyhow::{anyhow, Result};
-use pnet::packet::{
+use pnet_packet::{
     arp::ArpPacket, ethernet::*, icmp::IcmpPacket, icmpv6::Icmpv6Packet, ip::*, ipv4::*, ipv6::*,
     tcp::TcpPacket, udp::UdpPacket, Packet,
 };
