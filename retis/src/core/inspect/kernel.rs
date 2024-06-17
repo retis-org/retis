@@ -11,13 +11,13 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
-use bimap::BiBTreeMap;
 use flate2::bufread::GzDecoder;
 use log::warn;
 use regex::Regex;
 
 use super::{btf::BtfInfo, kernel_version::KernelVersion, BASE_TEST_DIR};
 use crate::core::kernel::Symbol;
+use crate::helpers::bimap::BiBTreeMap;
 
 /// Provides helpers to inspect probe related information in the kernel.
 pub(crate) struct KernelInspector {
@@ -257,16 +257,14 @@ impl KernelInspector {
     pub(crate) fn get_symbol_addr(&self, name: &str) -> Result<u64> {
         Ok(*self
             .symbols
-            .get_by_right(name)
+            .get_by_right(&name.to_string())
             .ok_or_else(|| anyhow!("Can't get symbol address for {}", name))?)
     }
 
     /// Given an address, try to find the nearest symbol, if any.
     pub(crate) fn find_nearest_symbol(&self, target: u64) -> Result<u64> {
-        let nearest = self
-            .symbols
-            .left_range((Unbounded, Included(&target)))
-            .next_back();
+        let bounding = (Unbounded, Included(target));
+        let nearest = self.symbols.range_by_left(&bounding).next_back();
 
         match nearest {
             Some(symbol) => Ok(*symbol.0),
