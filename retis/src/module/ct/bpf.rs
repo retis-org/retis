@@ -2,21 +2,24 @@
 //! Please keep this file in sync with its BPF counterpart in bpf/ct.bpf.c
 use std::collections::HashMap;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use btf_rs::Type;
 use plain::Plain;
 use std::net::Ipv6Addr;
 
 use crate::{
     core::{
-        events::{
-            parse_single_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory,
-        },
+        events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
         inspect::inspector,
     },
     events::*,
     helpers,
 };
+
+/// Raw sections of the Ct event.
+const SECTION_META: u64 = 0;
+const SECTION_BASE_CONN: u64 = 1;
+const SECTION_PARENT_CONN: u64 = 2;
 
 /// Retis-specific flags.
 pub(super) const RETIS_CT_DIR_ORIG: u32 = 1 << 0;
@@ -61,7 +64,6 @@ struct RawCtEvent {
     zone_id: u16,
     orig: NfConnTuple,
     reply: NfConnTuple,
-    state: u8,
     tcp_state: u8,
 }
 
@@ -74,7 +76,45 @@ pub(crate) struct CtEventFactory {
 
 impl RawEventSectionFactory for CtEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        Ok(Box::new(self.unmarshal_ct(raw_sections)?))
+        let mut event = CtEvent {
+            state: {
+                let raw = parse_raw_section::<u8>(
+                    raw_sections
+                        .iter()
+                        .find(|s| s.header.data_type as u64 == SECTION_META)
+                        .ok_or_else(|| anyhow!("CT BPF event does not have a meta section"))?,
+                )?;
+
+                use CtState::*;
+                // These values must be kept in sync with the ones defined in:
+                // include/uapi/linux/netfilter/nf_conntrack_common.h
+                match raw {
+                    0 => Established,
+                    1 => Related,
+                    2 => New,
+                    3 => Reply,
+                    4 => RelatedReply,
+                    7 => Untracked,
+                    _ => bail!("ct: unsupported ct state {}", raw),
+                }
+            },
+            base: self.unmarshal_ct(
+                raw_sections
+                    .iter()
+                    .find(|s| s.header.data_type as u64 == SECTION_BASE_CONN)
+                    .ok_or_else(|| anyhow!("CT BPF event does not have a base section"))?,
+            )?,
+            parent: None,
+        };
+
+        if let Some(raw_section) = raw_sections
+            .iter()
+            .find(|s| s.header.data_type as u64 == SECTION_PARENT_CONN)
+        {
+            event.parent = Some(self.unmarshal_ct(raw_section)?);
+        }
+
+        Ok(Box::new(event))
     }
 }
 
@@ -115,8 +155,8 @@ impl CtEventFactory {
         Ok(())
     }
 
-    pub(super) fn unmarshal_ct(&mut self, sections: Vec<BpfRawSection>) -> Result<CtEvent> {
-        let raw = parse_single_raw_section::<RawCtEvent>(SectionId::Ct, &sections)?;
+    pub(super) fn unmarshal_ct(&mut self, raw_section: &BpfRawSection) -> Result<CtConnEvent> {
+        let raw = parse_raw_section::<RawCtEvent>(raw_section)?;
         let flags = raw.flags;
 
         let zone_dir = match flags {
@@ -214,20 +254,7 @@ impl CtEventFactory {
             None
         };
 
-        use CtState::*;
-        // These values must be kept in sync with the ones defined in:
-        // include/uapi/linux/netfilter/nf_conntrack_common.h
-        let state = match raw.state {
-            0 => Established,
-            1 => Related,
-            2 => New,
-            3 => Reply,
-            4 => RelatedReply,
-            7 => Untracked,
-            _ => bail!("ct: unsupported ct state {}", raw.state),
-        };
-
-        Ok(CtEvent {
+        Ok(CtConnEvent {
             zone_id: raw.zone_id,
             zone_dir,
             orig: CtTuple {
@@ -238,7 +265,6 @@ impl CtEventFactory {
                 ip: reply_ip,
                 proto: reply_proto,
             },
-            state,
             tcp_state,
         })
     }
