@@ -153,11 +153,10 @@ impl BpfEventsFactory {
                         // ringbuffer. This could normally be
                         // triggered by an actual interruption
                         // (signal) or artificially from the
-                        // callback. Exit without printing any error.
+                        // callback. Do not print any error.
                         libbpf_rs::ErrorKind::Interrupted => (),
                         _ => error!("Unexpected error while polling ({e})"),
                     }
-                    break;
                 }
             }
         }))
