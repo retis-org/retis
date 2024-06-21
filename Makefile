@@ -60,7 +60,7 @@ EBPF_HOOKS := $(abspath $(wildcard retis/src/module/*/bpf))
 all: debug
 
 install: release
-	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS) --path=. --offline --frozen
+	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS) --path=$(ROOT_DIR)/retis --offline --frozen
 
 define build
 	$(call out_console,CARGO,$(strip $(2)) ...)
