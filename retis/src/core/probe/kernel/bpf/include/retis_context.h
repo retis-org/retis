@@ -2,6 +2,7 @@
 #define __CORE_PROBE_KERNEL_BPF_RETIS_CONTEXT__
 
 #include <vmlinux.h>
+#include <compat.h>
 
 enum kernel_probe_type {
 	KERNEL_PROBE_KPROBE = 0,
@@ -107,6 +108,7 @@ struct retis_context {
  */
 static __always_inline struct sk_buff *retis_get_sk_buff(struct retis_context *ctx)
 {
+	struct nft_traceinfo___6_3_0 *info_63;
 	const struct nft_pktinfo *pkt;
 	struct sk_buff *skb = NULL;
 	struct nft_traceinfo *info;
@@ -122,8 +124,9 @@ static __always_inline struct sk_buff *retis_get_sk_buff(struct retis_context *c
 		if (!info)
 			goto out;
 
-		if (bpf_core_field_exists(info->pkt))
-			pkt = BPF_CORE_READ(info, pkt);
+		info_63 = (struct nft_traceinfo___6_3_0 *)info;
+		if (bpf_core_field_exists(info_63->pkt))
+			pkt = BPF_CORE_READ(info_63, pkt);
 		else
 			pkt = retis_get_nft_pktinfo(ctx);
 

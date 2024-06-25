@@ -31,7 +31,11 @@ static __always_inline u64 kprobe_get_func_ip(struct pt_regs *ctx) {
 	if (bpf_core_enum_value_exists(enum bpf_func_id___x, BPF_FUNC_get_func_ip___5_15_0))
 		return bpf_get_func_ip(ctx);
 	else
-		return PT_REGS_IP(ctx) - 1;
+#ifdef __TARGET_ARCH_x86
+		return PT_REGS_IP(ctx) - sizeof(kprobe_opcode_t);
+#else
+		return PT_REGS_IP(ctx);
+#endif
 }
 
 /* The following helpers validate skb offsets (mac, network & transport) as they

@@ -2,6 +2,7 @@
 #include <bpf/bpf_core_read.h>
 
 #include <common.h>
+#include <compat.h>
 
 #define VERD_SCALE (NFT_RETURN * -1)
 #define ALLOWED_VERDICTS(verd, mask) (1 << (verd + VERD_SCALE) & mask)
@@ -48,15 +49,6 @@ struct nft_event {
 	s64 r_handle;
 	u8 policy;
 } __attribute__((packed));
-
-struct nft_rule_dp___5_17_0 {
-	u64	is_last:1,
-		handle:42;
-} __attribute__((preserve_access_index));
-
-struct nft_rule___3_13_0 {
-	u64	handle:42;
-} __attribute__((preserve_access_index));
 
 /* Specialized macro. Deals with different types with similar layout. */
 #define __nft_get_rule_handle(__info, __verdict, __rule) ({	\
@@ -136,10 +128,6 @@ static __always_inline int nft_trace(struct nft_config *cfg,
 	return 0;
 }
 
-struct nft_rule_dp_last___6_4_0 {
-	const struct nft_chain *chain;	/* for nftables tracing */
-} __attribute__((preserve_access_index));
-
 static __always_inline
 const struct nft_chain *nft_get_chain_from_rule(struct retis_context *ctx,
 						struct nft_traceinfo *info,
@@ -147,6 +135,7 @@ const struct nft_chain *nft_get_chain_from_rule(struct retis_context *ctx,
 {
 	const struct nft_rule_dp_last___6_4_0 *last = NULL;
 	const struct nft_base_chain *base_chain;
+	struct nft_traceinfo___6_3_0 *info_63;
 	u64 rule_dlen;
 	int i;
 
@@ -163,7 +152,8 @@ const struct nft_chain *nft_get_chain_from_rule(struct retis_context *ctx,
 	 * nft_rule_dp_last___6_4_0). For the time being this could not be
 	 * done because of compilers and the way programs are built.
 	 */
-	if (!bpf_core_field_exists(info->rule)) {
+	info_63 = (struct nft_traceinfo___6_3_0 *)info;
+	if (!bpf_core_field_exists(info_63->rule)) {
 		/* Make the loop bounded. 1024 has no specific
 		 * meaning, just a reasonable value.
 		 */
@@ -200,9 +190,12 @@ void nft_retrieve_rule(struct retis_context *ctx, struct nft_config *cfg,
 		       const void **rule,
 		       const struct nft_chain **chain)
 {
-	if (bpf_core_field_exists(info->rule)) {
+	struct nft_traceinfo___6_3_0 *info_63;
+
+	info_63 = (struct nft_traceinfo___6_3_0 *)info;
+	if (bpf_core_field_exists(info_63->rule)) {
 		*chain = retis_get_nft_chain(ctx, cfg);
-		*rule = BPF_CORE_READ(info, rule);
+		*rule = BPF_CORE_READ(info_63, rule);
 		return;
 	}
 
@@ -215,12 +208,14 @@ const struct nft_verdict *nft_get_verdict(struct retis_context *ctx,
 					  struct nft_config *cfg,
 					  struct nft_traceinfo *info)
 {
+	struct nft_traceinfo___6_3_0 *info_63;
 	const struct nft_verdict *verdict;
 
-	if (!bpf_core_field_exists(info->verdict))
+	info_63 = (struct nft_traceinfo___6_3_0 *)info;
+	if (!bpf_core_field_exists(info_63->verdict))
 		verdict = retis_get_nft_verdict(ctx, cfg);
 	else
-		verdict = BPF_CORE_READ(info, verdict);
+		verdict = BPF_CORE_READ(info_63, verdict);
 
 	return verdict;
 }
