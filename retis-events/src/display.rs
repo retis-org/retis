@@ -1,5 +1,15 @@
 use std::fmt;
 
+use super::TimeSpec;
+
+/// Controls how the time should be displayed in the events.
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+pub enum TimeFormat {
+    #[default]
+    MonotonicTimestamp,
+    UtcDate,
+}
+
 /// Controls how an event is formatted.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct DisplayFormat {
@@ -7,6 +17,10 @@ pub struct DisplayFormat {
     pub multiline: bool,
     /// Should metadata section be printed?
     pub show_metadata: bool,
+    /// How the time is formatted.
+    pub time_format: TimeFormat,
+    /// Offset of the monotonic clock to the wall-clock time.
+    pub monotonic_offset: Option<TimeSpec>,
 }
 
 impl DisplayFormat {
@@ -23,6 +37,18 @@ impl DisplayFormat {
     /// Show metadata sections in the output?
     pub fn show_metadata(mut self) -> Self {
         self.show_metadata = true;
+        self
+    }
+
+    /// Configure how the time will be formatted.
+    pub fn time_format(mut self, format: TimeFormat) -> Self {
+        self.time_format = format;
+        self
+    }
+
+    /// Sets the monotonic clock to the wall-clock time.
+    pub fn monotonic_offset(mut self, offset: TimeSpec) -> Self {
+        self.monotonic_offset = Some(offset);
         self
     }
 }
