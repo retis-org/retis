@@ -15,7 +15,7 @@ pub struct GlobalEventMd {
 }
 
 impl EventFmt for GlobalEventMd {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(f, "Retis version {}", self.retis_version)
     }
 }
@@ -42,7 +42,7 @@ pub struct CommonEvent {
 }
 
 impl EventFmt for CommonEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result {
         match format.time_format {
             TimeFormat::MonotonicTimestamp => write!(f, "{}", self.timestamp)?,
             TimeFormat::UtcDate => match format.monotonic_offset {

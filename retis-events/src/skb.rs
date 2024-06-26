@@ -38,7 +38,7 @@ pub struct SkbEvent {
 }
 
 impl EventFmt for SkbEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
         let mut len = 0;
 
         let mut space = DelimWriter::new(' ');

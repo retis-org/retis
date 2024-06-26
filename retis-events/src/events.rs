@@ -121,7 +121,7 @@ impl Event {
 }
 
 impl EventFmt for Event {
-    fn event_fmt(&self, f: &mut std::fmt::Formatter, format: DisplayFormat) -> std::fmt::Result {
+    fn event_fmt(&self, f: &mut std::fmt::Formatter, format: &DisplayFormat) -> std::fmt::Result {
         // First format the first event line starting with the always-there
         // {common} section, followed by the {kernel} or {user} one.
         write!(
