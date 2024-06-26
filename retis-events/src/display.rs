@@ -5,6 +5,8 @@ use std::fmt;
 pub struct DisplayFormat {
     /// Can the formatting logic use more than a single line?
     pub multiline: bool,
+    /// Should metadata section be printed?
+    pub show_metadata: bool,
 }
 
 impl DisplayFormat {
@@ -15,6 +17,12 @@ impl DisplayFormat {
     /// Configure multi-line output.
     pub fn multiline(mut self, enabled: bool) -> Self {
         self.multiline = enabled;
+        self
+    }
+
+    /// Show metadata sections in the output?
+    pub fn show_metadata(mut self) -> Self {
+        self.show_metadata = true;
         self
     }
 }

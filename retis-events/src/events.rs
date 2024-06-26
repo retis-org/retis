@@ -166,7 +166,7 @@ impl EventFmt for Event {
             .iter()
             .filter_map(|id| {
                 let id = SectionId::from_u8(*id).unwrap();
-                match id.is_metadata() {
+                match !format.show_metadata && id.is_metadata() {
                     true => None,
                     false => self.0.get(&id),
                 }
