@@ -52,10 +52,15 @@ pub(crate) struct Sort {
     #[arg(long, default_value = "false")]
     pub(super) print: bool,
 
-    /// Format used when printing and event.
+    /// Format used when printing an event.
     #[arg(long)]
     #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
     pub(super) format: CliDisplayFormat,
+
+    /// Time format used when printing an event.
+    #[arg(long)]
+    #[clap(value_enum, default_value_t=CliTimeFormat::MonotonicTimestamp)]
+    pub(super) time_format: CliTimeFormat,
 }
 
 impl SubCommandParserRunner for Sort {
@@ -99,11 +104,13 @@ impl SubCommandParserRunner for Sort {
         }
 
         if self.out.is_none() || self.print {
+            let format = DisplayFormat::new()
+                .multiline(self.format == CliDisplayFormat::MultiLine)
+                .time_format(self.time_format.into());
+
             printers.push(PrintSeries::new(
                 Box::new(stdout()),
-                PrintSingleFormat::Text(
-                    DisplayFormat::new().multiline(self.format == CliDisplayFormat::MultiLine),
-                ),
+                PrintSingleFormat::Text(format),
             ));
         }
 

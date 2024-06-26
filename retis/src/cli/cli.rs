@@ -19,7 +19,7 @@ use super::dynamic::DynamicCommand;
 use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
-    events::SectionId,
+    events::{SectionId, TimeFormat},
     generate::Complete,
     inspect::Inspect,
     module::Modules,
@@ -424,6 +424,24 @@ pub(crate) enum CliDisplayFormat {
     SingleLine,
     #[default]
     MultiLine,
+}
+
+/// Type of the "time_format" argument.
+// It is an enum that maps 1:1 with the time formats defined in events library.
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, ValueEnum)]
+pub(crate) enum CliTimeFormat {
+    #[default]
+    MonotonicTimestamp,
+    UtcDate,
+}
+
+impl From<CliTimeFormat> for TimeFormat {
+    fn from(val: CliTimeFormat) -> Self {
+        match val {
+            CliTimeFormat::MonotonicTimestamp => TimeFormat::MonotonicTimestamp,
+            CliTimeFormat::UtcDate => TimeFormat::UtcDate,
+        }
+    }
 }
 
 /// Create and register a ThinCli
