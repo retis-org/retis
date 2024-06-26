@@ -101,7 +101,9 @@ impl SubCommandParserRunner for Sort {
         if self.out.is_none() || self.print {
             printers.push(PrintSeries::new(
                 Box::new(stdout()),
-                PrintSingleFormat::Text(self.format.into()),
+                PrintSingleFormat::Text(
+                    DisplayFormat::new().multiline(self.format == CliDisplayFormat::MultiLine),
+                ),
             ));
         }
 

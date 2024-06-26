@@ -19,7 +19,7 @@ use super::dynamic::DynamicCommand;
 use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
-    events::{DisplayFormat, SectionId},
+    events::SectionId,
     generate::Complete,
     inspect::Inspect,
     module::Modules,
@@ -424,15 +424,6 @@ pub(crate) enum CliDisplayFormat {
     SingleLine,
     #[default]
     MultiLine,
-}
-
-impl From<CliDisplayFormat> for DisplayFormat {
-    fn from(val: CliDisplayFormat) -> Self {
-        match val {
-            CliDisplayFormat::SingleLine => DisplayFormat::SingleLine,
-            CliDisplayFormat::MultiLine => DisplayFormat::MultiLine,
-        }
-    }
 }
 
 /// Create and register a ThinCli

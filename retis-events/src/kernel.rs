@@ -44,17 +44,16 @@ impl StackTrace {
 impl EventFmt for StackTrace {
     fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result {
         let last = self.0.len() - 1;
-        match format {
-            DisplayFormat::SingleLine => {
-                write!(f, "[{}]", self.0.join(", "))
-            }
-            DisplayFormat::MultiLine => self.0.iter().enumerate().try_for_each(|(i, sym)| {
+        if format.multiline {
+            self.0.iter().enumerate().try_for_each(|(i, sym)| {
                 write!(f, "    {sym}")?;
                 if i != last {
                     writeln!(f)?;
                 }
                 Ok(())
-            }),
+            })
+        } else {
+            write!(f, "[{}]", self.0.join(", "))
         }
     }
 }

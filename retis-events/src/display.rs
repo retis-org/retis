@@ -1,10 +1,22 @@
 use std::fmt;
 
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-pub enum DisplayFormat {
-    SingleLine,
-    #[default]
-    MultiLine,
+/// Controls how an event is formatted.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DisplayFormat {
+    /// Can the formatting logic use more than a single line?
+    pub multiline: bool,
+}
+
+impl DisplayFormat {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Configure multi-line output.
+    pub fn multiline(mut self, enabled: bool) -> Self {
+        self.multiline = enabled;
+        self
+    }
 }
 
 /// Trait controlling how an event or an event section (or any custom type
