@@ -24,7 +24,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     let mut p = PrintSingle::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintSingleFormat::Text(DisplayFormat::SingleLine),
+        PrintSingleFormat::Text(DisplayFormat::new()),
     );
     let now = Instant::now();
     for _ in 0..iters {
@@ -37,7 +37,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     let mut p = PrintSingle::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintSingleFormat::Text(DisplayFormat::MultiLine),
+        PrintSingleFormat::Text(DisplayFormat::new().multiline(true)),
     );
     let now = Instant::now();
     for _ in 0..iters {
@@ -69,7 +69,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     let mut p = PrintSeries::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintSingleFormat::Text(DisplayFormat::SingleLine),
+        PrintSingleFormat::Text(DisplayFormat::new()),
     );
     let now = Instant::now();
     for _ in 0..iters {
@@ -82,7 +82,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     let mut p = PrintSeries::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintSingleFormat::Text(DisplayFormat::MultiLine),
+        PrintSingleFormat::Text(DisplayFormat::new().multiline(true)),
     );
     let now = Instant::now();
     for _ in 0..iters {

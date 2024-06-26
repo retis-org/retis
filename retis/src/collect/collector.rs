@@ -16,7 +16,7 @@ use nix::unistd::Uid;
 
 use super::cli::Collect;
 use crate::{
-    cli::SubCommandRunner,
+    cli::{CliDisplayFormat, SubCommandRunner},
     core::{
         events::RetisEventsFactory,
         filters::{meta::filter::FilterMeta, packets::filter::FilterPacketType},
@@ -430,7 +430,9 @@ impl Collectors {
         if collect.out.is_none() || collect.print {
             printers.push(PrintSingle::new(
                 Box::new(io::stdout()),
-                PrintSingleFormat::Text(collect.format.into()),
+                PrintSingleFormat::Text(
+                    DisplayFormat::new().multiline(collect.format == CliDisplayFormat::MultiLine),
+                ),
             ));
         }
 

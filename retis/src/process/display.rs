@@ -32,10 +32,8 @@ impl PrintSingle {
                 let event = format!("{}", e.display(format));
                 if !event.is_empty() {
                     self.writer.write_all(event.as_bytes())?;
-                    match format {
-                        DisplayFormat::SingleLine => self.writer.write_all(b"\n")?,
-                        DisplayFormat::MultiLine => self.writer.write_all(b"\n\n")?,
-                    }
+                    self.writer
+                        .write_all(if format.multiline { b"\n\n" } else { b"\n" })?;
                 }
             }
             PrintSingleFormat::Json => {

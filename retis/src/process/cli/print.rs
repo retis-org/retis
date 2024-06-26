@@ -40,7 +40,9 @@ impl SubCommandParserRunner for Print {
         // Formatter & printer for events.
         let mut output = PrintSingle::new(
             Box::new(stdout()),
-            PrintSingleFormat::Text(self.format.into()),
+            PrintSingleFormat::Text(
+                DisplayFormat::new().multiline(self.format == CliDisplayFormat::MultiLine),
+            ),
         );
 
         use EventResult::*;
