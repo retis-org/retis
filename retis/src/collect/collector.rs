@@ -212,6 +212,7 @@ impl Collectors {
                     retis_version: option_env!("RELEASE_VERSION")
                         .unwrap_or("unspec")
                         .to_string(),
+                    clock_monotonic_offset: monotonic_clock_offset()?,
                 }),
             )
         })?;

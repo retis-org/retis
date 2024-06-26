@@ -8,6 +8,8 @@ use crate::{event_section, event_type, *};
 pub struct StartupEvent {
     /// Retis version used while collecting events.
     pub retis_version: String,
+    /// CLOCK_MONOTONIC offset in regards to local machine time.
+    pub clock_monotonic_offset: TimeSpec,
 }
 
 impl EventFmt for StartupEvent {
