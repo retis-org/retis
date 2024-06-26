@@ -28,8 +28,12 @@ impl PrintSingle {
     /// Process events one by one (format & print).
     pub(crate) fn process_one(&mut self, e: &Event) -> Result<()> {
         match self.format {
-            PrintSingleFormat::Text(format) => {
-                let event = format!("{}", e.display(format));
+            PrintSingleFormat::Text(ref mut format) => {
+                if let Some(common) = e.get_section::<StartupEvent>(SectionId::Startup) {
+                    format.monotonic_offset = Some(common.clock_monotonic_offset);
+                }
+
+                let event = format!("{}", e.display(*format));
                 if !event.is_empty() {
                     self.writer.write_all(event.as_bytes())?;
                     self.writer
@@ -82,10 +86,14 @@ impl PrintSeries {
     pub(crate) fn process_one(&mut self, series: &EventSeries) -> Result<()> {
         let mut content = String::new();
         match self.format {
-            PrintSingleFormat::Text(format) => {
+            PrintSingleFormat::Text(ref mut format) => {
                 let mut indent = 0;
                 for event in series.events.iter() {
-                    content.push_str(&Self::indent(indent, format!("{}", event.display(format))));
+                    if let Some(common) = event.get_section::<StartupEvent>(SectionId::Startup) {
+                        format.monotonic_offset = Some(common.clock_monotonic_offset);
+                    }
+
+                    content.push_str(&Self::indent(indent, format!("{}", event.display(*format))));
                     if !content.is_empty() {
                         content.push('\n');
                         indent = 2;

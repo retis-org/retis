@@ -52,10 +52,14 @@ pub(crate) struct Sort {
     #[arg(long, default_value = "false")]
     pub(super) print: bool,
 
-    /// Format used when printing and event.
+    /// Format used when printing an event.
     #[arg(long)]
     #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
     pub(super) format: CliDisplayFormat,
+
+    /// Print the time as UTC.
+    #[arg(long)]
+    pub(super) utc: bool,
 }
 
 impl SubCommandParserRunner for Sort {
@@ -99,11 +103,17 @@ impl SubCommandParserRunner for Sort {
         }
 
         if self.out.is_none() || self.print {
+            let format = DisplayFormat::new()
+                .multiline(self.format == CliDisplayFormat::MultiLine)
+                .time_format(if self.utc {
+                    TimeFormat::UtcDate
+                } else {
+                    TimeFormat::MonotonicTimestamp
+                });
+
             printers.push(PrintSeries::new(
                 Box::new(stdout()),
-                PrintSingleFormat::Text(
-                    DisplayFormat::new().multiline(self.format == CliDisplayFormat::MultiLine),
-                ),
+                PrintSingleFormat::Text(format),
             ));
         }
 

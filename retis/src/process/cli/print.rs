@@ -26,6 +26,8 @@ pub(crate) struct Print {
     #[arg(long, help = "Format used when printing an event.")]
     #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
     pub(super) format: CliDisplayFormat,
+    #[arg(long, help = "Print the time as UTC")]
+    pub(super) utc: bool,
 }
 
 impl SubCommandParserRunner for Print {
@@ -37,13 +39,17 @@ impl SubCommandParserRunner for Print {
         // Create event factory.
         let mut factory = FileEventsFactory::new(self.input.as_path())?;
 
+        // Format.
+        let format = DisplayFormat::new()
+            .multiline(self.format == CliDisplayFormat::MultiLine)
+            .time_format(if self.utc {
+                TimeFormat::UtcDate
+            } else {
+                TimeFormat::MonotonicTimestamp
+            });
+
         // Formatter & printer for events.
-        let mut output = PrintSingle::new(
-            Box::new(stdout()),
-            PrintSingleFormat::Text(
-                DisplayFormat::new().multiline(self.format == CliDisplayFormat::MultiLine),
-            ),
-        );
+        let mut output = PrintSingle::new(Box::new(stdout()), PrintSingleFormat::Text(format));
 
         use EventResult::*;
         while run.running() {
