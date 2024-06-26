@@ -68,6 +68,8 @@ defaults to \"retis.data\"."
     #[arg(long, help = "Format used when printing an event.")]
     #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
     pub(super) format: CliDisplayFormat,
+    #[arg(long, help = "Print the time as UTC")]
+    pub(super) utc: bool,
     #[arg(
         id = "filter-packet",
         short,

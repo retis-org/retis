@@ -429,11 +429,18 @@ impl Collectors {
         // Write events to stdout if we don't write to a file (--out) or if
         // explicitly asked to (--print).
         if collect.out.is_none() || collect.print {
+            let format = DisplayFormat::new()
+                .multiline(collect.format == CliDisplayFormat::MultiLine)
+                .time_format(if collect.utc {
+                    TimeFormat::UtcDate
+                } else {
+                    TimeFormat::MonotonicTimestamp
+                })
+                .monotonic_offset(monotonic_clock_offset()?);
+
             printers.push(PrintSingle::new(
                 Box::new(io::stdout()),
-                PrintSingleFormat::Text(
-                    DisplayFormat::new().multiline(collect.format == CliDisplayFormat::MultiLine),
-                ),
+                PrintSingleFormat::Text(format),
             ));
         }
 
