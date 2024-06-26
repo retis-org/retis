@@ -121,14 +121,12 @@ impl Event {
 }
 
 impl EventFmt for Event {
-    fn event_fmt(&self, f: &mut std::fmt::Formatter, format: DisplayFormat) -> std::fmt::Result {
-        // First format the first event line starting with the always-there
-        // {common} section, followed by the {kernel} or {user} one.
-        write!(
-            f,
-            "{}",
-            self.0.get(&SectionId::Common).unwrap().display(format)
-        )?;
+    fn event_fmt(&self, f: &mut std::fmt::Formatter, format: &DisplayFormat) -> std::fmt::Result {
+        // First format the first event line starting with the {common} section,
+        // followed by the {kernel} or {user} one.
+        if let Some(common) = self.0.get(&SectionId::Common) {
+            write!(f, "{}", common.display(format))?;
+        }
         if let Some(kernel) = self.0.get(&SectionId::Kernel) {
             write!(f, " {}", kernel.display(format))?;
         } else if let Some(user) = self.0.get(&SectionId::Userspace) {
@@ -149,23 +147,29 @@ impl EventFmt for Event {
         // If we have a stack trace, show it.
         if let Some(kernel) = self.get_section::<KernelEvent>(SectionId::Kernel) {
             if let Some(stack) = &kernel.stack_trace {
-                match format {
-                    DisplayFormat::SingleLine => write!(f, " {}", stack.display(format))?,
-                    DisplayFormat::MultiLine => write!(f, "\n{}", stack.display(format))?,
+                match format.flavor {
+                    DisplayFormatFlavor::SingleLine => write!(f, " {}", stack.display(format))?,
+                    DisplayFormatFlavor::MultiLine => write!(f, "\n{}", stack.display(format))?,
                 }
             }
         }
 
-        let sep = match format {
-            DisplayFormat::SingleLine => " ",
-            DisplayFormat::MultiLine => "\n  ",
+        let sep = match format.flavor {
+            DisplayFormatFlavor::SingleLine => " ",
+            DisplayFormatFlavor::MultiLine => "\n  ",
         };
 
         // Finally show all sections.
         (SectionId::Skb.to_u8()..SectionId::_MAX.to_u8())
             .collect::<Vec<u8>>()
             .iter()
-            .filter_map(|id| self.0.get(&SectionId::from_u8(*id).unwrap()))
+            .filter_map(|id| {
+                let id = SectionId::from_u8(*id).unwrap();
+                match !format.show_metadata && id.is_metadata() {
+                    true => None,
+                    false => self.0.get(&id),
+                }
+            })
             .try_for_each(|section| write!(f, "{sep}{}", section.display(format)))?;
 
         Ok(())
@@ -185,8 +189,9 @@ pub enum SectionId {
     Ovs = 8,
     Nft = 9,
     Ct = 10,
+    MdCommon = 11,
     // TODO: use std::mem::variant_count once in stable.
-    _MAX = 11,
+    _MAX = 12,
 }
 
 impl FromStr for SectionId {
@@ -206,6 +211,7 @@ impl FromStr for SectionId {
             OvsEvent::SECTION_NAME => Ovs,
             NftEvent::SECTION_NAME => Nft,
             CtEvent::SECTION_NAME => Ct,
+            CommonEventMd::SECTION_NAME => MdCommon,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -226,6 +232,7 @@ impl SectionId {
             8 => Ovs,
             9 => Nft,
             10 => Ct,
+            11 => MdCommon,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -245,7 +252,8 @@ impl SectionId {
             Ovs => 8,
             Nft => 9,
             Ct => 10,
-            _MAX => 11,
+            MdCommon => 11,
+            _MAX => 12,
         }
     }
 
@@ -263,8 +271,14 @@ impl SectionId {
             Ovs => OvsEvent::SECTION_NAME,
             Nft => NftEvent::SECTION_NAME,
             Ct => CtEvent::SECTION_NAME,
+            MdCommon => CommonEventMd::SECTION_NAME,
             _MAX => "_max",
         }
+    }
+
+    /// Is the section a metadata one?
+    pub fn is_metadata(&self) -> bool {
+        matches!(self, SectionId::MdCommon)
     }
 }
 
@@ -307,6 +321,9 @@ fn event_sections() -> Result<&'static EventSectionMap> {
         });
         events.insert(CtEvent::SECTION_NAME.to_string(), |v| {
             Ok(Box::new(serde_json::from_value::<CtEvent>(v)?))
+        });
+        events.insert(CommonEventMd::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<CommonEventMd>(v)?))
         });
         Ok(events)
     })

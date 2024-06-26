@@ -21,7 +21,8 @@ use crate::{
         kernel::Symbol,
         probe::kernel::utils::parse_probe,
     },
-    process::display::PrintSingle,
+    events::*,
+    process::display::*,
 };
 
 #[cfg(not(test))]
@@ -39,7 +40,7 @@ use crate::{
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
     events::{EventResult, SectionId},
-    helpers::signals::Running,
+    helpers::{signals::Running, time::monotonic_clock_offset},
     module::Modules,
 };
 
@@ -78,7 +79,12 @@ pub(crate) trait Collector {
     /// will make the whole program to fail. In general collectors should try
     /// hard to run in various setups, see the `crate::collector` top
     /// documentation for more information.
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()>;
+    fn init(
+        &mut self,
+        cli: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        md_event: &mut Event,
+    ) -> Result<()>;
     /// Start the collector.
     fn start(&mut self) -> Result<()> {
         Ok(())
@@ -100,6 +106,8 @@ pub(crate) struct Collectors {
     // Keep a reference on the tracking configuration map.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
     loaded: Vec<SectionId>,
+    // Metadata events.
+    md_event: Event,
 }
 
 impl Collectors {
@@ -116,6 +124,7 @@ impl Collectors {
             tracking_gc: None,
             tracking_config_map: None,
             loaded: Vec::new(),
+            md_event: Event::new(),
         })
     }
 
@@ -193,6 +202,17 @@ impl Collectors {
             bail!("Retis needs to be run as root when --allow-system-changes is used");
         }
 
+        // Set common md event.
+        self.md_event.insert_section(
+            SectionId::MdCommon,
+            Box::new(CommonEventMd {
+                retis_version: option_env!("RELEASE_VERSION")
+                    .unwrap_or("unspec")
+                    .to_string(),
+                clock_monotonic_offset: monotonic_clock_offset()?,
+            }),
+        )?;
+
         // Try initializing all collectors.
         for name in &collect.args()?.collectors {
             let id = SectionId::from_str(name)?;
@@ -213,7 +233,7 @@ impl Collectors {
                 }
             }
 
-            if let Err(e) = c.init(cli, self.probes.builder_mut()?) {
+            if let Err(e) = c.init(cli, self.probes.builder_mut()?, &mut self.md_event) {
                 bail!("Could not initialize the {} collector: {}", id, e);
             }
 
@@ -401,22 +421,34 @@ impl Collectors {
         // Write events to stdout if we don't write to a file (--out) or if
         // explicitly asked to (--print).
         if collect.out.is_none() || collect.print {
-            printers.push(PrintSingle::text(
+            let mut format = DisplayFormat::new(collect.format.into());
+            format.set_time_format(collect.time_format.into());
+            format.set_monotonic_offset(monotonic_clock_offset()?);
+
+            printers.push(PrintSingle::new(
                 Box::new(io::stdout()),
-                collect.format.into(),
+                PrintSingleFormat::Text(format),
             ));
         }
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            printers.push(PrintSingle::json(Box::new(BufWriter::new(
-                OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(out)
-                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-            ))));
+            let mut printer = PrintSingle::new(
+                Box::new(BufWriter::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(out)
+                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+                )),
+                PrintSingleFormat::Json,
+            );
+
+            // Store "metadata events" first.
+            printer.process_one(&self.md_event)?;
+
+            printers.push(printer);
         }
 
         if let Some(cmd) = collect.cmd.to_owned() {
@@ -493,7 +525,6 @@ mod tests {
     use crate::{
         core::{events::bpf::*, probe::ProbeBuilderManager},
         event_section,
-        events::*,
         module::Module,
     };
 
@@ -510,7 +541,12 @@ mod tests {
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
             cli.register_module_noargs(SectionId::Skb)
         }
-        fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
+        fn init(
+            &mut self,
+            _: &CliConfig,
+            _: &mut ProbeBuilderManager,
+            _: &mut Event,
+        ) -> Result<()> {
             Ok(())
         }
         fn start(&mut self) -> Result<()> {
@@ -537,7 +573,12 @@ mod tests {
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
             cli.register_module_noargs(SectionId::Ovs)
         }
-        fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
+        fn init(
+            &mut self,
+            _: &CliConfig,
+            _: &mut ProbeBuilderManager,
+            _: &mut Event,
+        ) -> Result<()> {
             bail!("Could not initialize")
         }
         fn start(&mut self) -> Result<()> {
@@ -559,7 +600,7 @@ mod tests {
     struct TestEvent {}
 
     impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: DisplayFormat) -> std::fmt::Result {
+        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: &DisplayFormat) -> std::fmt::Result {
             write!(f, "test event section")
         }
     }
@@ -609,10 +650,11 @@ mod tests {
 
         let mut collectors = Collectors::new(group)?;
         let mut mgr = ProbeBuilderManager::new()?;
+        let mut md_event = Event::new();
         let config = get_cli("skb,ovs")?.run()?;
 
-        assert!(dummy_a.init(&config, &mut mgr).is_ok());
-        assert!(dummy_b.init(&config, &mut mgr).is_err());
+        assert!(dummy_a.init(&config, &mut mgr, &mut md_event).is_ok());
+        assert!(dummy_b.init(&config, &mut mgr, &mut md_event).is_err());
 
         assert!(collectors.init(&config).is_err());
         Ok(())

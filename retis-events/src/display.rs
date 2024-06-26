@@ -1,10 +1,48 @@
 use std::fmt;
 
+use super::TimeSpec;
+
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-pub enum DisplayFormat {
+pub enum DisplayFormatFlavor {
     SingleLine,
     #[default]
     MultiLine,
+}
+
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+pub enum TimeFormat {
+    #[default]
+    MonotonicTimestamp,
+    UtcDate,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DisplayFormat {
+    pub flavor: DisplayFormatFlavor,
+    pub time_format: TimeFormat,
+    pub show_metadata: bool,
+    pub monotonic_offset: Option<TimeSpec>,
+}
+
+impl DisplayFormat {
+    pub fn new(flavor: DisplayFormatFlavor) -> Self {
+        Self {
+            flavor,
+            ..Default::default()
+        }
+    }
+
+    pub fn show_metadata(&mut self) {
+        self.show_metadata = true
+    }
+
+    pub fn set_time_format(&mut self, format: TimeFormat) {
+        self.time_format = format;
+    }
+
+    pub fn set_monotonic_offset(&mut self, offset: TimeSpec) {
+        self.monotonic_offset = Some(offset);
+    }
 }
 
 /// Trait controlling how an event or an event section (or any custom type
@@ -14,7 +52,7 @@ pub enum DisplayFormat {
 /// arguments, unlike a plain std::fmt::Display implementation.
 pub trait EventDisplay<'a>: EventFmt {
     /// Display the event using the default event format.
-    fn display(&'a self, format: DisplayFormat) -> Box<dyn fmt::Display + 'a>;
+    fn display(&'a self, format: &'a DisplayFormat) -> Box<dyn fmt::Display + 'a>;
 }
 
 /// Trait controlling how an event or an event section (or any custom type
@@ -26,17 +64,17 @@ pub trait EventDisplay<'a>: EventFmt {
 /// members if any.
 pub trait EventFmt {
     /// Default formatting of an event.
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result;
+    fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result;
 }
 
 impl<'a, T> EventDisplay<'a> for T
 where
     T: EventFmt,
 {
-    fn display(&'a self, format: DisplayFormat) -> Box<dyn fmt::Display + 'a> {
+    fn display(&'a self, format: &'a DisplayFormat) -> Box<dyn fmt::Display + 'a> {
         struct DefaultDisplay<'a, U> {
             myself: &'a U,
-            format: DisplayFormat,
+            format: &'a DisplayFormat,
         }
         impl<U: EventFmt> fmt::Display for DefaultDisplay<'_, U> {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

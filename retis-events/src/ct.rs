@@ -117,7 +117,7 @@ pub struct CtEvent {
 }
 
 impl EventFmt for CtEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
         use CtState::*;
         match self.state {
             Established => write!(f, "ct_state ESTABLISHED ")?,

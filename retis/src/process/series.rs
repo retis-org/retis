@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::events::{CommonEvent, Event, SectionId, TrackingInfo};
 
@@ -83,7 +83,7 @@ impl EventSorter {
                     .unwrap()
                     .get_section::<CommonEvent>(SectionId::Common)
                     .map(|c| c.timestamp)
-                    .ok_or_else(|| anyhow!("malformed event: no common section"))?
+                    .unwrap_or(0)
             {
                 self.pop_oldest_series()
             } else {

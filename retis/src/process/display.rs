@@ -5,7 +5,7 @@ use anyhow::Result;
 use super::series::EventSeries;
 use crate::events::*;
 
-enum PrintSingleFormat {
+pub(crate) enum PrintSingleFormat {
     Text(DisplayFormat),
     Json,
 }
@@ -17,29 +17,26 @@ pub(crate) struct PrintSingle {
 }
 
 impl PrintSingle {
-    pub(crate) fn text(writer: Box<dyn Write>, format: DisplayFormat) -> Self {
-        Self {
-            writer,
-            format: PrintSingleFormat::Text(format),
-        }
-    }
-
-    pub(crate) fn json(writer: Box<dyn Write>) -> Self {
-        Self {
-            writer,
-            format: PrintSingleFormat::Json,
-        }
+    pub(crate) fn new(writer: Box<dyn Write>, format: PrintSingleFormat) -> Self {
+        Self { writer, format }
     }
 
     /// Process events one by one (format & print).
     pub(crate) fn process_one(&mut self, e: &Event) -> Result<()> {
         match self.format {
-            PrintSingleFormat::Text(format) => {
-                let event = match format {
-                    DisplayFormat::SingleLine => format!("{}\n", e.display(format)),
-                    DisplayFormat::MultiLine => format!("\n{}\n", e.display(format)),
-                };
-                self.writer.write_all(event.as_bytes())?;
+            PrintSingleFormat::Text(ref mut format) => {
+                if let Some(common) = e.get_section::<CommonEventMd>(SectionId::MdCommon) {
+                    format.set_monotonic_offset(common.clock_monotonic_offset);
+                }
+
+                let event = format!("{}", e.display(format));
+                if !event.is_empty() {
+                    self.writer.write_all(event.as_bytes())?;
+                    match format.flavor {
+                        DisplayFormatFlavor::SingleLine => self.writer.write_all(b"\n")?,
+                        DisplayFormatFlavor::MultiLine => self.writer.write_all(b"\n\n")?,
+                    }
+                }
             }
             PrintSingleFormat::Json => {
                 let mut event = serde_json::to_vec(&e.to_json())?;
@@ -64,58 +61,47 @@ pub(crate) struct PrintSeries {
 }
 
 impl PrintSeries {
-    pub(crate) fn text(writer: Box<dyn Write>, format: DisplayFormat) -> Self {
-        Self {
-            writer,
-            format: PrintSingleFormat::Text(format),
-        }
-    }
-
-    pub(crate) fn json(writer: Box<dyn Write>) -> Self {
-        Self {
-            writer,
-            format: PrintSingleFormat::Json,
-        }
+    pub(crate) fn new(writer: Box<dyn Write>, format: PrintSingleFormat) -> Self {
+        Self { writer, format }
     }
 
     fn indent(n_spaces: usize, lines: String) -> String {
-        lines
-            .split('\n')
-            .map(|line| format!("{}{}", " ".repeat(n_spaces), line))
-            .collect::<Vec<String>>()
-            .join("\n")
+        if n_spaces == 0 || lines.is_empty() {
+            return lines;
+        }
+
+        let mut res = Vec::new();
+        let mut delim = "+ ";
+        for line in lines.split('\n') {
+            res.push(format!("{}{}{}", " ".repeat(n_spaces), delim, line));
+            delim = "  ";
+        }
+
+        res.join("\n")
     }
 
     /// Process events one by one (format & print).
     pub(crate) fn process_one(&mut self, series: &EventSeries) -> Result<()> {
         let mut content = String::new();
         match self.format {
-            PrintSingleFormat::Text(format) => {
-                match format {
-                    DisplayFormat::SingleLine => {
-                        if let Some(first) = series.events.first() {
-                            content.push_str(&format!("\n{}\n", first.display(format)));
-                        }
-                        for event in series.events.iter().skip(1) {
-                            content
-                                .push_str(&Self::indent(2, format!("+ {}", event.display(format))));
-                            content.push('\n');
-                        }
+            PrintSingleFormat::Text(ref mut format) => {
+                let mut indent = 0;
+                for event in series.events.iter() {
+                    if let Some(common) = event.get_section::<CommonEventMd>(SectionId::MdCommon) {
+                        format.set_monotonic_offset(common.clock_monotonic_offset);
                     }
-                    DisplayFormat::MultiLine => {
-                        if let Some(first) = series.events.first() {
-                            content.push('\n');
-                            content.push_str(&format!("{}", first.display(format)));
-                            content.push('\n');
-                        }
-                        for event in series.events.iter().skip(1) {
-                            content
-                                .push_str(&Self::indent(2, format!("+ {}", event.display(format))));
-                            content.push('\n');
-                        }
+
+                    content.push_str(&Self::indent(indent, format!("{}", event.display(format))));
+                    if !content.is_empty() {
+                        content.push('\n');
+                        indent = 2;
                     }
                 }
-                self.writer.write_all(content.as_bytes())?;
+
+                if !content.is_empty() {
+                    content.push('\n');
+                    self.writer.write_all(content.as_bytes())?;
+                }
             }
             PrintSingleFormat::Json => {
                 let mut event = serde_json::to_vec(&series.to_json())?;
