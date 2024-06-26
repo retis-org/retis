@@ -623,7 +623,7 @@ mod tests {
     }
 
     impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: DisplayFormat) -> std::fmt::Result {
+        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: &DisplayFormat) -> std::fmt::Result {
             write!(
                 f,
                 "field0: {:?} field1: {:?} field2: {:?}",

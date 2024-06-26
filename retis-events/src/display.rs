@@ -52,7 +52,7 @@ impl DisplayFormat {
 /// arguments, unlike a plain std::fmt::Display implementation.
 pub trait EventDisplay<'a>: EventFmt {
     /// Display the event using the default event format.
-    fn display(&'a self, format: DisplayFormat) -> Box<dyn fmt::Display + 'a>;
+    fn display(&'a self, format: &'a DisplayFormat) -> Box<dyn fmt::Display + 'a>;
 }
 
 /// Trait controlling how an event or an event section (or any custom type
@@ -64,17 +64,17 @@ pub trait EventDisplay<'a>: EventFmt {
 /// members if any.
 pub trait EventFmt {
     /// Default formatting of an event.
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: DisplayFormat) -> fmt::Result;
+    fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result;
 }
 
 impl<'a, T> EventDisplay<'a> for T
 where
     T: EventFmt,
 {
-    fn display(&'a self, format: DisplayFormat) -> Box<dyn fmt::Display + 'a> {
+    fn display(&'a self, format: &'a DisplayFormat) -> Box<dyn fmt::Display + 'a> {
         struct DefaultDisplay<'a, U> {
             myself: &'a U,
-            format: DisplayFormat,
+            format: &'a DisplayFormat,
         }
         impl<U: EventFmt> fmt::Display for DefaultDisplay<'_, U> {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

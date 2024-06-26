@@ -33,7 +33,7 @@ impl PrintSingle {
                     format.monotonic_offset = Some(common.clock_monotonic_offset);
                 }
 
-                let event = format!("{}", e.display(*format));
+                let event = format!("{}", e.display(format));
                 if !event.is_empty() {
                     self.writer.write_all(event.as_bytes())?;
                     self.writer
@@ -93,7 +93,7 @@ impl PrintSeries {
                         format.monotonic_offset = Some(common.clock_monotonic_offset);
                     }
 
-                    content.push_str(&Self::indent(indent, format!("{}", event.display(*format))));
+                    content.push_str(&Self::indent(indent, format!("{}", event.display(format))));
                     if !content.is_empty() {
                         content.push('\n');
                         indent = 2;
