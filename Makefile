@@ -81,10 +81,20 @@ release: ebpf
 	$(call build, build --release, building retis (release))
 
 test: ebpf
-	$(call build, test, building and running tests)
+ifeq ($(COV),1)
+	$(CARGO) llvm-cov clean --workspace -q
+	$(call build,llvm-cov $(if $(VERBOSITY),,-q),running tests with coverage)
+else
+	$(call build,test,building and running tests)
+endif
 
 bench: ebpf
 	$(call build, build -F benchmark --release, building benchmarks)
+
+ifeq ($(COV),1)
+report:
+	$(CARGO) llvm-cov report --html
+endif
 
 ifeq ($(NOVENDOR),)
 $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
@@ -115,6 +125,9 @@ clean-ebpf:
 
 clean: clean-ebpf
 	$(call out_console,CLEAN,cleaning retis ...)
+ifeq ($(COV),1)
+	$(CARGO) llvm-cov clean --workspace
+endif
 	$(CARGO) clean
 
 help:
@@ -143,5 +156,6 @@ help:
 	$(call help_once,CARGO_OPTS          --  Changes `cargo` default behavior (e.g. --verbose).)
 	$(call help_once,NOVENDOR            --  Avoid to self detect and consume the vendored headers)
 	$(call help_once,                        shipped with libbpf-sys.)
+	$(call help_once,COV                 --  enable code coverage for testing.)
 
 .PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test
