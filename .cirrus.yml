@@ -18,7 +18,9 @@ unittest_task:
   << : *cargo_task_template
   container:
     image: rust:bookworm
-  build_script: make V=1 CARGO_OPTS=--verbose
+  build_script:
+    - cargo install cargo-llvm-cov
+    - make V=1 CARGO_OPTS=--verbose
   test_script: make test V=1 CARGO_OPTS=--verbose
   check_script:
     - cargo fmt --check
@@ -41,6 +43,7 @@ aarch64_task:
   arm_container:
     image: rust:bookworm
   build_script:
+    - cargo install cargo-llvm-cov
     - ln -s /usr/include/asm-generic /usr/include/asm
     - make V=1 CARGO_OPTS=--verbose
   test_script: make test V=1 CARGO_OPTS=--verbose
