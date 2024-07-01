@@ -82,6 +82,19 @@ test: ebpf
 bench: ebpf
 	$(call build, build -F benchmark --release, building benchmarks)
 
+coverage: RUSTFLAGS += -C instrument-coverage
+coverage: ebpf
+	$(call build, build, building retis with coverage instrumentation)
+
+merge:
+	@echo "Merging coverage data..."
+	llvm-profdata merge -sparse default_*.profraw -o retis_coverage.profdata
+
+report:
+	@echo "Generating coverage report..."
+	llvm-cov show --format=html --output-dir=coverage --instr-profile=retis_coverage.profdata target/debug/retis
+	@echo "Coverage report generated in ./coverage directory."
+
 ifeq ($(NOVENDOR),)
 $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
 	-mkdir -p $(LIBBPF_INCLUDES)/bpf
@@ -108,6 +121,7 @@ clean-ebpf:
 
 clean: clean-ebpf
 	$(call out_console,CLEAN,cleaning retis ...)
+	rm -rf coverage default_*.profraw retis_coverage.profdata
 	$(CARGO) clean
 
 help:
