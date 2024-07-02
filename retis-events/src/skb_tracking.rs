@@ -86,7 +86,8 @@ impl Ord for TrackingInfo {
 
 impl EventFmt for TrackingInfo {
     fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result {
-        write!(f, "{} n {}", self.skb.display(format), self.idx)
+        self.skb.event_fmt(f, format)?;
+        write!(f, " n {}", self.idx)
     }
 }
 
