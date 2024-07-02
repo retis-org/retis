@@ -49,7 +49,7 @@ impl EventFmt for StackTrace {
                 write!(f, "[{}]", self.0.join(", "))
             }
             DisplayFormatFlavor::MultiLine => self.0.iter().enumerate().try_for_each(|(i, sym)| {
-                write!(f, "    {sym}")?;
+                write!(f, "{sym}")?;
                 if i != last {
                     writeln!(f)?;
                 }
