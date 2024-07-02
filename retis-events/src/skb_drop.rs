@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::*;
-use crate::event_section;
+use crate::{event_section, Formatter};
 
 /// Skb drop event section.
 #[event_section("skb-drop")]
@@ -14,7 +14,7 @@ pub struct SkbDropEvent {
 }
 
 impl EventFmt for SkbDropEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         match &self.subsys {
             None => write!(f, "drop (reason {})", self.drop_reason),
             Some(name) => write!(f, "drop (reason {name}/{})", self.drop_reason),

@@ -4,7 +4,7 @@ use super::{
     net::{etype_str, protocol_str, RawPacket},
     *,
 };
-use crate::{event_section, event_type};
+use crate::{event_section, event_type, Formatter};
 
 /// Skb event section.
 #[event_section("skb")]
@@ -38,7 +38,7 @@ pub struct SkbEvent {
 }
 
 impl EventFmt for SkbEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         let mut len = 0;
 
         let mut space = DelimWriter::new(' ');

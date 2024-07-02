@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::*;
-use crate::{event_section, event_type};
+use crate::{event_section, event_type, Formatter};
 
 #[event_type]
 #[derive(Default)]
@@ -128,7 +128,7 @@ pub struct CtConnEvent {
 }
 
 impl EventFmt for CtEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         use CtState::*;
         match self.state {
             Established => write!(f, "ct_state ESTABLISHED ")?,
@@ -152,7 +152,7 @@ impl EventFmt for CtEvent {
 }
 
 impl CtEvent {
-    fn format_conn(conn: &CtConnEvent, f: &mut fmt::Formatter) -> fmt::Result {
+    fn format_conn(conn: &CtConnEvent, f: &mut Formatter) -> fmt::Result {
         match (&conn.orig.proto, &conn.reply.proto) {
             (CtProto::Tcp(tcp_orig), CtProto::Tcp(tcp_reply)) => {
                 write!(
