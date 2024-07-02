@@ -77,6 +77,10 @@ and/or [help wanted](https://github.com/retis-org/retis/issues?q=is%3Aissue+is%3
    documentation we expect.
 1. Add unit tests.
 1. Base new work on top of the `main` branch.
+1. Use conscious language. Sometimes the information to collect (eg. in the
+   kernel) is not converted yet or is part of a stable API; we can still use a
+   better word in Retis. A good example is the Linux `nf_conn->master` object in
+   the `ct` collector: we expose it as the "parent".
 
 ### Coding style
 
