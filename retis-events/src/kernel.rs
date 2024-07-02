@@ -46,7 +46,7 @@ impl EventFmt for StackTrace {
         let last = self.0.len() - 1;
         if format.multiline {
             self.0.iter().enumerate().try_for_each(|(i, sym)| {
-                write!(f, "    {sym}")?;
+                write!(f, "{sym}")?;
                 if i != last {
                     writeln!(f)?;
                 }
