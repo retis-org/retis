@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use serde::{de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer, Serializer};
 
 use super::*;
-use crate::{event_section, event_type};
+use crate::{event_section, event_type, Formatter};
 
 ///The OVS Event
 #[derive(PartialEq)]
@@ -16,7 +16,7 @@ pub struct OvsEvent {
 }
 
 impl EventFmt for OvsEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         self.event.event_fmt(f, format)
     }
 }
@@ -58,7 +58,7 @@ pub enum OvsEventType {
 }
 
 impl EventFmt for OvsEventType {
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         use OvsEventType::*;
         let disp: &dyn EventFmt = match self {
             Upcall(e) => e,
@@ -102,7 +102,7 @@ pub struct UpcallEvent {
 }
 
 impl EventFmt for UpcallEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(
             f,
             "upcall{} port {} cpu {}",
@@ -134,7 +134,7 @@ pub struct UpcallEnqueueEvent {
 }
 
 impl EventFmt for UpcallEnqueueEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(
             f,
             "upcall_enqueue{} ({}/{}) q {} ret {}",
@@ -158,7 +158,7 @@ pub struct UpcallReturnEvent {
 }
 
 impl EventFmt for UpcallReturnEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(
             f,
             "upcall_ret ({}/{}) ret {}",
@@ -218,7 +218,7 @@ impl OperationEvent {
 }
 
 impl EventFmt for OperationEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(
             f,
             "flow_{} q {} ts {} ({})",
@@ -250,7 +250,7 @@ pub struct RecvUpcallEvent {
 }
 
 impl EventFmt for RecvUpcallEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         // FIXME: there are more fields.
         write!(
             f,
@@ -276,7 +276,7 @@ pub struct ActionEvent {
 }
 
 impl EventFmt for ActionEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         if self.recirc_id != 0 {
             write!(f, "[recirc_id {:#x}] ", self.recirc_id)?;
         }

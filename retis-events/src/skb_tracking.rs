@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::*;
-use crate::event_section;
+use crate::{event_section, Formatter};
 
 /// Tracking event section.
 /// For more information of how the tracking logic is designed and how it can be
@@ -47,7 +47,7 @@ impl SkbTrackingEvent {
 }
 
 impl EventFmt for SkbTrackingEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(f, "#{:x} (skb {:x})", self.tracking_id(), self.skb)
     }
 }
@@ -85,7 +85,7 @@ impl Ord for TrackingInfo {
 }
 
 impl EventFmt for TrackingInfo {
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         self.skb.event_fmt(f, format)?;
         write!(f, " n {}", self.idx)
     }

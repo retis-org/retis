@@ -17,10 +17,7 @@ use anyhow::{anyhow, bail, Result};
 use log::{error, log, Level};
 use plain::Plain;
 
-use crate::{
-    events::{CommonEvent, TaskEvent, *},
-    helpers::signals::Running,
-};
+use crate::{events::*, helpers::signals::Running};
 
 /// Raw event sections for common.
 pub(super) const COMMON_SECTION_CORE: u64 = 0;
@@ -577,7 +574,7 @@ mod tests {
     }
 
     impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: &DisplayFormat) -> std::fmt::Result {
+        fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> std::fmt::Result {
             write!(
                 f,
                 "field0: {:?} field1: {:?} field2: {:?}",

@@ -121,7 +121,7 @@ impl Event {
 }
 
 impl EventFmt for Event {
-    fn event_fmt(&self, f: &mut std::fmt::Formatter, format: &DisplayFormat) -> std::fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> std::fmt::Result {
         // First format the first event line starting with the {common} section,
         // followed by the {kernel} or {user} one.
         if let Some(common) = self.0.get(&SectionId::Common) {
@@ -151,18 +151,21 @@ impl EventFmt for Event {
 
         // Separator between each following sections.
         let sep = match format.flavor {
-            DisplayFormatFlavor::SingleLine => " ",
-            DisplayFormatFlavor::MultiLine => "\n  ",
+            DisplayFormatFlavor::SingleLine => ' ',
+            DisplayFormatFlavor::MultiLine => '\n',
         };
 
         // If we have a stack trace, show it.
         if let Some(kernel) = self.get_section::<KernelEvent>(SectionId::Kernel) {
             if let Some(stack) = &kernel.stack_trace {
+                f.conf.inc_level(4);
                 write!(f, "{sep}")?;
                 stack.event_fmt(f, format)?;
+                f.conf.reset_level();
             }
         }
 
+        f.conf.inc_level(2);
 
         // Finally show all sections.
         (SectionId::Skb.to_u8()..SectionId::_MAX.to_u8())
@@ -180,6 +183,7 @@ impl EventFmt for Event {
                 section.event_fmt(f, format)
             })?;
 
+        f.conf.reset_level();
         Ok(())
     }
 }

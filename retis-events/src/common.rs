@@ -2,7 +2,7 @@ use std::fmt;
 
 use chrono::{DateTime, Utc};
 
-use crate::{event_section, event_type, *};
+use crate::*;
 
 #[event_section("md_common")]
 pub struct CommonEventMd {
@@ -12,7 +12,7 @@ pub struct CommonEventMd {
 }
 
 impl EventFmt for CommonEventMd {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(f, "Retis version {}", self.retis_version)
     }
 }
@@ -39,7 +39,7 @@ pub struct CommonEvent {
 }
 
 impl EventFmt for CommonEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         match format.time_format {
             TimeFormat::MonotonicTimestamp => write!(f, "{}", self.timestamp)?,
             TimeFormat::UtcDate => match format.monotonic_offset {

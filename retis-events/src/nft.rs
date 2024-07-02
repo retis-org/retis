@@ -1,7 +1,7 @@
 use std::{fmt, str};
 
 use super::*;
-use crate::event_section;
+use crate::{event_section, Formatter};
 
 /// Nft event section
 #[event_section("nft")]
@@ -17,7 +17,7 @@ pub struct NftEvent {
 }
 
 impl EventFmt for NftEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(
             f,
             "table {} ({}) chain {} ({})",
