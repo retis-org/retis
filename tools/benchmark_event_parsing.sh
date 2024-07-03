@@ -1,6 +1,6 @@
 #!/bin/bash
 
-make bench V=1
+make bench -j$(nproc)
 
 time_first=0
 time_1m=0
