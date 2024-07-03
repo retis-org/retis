@@ -9,7 +9,7 @@ use anyhow::{bail, Result};
 use crate::{
     core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
     events::*,
-    helpers,
+    helpers, raw_event_section,
 };
 
 /// Event data types supported by the ovs module.
@@ -79,7 +79,7 @@ pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection, event: &mut OvsEven
 }
 
 /// OVS action event data.
-#[repr(C)]
+#[raw_event_section]
 struct BpfActionEvent {
     /// Action to be executed.
     action: u8,
@@ -152,7 +152,7 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
 }
 
 /// OVS action tracking event data.
-#[repr(C)]
+#[raw_event_section]
 struct BpfActionTrackEvent {
     /// Queue id.
     queue_id: u32,
@@ -225,13 +225,19 @@ pub(super) fn unmarshall_recirc(raw_section: &BpfRawSection, event: &mut OvsEven
 }
 
 pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    #[repr(C)]
+    #[repr(C, packed)]
     union IP {
         ipv4: u32,
         ipv6: u128,
     }
 
-    #[repr(C, packed)]
+    impl Default for IP {
+        fn default() -> Self {
+            IP { ipv6: 0 }
+        }
+    }
+
+    #[raw_event_section]
     struct BpfConntrackAction {
         flags: u32,
         zone_id: u16,
@@ -239,19 +245,6 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
         max_addr: IP,
         min_port: u16,
         max_port: u16,
-    }
-
-    impl Default for BpfConntrackAction {
-        fn default() -> Self {
-            BpfConntrackAction {
-                flags: 0,
-                zone_id: 0,
-                min_addr: IP { ipv6: 0 },
-                max_addr: IP { ipv6: 0 },
-                min_port: 0,
-                max_port: 0,
-            }
-        }
     }
 
     let raw = parse_raw_section::<BpfConntrackAction>(raw_section)?;

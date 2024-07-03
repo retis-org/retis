@@ -48,7 +48,7 @@ struct nft_event {
 	s64 c_handle;
 	s64 r_handle;
 	u8 policy;
-} __attribute__((packed));
+};
 
 /* Specialized macro. Deals with different types with similar layout. */
 #define __nft_get_rule_handle(__info, __verdict, __rule) ({	\

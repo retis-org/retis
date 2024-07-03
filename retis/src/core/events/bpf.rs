@@ -20,6 +20,7 @@ use plain::Plain;
 use crate::{
     events::{CommonEvent, TaskEvent, *},
     helpers::signals::Running,
+    raw_event_section,
 };
 
 /// Raw event sections for common.
@@ -439,7 +440,7 @@ impl RawEventSectionFactory for CommonEventFactory {
 event_byte_array!(TaskName, 64);
 
 /// Task information retrieved in common probes.
-#[repr(C)]
+#[raw_event_section]
 struct RawTaskEvent {
     /// pid/tgid.
     pid: u64,

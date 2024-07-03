@@ -13,7 +13,7 @@ use crate::{
         inspect::inspector,
     },
     events::*,
-    helpers,
+    helpers, raw_event_section,
 };
 
 /// Raw sections of the Ct event.
@@ -43,22 +43,21 @@ impl Default for IP {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-#[repr(C, packed)]
+#[derive(Clone, Copy)]
+#[raw_event_section]
 struct IpProto {
     addr: IP,
     data: u16,
 }
 
-#[derive(Clone, Copy, Default)]
-#[repr(C, packed)]
+#[derive(Clone, Copy)]
+#[raw_event_section]
 struct NfConnTuple {
     src: IpProto,
     dst: IpProto,
 }
 
-#[derive(Default)]
-#[repr(C, packed)]
+#[raw_event_section]
 struct RawCtEvent {
     flags: u32,
     zone_id: u16,

@@ -19,7 +19,7 @@ struct kernel_event {
 	/* values from enum kernel_probe_type */
 	u8 type;
 	long stack_id;
-} __attribute__((packed));
+};
 
 /* Per-probe configuration; keep in sync with its Rust counterpart in
  * core::probe::kernel::config.

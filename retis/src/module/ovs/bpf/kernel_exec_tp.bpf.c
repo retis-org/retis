@@ -41,20 +41,19 @@ struct exec_recirc {
 #define R_OVS_CT_NAT_RANGE_PERSISTENT		(1 << 10)
 #define R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY	(1 << 11)
 
+union exec_ip {
+	u32 addr4;
+	u128 addr6;
+} __attribute((packed))__;
+
 struct exec_ct {
 	u32 flags;
 	u16 zone_id;
-	union {
-		u32 min_addr4;
-		u128 min_addr6;
-	};
-	union {
-		u32 max_addr4;
-		u128 max_addr6;
-	};
+	union exec_ip min;
+	union exec_ip max;
 	u16 min_port;
 	u16 max_port;
-} __attribute__((packed));
+};
 
 static __always_inline void fill_nat(struct ovs_conntrack_info *info,
 				     struct exec_ct *ct)
@@ -77,18 +76,18 @@ static __always_inline void fill_nat(struct ovs_conntrack_info *info,
 	if (info->range.flags & NF_NAT_RANGE_MAP_IPS) {
 		ct->flags |= R_OVS_CT_NAT_RANGE_MAP_IPS;
 		if (info->family == NFPROTO_IPV4) {
-			bpf_probe_read_kernel(&ct->min_addr4,
-					      sizeof(ct->min_addr4),
+			bpf_probe_read_kernel(&ct->min.addr4,
+					      sizeof(ct->min.addr4),
 					      &info->range.min_addr.ip);
-			bpf_probe_read_kernel(&ct->max_addr4,
-					      sizeof(ct->max_addr4),
+			bpf_probe_read_kernel(&ct->max.addr4,
+					      sizeof(ct->max.addr4),
 					      &info->range.max_addr.ip);
 		} else if (info->family == NFPROTO_IPV6) {
-			bpf_probe_read_kernel(&ct->min_addr6,
-					      sizeof(ct->min_addr6),
+			bpf_probe_read_kernel(&ct->min.addr6,
+					      sizeof(ct->min.addr6),
 					      &info->range.min_addr.in6);
-			bpf_probe_read_kernel(&ct->max_addr6,
-					      sizeof(ct->max_addr6),
+			bpf_probe_read_kernel(&ct->max.addr6,
+					      sizeof(ct->max.addr6),
 					      &info->range.max_addr.in6);
 		}
 	}
