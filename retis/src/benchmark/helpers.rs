@@ -5,7 +5,7 @@ use anyhow::Result;
 use crate::{
     core::{events::*, probe::kernel::RawKernelEvent},
     events::*,
-    module::skb::bpf::*,
+    module::{ct::bpf::*, skb::bpf::*},
 };
 
 /// Raw event sections can implement this trait to provide a way to build a raw
@@ -56,6 +56,8 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     RawDevEvent::build_raw(&mut event)?;
     RawNsEvent::build_raw(&mut event)?;
     RawPacketEvent::build_raw(&mut event)?;
+    RawCtMetaEvent::build_raw(&mut event)?;
+    RawCtEvent::build_raw(&mut event)?;
 
     // Construct the raw event.
     let size = event.len() as u16;

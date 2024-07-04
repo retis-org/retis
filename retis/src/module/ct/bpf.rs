@@ -30,6 +30,11 @@ pub(super) const RETIS_CT_PROTO_TCP: u32 = 1 << 4;
 pub(super) const RETIS_CT_PROTO_UDP: u32 = 1 << 5;
 pub(super) const RETIS_CT_PROTO_ICMP: u32 = 1 << 6;
 
+#[raw_event_section]
+pub(crate) struct RawCtMetaEvent {
+    state: u8,
+}
+
 #[derive(Clone, Copy)]
 #[repr(C, packed)]
 union IP {
@@ -58,7 +63,7 @@ struct NfConnTuple {
 }
 
 #[raw_event_section]
-struct RawCtEvent {
+pub(crate) struct RawCtEvent {
     flags: u32,
     zone_id: u16,
     orig: NfConnTuple,
@@ -77,7 +82,7 @@ impl RawEventSectionFactory for CtEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = CtEvent {
             state: {
-                let raw = parse_raw_section::<u8>(
+                let raw = parse_raw_section::<RawCtMetaEvent>(
                     raw_sections
                         .iter()
                         .find(|s| s.header.data_type as u64 == SECTION_META)
@@ -87,14 +92,14 @@ impl RawEventSectionFactory for CtEventFactory {
                 use CtState::*;
                 // These values must be kept in sync with the ones defined in:
                 // include/uapi/linux/netfilter/nf_conntrack_common.h
-                match raw {
+                match raw.state {
                     0 => Established,
                     1 => Related,
                     2 => New,
                     3 => Reply,
                     4 => RelatedReply,
                     7 => Untracked,
-                    _ => bail!("ct: unsupported ct state {}", raw),
+                    _ => bail!("ct: unsupported ct state {}", raw.state),
                 }
             },
             base: self.unmarshal_ct(
@@ -266,5 +271,42 @@ impl CtEventFactory {
             },
             tcp_state,
         })
+    }
+}
+
+#[cfg(feature = "benchmark")]
+pub(crate) mod benchmark {
+    use anyhow::Result;
+
+    use super::*;
+    use crate::{benchmark::helpers::*, events::SectionId};
+
+    impl RawSectionBuilder for RawCtMetaEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let data = RawCtMetaEvent::default();
+            build_raw_section(
+                out,
+                SectionId::Ct.to_u8(),
+                SECTION_META as u8,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
+    }
+
+    impl RawSectionBuilder for RawCtEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let data = RawCtEvent {
+                flags: RETIS_CT_DIR_REPLY | RETIS_CT_IPV4 | RETIS_CT_PROTO_TCP,
+                ..Default::default()
+            };
+            build_raw_section(
+                out,
+                SectionId::Ct.to_u8(),
+                SECTION_BASE_CONN as u8,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
     }
 }
