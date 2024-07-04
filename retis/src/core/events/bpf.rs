@@ -443,7 +443,7 @@ event_byte_array!(TaskName, 64);
 
 /// Task information retrieved in common probes.
 #[raw_event_section]
-struct RawTaskEvent {
+pub(crate) struct RawTaskEvent {
     /// pid/tgid.
     pid: u64,
     /// Current task name.
@@ -566,8 +566,12 @@ pub(crate) type SectionFactories = HashMap<SectionId, Box<dyn EventSectionFactor
 pub(crate) mod benchmark {
     use anyhow::Result;
 
-    use super::RawCommonEvent;
-    use crate::{benchmark::helpers::*, core::events::COMMON_SECTION_CORE, events::SectionId};
+    use super::{RawCommonEvent, RawTaskEvent};
+    use crate::{
+        benchmark::helpers::*,
+        core::events::{COMMON_SECTION_CORE, COMMON_SECTION_TASK},
+        events::SectionId,
+    };
 
     impl RawSectionBuilder for RawCommonEvent {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
@@ -576,6 +580,24 @@ pub(crate) mod benchmark {
                 out,
                 SectionId::Common.to_u8(),
                 COMMON_SECTION_CORE as u8,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
+    }
+
+    impl RawSectionBuilder for RawTaskEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let mut data = RawTaskEvent::default();
+            data.comm.0[0] = b'r';
+            data.comm.0[1] = b'e';
+            data.comm.0[2] = b't';
+            data.comm.0[3] = b'i';
+            data.comm.0[4] = b's';
+            build_raw_section(
+                out,
+                SectionId::Common.to_u8(),
+                COMMON_SECTION_TASK as u8,
                 &mut as_u8_vec(&data),
             );
             Ok(())

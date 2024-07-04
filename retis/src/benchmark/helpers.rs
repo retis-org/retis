@@ -46,6 +46,7 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
 
     // Build sections.
     RawCommonEvent::build_raw(&mut event)?;
+    RawTaskEvent::build_raw(&mut event)?;
 
     // Construct the raw event.
     let size = event.len() as u16;
