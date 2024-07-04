@@ -510,14 +510,14 @@ pub(super) const BPF_EVENTS_MAX: u32 = 8 * 1024;
 
 /// Size of the raw data buffer of a BPF event. Please keep synced with its BPF
 /// counterpart.
-pub(super) const BPF_RAW_EVENT_DATA_SIZE: usize = 1024 - 2 /* remove the size field */;
+pub(crate) const BPF_RAW_EVENT_DATA_SIZE: usize = 1024 - 2 /* remove the size field */;
 
 /// Raw event format shared between the Rust and BPF part. Please keep in sync
 /// with its BPF counterpart.
 #[repr(C, packed)]
-pub(super) struct RawEvent {
-    size: u16,
-    data: [u8; BPF_RAW_EVENT_DATA_SIZE],
+pub(crate) struct RawEvent {
+    pub(crate) size: u16,
+    pub(crate) data: [u8; BPF_RAW_EVENT_DATA_SIZE],
 }
 
 unsafe impl Plain for RawEvent {}
@@ -535,7 +535,7 @@ pub(crate) struct BpfRawSection<'a> {
 #[repr(C, packed)]
 #[derive(Clone, Copy, Default)]
 pub(crate) struct BpfRawSectionHeader {
-    pub(super) owner: u8,
+    pub(crate) owner: u8,
     pub(crate) data_type: u8,
     pub(crate) size: u16,
 }
