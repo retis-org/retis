@@ -54,6 +54,7 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     RawKernelEvent::build_raw(&mut event)?;
     SkbTrackingEvent::build_raw(&mut event)?;
     RawDevEvent::build_raw(&mut event)?;
+    RawNsEvent::build_raw(&mut event)?;
 
     // Construct the raw event.
     let size = event.len() as u16;

@@ -167,7 +167,7 @@ pub(super) fn unmarshal_dev(raw_section: &BpfRawSection) -> Result<Option<SkbDev
 
 /// Net namespace information retrieved from skbs.
 #[raw_event_section]
-struct RawNsEvent {
+pub(crate) struct RawNsEvent {
     /// Net namespace id.
     netns: u32,
 }
@@ -392,6 +392,19 @@ pub(crate) mod benchmark {
                 out,
                 SectionId::Skb.to_u8(),
                 SECTION_DEV as u8,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
+    }
+
+    impl RawSectionBuilder for RawNsEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let data = RawNsEvent::default();
+            build_raw_section(
+                out,
+                SectionId::Skb.to_u8(),
+                SECTION_NS as u8,
                 &mut as_u8_vec(&data),
             );
             Ok(())
