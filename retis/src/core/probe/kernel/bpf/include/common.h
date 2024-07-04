@@ -268,7 +268,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	ti->pid = bpf_get_current_pid_tgid();
 	bpf_get_current_comm(ti->comm, sizeof(ti->comm));
 
-	k = get_event_section(event, KERNEL, 1, sizeof(*k));
+	k = get_event_section(event, KERNEL, 0, sizeof(*k));
 	if (!k)
 		goto discard_event;
 

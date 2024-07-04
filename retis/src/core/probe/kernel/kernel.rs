@@ -8,7 +8,9 @@ use super::{config::ProbeConfig, inspect::inspect_symbol};
 use crate::EventSectionFactory;
 use crate::{
     core::{
-        events::{BpfRawSection, EventSectionFactory, RawEventSectionFactory},
+        events::{
+            parse_single_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory,
+        },
         kernel::Symbol,
         probe::{
             common::{Counters, CountersKey},
@@ -16,6 +18,7 @@ use crate::{
         },
     },
     events::*,
+    raw_event_section,
 };
 
 // Split to exclude from tests.
@@ -112,29 +115,19 @@ impl KernelEventFactory {
     }
 }
 
+#[raw_event_section]
+pub(crate) struct RawKernelEvent {
+    symbol: u64,
+    r#type: u8,
+    stack_id: u64,
+}
+
 impl RawEventSectionFactory for KernelEventFactory {
-    fn create(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        if raw_sections.len() != 1 {
-            bail!("Kernel event from BPF must be a single section");
-        }
-
-        // Unwrap as we just checked the vector contains 1 element.
-        let raw = raw_sections.pop().unwrap();
-
-        if raw.header.data_type != 1 {
-            bail!("Unknown data type");
-        }
-
-        if raw.data.len() != 17 {
-            bail!(
-                "Section data is not the expected size {} != 17",
-                raw.data.len()
-            );
-        }
-
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+        let raw = parse_single_raw_section::<RawKernelEvent>(SectionId::Kernel, &raw_sections)?;
         let mut event = KernelEvent::default();
 
-        let symbol_addr = u64::from_ne_bytes(raw.data[0..8].try_into()?);
+        let symbol_addr = raw.symbol;
         event.symbol = match self.symbols_cache.get(&symbol_addr) {
             Some(name) => name.clone(),
             None => {
@@ -144,7 +137,7 @@ impl RawEventSectionFactory for KernelEventFactory {
             }
         };
 
-        event.probe_type = match raw.data[8] {
+        event.probe_type = match raw.r#type {
             0 => "kprobe",
             1 => "kretprobe",
             2 => "raw_tracepoint",
@@ -153,11 +146,28 @@ impl RawEventSectionFactory for KernelEventFactory {
         .to_string();
 
         #[cfg(not(test))]
-        self.unmarshal_stackid(
-            &mut event,
-            i64::from_ne_bytes(raw.data[9..17].try_into()?) as i32,
-        )?;
+        self.unmarshal_stackid(&mut event, raw.stack_id as i32)?;
 
         Ok(Box::new(event))
+    }
+}
+
+#[cfg(feature = "benchmark")]
+pub(crate) mod benchmark {
+    use anyhow::Result;
+
+    use super::RawKernelEvent;
+    use crate::{benchmark::helpers::*, core::kernel::Symbol, events::SectionId};
+
+    impl RawSectionBuilder for RawKernelEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let data = RawKernelEvent {
+                symbol: Symbol::from_name("openvswitch:ovs_do_execute_action")?.addr()?,
+                r#type: 2, // Raw tracepoint.
+                stack_id: u64::MAX,
+            };
+            build_raw_section(out, SectionId::Kernel.to_u8(), 0, &mut as_u8_vec(&data));
+            Ok(())
+        }
     }
 }
