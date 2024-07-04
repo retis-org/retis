@@ -2,7 +2,10 @@ use std::{mem, slice};
 
 use anyhow::Result;
 
-use crate::core::{events::*, probe::kernel::RawKernelEvent};
+use crate::{
+    core::{events::*, probe::kernel::RawKernelEvent},
+    events::*,
+};
 
 /// Raw event sections can implement this trait to provide a way to build a raw
 /// event represented as an u8 vector.
@@ -48,6 +51,7 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     RawCommonEvent::build_raw(&mut event)?;
     RawTaskEvent::build_raw(&mut event)?;
     RawKernelEvent::build_raw(&mut event)?;
+    SkbTrackingEvent::build_raw(&mut event)?;
 
     // Construct the raw event.
     let size = event.len() as u16;
