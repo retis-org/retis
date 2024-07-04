@@ -129,7 +129,7 @@ pub(super) fn unmarshal_icmpv6(icmp: &Icmpv6Packet) -> Result<SkbIcmpV6Event> {
 
 /// Net device information retrieved from skbs.
 #[raw_event_section]
-struct RawDevEvent {
+pub(crate) struct RawDevEvent {
     /// Net device name.
     dev_name: [u8; 16],
     /// Net device index.
@@ -370,5 +370,31 @@ impl RawEventSectionFactory for SkbEventFactory {
         }
 
         Ok(Box::new(event))
+    }
+}
+
+#[cfg(feature = "benchmark")]
+pub(crate) mod benchmark {
+    use anyhow::Result;
+
+    use super::*;
+    use crate::{benchmark::helpers::*, events::SectionId};
+
+    impl RawSectionBuilder for RawDevEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let data = RawDevEvent {
+                dev_name: [
+                    b'e', b't', b'h', b'0', b'\0', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                ],
+                ..Default::default()
+            };
+            build_raw_section(
+                out,
+                SectionId::Skb.to_u8(),
+                SECTION_DEV as u8,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
     }
 }
