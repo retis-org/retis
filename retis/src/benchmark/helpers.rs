@@ -44,6 +44,9 @@ pub(crate) fn as_u8_vec<T: Sized>(input: &T) -> Vec<u8> {
 pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     let mut event = Vec::with_capacity(BPF_RAW_EVENT_DATA_SIZE);
 
+    // Build sections.
+    RawCommonEvent::build_raw(&mut event)?;
+
     // Construct the raw event.
     let size = event.len() as u16;
     event.append(&mut vec![0; BPF_RAW_EVENT_DATA_SIZE - event.len()]);

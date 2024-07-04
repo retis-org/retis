@@ -408,6 +408,13 @@ pub(crate) fn parse_single_raw_section<'a, T>(
     parse_raw_section::<T>(&raw_sections[0])
 }
 
+/// Common information from all BPF events.
+#[raw_event_section]
+pub(crate) struct RawCommonEvent {
+    timestamp: u64,
+    smp_id: u32,
+}
+
 #[derive(Default, crate::EventSectionFactory)]
 pub(crate) struct CommonEventFactory {}
 
@@ -418,15 +425,10 @@ impl RawEventSectionFactory for CommonEventFactory {
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
                 COMMON_SECTION_CORE => {
-                    if section.data.len() != 12 {
-                        bail!(
-                            "Core part of the common event is not the expected size {} != 12",
-                            section.data.len()
-                        );
-                    }
+                    let raw = parse_raw_section::<RawCommonEvent>(section)?;
 
-                    common.timestamp = u64::from_ne_bytes(section.data[0..8].try_into()?);
-                    common.smp_id = u32::from_ne_bytes(section.data[8..12].try_into()?);
+                    common.timestamp = raw.timestamp;
+                    common.smp_id = raw.smp_id;
                 }
                 COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
                 _ => bail!("Unknown data type"),
@@ -559,6 +561,27 @@ pub(crate) trait RawEventSectionFactory {
 
 /// Type alias to refer to the commonly used EventSectionFactory HashMap.
 pub(crate) type SectionFactories = HashMap<SectionId, Box<dyn EventSectionFactory>>;
+
+#[cfg(feature = "benchmark")]
+pub(crate) mod benchmark {
+    use anyhow::Result;
+
+    use super::RawCommonEvent;
+    use crate::{benchmark::helpers::*, core::events::COMMON_SECTION_CORE, events::SectionId};
+
+    impl RawSectionBuilder for RawCommonEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let data = RawCommonEvent::default();
+            build_raw_section(
+                out,
+                SectionId::Common.to_u8(),
+                COMMON_SECTION_CORE as u8,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
