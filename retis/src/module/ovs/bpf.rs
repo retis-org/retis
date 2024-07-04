@@ -80,7 +80,7 @@ pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection, event: &mut OvsEven
 
 /// OVS action event data.
 #[raw_event_section]
-struct BpfActionEvent {
+pub(crate) struct BpfActionEvent {
     /// Action to be executed.
     action: u8,
     /// Recirculation id.
@@ -369,5 +369,29 @@ impl RawEventSectionFactory for OvsEventFactory {
         }
 
         Ok(Box::new(event))
+    }
+}
+
+#[cfg(feature = "benchmark")]
+pub(crate) mod benchmark {
+    use anyhow::Result;
+
+    use super::*;
+    use crate::{benchmark::helpers::*, events::SectionId};
+
+    impl RawSectionBuilder for BpfActionEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let data = BpfActionEvent {
+                action: 1,
+                recirc_id: 3,
+            };
+            build_raw_section(
+                out,
+                SectionId::Ovs.to_u8(),
+                OvsDataType::ActionExec as u8,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
     }
 }
