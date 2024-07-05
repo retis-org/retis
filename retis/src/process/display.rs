@@ -73,7 +73,7 @@ impl PrintSeries {
         }
 
         let mut res = Vec::new();
-        let mut delim = "+ ";
+        let mut delim = "↳ ";
         for line in lines.split('\n') {
             res.push(format!("{}{}{}", " ".repeat(n_spaces), delim, line));
             delim = "  ";
