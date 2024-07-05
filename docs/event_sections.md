@@ -52,3 +52,15 @@ The `collector` sections are described in the collector specific pages.
 - `event index`: when an event is part of a series of events (this is only
   available at post-processing time when using the `sort` sub-command), this
   indicates the index of the event in the series.
+
+## Startup section
+
+```none
+Retis version {version}
+```
+
+Contains the `version` of the Retis binary that collected the event series as
+well as timing information for being able to display time in UTC at
+post-processing time. Only the `version` is shown in the output.
+
+This section is emitted when a collection is started.
