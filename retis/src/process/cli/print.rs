@@ -46,7 +46,7 @@ impl SubCommandParserRunner for Print {
             .time_format(self.time_format.into());
 
         // Formatter & printer for events.
-        let mut output = PrintSingle::new(Box::new(stdout()), PrintSingleFormat::Text(format));
+        let mut output = PrintEvent::new(Box::new(stdout()), PrintEventFormat::Text(format));
 
         use EventResult::*;
         while run.running() {
