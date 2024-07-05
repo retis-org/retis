@@ -10,7 +10,7 @@ or metadata sections not linked to a particular packet or kernel event (by
 default those are not shown).
 
 ```none
-<common> <kernel or userspace> <tracking> <drop> <stack trace> <collector...>
+<common> <kernel or userspace> <tracking> <drop> <stack trace> <collector...> <metadata...>
 ```
 
 The `collector` sections are described in the collector specific pages.
@@ -51,3 +51,17 @@ The `collector` sections are described in the collector specific pages.
 - `event index`: when an event is part of a series of events (this is only
   available at post-processing time when using the `sort` sub-command), this
   indicates the index of the event in the series.
+
+## Metadata sections
+
+Those special sections can be part of an event in addition to the above
+sections, or be the only data in an event. Those kind of events contains global
+information not related to a kernel event.
+
+### Common metadata section
+
+```none
+Retis version {version}
+```
+
+Contains the `version` of the Retis binary that collected the event series.
