@@ -5,8 +5,8 @@ use anyhow::Result;
 use super::series::EventSeries;
 use crate::events::*;
 
-/// Select the format to follow when printing events with `PrintSingle`.
-pub(crate) enum PrintSingleFormat {
+/// Select the format to follow when printing events with `PrintEvent`.
+pub(crate) enum PrintEventFormat {
     /// Text(format): display the events in a text representation following the
     /// rules defined in `format` (see `DisplayFormat`).
     Text(DisplayFormat),
@@ -15,20 +15,20 @@ pub(crate) enum PrintSingleFormat {
 }
 
 /// Handles event individually and write to a `Write`.
-pub(crate) struct PrintSingle {
+pub(crate) struct PrintEvent {
     writer: Box<dyn Write>,
-    format: PrintSingleFormat,
+    format: PrintEventFormat,
 }
 
-impl PrintSingle {
-    pub(crate) fn new(writer: Box<dyn Write>, format: PrintSingleFormat) -> Self {
+impl PrintEvent {
+    pub(crate) fn new(writer: Box<dyn Write>, format: PrintEventFormat) -> Self {
         Self { writer, format }
     }
 
     /// Process events one by one (format & print).
     pub(crate) fn process_one(&mut self, e: &Event) -> Result<()> {
         match self.format {
-            PrintSingleFormat::Text(ref mut format) => {
+            PrintEventFormat::Text(ref mut format) => {
                 if let Some(common) = e.get_section::<StartupEvent>(SectionId::Startup) {
                     format.monotonic_offset = Some(common.clock_monotonic_offset);
                 }
@@ -40,7 +40,7 @@ impl PrintSingle {
                         .write_all(if format.multiline { b"\n\n" } else { b"\n" })?;
                 }
             }
-            PrintSingleFormat::Json => {
+            PrintEventFormat::Json => {
                 let mut event = serde_json::to_vec(&e.to_json())?;
                 event.push(b'\n');
                 self.writer.write_all(&event)?;
@@ -59,11 +59,11 @@ impl PrintSingle {
 /// Handles event series formatting and writing to a `Write`.
 pub(crate) struct PrintSeries {
     writer: Box<dyn Write>,
-    format: PrintSingleFormat,
+    format: PrintEventFormat,
 }
 
 impl PrintSeries {
-    pub(crate) fn new(writer: Box<dyn Write>, format: PrintSingleFormat) -> Self {
+    pub(crate) fn new(writer: Box<dyn Write>, format: PrintEventFormat) -> Self {
         Self { writer, format }
     }
 
@@ -86,7 +86,7 @@ impl PrintSeries {
     pub(crate) fn process_one(&mut self, series: &EventSeries) -> Result<()> {
         let mut content = String::new();
         match self.format {
-            PrintSingleFormat::Text(ref mut format) => {
+            PrintEventFormat::Text(ref mut format) => {
                 let mut indent = 0;
                 for event in series.events.iter() {
                     if let Some(common) = event.get_section::<StartupEvent>(SectionId::Startup) {
@@ -105,7 +105,7 @@ impl PrintSeries {
                     self.writer.write_all(content.as_bytes())?;
                 }
             }
-            PrintSingleFormat::Json => {
+            PrintEventFormat::Json => {
                 let mut event = serde_json::to_vec(&series.to_json())?;
                 event.push(b'\n');
                 self.writer.write_all(&event)?;

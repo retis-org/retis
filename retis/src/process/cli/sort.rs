@@ -98,7 +98,7 @@ impl SubCommandParserRunner for Sort {
                         .open(&out)
                         .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
                 )),
-                PrintSingleFormat::Json,
+                PrintEventFormat::Json,
             ));
         }
 
@@ -113,7 +113,7 @@ impl SubCommandParserRunner for Sort {
 
             printers.push(PrintSeries::new(
                 Box::new(stdout()),
-                PrintSingleFormat::Text(format),
+                PrintEventFormat::Text(format),
             ));
         }
 

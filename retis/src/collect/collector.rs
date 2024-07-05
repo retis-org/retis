@@ -438,15 +438,15 @@ impl Collectors {
                 })
                 .monotonic_offset(monotonic_clock_offset()?);
 
-            printers.push(PrintSingle::new(
+            printers.push(PrintEvent::new(
                 Box::new(io::stdout()),
-                PrintSingleFormat::Text(format),
+                PrintEventFormat::Text(format),
             ));
         }
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            printers.push(PrintSingle::new(
+            printers.push(PrintEvent::new(
                 Box::new(BufWriter::new(
                     OpenOptions::new()
                         .create(true)
@@ -455,7 +455,7 @@ impl Collectors {
                         .open(out)
                         .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
                 )),
-                PrintSingleFormat::Json,
+                PrintEventFormat::Json,
             ));
         }
 
