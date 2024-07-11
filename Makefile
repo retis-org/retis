@@ -95,7 +95,7 @@ $(EBPF_HOOKS):  OUT_NAME := HOOK
 $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	$(call out_console,$(OUT_NAME),building $@ ...)
 	CFLAGS_INCLUDES="$(INCLUDES)" \
-	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@ $(TGT)
+	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@
 
 clean-ebpf:
 	$(call out_console,CLEAN,cleaning ebpf progs...)
