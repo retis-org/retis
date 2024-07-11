@@ -5,12 +5,12 @@ OBJCOPY := llvm-objcopy
 
 CARGO := cargo
 DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
-CARGO_CFG_TARGET_ARCH := $(if $(ARCH),$(ARCH),$(DEFAULT_ARCH))
+ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$(DEFAULT_ARCH))
 
 RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
 
-export LLC CFLAGS CLANG CARGO_CFG_TARGET_ARCH OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
+export ARCH CFLAGS CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
 
 PRINT = echo
 
