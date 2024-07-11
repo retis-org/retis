@@ -97,6 +97,19 @@ $ mkdir -p /etc/retis/profiles
 $ cp profiles/* /etc/retis/profiles
 ```
 
+#### Cross-compilation
+
+Retis can be cross-compiled and is currently supported on x86, x86-64 and
+aarch64. The target is defined using the `CARGO_BUILD_TARGET` environment
+variable, which is documented in the
+[Rust reference](https://doc.rust-lang.org/cargo/reference/config.html#buildtarget).
+
+```none
+$ CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu make release
+$ file ./target/aarch64-unknown-linux-gnu/release/retis
+[...] ARM aarch64, [...]
+```
+
 ### Running as non-root
 
 Retis can run as non-root if it has the right capabilities. Note that doing this
