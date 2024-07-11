@@ -22,6 +22,7 @@ BPF_CFLAGS := -target bpf \
               -Werror \
               -D__TARGET_ARCH_$(BPF_ARCH) \
 	      -O2
+CFLAGS += $(CFLAGS_INCLUDES)
 
 ALL_REQ := $(OBJS)
 
