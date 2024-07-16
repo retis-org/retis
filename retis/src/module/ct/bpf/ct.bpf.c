@@ -3,6 +3,14 @@
 
 #include <common.h>
 
+/* Ct event sections.
+ *
+ * Please keep in sync with its Rust counterpart in module::ct::bpf.
+ */
+#define SECTION_META		0
+#define SECTION_BASE_CONN	1
+#define SECTION_PARENT_CONN	2
+
 /* Retis-specific flags */
 #define RETIS_CT_DIR_ORIG	1 << 0
 #define RETIS_CT_DIR_REPLY	1 << 1
@@ -26,6 +34,10 @@
 #define ORIG tuplehash[IP_CT_DIR_ORIGINAL].tuple
 #define REPLY tuplehash[IP_CT_DIR_REPLY].tuple
 
+struct ct_meta_event {
+	u8 state;
+} __attribute__((packed));
+
 struct nf_conn_addr_proto {
 	union {
 		u32 ip;
@@ -46,9 +58,7 @@ struct ct_event {
 	u16 zone_id;
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
-	u8 state;
 	u8 tcp_state;
-
 } __attribute__((packed));
 
 static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
@@ -172,6 +182,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 
 DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	struct nf_conn *nf_conn;
+	struct ct_meta_event *m;
 	struct sk_buff *skb;
 	unsigned long nfct;
 	struct ct_event *e;
@@ -199,12 +210,27 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	if (!ct_protocol_is_supported(l3num, protonum))
 		return 0;
 
-	e = get_event_section(event, COLLECTOR_CT, 0, sizeof(*e));
+	e = get_event_section(event, COLLECTOR_CT, SECTION_BASE_CONN,
+			      sizeof(*e));
 	if (!e)
 		return 0;
-
-	e->state = (u8) (nfct & NFCT_INFOMASK);
 	process_nf_conn(e, nf_conn, l3num, protonum);
+
+	nf_conn = BPF_CORE_READ(nf_conn, master);
+	if (nf_conn) {
+		e = get_event_section(event, COLLECTOR_CT, SECTION_PARENT_CONN,
+				      sizeof(*e));
+		if (!e)
+			return 0;
+		process_nf_conn(e, nf_conn,
+				(u16)BPF_CORE_READ(nf_conn, ORIG.src.l3num),
+				(u8)BPF_CORE_READ(nf_conn, ORIG.dst.protonum));
+	}
+
+	m = get_event_section(event, COLLECTOR_CT, SECTION_META, sizeof(*m));
+	if (!m)
+		return 0;
+	m->state = (u8)(nfct & NFCT_INFOMASK);
 
 	return 0;
 )

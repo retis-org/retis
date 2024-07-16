@@ -9,7 +9,11 @@ specific data. Currently supported protocols are IPv4/6, TCP, UDP and ICMP.
 
 ## Events
 
-The `ct` events start with the state information,
+The `ct` events will be constructed with the following.
+
+### Metadata
+
+State information,
 
 ```none
 ct_state {state}
@@ -18,7 +22,9 @@ ct_state {state}
 `state` is one of `ESTABLISHED`, `RELATED`, `NEW`, `REPLY`, `RELATED_REPLY` and
 `UNTRACKED.`
 
-Then the event is followed by a protocol specific part. For TCP and UDP,
+### Connection information
+
+This starts by a protocol specific part. For TCP and UDP,
 
 ```none
 {protocol name} ({TCP state if any}) orig [{src ip}.{src port} > {dst ip}.{dst port}]
@@ -34,3 +40,14 @@ icmp orig [{src ip} > {dst ip} type {type number} code {code number} id {id}]
 
 Then the event ends up with zone information, which can be one of `orig-zone
 {zone id}`, `reply-zone {zone id}` and `zone {zone id}`.
+
+### Parent connection information
+
+If available, the parent connection information is then shown as follow,
+
+```none
+parent [<parent connection information>]
+```
+
+The `<parent connection information>` has the same format as the connection
+information above.
