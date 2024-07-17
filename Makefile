@@ -130,7 +130,7 @@ help:
 	$(PRINT) '                        For further `cargo` customization please refer to configuration'
 	$(PRINT) '                        environment variables'
 	$(PRINT) '                        (https://doc.rust-lang.org/cargo/reference/environment-variables.html).'
-	$(PRINT) 'CARGO_CMD_OPTS      --  Changes `cargo` subcommand default behavior (e.g. --release for `build`).'
+	$(PRINT) 'CARGO_CMD_OPTS      --  Changes `cargo` subcommand default behavior (e.g. --features <features> for `build`).'
 	$(PRINT) 'CARGO_INSTALL_OPTS  --  Changes `cargo` install subcommand default behavior.'
 	$(PRINT) 'CARGO_OPTS          --  Changes `cargo` default behavior (e.g. --verbose).'
 	$(PRINT) 'NOVENDOR            --  Avoid to self detect and consume the vendored headers'
