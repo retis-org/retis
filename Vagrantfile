@@ -26,8 +26,8 @@ SCRIPT
 Vagrant.configure("2") do |config|
   config.vm.box_check_update = false
 
-  config.vm.define "f39" do |fedora|
-    fedora.vm.box = "fedora/39-cloud-base"
+  config.vm.define "x86_64-f40" do |fedora|
+    fedora.vm.box = "fedora/40-cloud-base"
 
     fedora.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     fedora.vm.provision "shell", inline: <<-SHELL
@@ -37,7 +37,7 @@ Vagrant.configure("2") do |config|
     fedora.vm.synced_folder ".", "/vagrant", type: "rsync"
   end
 
-  config.vm.define "rawhide" do |rawhide|
+  config.vm.define "x86_64-rawhide" do |rawhide|
     def get_box(pattern)
       require 'open-uri'
       require 'nokogiri'
@@ -59,7 +59,7 @@ Vagrant.configure("2") do |config|
     rawhide.vm.synced_folder ".", "/vagrant", type: "rsync"
   end
 
-  config.vm.define "c8s" do |centos|
+  config.vm.define "x86_64-c8s" do |centos|
     centos.vm.box = "generic/centos8s"
 
     centos.vm.provision "shell", inline: <<-SHELL
@@ -74,7 +74,7 @@ Vagrant.configure("2") do |config|
     centos.vm.synced_folder ".", "/vagrant", type: "rsync"
   end
 
-  config.vm.define "c9s" do |centos|
+  config.vm.define "x86_64-c9s" do |centos|
     centos.vm.box = "generic/centos9s"
 
     centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
@@ -86,7 +86,7 @@ Vagrant.configure("2") do |config|
     centos.vm.synced_folder ".", "/vagrant", type: "rsync"
   end
 
-  config.vm.define "jammy" do |jammy|
+  config.vm.define "x86_64-jammy" do |jammy|
     jammy.vm.box = "generic/ubuntu2204"
 
     jammy.vm.provision "shell", inline: <<-SHELL

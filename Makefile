@@ -5,12 +5,12 @@ OBJCOPY := llvm-objcopy
 
 CARGO := cargo
 DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
-CARGO_CFG_TARGET_ARCH := $(if $(ARCH),$(ARCH),$(DEFAULT_ARCH))
+ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$(DEFAULT_ARCH))
 
 RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
 
-export LLC CLANG CARGO_CFG_TARGET_ARCH OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
+export ARCH CFLAGS CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
 
 PRINT = echo
 
@@ -94,8 +94,8 @@ $(EBPF_PROBES): OUT_NAME := PROBE
 $(EBPF_HOOKS):  OUT_NAME := HOOK
 $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	$(call out_console,$(OUT_NAME),building $@ ...)
-	CFLAGS="$(INCLUDES)" \
-	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@ $(TGT)
+	CFLAGS_INCLUDES="$(INCLUDES)" \
+	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@
 
 clean-ebpf:
 	$(call out_console,CLEAN,cleaning ebpf progs...)
