@@ -1,33 +1,32 @@
 # Requirements
 
-All requirements are for commands collecting events, for now only `collect`.
+All the following requirements are for commands collecting events only; such as
+the `collect` sub-command.
 
-Mandatory requirements:
+- The Retis binary needs `CAP_SYS_ADMIN`, `CAP_BPF` and `CAP_SYSLOG` to be set.
+- The running kernel should have been compiled with the right
+  [set of options](#kernel-kconfig-options).
+- Access to `/sys/kernel/btf` and `/proc/kallsyms` to parse kernel functions and
+  types.
+- `debugfs` should be mounted to `/sys/kernel/debug` to allow filtering
+  functions and events.
 
-- Retis needs `CAP_SYS_ADMIN`, `CAP_BPF`, `CAP_SYSLOG` and access to all files
-  listed in the [requirements](#requirements).
+## Kernel Kconfig options
 
-- The following kernel configuration:
-  - `CONFIG_BPF_SYSCALL=y`.
-  - `CONFIG_DEBUG_INFO_BTF=y` to parse kernel functions and types.
+In order to collect events Retis requires some options to be set in the running
+kernel:
 
-- Access to `/sys/kernel/btf` and `/proc/kallsyms`.
-
-Not strictly required but best for user experience and feature scope:
-
-- The following kernel configuration:
-  - `CONFIG_KPROBES=y` to allow using kprobes.
-  - `CONFIG_PERF_EVENTS=y` to retrieve stack traces (& probably more).
-
-- `debugfs` mounted to `/sys/kernel/debug` to allow filtering functions and
-  events.
-
-- `/etc/os-release` to gather information about the current distribution.
+- `CONFIG_BPF_SYSCALL`
+- `CONFIG_DEBUG_FS`
+- `CONFIG_DEBUG_INFO_BTF`
+- `CONFIG_KALLSYMS_ALL`
+- `CONFIG_KPROBES`
+- `CONFIG_PERF_EVENTS` (to retrieve stack traces & probably more)
 
 ## Supported operating systems
 
-Those are operating systems we know are compatible with running Retis. Of course
-the list is not exhaustive (let us know if we can add new lines).
+Those are operating systems we know are compatible with running Retis. The list
+is not exhaustive and Retis should be able to run on other distributions.
 
 | Operating system | Notes                                                |
 | ---------------- | ---------------------------------------------------- |
@@ -35,5 +34,6 @@ the list is not exhaustive (let us know if we can add new lines).
 | RHEL9            |                                                      |
 | CentOS Stream 9  |                                                      |
 | RHEL8            | >= 8.6                                               |
+| CentOS Stream 8  | >= 8.6                                               |
 | Ubuntu Jammy     |                                                      |
 
