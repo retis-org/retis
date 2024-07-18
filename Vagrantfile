@@ -63,6 +63,14 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-8-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/8-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
+    # CentOS mirror URL changed but the c8s image is no longer being built. We
+    # have to fix them manually in order to install packages later.
+    centos.vm.provision "repos-fixup", type: "shell", inline: <<-SHELL
+       sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
+       sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
+       sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
+    SHELL
+
     centos.vm.provision "shell", inline: <<-SHELL
        dnf config-manager --set-enabled powertools
     SHELL
