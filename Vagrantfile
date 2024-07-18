@@ -28,7 +28,7 @@ def get_box(url, pattern)
   require 'nokogiri'
 
   doc = Nokogiri::HTML(URI.open(url))
-  box = doc.css('a').map { |link| link['href'] }.select { |alink| alink.include?(pattern) }.last
+  box = doc.css('a').map { |link| link['href'] }.select { |alink| pattern.match?(alink) }.last
   url + box
 end
 
@@ -48,7 +48,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "x86_64-rawhide" do |rawhide|
     rawhide.vm.box = "fedora-rawhide-cloud"
-    rawhide.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", "vagrant.libvirt.box")
+    rawhide.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
     rawhide.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     rawhide.vm.provision "shell", inline: <<-SHELL
