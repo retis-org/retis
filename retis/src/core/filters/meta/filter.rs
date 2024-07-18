@@ -545,7 +545,7 @@ mod tests {
     }
 
     #[test_case("==" ; "op is eq")]
-    #[test_case("!=" ; "op is neq")]
+    #[test_case("!=" ; "op is ne")]
     #[test_case("<" ; "op is lt")]
     #[test_case("<=" ; "op is le")]
     #[test_case(">" ; "op is gt")]
@@ -565,7 +565,7 @@ mod tests {
     }
 
     #[test_case("==", MetaCmp::Eq ; "op is eq")]
-    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is ne")]
     fn meta_filter_string(op_str: &'static str, op: MetaCmp) {
         let filter =
             FilterMeta::from_string(format!("sk_buff.dev.name {op_str} 'dummy0'").to_string())
@@ -600,7 +600,7 @@ mod tests {
     }
 
     #[test_case("==", MetaCmp::Eq ; "op is eq")]
-    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is ne")]
     #[test_case("<", MetaCmp::Lt ; "op is lt")]
     #[test_case("<=", MetaCmp::Le ; "op is le")]
     #[test_case(">", MetaCmp::Gt ; "op is gt")]
@@ -628,7 +628,7 @@ mod tests {
     }
 
     #[test_case("==", MetaCmp::Eq ; "op is eq")]
-    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is ne")]
     #[test_case("<", MetaCmp::Lt ; "op is lt")]
     #[test_case("<=", MetaCmp::Le ; "op is le")]
     #[test_case(">", MetaCmp::Gt ; "op is gt")]
