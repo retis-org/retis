@@ -36,7 +36,8 @@ Vagrant.configure("2") do |config|
   config.vm.box_check_update = false
 
   config.vm.define "x86_64-f40" do |fedora|
-    fedora.vm.box = "fedora/40-cloud-base"
+    fedora.vm.box = "fedora-40-cloud"
+    fedora.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/releases/40/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
     fedora.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     fedora.vm.provision "shell", inline: <<-SHELL
@@ -59,7 +60,8 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.define "x86_64-c8s" do |centos|
-    centos.vm.box = "generic/centos8s"
+    centos.vm.box = "centos-8-stream"
+    centos.vm.box_url = get_box("https://cloud.centos.org/centos/8-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
     centos.vm.provision "shell", inline: <<-SHELL
        dnf config-manager --set-enabled powertools
@@ -74,7 +76,8 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.define "x86_64-c9s" do |centos|
-    centos.vm.box = "generic/centos9s"
+    centos.vm.box = "centos-9-stream"
+    centos.vm.box_url = get_box("https://cloud.centos.org/centos/9-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
     centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "shell", inline: <<-SHELL
