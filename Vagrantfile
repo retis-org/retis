@@ -23,6 +23,15 @@ dnf install -y \
     python3 -m pip install pytest pyroute2
 SCRIPT
 
+def get_box(url, pattern)
+  require 'open-uri'
+  require 'nokogiri'
+
+  doc = Nokogiri::HTML(URI.open(url))
+  box = doc.css('a').map { |link| link['href'] }.select { |alink| alink.include?(pattern) }.last
+  url + box
+end
+
 Vagrant.configure("2") do |config|
   config.vm.box_check_update = false
 
@@ -38,18 +47,8 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.define "x86_64-rawhide" do |rawhide|
-    def get_box(pattern)
-      require 'open-uri'
-      require 'nokogiri'
-
-      url = "https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/"
-      doc = Nokogiri::HTML(URI.open(url))
-      box = doc.css('a').map { |link| link['href'] }.select { |alink| alink.include?(pattern) }.last
-      url + box
-    end
-
     rawhide.vm.box = "fedora-rawhide-cloud"
-    rawhide.vm.box_url = get_box("vagrant.libvirt.box")
+    rawhide.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", "vagrant.libvirt.box")
 
     rawhide.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     rawhide.vm.provision "shell", inline: <<-SHELL
