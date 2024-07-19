@@ -826,4 +826,58 @@ mod tests {
 
         Ok(filter.0[1].load_ref().clone())
     }
+
+    #[test]
+    fn meta_filter_cast() {
+        // Casting a field smaller than a pointer is not allowed
+        assert!(
+            FilterMeta::from_string(format!("sk_buff.cloned:~0x0:nf_conn").to_string()).is_err()
+        );
+        assert!(FilterMeta::from_string(format!("sk_buff.len:~0x0:nf_conn").to_string()).is_err());
+        assert!(
+            FilterMeta::from_string(format!("sk_buff.mac_len:~0x0:nf_conn").to_string()).is_err()
+        );
+        // Arrays cannot be casted
+        assert!(FilterMeta::from_string(format!("sk_buff.cb:~0x0:nf_conn").to_string()).is_err());
+        // Cast to non-walkable types is not allowed
+        assert!(
+            FilterMeta::from_string(format!("sk_buff._nfct:~0x0:u32.mark").to_string()).is_err()
+        );
+        // Casting a leaf is not allowed
+        assert!(
+            FilterMeta::from_string(format!("sk_buff._nfct.mark:~0x0:nf_conn").to_string())
+                .is_err()
+        );
+
+        let filter =
+            FilterMeta::from_string(format!("sk_buff._nfct:~0x0:nf_conn.mark").to_string())
+                .unwrap();
+        // Two for loads and one for the target
+        assert_eq!(filter.0.len(), 3);
+        let load = filter.0[1].load_ref();
+        // '_nfct' type_id=? bits_offset=832
+        assert_eq!(
+            *load,
+            MetaLoad {
+                r#type: PTR_BIT,
+                nmemb: 0,
+                offt: 104,
+                bf_size: 0,
+                mask: !0
+            }
+        );
+        // STRUCT 'nf_conn' size=248 vlen=14
+        //   'mark' type_id=? bits_offset=1344
+        let load = filter.0[2].load_ref();
+        assert_eq!(
+            *load,
+            MetaLoad {
+                r#type: MetaType::Int as u8,
+                nmemb: 0,
+                offt: 168,
+                bf_size: 0,
+                mask: 0
+            }
+        );
+    }
 }
