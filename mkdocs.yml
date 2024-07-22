@@ -9,6 +9,7 @@ repo_url: https://github.com/retis-org/retis
 nav:
   - Overview: index.md
   - Profiles: profiles.md
+  - Filtering: filtering.md
   - Installation: install.md
   - Requirements: requirements.md
   - Contributing: CONTRIBUTING.md
