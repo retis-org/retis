@@ -180,19 +180,19 @@ impl KernelInspector {
                 if l.starts_with("CONFIG_") {
                     let (cfg, val) = l
                         .split_once('=')
-                        .ok_or_else(|| anyhow!("Could not parse the Kconfig option"))?;
+                        .ok_or_else(|| anyhow!("Could not parse set Kconfig option ({l})"))?;
 
                     // Handle string values nicely.
                     let val = val.trim_start_matches('"').trim_end_matches('"');
 
                     map.insert(cfg.to_string(), val.to_string());
-                } else if l.starts_with("# CONFIG_") {
+                } else if l.starts_with("# CONFIG_") && l.ends_with(" is not set") {
                     // Unwrap as we just made sure this would succeed.
                     let (cfg, _) = l
                         .strip_prefix("# ")
                         .unwrap()
                         .split_once(' ')
-                        .ok_or_else(|| anyhow!("Could not parse the Kconfig option"))?;
+                        .ok_or_else(|| anyhow!("Could not parse unset Kconfig option ({l})"))?;
                     map.insert(cfg.to_string(), 'n'.to_string());
                 }
                 Ok(())
@@ -436,6 +436,12 @@ mod tests {
         );
         assert_eq!(inspector().get_config_option("CONFIG_FOO").unwrap(), None);
         assert_eq!(
+            inspector()
+                .get_config_option("CONFIG_COMPILE_TEST")
+                .unwrap(),
+            Some("n")
+        );
+        assert_eq!(
             inspector().get_config_option("CONFIG_NETPOLL").unwrap(),
             Some("y")
         );
@@ -444,6 +450,12 @@ mod tests {
                 .get_config_option("CONFIG_DEFAULT_HOSTNAME")
                 .unwrap(),
             Some("(none)")
+        );
+        assert_eq!(
+            inspector()
+                .get_config_option("CONFIG_SYSTEM_TRUSTED_KEYS")
+                .unwrap(),
+            Some("")
         );
     }
 
