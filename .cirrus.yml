@@ -106,10 +106,8 @@ functional_task:
   vagrant_cache: &vagrant_cache
     reupload_on_changes: true
     fingerprint_script: |
-      # for rawhide invalidate once a week
-      if [ x${DISTRO} = xrawhide ]; then
-          date -d 'next monday - 1 week' +%Y%m%d
-      fi
+      # Invalidate once a week
+      date -d 'next monday - 1 week' +%Y%m%d
       echo ${DISTRO}; cat Vagrantfile
     folder: /root/.vagrant.d/boxes
 
