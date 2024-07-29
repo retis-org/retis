@@ -3,6 +3,8 @@
 
 #include <bpf/bpf_helpers.h>
 
+#include <common_defs.h>
+
 /* Defines the context passed to the packet filtering
  * facility. Includes both input and output.
  * Keep in sync with its Rust counterpart in
@@ -14,7 +16,7 @@ struct retis_packet_filter_ctx {
 	unsigned int len;	/* linear length. */
 	/* Output */
 	unsigned int ret;	/* outcome of the match (zero if miss). */
-} __attribute__((packed));
+} __packed;
 
 #define FILTER_MAX_INSNS 4096
 

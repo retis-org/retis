@@ -17,7 +17,7 @@
 struct retis_log_event {
 	u8 level;
 	u8 msg[LOG_MAX];
-} __attribute__((packed));
+} __packed;
 
 /* We're using the section identifiers defined in retis-events.
  * Please keep in sync. */
@@ -37,14 +37,14 @@ enum retis_event_owners {
 struct retis_raw_event {
 	u16 size;
 	u8 data[RAW_EVENT_DATA_SIZE];
-} __attribute__((packed));
+} __packed;
 
 /* Please keep synced with its Rust counterpart. */
 struct retis_raw_event_section_header {
 	u8 owner;
 	u8 data_type;
 	u16 size;
-} __attribute__((packed));
+} __packed;
 
 /* Please keep synced with its Rust counterpart. */
 struct {
@@ -125,7 +125,7 @@ static __always_inline u16 get_event_size(struct retis_raw_event *event)
 struct common_event {
 	u64 timestamp;
 	u32 smp_id;
-} __attribute__((packed));
+} __packed;
 
 struct common_task_event {
 	u64 pid;
