@@ -20,6 +20,7 @@ use plain::Plain;
 use crate::{
     events::{CommonEvent, TaskEvent, *},
     helpers::signals::Running,
+    raw_event_section,
 };
 
 /// Raw event sections for common.
@@ -407,6 +408,13 @@ pub(crate) fn parse_single_raw_section<'a, T>(
     parse_raw_section::<T>(&raw_sections[0])
 }
 
+/// Common information from all BPF events.
+#[raw_event_section]
+pub(crate) struct RawCommonEvent {
+    timestamp: u64,
+    smp_id: u32,
+}
+
 #[derive(Default, crate::EventSectionFactory)]
 pub(crate) struct CommonEventFactory {}
 
@@ -417,15 +425,10 @@ impl RawEventSectionFactory for CommonEventFactory {
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
                 COMMON_SECTION_CORE => {
-                    if section.data.len() != 12 {
-                        bail!(
-                            "Core part of the common event is not the expected size {} != 12",
-                            section.data.len()
-                        );
-                    }
+                    let raw = parse_raw_section::<RawCommonEvent>(section)?;
 
-                    common.timestamp = u64::from_ne_bytes(section.data[0..8].try_into()?);
-                    common.smp_id = u32::from_ne_bytes(section.data[8..12].try_into()?);
+                    common.timestamp = raw.timestamp;
+                    common.smp_id = raw.smp_id;
                 }
                 COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
                 _ => bail!("Unknown data type"),
@@ -439,8 +442,8 @@ impl RawEventSectionFactory for CommonEventFactory {
 event_byte_array!(TaskName, 64);
 
 /// Task information retrieved in common probes.
-#[repr(C)]
-struct RawTaskEvent {
+#[raw_event_section]
+pub(crate) struct RawTaskEvent {
     /// pid/tgid.
     pid: u64,
     /// Current task name.
@@ -509,14 +512,14 @@ pub(super) const BPF_EVENTS_MAX: u32 = 8 * 1024;
 
 /// Size of the raw data buffer of a BPF event. Please keep synced with its BPF
 /// counterpart.
-pub(super) const BPF_RAW_EVENT_DATA_SIZE: usize = 1024 - 2 /* remove the size field */;
+pub(crate) const BPF_RAW_EVENT_DATA_SIZE: usize = 1024 - 2 /* remove the size field */;
 
 /// Raw event format shared between the Rust and BPF part. Please keep in sync
 /// with its BPF counterpart.
 #[repr(C, packed)]
-pub(super) struct RawEvent {
-    size: u16,
-    data: [u8; BPF_RAW_EVENT_DATA_SIZE],
+pub(crate) struct RawEvent {
+    pub(crate) size: u16,
+    pub(crate) data: [u8; BPF_RAW_EVENT_DATA_SIZE],
 }
 
 unsafe impl Plain for RawEvent {}
@@ -534,7 +537,7 @@ pub(crate) struct BpfRawSection<'a> {
 #[repr(C, packed)]
 #[derive(Clone, Copy, Default)]
 pub(crate) struct BpfRawSectionHeader {
-    pub(super) owner: u8,
+    pub(crate) owner: u8,
     pub(crate) data_type: u8,
     pub(crate) size: u16,
 }
@@ -558,6 +561,49 @@ pub(crate) trait RawEventSectionFactory {
 
 /// Type alias to refer to the commonly used EventSectionFactory HashMap.
 pub(crate) type SectionFactories = HashMap<SectionId, Box<dyn EventSectionFactory>>;
+
+#[cfg(feature = "benchmark")]
+pub(crate) mod benchmark {
+    use anyhow::Result;
+
+    use super::{RawCommonEvent, RawTaskEvent};
+    use crate::{
+        benchmark::helpers::*,
+        core::events::{COMMON_SECTION_CORE, COMMON_SECTION_TASK},
+        events::SectionId,
+    };
+
+    impl RawSectionBuilder for RawCommonEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let data = RawCommonEvent::default();
+            build_raw_section(
+                out,
+                SectionId::Common.to_u8(),
+                COMMON_SECTION_CORE as u8,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
+    }
+
+    impl RawSectionBuilder for RawTaskEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let mut data = RawTaskEvent::default();
+            data.comm.0[0] = b'r';
+            data.comm.0[1] = b'e';
+            data.comm.0[2] = b't';
+            data.comm.0[3] = b'i';
+            data.comm.0[4] = b's';
+            build_raw_section(
+                out,
+                SectionId::Common.to_u8(),
+                COMMON_SECTION_TASK as u8,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

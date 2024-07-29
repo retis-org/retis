@@ -4,6 +4,8 @@ use anyhow::{bail, Result};
 use btf_rs::Type;
 use log::warn;
 
+use crate::raw_event_section;
+
 // Keep in sync with definition in include/net/dropreason-core.h (Linux
 // sources).
 const SKB_DROP_REASON_SUBSYS_SHIFT: u32 = 16;
@@ -18,7 +20,7 @@ use crate::{
     events::*,
 };
 
-#[repr(C, packed)]
+#[raw_event_section]
 struct BpfSkbDropEvent {
     drop_reason: i32,
 }

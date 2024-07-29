@@ -36,21 +36,23 @@
 
 struct ct_meta_event {
 	u8 state;
-} __attribute__((packed));
+};
+
+union nf_conn_ip {
+	u32 ip;
+	u128 ip6;
+} __attribute((packed))__;
 
 struct nf_conn_addr_proto {
-	union {
-		u32 ip;
-		u128 ip6;
-	} addr;
+	union nf_conn_ip addr;
 	/* per-protocol generic data */
 	u16 data;
-} __attribute__((packed));
+};
 
 struct nf_conn_tuple {
 	struct nf_conn_addr_proto src;
 	struct nf_conn_addr_proto dst;
-} __attribute__((packed));
+};
 
 /* Conntrack event information */
 struct ct_event {
@@ -59,7 +61,7 @@ struct ct_event {
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
 	u8 tcp_state;
-} __attribute__((packed));
+};
 
 static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
 {

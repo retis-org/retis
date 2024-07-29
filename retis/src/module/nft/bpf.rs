@@ -6,6 +6,7 @@ use crate::{
     },
     event_byte_array,
     events::*,
+    raw_event_section,
 };
 
 // Please keep in sync with its bpf counterpart under
@@ -64,7 +65,7 @@ pub(super) const VERD_MAX: u64 = VERD_REPEAT;
 
 // Please keep in sync with its bpf counterpart under
 // src/modules/nft/bpf/nft.bpf.c
-#[repr(C, packed)]
+#[raw_event_section]
 struct NftBpfEvent {
     /// Table name.
     tn: NftName,
