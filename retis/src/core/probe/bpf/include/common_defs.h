@@ -102,6 +102,8 @@ static __always_inline void err_report(u64 sym_addr, u32 pid)
 		__sync_fetch_and_add(&err_counters->dropped_events, 1);
 }
 
+#define __packed __attribute__((packed))
+
 #ifndef likely
 #define likely(x) __builtin_expect(!!(x), 1)
 #endif
