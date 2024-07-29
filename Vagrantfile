@@ -23,11 +23,21 @@ dnf install -y \
     python3 -m pip install pytest pyroute2
 SCRIPT
 
+def get_box(url, pattern)
+  require 'open-uri'
+  require 'nokogiri'
+
+  doc = Nokogiri::HTML(URI.open(url))
+  box = doc.css('a').map { |link| link['href'] }.select { |alink| pattern.match?(alink) }.last
+  url + box
+end
+
 Vagrant.configure("2") do |config|
   config.vm.box_check_update = false
 
   config.vm.define "x86_64-f40" do |fedora|
-    fedora.vm.box = "fedora/40-cloud-base"
+    fedora.vm.box = "fedora-40-cloud"
+    fedora.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/releases/40/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
     fedora.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     fedora.vm.provision "shell", inline: <<-SHELL
@@ -38,18 +48,8 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.define "x86_64-rawhide" do |rawhide|
-    def get_box(pattern)
-      require 'open-uri'
-      require 'nokogiri'
-
-      url = "https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/"
-      doc = Nokogiri::HTML(URI.open(url))
-      box = doc.css('a').map { |link| link['href'] }.select { |alink| alink.include?(pattern) }.last
-      url + box
-    end
-
     rawhide.vm.box = "fedora-rawhide-cloud"
-    rawhide.vm.box_url = get_box("vagrant.libvirt.box")
+    rawhide.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
     rawhide.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     rawhide.vm.provision "shell", inline: <<-SHELL
@@ -60,7 +60,16 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.define "x86_64-c8s" do |centos|
-    centos.vm.box = "generic/centos8s"
+    centos.vm.box = "centos-8-stream"
+    centos.vm.box_url = get_box("https://cloud.centos.org/centos/8-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
+
+    # CentOS mirror URL changed but the c8s image is no longer being built. We
+    # have to fix them manually in order to install packages later.
+    centos.vm.provision "repos-fixup", type: "shell", inline: <<-SHELL
+       sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
+       sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
+       sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
+    SHELL
 
     centos.vm.provision "shell", inline: <<-SHELL
        dnf config-manager --set-enabled powertools
@@ -75,7 +84,8 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.define "x86_64-c9s" do |centos|
-    centos.vm.box = "generic/centos9s"
+    centos.vm.box = "centos-9-stream"
+    centos.vm.box_url = get_box("https://cloud.centos.org/centos/9-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
     centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "shell", inline: <<-SHELL
