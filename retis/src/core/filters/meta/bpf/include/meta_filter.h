@@ -29,6 +29,7 @@ union retis_meta_op {
 		u8 nmemb;
 		u16 offt;
 		u8 bf_size;
+		u64 mask;
 	} l;
 	struct {
 		u8 md[META_TARGET_MAX];
@@ -61,6 +62,8 @@ struct retis_meta_ctx {
 	void *data;
 	/* size of data (optional). */
 	u8 sz;
+	/* mask for unsigned num comparison. */
+	u64 mask;
 	/* operation. */
 	u8 cmp;
 };
@@ -104,13 +107,15 @@ static __always_inline long meta_process_ops(struct retis_meta_ctx *ctx)
 						  (char *)ctx->base + (val->l.offt)))
 				return -1;
 
-			ctx->base = (void *)ptr;
+			ctx->base = val->l.mask ? (void *)(ptr & val->l.mask)
+				                : (void *)ptr;
 			continue;
 		}
 
 		/* Non intermediate */
 		ctx->offset = val->l.offt;
 		ctx->type = val->l.type;
+		ctx->mask = val->l.mask;
 		ctx->nmemb = val->l.nmemb;
 		ctx->bfs = val->l.bf_size;
 	}
@@ -119,8 +124,11 @@ static __always_inline long meta_process_ops(struct retis_meta_ctx *ctx)
 }
 
 static __always_inline
-bool cmp_num(u64 operand1, u64 operand2, bool sign_bit, u8 cmp_type)
+bool cmp_num(u64 operand1, u64 mmask, u64 operand2, bool sign_bit, u8 cmp_type)
 {
+	if (!sign_bit && mmask)
+		operand1 &= mmask;
+
 	switch (cmp_type) {
 	case RETIS_EQ:
 		return (operand1 == operand2);
@@ -278,7 +286,7 @@ unsigned int filter_num(struct retis_meta_ctx *ctx)
 
 	tval = *((u64 *)ctx->data);
 
-	return cmp_num(mval, tval, sign_bit, ctx->cmp);
+	return cmp_num(mval, ctx->mask, tval, sign_bit, ctx->cmp);
 }
 
 static __always_inline

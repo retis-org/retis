@@ -7,16 +7,21 @@
 use anyhow::{anyhow, bail, Result};
 use btf_rs::*;
 use plain::Plain;
-use regex::Regex;
 
 use crate::core::inspect::inspector;
 
 const META_OPS_MAX: u32 = 32;
 const META_TARGET_MAX: usize = 32;
-const MF_RE: &str = r#"([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*){1,})[\s]{1,}(==|!=|>=|<=|<|>)[\s]{1,}(0x[0-9a-fA-F]+|-?[0-9]+|"[ -~]*"|'[ -~]*'|[a-zA-Z_][a-zA-Z0-9_]*){1}"#;
 
 const PTR_BIT: u8 = 1 << 6;
 const SIGN_BIT: u8 = 1 << 7;
+
+#[derive(Default)]
+struct LhsNode<'a> {
+    member: &'a str,
+    mask: u64,
+    tgt_type: Option<&'a str>,
+}
 
 #[derive(Eq, PartialEq)]
 enum MetaCmp {
@@ -65,7 +70,7 @@ struct MetaTarget {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 struct MetaLoad {
     // Type of data we're going to load
     // bit 0-4: [char|short|int|long], bit5: reserved, bit6: is_ptr, bit7: sign
@@ -77,6 +82,8 @@ struct MetaLoad {
     offt: u16,
     // Zero for no bitfield.
     bf_size: u8,
+    // Mask to apply. Only numbers are supported.
+    mask: u64,
 }
 
 impl MetaLoad {
@@ -159,7 +166,7 @@ impl MetaOp {
         Ok(())
     }
 
-    fn emit_load(btf: &Btf, r#type: &Type, offt: u32, bfs: u32) -> Result<MetaOp> {
+    fn emit_load(btf: &Btf, r#type: &Type, offt: u32, bfs: u32, mask: u64) -> Result<MetaOp> {
         let mut op: MetaOp = MetaOp::new();
         let lop = op.load_ref_mut();
         let mut t = r#type.clone();
@@ -235,6 +242,14 @@ impl MetaOp {
                 Some(x) => x,
                 None => break,
             };
+        }
+
+        if mask > 0 {
+            if lop.is_ptr() || (lop.is_num() && !lop.is_signed()) {
+                lop.mask = mask;
+            } else {
+                bail!("mask is only supported for pointers and unsigned numeric members.");
+            }
         }
 
         lop.bf_size = u8::try_from(bfs)?;
@@ -379,8 +394,13 @@ impl Rval {
 pub(crate) struct FilterMeta(pub(crate) Vec<MetaOp>);
 
 impl FilterMeta {
-    fn check_one_walkable(t: &Type, ind: &mut u8) -> Result<bool> {
+    fn check_one_walkable(t: &Type, ind: &mut u8, casted: bool) -> Result<bool> {
         match t {
+            Type::Int(i)
+                if i.size() == std::mem::size_of::<*const std::ffi::c_void>() && casted =>
+            {
+                *ind += 1
+            }
             Type::Ptr(_) => *ind += 1,
             Type::Struct(_) | Type::Union(_) => {
                 return Ok(true);
@@ -391,7 +411,10 @@ impl FilterMeta {
             | Type::Restrict(_)
             | Type::DeclTag(_)
             | Type::TypeTag(_) => (),
-            _ => bail!("unexpected type ({})", t.name()),
+            _ => bail!(
+                "unexpected type ({}) while walking struct members",
+                t.name()
+            ),
         };
 
         Ok(false)
@@ -399,13 +422,15 @@ impl FilterMeta {
 
     // Return all comparable and walkable types Ptr, Int, Array, Enum[64],
     // Struct, Union
-    fn next_walkable(btf: &Btf, r#type: Type) -> Result<(u8, Type)> {
+    fn next_walkable(btf: &Btf, r#type: Type, casted: bool) -> Result<(u8, Type)> {
         let btf_type = r#type.as_btf_type();
         let mut ind = 0;
 
         // Return early if r#type is already walkable
-        if Self::check_one_walkable(&r#type, &mut ind)? {
+        if Self::check_one_walkable(&r#type, &mut ind, casted)? {
             return Ok((0, r#type));
+        } else if casted {
+            return Ok((ind, r#type));
         }
 
         let btf_type = btf_type.ok_or_else(|| {
@@ -413,7 +438,7 @@ impl FilterMeta {
         })?;
 
         for x in btf.type_iter(btf_type) {
-            if Self::check_one_walkable(&x, &mut ind)? {
+            if Self::check_one_walkable(&x, &mut ind, casted)? {
                 return Ok((ind, x));
             }
         }
@@ -421,45 +446,120 @@ impl FilterMeta {
         bail!("failed to retrieve next walkable object.")
     }
 
+    fn parse_mask(el: &str) -> Result<u64> {
+        let (el, not) = match el.strip_prefix('~') {
+            Some(num) => (num, true),
+            None => (el, false),
+        };
+
+        let (base, mask_str) = if let Some(hex) = el.strip_prefix("0x") {
+            (16, hex)
+        } else if let Some(bin) = el.strip_prefix("0b") {
+            (2, bin)
+        } else {
+            (10, el)
+        };
+
+        let mut mask = u64::from_str_radix(mask_str, base).map_err(|_| {
+            anyhow!(
+                "invalid mask. Use an hex, binary or decimal mask (0x<hex>, 0b<bin>, <decimal>)"
+            )
+        })?;
+
+        mask = if not { !mask } else { mask };
+        if mask == 0 {
+            bail!("mask cannot be zero");
+        }
+
+        Ok(mask)
+    }
+
+    // Parse (in a very simple way) the filter string splitting it
+    // into rhs op and lhs.
+    // Requires spaces as separator among elements.
+    fn parse_filter(filter: &str) -> Result<(Vec<LhsNode>, MetaCmp, &str)> {
+        let expr = filter.split(' ').collect::<Vec<_>>();
+
+        let [lhs, op, rhs]: [&str; 3] = match expr.len() {
+            3 => expr
+                .try_into()
+                .map_err(|_| anyhow!("cannot split filter ({filter})"))?,
+            1 => [expr[0], "!=", "0"],
+            _ => bail!("invalid filter ({filter})"),
+        };
+
+        let lhs: Vec<_> = lhs
+            .split('.')
+            .enumerate()
+            .map(|x| {
+                let first = x.0 == 0;
+                let mut elem = x.1.split(':');
+                // member is mandatory.
+                let member = elem.next().ok_or_else(|| anyhow!("member is mandatory"))?;
+
+                if first && member != "sk_buff" {
+                    bail!("starting struct isn't supported (not sk_buff)");
+                }
+                // mask is optional and must be a number.
+                // Can be under the form [~]{hex, bin, dec}
+                let mask = if let Some(el) = elem.next() {
+                    if first {
+                        bail!("initial type must be a base type only");
+                    }
+                    Self::parse_mask(el)?
+                } else {
+                    0x0
+                };
+
+                // tgt_type is optional.
+                let tgt_type = elem.next();
+
+                if elem.next().is_some() {
+                    bail!(
+                        "unexpected field expression (must be under the form field[:mask[:type]])"
+                    );
+                }
+
+                Ok(LhsNode {
+                    member,
+                    mask,
+                    tgt_type,
+                })
+            })
+            .collect::<Result<Vec<LhsNode<'_>>>>()?;
+
+        if lhs.len() <= 1 {
+            bail!("expression does not point to a member");
+        }
+
+        Ok((lhs, MetaCmp::from_str(op)?, rhs))
+    }
+
     pub(crate) fn from_string(fstring: String) -> Result<Self> {
-        let btf = &inspector()?.kernel.btf;
+        let btf_info = &inspector()?.kernel.btf;
         let mut ops: Vec<_> = Vec::new();
         let mut offt: u32 = 0;
         let mut stored_offset: u32 = 0;
         let mut stored_bf_size: u32 = 0;
+        let mut mask = 0;
 
-        // Check the correctness, perform preliminar checks for the
-        // operator type against the target (e.g. >= against number).
-        //
-        // Once the lmo type is known, compare the rval against the
-        // lmo type (e.g. INT against LONG, sign)
-        let re = Regex::new(MF_RE)?;
+        let (mut fields, op, rval) = Self::parse_filter(&fstring)?;
 
-        let Some((_, [lval, op, rval])) = re.captures(&fstring).map(|caps| caps.extract()) else {
-            bail!("Invalid filter expression.")
-        };
+        // At least two elements are present
+        let init_sym = fields.remove(0).member;
 
-        let mut fields: Vec<_> = lval.split('.').collect();
-
-        // The captures ensure at least two elements are present
-        let init_sym = fields.remove(0);
-
-        if !init_sym.eq("sk_buff") {
-            bail!("unsupported data structure {init_sym}. sk_buff must be used.")
-        }
-
-        let mut types = btf
+        let mut types = btf_info
             .resolve_types_by_name(init_sym)
             .map_err(|e| anyhow!("unable to resolve sk_buff data type {e}"))?;
 
-        let (btf, ref mut r#type) =
+        let (mut btf, ref mut r#type) =
             match types.iter_mut().find(|(_, t)| matches!(t, Type::Struct(_))) {
                 Some(r#struct) => r#struct,
                 None => bail!("Could not resolve {init_sym} to a struct"),
             };
 
         for (pos, field) in fields.iter().enumerate() {
-            let sub_node = walk_btf_node(btf, r#type, field, offt);
+            let sub_node = walk_btf_node(btf, r#type, field.member, offt);
             match sub_node {
                 Some((offset, bfs, snode)) => {
                     if pos < fields.len() - 1 {
@@ -468,7 +568,7 @@ impl FilterMeta {
                         // Named Structs or Union return (level matched) but are
                         //   still part of the parent Struct, so the offset has to
                         //   be preserved.
-                        let (ind, x) = Self::next_walkable(btf, snode)?;
+                        let (ind, x) = Self::next_walkable(btf, snode, field.tgt_type.is_some())?;
                         let one = 1;
 
                         match ind.cmp(&one) {
@@ -478,17 +578,52 @@ impl FilterMeta {
                                 let mut op: MetaOp = MetaOp::new();
                                 op.l.offt = u16::try_from(offset / 8)?;
                                 op.l.r#type = PTR_BIT;
+                                op.l.mask = field.mask;
                                 ops.push(op);
                             }
                             std::cmp::Ordering::Greater => {
                                 bail!("pointers of pointers are not supported")
                             }
-                            _ => offt = offset,
+                            _ => {
+                                if field.mask != 0 {
+                                    bail!("intermediate members masking is only supported for pointers and unsigned numbers");
+                                }
+                                offt = offset
+                            }
                         }
 
-                        *r#type = x.clone();
+                        if let Some(tgt) = field.tgt_type {
+                            let mut types = btf_info
+                                .resolve_types_by_name(tgt)
+                                .map_err(|e| anyhow!("unable to resolve data type: {e}"))?;
+
+                            (btf, *r#type) = match types.iter_mut().find(|(_, t)| {
+                                matches!(t, Type::Union(_))
+                                    || matches!(t, Type::Struct(_))
+                                    || matches!(t, Type::Typedef(_))
+                            }) {
+                                Some((ref btf, r#type)) => {
+                                    let nw = Self::next_walkable(btf, r#type.clone(), false)?;
+                                    if nw.0 > 0 {
+                                        bail!(
+                                            "cast type ({tgt}: {}) cannot be an alias to a pointer",
+                                            r#type.name()
+                                        );
+                                    }
+                                    (btf, nw.1)
+                                }
+                                None => bail!("Could not resolve {tgt} to a struct or typedef"),
+                            };
+                        } else {
+                            *r#type = x.clone();
+                        }
                     } else {
+                        if let Some(tgt) = field.tgt_type {
+                            bail!("trying to cast a leaf member into {tgt}");
+                        }
+
                         *r#type = snode;
+                        mask = field.mask;
                     }
 
                     stored_offset = offset;
@@ -496,14 +631,13 @@ impl FilterMeta {
                         stored_bf_size = bfs;
                     }
                 }
-                None => bail!("{field} not found or is a bitfield!"),
+                None => bail!("field {} not found in type {}", field.member, r#type.name()),
             }
         }
 
-        let lmo = MetaOp::emit_load(btf, r#type, stored_offset, stored_bf_size)?;
+        let lmo = MetaOp::emit_load(btf, r#type, stored_offset, stored_bf_size, mask)?;
         ops.push(lmo);
 
-        let op = MetaCmp::from_str(op)?;
         let rval = Rval::from_str(rval)?;
 
         ops.insert(0, MetaOp::emit_target(lmo.load_ref(), rval, op)?);
@@ -545,7 +679,7 @@ mod tests {
     }
 
     #[test_case("==" ; "op is eq")]
-    #[test_case("!=" ; "op is neq")]
+    #[test_case("!=" ; "op is ne")]
     #[test_case("<" ; "op is lt")]
     #[test_case("<=" ; "op is le")]
     #[test_case(">" ; "op is gt")]
@@ -565,7 +699,7 @@ mod tests {
     }
 
     #[test_case("==", MetaCmp::Eq ; "op is eq")]
-    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is ne")]
     fn meta_filter_string(op_str: &'static str, op: MetaCmp) {
         let filter =
             FilterMeta::from_string(format!("sk_buff.dev.name {op_str} 'dummy0'").to_string())
@@ -600,7 +734,7 @@ mod tests {
     }
 
     #[test_case("==", MetaCmp::Eq ; "op is eq")]
-    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is ne")]
     #[test_case("<", MetaCmp::Lt ; "op is lt")]
     #[test_case("<=", MetaCmp::Le ; "op is le")]
     #[test_case(">", MetaCmp::Gt ; "op is gt")]
@@ -628,7 +762,7 @@ mod tests {
     }
 
     #[test_case("==", MetaCmp::Eq ; "op is eq")]
-    #[test_case("!=", MetaCmp::Ne ; "op is neq")]
+    #[test_case("!=", MetaCmp::Ne ; "op is ne")]
     #[test_case("<", MetaCmp::Lt ; "op is lt")]
     #[test_case("<=", MetaCmp::Le ; "op is le")]
     #[test_case(">", MetaCmp::Gt ; "op is gt")]
@@ -655,5 +789,95 @@ mod tests {
                 .unwrap(),
         );
         assert_eq!(target, 1);
+    }
+
+    // Only validates for what type of targets lhs-only expressions
+    // are allowed. The offset extraction is not required as it is
+    // already performed by previous tests.
+    #[test_case("dev" => matches Err(_); "pointer")]
+    #[test_case("dev.name" => matches Err(_); "string failure")]
+    #[test_case("headers" => matches Err(_); "named struct failure")]
+    #[test_case("mark" => matches Ok(_); "u32")]
+    #[test_case("headers.skb_iif" => matches Ok(_); "signed int")]
+    #[test_case("cloned" => matches Ok(_); "unsigned bitfield")]
+    fn meta_filter_lhs_only(field: &'static str) -> Result<()> {
+        let filter = FilterMeta::from_string(format!("sk_buff.{field}").to_string())?;
+        let meta_target = filter.0[0].target_ref();
+
+        assert_eq!(meta_target.cmp, MetaCmp::Ne as u8);
+        assert!(meta_target.md.iter().all(|&x| x == 0));
+
+        Ok(())
+    }
+
+    #[test_case("dev.name:~0x00" => matches Err(_); "string failure")]
+    #[test_case("dev:~0x00.mtu" => matches Ok(l) if l == MetaLoad { r#type: PTR_BIT, nmemb: 0, offt: 16, bf_size: 0, mask: !0x00 }; "pointer")]
+    #[test_case("mark:0xff" => matches Ok(l) if l == MetaLoad { r#type: MetaType::Int as u8, nmemb: 0, offt: 168, bf_size: 0, mask: 0xff }; "u32")]
+    #[test_case("mark:0x0" => matches Err(_); "zero hex mask failure")]
+    #[test_case("mark:~0xffffffffffffffff" => matches Err(_); "bitwise not u64 hex mask failure")]
+    #[test_case("mark:0b00" => matches Err(_); "zero bin mask failure")]
+    #[test_case("mark:0" => matches Err(_); "mask format failure")]
+    #[test_case("headers.skb_iif:0xbad" => matches Err(_); "signed int failure")]
+    #[test_case("pkt_type:0x2" => matches Ok(l) if l == MetaLoad { r#type: MetaType::Char as u8, nmemb: 0, offt: 1024, bf_size: 3, mask: 0x2 }; "unsigned bitfield")]
+    #[test_case("pkt_type:0b10" => matches Ok(l) if l == MetaLoad { r#type: MetaType::Char as u8, nmemb: 0, offt: 1024, bf_size: 3, mask: 0x2 }; "binary unsigned bitfield")]
+    #[test_case("pkt_type:~0b10" => matches Ok(l) if l == MetaLoad { r#type: MetaType::Char as u8, nmemb: 0, offt: 1024, bf_size: 3, mask: !0x2 }; "bitwise not binary unsigned bitfield")]
+    fn meta_filter_masks(expr: &'static str) -> Result<MetaLoad> {
+        let filter = FilterMeta::from_string(format!("sk_buff.{expr}").to_string())?;
+
+        Ok(filter.0[1].load_ref().clone())
+    }
+
+    #[test]
+    fn meta_filter_cast() {
+        // Casting a field smaller than a pointer is not allowed
+        assert!(
+            FilterMeta::from_string(format!("sk_buff.cloned:~0x0:nf_conn").to_string()).is_err()
+        );
+        assert!(FilterMeta::from_string(format!("sk_buff.len:~0x0:nf_conn").to_string()).is_err());
+        assert!(
+            FilterMeta::from_string(format!("sk_buff.mac_len:~0x0:nf_conn").to_string()).is_err()
+        );
+        // Arrays cannot be casted
+        assert!(FilterMeta::from_string(format!("sk_buff.cb:~0x0:nf_conn").to_string()).is_err());
+        // Cast to non-walkable types is not allowed
+        assert!(
+            FilterMeta::from_string(format!("sk_buff._nfct:~0x0:u32.mark").to_string()).is_err()
+        );
+        // Casting a leaf is not allowed
+        assert!(
+            FilterMeta::from_string(format!("sk_buff._nfct.mark:~0x0:nf_conn").to_string())
+                .is_err()
+        );
+
+        let filter =
+            FilterMeta::from_string(format!("sk_buff._nfct:~0x0:nf_conn.mark").to_string())
+                .unwrap();
+        // Two for loads and one for the target
+        assert_eq!(filter.0.len(), 3);
+        let load = filter.0[1].load_ref();
+        // '_nfct' type_id=? bits_offset=832
+        assert_eq!(
+            *load,
+            MetaLoad {
+                r#type: PTR_BIT,
+                nmemb: 0,
+                offt: 104,
+                bf_size: 0,
+                mask: !0
+            }
+        );
+        // STRUCT 'nf_conn' size=248 vlen=14
+        //   'mark' type_id=? bits_offset=1344
+        let load = filter.0[2].load_ref();
+        assert_eq!(
+            *load,
+            MetaLoad {
+                r#type: MetaType::Int as u8,
+                nmemb: 0,
+                offt: 168,
+                bf_size: 0,
+                mask: 0
+            }
+        );
     }
 }
