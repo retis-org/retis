@@ -16,7 +16,7 @@ use crate::{
     events::{file::FileEventsFactory, *},
     helpers::signals::Running,
     module::Modules,
-    process::{display::PrintSeries, series::EventSorter, tracking::AddTracking},
+    process::{display::*, series::EventSorter, tracking::AddTracking},
 };
 
 /// The default size of the sorting buffer
@@ -52,10 +52,15 @@ pub(crate) struct Sort {
     #[arg(long, default_value = "false")]
     pub(super) print: bool,
 
-    /// Format used when printing and event.
+    /// Format used when printing an event.
     #[arg(long)]
-    #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
-    pub(super) format: CliDisplayFormat,
+    #[clap(value_enum, default_value_t=CliDisplayFormatFlavor::MultiLine)]
+    pub(super) format: CliDisplayFormatFlavor,
+
+    /// Time format used when printing an event.
+    #[arg(long)]
+    #[clap(value_enum, default_value_t=CliTimeFormat::MonotonicTimestamp)]
+    pub(super) time_format: CliTimeFormat,
 }
 
 impl SubCommandParserRunner for Sort {
@@ -85,18 +90,27 @@ impl SubCommandParserRunner for Sort {
                 bail!("Cannot sort a file in-place. Please specify an output file that's different to the input one.");
             }
 
-            printers.push(PrintSeries::json(Box::new(BufWriter::new(
-                OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(&out)
-                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-            ))));
+            printers.push(PrintSeries::new(
+                Box::new(BufWriter::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(&out)
+                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+                )),
+                PrintSingleFormat::Json,
+            ));
         }
 
         if self.out.is_none() || self.print {
-            printers.push(PrintSeries::text(Box::new(stdout()), self.format.into()));
+            let mut format = DisplayFormat::new(self.format.into());
+            format.set_time_format(self.time_format.into());
+
+            printers.push(PrintSeries::new(
+                Box::new(stdout()),
+                PrintSingleFormat::Text(format),
+            ));
         }
 
         while run.running() {

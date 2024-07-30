@@ -66,8 +66,11 @@ defaults to \"retis.data\"."
     )]
     pub(super) print: bool,
     #[arg(long, help = "Format used when printing an event.")]
-    #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
-    pub(super) format: CliDisplayFormat,
+    #[clap(value_enum, default_value_t=CliDisplayFormatFlavor::MultiLine)]
+    pub(super) format: CliDisplayFormatFlavor,
+    #[arg(long, help = "Time format used when printing an event.")]
+    #[clap(value_enum, default_value_t=CliTimeFormat::MonotonicTimestamp)]
+    pub(super) time_format: CliTimeFormat,
     #[arg(
         id = "filter-packet",
         short,

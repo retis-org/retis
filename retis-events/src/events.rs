@@ -121,53 +121,69 @@ impl Event {
 }
 
 impl EventFmt for Event {
-    fn event_fmt(&self, f: &mut std::fmt::Formatter, format: DisplayFormat) -> std::fmt::Result {
-        // First format the first event line starting with the always-there
-        // {common} section, followed by the {kernel} or {user} one.
-        write!(
-            f,
-            "{}",
-            self.0.get(&SectionId::Common).unwrap().display(format)
-        )?;
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> std::fmt::Result {
+        // First format the first event line starting with the {common} section,
+        // followed by the {kernel} or {user} one.
+        if let Some(common) = self.0.get(&SectionId::Common) {
+            common.event_fmt(f, format)?;
+        }
         if let Some(kernel) = self.0.get(&SectionId::Kernel) {
-            write!(f, " {}", kernel.display(format))?;
+            write!(f, " ")?;
+            kernel.event_fmt(f, format)?;
         } else if let Some(user) = self.0.get(&SectionId::Userspace) {
-            write!(f, " {}", user.display(format))?;
+            write!(f, " ")?;
+            user.event_fmt(f, format)?;
         }
 
         // If we do have tracking and/or drop sections, put them there too.
         // Special case the global tracking information from here for now.
         if let Some(tracking) = self.0.get(&SectionId::Tracking) {
-            write!(f, " {}", tracking.display(format))?;
+            write!(f, " ")?;
+            tracking.event_fmt(f, format)?;
         } else if let Some(skb_tracking) = self.0.get(&SectionId::SkbTracking) {
-            write!(f, " {}", skb_tracking.display(format))?;
+            write!(f, " ")?;
+            skb_tracking.event_fmt(f, format)?;
         }
         if let Some(skb_drop) = self.0.get(&SectionId::SkbDrop) {
-            write!(f, " {}", skb_drop.display(format))?;
+            write!(f, " ")?;
+            skb_drop.event_fmt(f, format)?;
         }
+
+        // Separator between each following sections.
+        let sep = match format.flavor {
+            DisplayFormatFlavor::SingleLine => ' ',
+            DisplayFormatFlavor::MultiLine => '\n',
+        };
 
         // If we have a stack trace, show it.
         if let Some(kernel) = self.get_section::<KernelEvent>(SectionId::Kernel) {
             if let Some(stack) = &kernel.stack_trace {
-                match format {
-                    DisplayFormat::SingleLine => write!(f, " {}", stack.display(format))?,
-                    DisplayFormat::MultiLine => write!(f, "\n{}", stack.display(format))?,
-                }
+                f.conf.inc_level(4);
+                write!(f, "{sep}")?;
+                stack.event_fmt(f, format)?;
+                f.conf.reset_level();
             }
         }
 
-        let sep = match format {
-            DisplayFormat::SingleLine => " ",
-            DisplayFormat::MultiLine => "\n  ",
-        };
+        f.conf.inc_level(2);
 
         // Finally show all sections.
         (SectionId::Skb.to_u8()..SectionId::_MAX.to_u8())
             .collect::<Vec<u8>>()
             .iter()
-            .filter_map(|id| self.0.get(&SectionId::from_u8(*id).unwrap()))
-            .try_for_each(|section| write!(f, "{sep}{}", section.display(format)))?;
+            .filter_map(|id| {
+                let id = SectionId::from_u8(*id).unwrap();
+                match !format.show_metadata && id.is_metadata() {
+                    true => None,
+                    false => self.0.get(&id),
+                }
+            })
+            .try_for_each(|section| {
+                write!(f, "{sep}")?;
+                section.event_fmt(f, format)
+            })?;
 
+        f.conf.reset_level();
         Ok(())
     }
 }
@@ -185,8 +201,9 @@ pub enum SectionId {
     Ovs = 8,
     Nft = 9,
     Ct = 10,
+    MdCommon = 11,
     // TODO: use std::mem::variant_count once in stable.
-    _MAX = 11,
+    _MAX = 12,
 }
 
 impl FromStr for SectionId {
@@ -206,6 +223,7 @@ impl FromStr for SectionId {
             OvsEvent::SECTION_NAME => Ovs,
             NftEvent::SECTION_NAME => Nft,
             CtEvent::SECTION_NAME => Ct,
+            CommonEventMd::SECTION_NAME => MdCommon,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -226,6 +244,7 @@ impl SectionId {
             8 => Ovs,
             9 => Nft,
             10 => Ct,
+            11 => MdCommon,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -245,7 +264,8 @@ impl SectionId {
             Ovs => 8,
             Nft => 9,
             Ct => 10,
-            _MAX => 11,
+            MdCommon => 11,
+            _MAX => 12,
         }
     }
 
@@ -263,8 +283,14 @@ impl SectionId {
             Ovs => OvsEvent::SECTION_NAME,
             Nft => NftEvent::SECTION_NAME,
             Ct => CtEvent::SECTION_NAME,
+            MdCommon => CommonEventMd::SECTION_NAME,
             _MAX => "_max",
         }
+    }
+
+    /// Is the section a metadata one?
+    pub fn is_metadata(&self) -> bool {
+        matches!(self, SectionId::MdCommon)
     }
 }
 
@@ -307,6 +333,9 @@ fn event_sections() -> Result<&'static EventSectionMap> {
         });
         events.insert(CtEvent::SECTION_NAME.to_string(), |v| {
             Ok(Box::new(serde_json::from_value::<CtEvent>(v)?))
+        });
+        events.insert(CommonEventMd::SECTION_NAME.to_string(), |v| {
+            Ok(Box::new(serde_json::from_value::<CommonEventMd>(v)?))
         });
         Ok(events)
     })
