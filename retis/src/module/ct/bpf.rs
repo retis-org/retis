@@ -124,11 +124,7 @@ impl RawEventSectionFactory for CtEventFactory {
 
 impl CtEventFactory {
     pub(super) fn new() -> Result<Self> {
-        Ok(Self::default())
-    }
-
-    pub(super) fn bpf() -> Result<Self> {
-        let mut me = Self::new()?;
+        let mut me = Self::default();
         me.parse_tcp_states()?;
         Ok(me)
     }
