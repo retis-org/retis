@@ -13,16 +13,12 @@ use crate::{
     module::Module,
 };
 
-pub(crate) struct CtModule {
-    // Whether the event capturing module was initialized
-    init: bool,
-}
+#[derive(Default)]
+pub(crate) struct CtModule {}
 
 impl Collector for CtModule {
     fn new() -> Result<Self> {
-        Ok(CtModule {
-            init: cfg!(feature = "benchmark"),
-        })
+        Ok(Self::default())
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
@@ -53,9 +49,7 @@ impl Collector for CtModule {
 
     fn init(&mut self, _cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
         // Register our generic conntrack hook.
-        probes.register_kernel_hook(Hook::from(ct_hook::DATA))?;
-        self.init = true;
-        Ok(())
+        probes.register_kernel_hook(Hook::from(ct_hook::DATA))
     }
 }
 
@@ -64,9 +58,6 @@ impl Module for CtModule {
         self
     }
     fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::new(match self.init {
-            true => CtEventFactory::bpf()?,
-            false => CtEventFactory::new()?,
-        }))
+        Ok(Box::new(CtEventFactory::new()?))
     }
 }
