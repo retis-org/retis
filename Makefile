@@ -4,13 +4,33 @@ CLANG := clang
 OBJCOPY := llvm-objcopy
 
 CARGO := cargo
+BINDGEN := bindgen
 DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
 ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$(DEFAULT_ARCH))
 
 RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
 
-export ARCH CFLAGS CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
+# Needs to be set because of PT_REGS_PARMx() and any other target
+# specific facility.
+x86_64 := x86
+aarch64 := arm64
+powerpc64 := powerpc
+s390x := s390
+# Mappings takes precedence over custom ARCH
+BPF_ARCH := $(if $($(ARCH)),$($(ARCH)),$(ARCH))
+
+BPF_CFLAGS := -target bpf \
+              -Wall \
+              -Wno-unused-value \
+              -Wno-pointer-sign \
+              -Wno-compare-distinct-pointer-types \
+              -fno-stack-protector \
+              -Werror \
+              -D__TARGET_ARCH_$(BPF_ARCH) \
+	      -O2
+
+export BPF_ARCH BPF_CFLAGS CFLAGS CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
 
 PRINT = echo
 
@@ -61,6 +81,24 @@ all: debug
 
 install: release
 	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS) --path=$(ROOT_DIR)/retis --offline --frozen
+
+define annotations
+$(ROOT_DIR)/tools/annotations.py "$1" "uapi" $2
+endef
+
+BINDINGS := $(shell find $(abspath retis/src) -name '*.[ch]' -not -name 'vmlinux.h' -not -path '*/.out/*' -exec grep -l "__binding" {} \;)
+gen-bindings: $(BINDINGS)
+	$(call out_console,BINDINGS,processing $(<)...)
+	annotations="$(shell python3 $(ROOT_DIR)/tools/annotations.py "$<" "uapi" $(INCLUDES) $(BPF_CFLAGS))"; \
+	for a in $$annotations; do opts="--allowlist-item $$a $$opts"; done; \
+	path=$(<); \
+	out_path=$${path%%/bpf*}/$(basename $(notdir $(<)))_uapi.rs; \
+	$(BINDGEN) --no-layout-tests \
+		   $(<) \
+		   $$opts \
+		   -o $$out_path \
+		   -- $(INCLUDES) $(BPF_CFLAGS); \
+	$(call out_console,BINDINGS,generated bindings in "$$out_path"...)
 
 define build
 	$(call out_console,CARGO,$(strip $(2)) ...)
@@ -118,6 +156,7 @@ help:
 	$(PRINT) 'clean-ebpf          --  Deletes all the files generated during the build process'
 	$(PRINT) '	                  (eBPF only).'
 	$(PRINT) 'ebpf                --  Builds only the eBPF programs.'
+	$(PRINT) 'gen-bindings        --  Generate Rust bindings for bpf programs.'
 	$(PRINT) 'install             --  Installs Retis.'
 	$(PRINT) 'release             --  Builds Retis with the release option.'
 	$(PRINT) 'test                --  Builds and runs unit tests.'
