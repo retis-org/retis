@@ -4,6 +4,9 @@
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 
+#define __packed __attribute__((packed))
+#define __binding __attribute__((annotate("uapi")))
+
 /* Keep in sync with its Rust counterpart in crate::core::probe */
 #define PROBE_MAX	1024
 
@@ -101,8 +104,6 @@ static __always_inline void err_report(u64 sym_addr, u32 pid)
 	if (err_counters)
 		__sync_fetch_and_add(&err_counters->dropped_events, 1);
 }
-
-#define __packed __attribute__((packed))
 
 #ifndef likely
 #define likely(x) __builtin_expect(!!(x), 1)
