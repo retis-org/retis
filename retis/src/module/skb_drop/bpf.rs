@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use btf_rs::Type;
 use log::warn;
 
@@ -83,22 +83,15 @@ impl DropReasons {
 
 #[derive(crate::EventSectionFactory)]
 pub(crate) struct SkbDropEventFactory {
-    /// Map of sub-system reason ids to their custom drop reason definitions. A
-    /// `Some` value with an empty map means we couldn't retrieve the drop
-    /// reasons from the running kernel.
-    reasons: Option<HashMap<u16, DropReasons>>,
+    /// Map of sub-system reason ids to their custom drop reason definitions.
+    reasons: HashMap<u16, DropReasons>,
 }
 
 impl RawEventSectionFactory for SkbDropEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let raw = parse_single_raw_section::<BpfSkbDropEvent>(SectionId::SkbDrop, &raw_sections)?;
+
         let drop_reason = raw.drop_reason;
-
-        // Check if the drop reasons were correctly initialized.
-        if self.reasons.is_none() {
-            bail!("Factory was not initialized for consuming BPF events");
-        }
-
         let (subsys, drop_reason) = self.get_reason(drop_reason);
 
         Ok(Box::new(SkbDropEvent {
@@ -111,11 +104,6 @@ impl RawEventSectionFactory for SkbDropEventFactory {
 impl SkbDropEventFactory {
     /// Initialize a new skb drop factory.
     pub(crate) fn new() -> Result<Self> {
-        Ok(Self { reasons: None })
-    }
-
-    /// Initialize a new skb drop factory when handling events from BPF.
-    pub(crate) fn bpf() -> Result<Self> {
         let subsys = parse_enum("skb_drop_reason_subsys", &["SKB_DROP_REASON_SUBSYS_"])?;
 
         // Parse each sub-system drop reasons.
@@ -134,9 +122,7 @@ impl SkbDropEventFactory {
             reasons.insert(0, DropReasons::from_subsystem("core")?);
         }
 
-        Ok(Self {
-            reasons: Some(reasons),
-        })
+        Ok(Self { reasons })
     }
 
     /// Converts a raw drop reason value to a tuple of an optional sub-system
@@ -144,14 +130,14 @@ impl SkbDropEventFactory {
     fn get_reason(&self, raw_val: i32) -> (Option<String>, String) {
         // Special case when drop reasons aren't supported by the kernel. Fake a
         // core NOT_SPECIFIED reason.
-        if raw_val < 0 || self.reasons.is_none() {
+        if raw_val < 0 {
             return (None, "NOT_SPECIFIED".to_string());
         }
         let raw_val = raw_val as u32;
 
         // Retrieve the sub-system drop reason definition, if any.
         let subsys_id = (raw_val >> SKB_DROP_REASON_SUBSYS_SHIFT) as u16;
-        let subsys = match self.reasons.as_ref().unwrap().get(&subsys_id) {
+        let subsys = match self.reasons.get(&subsys_id) {
             Some(subsys) => subsys,
             // Handle the None case but really that should not happen, because
             // that means having a sub-system generating drop reasons without
