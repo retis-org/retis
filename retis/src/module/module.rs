@@ -10,7 +10,10 @@ use crate::{
     collect::Collector,
     core::{
         events::{CommonEventFactory, EventSectionFactory, FactoryId, SectionFactories},
-        probe::{kernel::KernelEventFactory, user::UserEventFactory},
+        probe::{
+            kernel::{CommonTypeEventFactory, KernelEventFactory},
+            user::UserEventFactory,
+        },
     },
 };
 
@@ -133,6 +136,10 @@ impl Modules {
         section_factories.insert(FactoryId::Common, Box::<CommonEventFactory>::default());
         section_factories.insert(FactoryId::Kernel, Box::<KernelEventFactory>::default());
         section_factories.insert(FactoryId::Userspace, Box::<UserEventFactory>::default());
+        section_factories.insert(
+            FactoryId::CommonType,
+            Box::<CommonTypeEventFactory>::default(),
+        );
 
         for (_, module) in self.modules.iter() {
             if let Some(factory) = module.section_factory()? {
