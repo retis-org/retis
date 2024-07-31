@@ -10,7 +10,10 @@ use crate::{
     collect::Collector,
     core::{
         events::{CommonEventFactory, EventSectionFactory, SectionFactories},
-        probe::{kernel::KernelEventFactory, user::UserEventFactory},
+        probe::{
+            kernel::{CommonTypeEventFactory, KernelEventFactory},
+            user::UserEventFactory,
+        },
     },
     events::*,
     process::tracking::TrackingInfoEventFactory,
@@ -81,6 +84,10 @@ impl Modules {
         // Register core event sections.
         section_factories.insert(SectionId::Common, Box::<CommonEventFactory>::default());
         section_factories.insert(SectionId::Kernel, Box::<KernelEventFactory>::default());
+        section_factories.insert(
+            SectionId::CommonType,
+            Box::new(CommonTypeEventFactory::new()?),
+        );
         section_factories.insert(SectionId::Userspace, Box::<UserEventFactory>::default());
         section_factories.insert(
             SectionId::Tracking,

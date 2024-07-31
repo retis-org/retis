@@ -185,8 +185,9 @@ pub enum SectionId {
     Ovs = 8,
     Nft = 9,
     Ct = 10,
+    CommonType = 11,
     // TODO: use std::mem::variant_count once in stable.
-    _MAX = 11,
+    _MAX = 12,
 }
 
 impl FromStr for SectionId {
@@ -206,6 +207,7 @@ impl FromStr for SectionId {
             OvsEvent::SECTION_NAME => Ovs,
             NftEvent::SECTION_NAME => Nft,
             CtEvent::SECTION_NAME => Ct,
+            // CommonType does not have a corresponding Event.
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -226,6 +228,7 @@ impl SectionId {
             8 => Ovs,
             9 => Nft,
             10 => Ct,
+            11 => CommonType,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -245,7 +248,8 @@ impl SectionId {
             Ovs => 8,
             Nft => 9,
             Ct => 10,
-            _MAX => 11,
+            CommonType => 11,
+            _MAX => 12,
         }
     }
 
@@ -263,6 +267,8 @@ impl SectionId {
             Ovs => OvsEvent::SECTION_NAME,
             Nft => NftEvent::SECTION_NAME,
             Ct => CtEvent::SECTION_NAME,
+            // CommonType does not have a corresponding Event.
+            CommonType => "_invalid",
             _MAX => "_max",
         }
     }
@@ -308,6 +314,7 @@ fn event_sections() -> Result<&'static EventSectionMap> {
         events.insert(CtEvent::SECTION_NAME.to_string(), |v| {
             Ok(Box::new(serde_json::from_value::<CtEvent>(v)?))
         });
+        // CommonType does not have a corresponding Event.
         Ok(events)
     })
 }
