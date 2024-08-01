@@ -4,7 +4,7 @@ use std::{collections::HashMap, fmt};
 
 use anyhow::{bail, Result};
 
-use super::{config::ProbeConfig, inspect::inspect_symbol};
+use super::{config::retis_probe_config, inspect::inspect_symbol};
 use crate::EventSectionFactory;
 use crate::{
     core::{
@@ -34,7 +34,7 @@ impl KernelProbe {
     }
 
     /// Generate the probe BPF configuration from a list of options.
-    pub(crate) fn gen_config(&self, options: &[ProbeOption]) -> Result<ProbeConfig> {
+    pub(crate) fn gen_config(&self, options: &[ProbeOption]) -> Result<retis_probe_config> {
         let mut config = inspect_symbol(&self.symbol)?;
 
         #[allow(clippy::single_match)]
