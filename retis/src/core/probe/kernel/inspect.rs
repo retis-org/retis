@@ -1,11 +1,11 @@
 use anyhow::Result;
 
-use super::config::ProbeConfig;
+use super::config::retis_probe_config;
 use crate::core::kernel::Symbol;
 
 /// Inspect a target using BTF and fill its description.
-pub(super) fn inspect_symbol(symbol: &Symbol) -> Result<ProbeConfig> {
-    let mut cfg = ProbeConfig::default();
+pub(super) fn inspect_symbol(symbol: &Symbol) -> Result<retis_probe_config> {
+    let mut cfg = retis_probe_config::default();
 
     // Look for known parameter types.
     if let Some(offset) = symbol.parameter_offset("struct sk_buff *")? {

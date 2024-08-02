@@ -2,7 +2,9 @@
 #define __CORE_PROBE_KERNEL_BPF_RETIS_CONTEXT__
 
 #include <vmlinux.h>
+
 #include <compat.h>
+#include <common_defs.h>
 
 enum kernel_probe_type {
 	KERNEL_PROBE_KPROBE = 0,
@@ -10,8 +12,7 @@ enum kernel_probe_type {
 	KERNEL_PROBE_TRACEPOINT = 2,
 };
 
-/* Per-probe parameter offsets; keep in sync with its Rust counterpart in
- * core::probe::kernel::config. A value of -1 means the argument isn't
+/* Per-probe parameter offsets. A value of -1 means the argument isn't
  * available. Please try to reuse the targeted object names.
  */
 struct retis_probe_offsets {
@@ -21,7 +22,7 @@ struct retis_probe_offsets {
 	s8 net;	 /* netns */
 	s8 nft_pktinfo;
 	s8 nft_traceinfo;
-} __attribute__((packed));
+} __packed;
 
 /* Common representation of the register values provided to the probes, as this
  * is done in a per-probe type fashion.
