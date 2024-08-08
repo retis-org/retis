@@ -425,7 +425,7 @@ impl RawEventSectionFactory for CommonEventFactory {
                     }
 
                     common.timestamp = u64::from_ne_bytes(section.data[0..8].try_into()?);
-                    common.smp_id = u32::from_ne_bytes(section.data[8..12].try_into()?);
+                    common.smp_id = Some(u32::from_ne_bytes(section.data[8..12].try_into()?));
                 }
                 COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
                 _ => bail!("Unknown data type"),
