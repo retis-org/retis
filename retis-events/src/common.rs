@@ -19,13 +19,17 @@ pub struct CommonEvent {
     /// Timestamp of when the event was generated.
     pub timestamp: u64,
     /// SMP processor id.
-    pub smp_id: u32,
+    pub smp_id: Option<u32>,
     pub task: Option<TaskEvent>,
 }
 
 impl EventFmt for CommonEvent {
     fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
-        write!(f, "{} ({})", self.timestamp, self.smp_id)?;
+        write!(f, "{}", self.timestamp)?;
+
+        if let Some(smp_id) = self.smp_id {
+            write!(f, " ({})", smp_id)?;
+        }
 
         if let Some(current) = &self.task {
             write!(f, " [{}] ", current.comm)?;

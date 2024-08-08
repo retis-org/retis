@@ -428,7 +428,7 @@ impl RawEventSectionFactory for CommonEventFactory {
                     let raw = parse_raw_section::<RawCommonEvent>(section)?;
 
                     common.timestamp = raw.timestamp;
-                    common.smp_id = raw.smp_id;
+                    common.smp_id = Some(raw.smp_id);
                 }
                 COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
                 _ => bail!("Unknown data type"),
