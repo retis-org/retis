@@ -20,7 +20,7 @@ use crate::{
         tracking::gc::TrackingGC,
         user::proc::{Process, ThreadInfo},
     },
-    events::SectionId,
+    events::{Event, SectionId},
     helpers::signals::Running,
     module::Module,
 };
@@ -93,7 +93,12 @@ impl Collector for OvsModule {
         Ok(())
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn init(
+        &mut self,
+        cli: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        _: &mut Event,
+    ) -> Result<()> {
         self.track = cli
             .get_section::<OvsCollectorArgs>(SectionId::Ovs)?
             .ovs_track;

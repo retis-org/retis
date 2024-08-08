@@ -13,7 +13,7 @@ use crate::{
     events::{file::FileEventsFactory, *},
     helpers::signals::Running,
     module::Modules,
-    process::display::PrintSingle,
+    process::display::*,
 };
 
 /// Print stored events to stdout
@@ -26,6 +26,9 @@ pub(crate) struct Print {
     #[arg(long, help = "Format used when printing an event.")]
     #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
     pub(super) format: CliDisplayFormat,
+    #[arg(long, help = "Time format used when printing an event.")]
+    #[clap(value_enum, default_value_t=CliTimeFormat::MonotonicTimestamp)]
+    pub(super) time_format: CliTimeFormat,
 }
 
 impl SubCommandParserRunner for Print {
@@ -37,8 +40,13 @@ impl SubCommandParserRunner for Print {
         // Create event factory.
         let mut factory = FileEventsFactory::new(self.input.as_path())?;
 
+        // Format.
+        let format = DisplayFormat::new()
+            .multiline(self.format == CliDisplayFormat::MultiLine)
+            .time_format(self.time_format.into());
+
         // Formatter & printer for events.
-        let mut output = PrintSingle::text(Box::new(stdout()), self.format.into());
+        let mut output = PrintEvent::new(Box::new(stdout()), PrintEventFormat::Text(format));
 
         use EventResult::*;
         while run.running() {

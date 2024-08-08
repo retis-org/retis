@@ -223,9 +223,12 @@ def test_ovs_conntrack(two_port_ovs):
 
     # Only interested in TCP OVS execute actions.
     def interested(e):
-        return e["kernel"]["symbol"] == "openvswitch:ovs_do_execute_action" and e[
-            "skb"
-        ].get("ip")
+        return (
+            "kernel" in e
+            and e["kernel"]["symbol"] == "openvswitch:ovs_do_execute_action"
+            and "skb" in e
+            and e["skb"].get("ip")
+        )
 
     events = list(filter(interested, events))
     assert_events_present(events, expected_events)
@@ -365,9 +368,10 @@ def test_ovs_tracking(two_port_ovs):
     series = retis.sort()
     # All events from the same direction must belong to the same packet (same
     # global tracking id).
-    assert len(series) == 2
-    assert len(series[0]) == len(expected_events) / 2
+    # 2 series + the initial md.
+    assert len(series) == 3
     assert len(series[1]) == len(expected_events) / 2
+    assert len(series[2]) == len(expected_events) / 2
 
 
 @pytest.mark.ovs_track

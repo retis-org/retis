@@ -29,7 +29,12 @@ impl Collector for SkbTrackingModule {
         cmd.register_module_noargs(SectionId::SkbTracking)
     }
 
-    fn init(&mut self, _: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn init(
+        &mut self,
+        _: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        _: &mut Event,
+    ) -> Result<()> {
         probes.register_kernel_hook(Hook::from(tracking_hook::DATA))
     }
 }

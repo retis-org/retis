@@ -14,6 +14,7 @@ nav:
   - Requirements: requirements.md
   - Contributing: CONTRIBUTING.md
   - External resources: resources.md
+  - Event sections: event_sections.md
   - Collectors:
       - skb: modules/skb.md
       - skb-drop: modules/skb_drop.md

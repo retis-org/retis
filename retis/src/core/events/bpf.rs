@@ -425,7 +425,7 @@ impl RawEventSectionFactory for CommonEventFactory {
                     }
 
                     common.timestamp = u64::from_ne_bytes(section.data[0..8].try_into()?);
-                    common.smp_id = u32::from_ne_bytes(section.data[8..12].try_into()?);
+                    common.smp_id = Some(u32::from_ne_bytes(section.data[8..12].try_into()?));
                 }
                 COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
                 _ => bail!("Unknown data type"),
@@ -577,7 +577,7 @@ mod tests {
     }
 
     impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: DisplayFormat) -> std::fmt::Result {
+        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: &DisplayFormat) -> std::fmt::Result {
             write!(
                 f,
                 "field0: {:?} field1: {:?} field2: {:?}",
