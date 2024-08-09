@@ -131,10 +131,10 @@ impl Module for SkbModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
     }
-    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::new(SkbEventFactory {
+    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
+        Ok(Some(Box::new(SkbEventFactory {
             report_eth: self.report_eth,
-        }))
+        })))
     }
 }
 

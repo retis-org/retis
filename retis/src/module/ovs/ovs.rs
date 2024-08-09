@@ -141,8 +141,8 @@ impl Module for OvsModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
     }
-    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::new(OvsEventFactory {}))
+    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
+        Ok(Some(Box::new(OvsEventFactory {})))
     }
 }
 

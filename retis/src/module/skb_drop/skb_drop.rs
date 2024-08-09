@@ -104,7 +104,7 @@ impl Module for SkbDropModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
     }
-    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::new(SkbDropEventFactory::new()?))
+    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
+        Ok(Some(Box::new(SkbDropEventFactory::new()?)))
     }
 }

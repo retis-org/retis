@@ -20,8 +20,10 @@ use crate::{
 pub(crate) trait Module {
     /// Return a Collector used for collect command
     fn collector(&mut self) -> &mut dyn Collector;
-    /// Return an EventSectionFactory
-    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>>;
+    /// Return an EventSectionFactory, if any
+    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
+        Ok(None)
+    }
 }
 
 /// All modules are registered there. The following is the main API and object
@@ -88,7 +90,9 @@ impl Modules {
         );
 
         for (id, module) in self.modules.iter() {
-            section_factories.insert(*id, module.section_factory()?);
+            if let Some(factory) = module.section_factory()? {
+                section_factories.insert(*id, factory);
+            }
         }
         Ok(section_factories)
     }

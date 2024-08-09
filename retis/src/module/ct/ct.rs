@@ -64,7 +64,7 @@ impl Module for CtModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
     }
-    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::new(CtEventFactory::new()?))
+    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
+        Ok(Some(Box::new(CtEventFactory::new()?)))
     }
 }
