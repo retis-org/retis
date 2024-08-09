@@ -10,6 +10,7 @@
 //! - `enum skb_drop_reason`
 //! - `enum mac80211_drop_reason`
 //! - `enum ovs_drop_reason`
+//! - `enum sk_rst_reason`
 
 use std::collections::HashMap;
 
@@ -39,6 +40,7 @@ struct RawCommonTypeEvent {
 #[derive(Eq, Hash, PartialEq)]
 enum TypeId {
     SkbDropReason = 1,
+    SkRstReason,
 }
 
 impl TypeId {
@@ -46,6 +48,7 @@ impl TypeId {
         use TypeId::*;
         Ok(match val {
             1 => SkbDropReason,
+            2 => SkRstReason,
             x => bail!("Cannot convert {x} to TypeId"),
         })
     }
@@ -68,6 +71,12 @@ impl CommonTypeEventFactory {
         drop_reasons.extend(parse_enum("mac80211_drop_reason", &[])?);
         drop_reasons.extend(parse_enum("ovs_drop_reason", &[])?);
         types.insert(TypeId::SkbDropReason, drop_reasons);
+
+        // enum sk_rst_reason
+        types.insert(
+            TypeId::SkRstReason,
+            parse_enum("sk_rst_reason", &["SK_RST_REASON_"])?,
+        );
 
         Ok(Self { types })
     }
@@ -110,6 +119,12 @@ impl RawEventSectionFactory for CommonTypeEventFactory {
                     },
                 })
             }
+            TypeId::SkRstReason => Box::new(SkbResetReasonEvent {
+                reset_reason: match map.get(&raw.val) {
+                    Some(reason) => reason.clone(),
+                    None => raw.val.to_string(),
+                },
+            }),
         })
     }
 }
