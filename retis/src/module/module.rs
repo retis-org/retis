@@ -138,7 +138,7 @@ impl Modules {
         section_factories.insert(FactoryId::Userspace, Box::<UserEventFactory>::default());
         section_factories.insert(
             FactoryId::CommonType,
-            Box::<CommonTypeEventFactory>::default(),
+            Box::new(CommonTypeEventFactory::new()?),
         );
 
         for (_, module) in self.modules.iter() {

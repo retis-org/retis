@@ -6,6 +6,7 @@
 #include <bpf/bpf_helpers.h>
 
 #include <common_defs.h>
+#include <common_types.h>
 #include <retis_context.h>
 #include <events.h>
 #include <helpers.h>
@@ -281,6 +282,8 @@ static __always_inline int chain(struct retis_context *ctx)
 
 	pass_threshold = get_event_size(event);
 	barrier_var(pass_threshold);
+
+	handle_common_types(ctx, event);
 
 /* Defines the logic to call hooks one by one.
  *
