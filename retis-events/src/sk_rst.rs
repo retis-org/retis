@@ -4,7 +4,7 @@ use super::*;
 use crate::event_section;
 
 /// Sk reset reason event section.
-#[event_section("sk-reset-reason")]
+#[event_section(SectionId::CommonType)] // FIXME
 pub struct SkbResetReasonEvent {
     /// Reason why a socket sent a reset. Only reported from specific functions.
     /// See `enum sk_rst_reason` in the kernel.

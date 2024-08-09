@@ -100,7 +100,7 @@ pub enum CtState {
     Untracked,
 }
 /// Conntrack event
-#[event_section("ct")]
+#[event_section(SectionId::Ct)]
 pub struct CtEvent {
     /// Packet's conntrack state
     pub state: CtState,
@@ -112,7 +112,8 @@ pub struct CtEvent {
 }
 
 /// Conntrack event
-#[event_section("ct")]
+#[event_type]
+#[derive(Default)]
 pub struct CtConnEvent {
     /// Zone ID
     pub zone_id: u16,
