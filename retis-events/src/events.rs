@@ -145,6 +145,9 @@ impl EventFmt for Event {
         if let Some(skb_drop) = self.0.get(&SectionId::SkbDrop) {
             write!(f, " {}", skb_drop.display(format))?;
         }
+        if let Some(common_type) = self.0.get(&SectionId::CommonType) {
+            write!(f, " {}", common_type.display(format))?;
+        }
 
         // If we have a stack trace, show it.
         if let Some(kernel) = self.get_section::<KernelEvent>(SectionId::Kernel) {
@@ -181,11 +184,11 @@ pub enum SectionId {
     Tracking = 4,
     SkbTracking = 5,
     SkbDrop = 6,
-    Skb = 7,
-    Ovs = 8,
-    Nft = 9,
-    Ct = 10,
-    CommonType = 11,
+    CommonType = 7,
+    Skb = 8,
+    Ovs = 9,
+    Nft = 10,
+    Ct = 11,
     // TODO: use std::mem::variant_count once in stable.
     _MAX = 12,
 }
@@ -224,11 +227,11 @@ impl SectionId {
             4 => Tracking,
             5 => SkbTracking,
             6 => SkbDrop,
-            7 => Skb,
-            8 => Ovs,
-            9 => Nft,
-            10 => Ct,
-            11 => CommonType,
+            7 => CommonType,
+            8 => Skb,
+            9 => Ovs,
+            10 => Nft,
+            11 => Ct,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -244,11 +247,11 @@ impl SectionId {
             Tracking => 4,
             SkbTracking => 5,
             SkbDrop => 6,
-            Skb => 7,
-            Ovs => 8,
-            Nft => 9,
-            Ct => 10,
-            CommonType => 11,
+            CommonType => 7,
+            Skb => 8,
+            Ovs => 9,
+            Nft => 10,
+            Ct => 11,
             _MAX => 12,
         }
     }
