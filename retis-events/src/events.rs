@@ -146,6 +146,10 @@ impl EventFmt for Event {
             write!(f, " ")?;
             skb_drop.event_fmt(f, format)?;
         }
+        if let Some(rst) = self.0.get(&SectionId::SkResetReason) {
+            write!(f, " ")?;
+            rst.event_fmt(f, format)?;
+        }
 
         // Separator between each following sections.
         let sep = if format.multiline { '\n' } else { ' ' };
@@ -186,13 +190,15 @@ pub enum SectionId {
     Tracking = 4,
     SkbTracking = 5,
     SkbDrop = 6,
-    Skb = 7,
-    Ovs = 8,
-    Nft = 9,
-    Ct = 10,
-    Startup = 11,
+    SkResetReason = 7,
+    // Below this sections are handled in a generic way by the formatting logic.
+    Skb = 8,
+    Ovs = 9,
+    Nft = 10,
+    Ct = 11,
+    Startup = 12,
     // TODO: use std::mem::variant_count once in stable.
-    _MAX = 12,
+    _MAX = 13,
 }
 
 impl SectionId {
@@ -206,11 +212,12 @@ impl SectionId {
             4 => Tracking,
             5 => SkbTracking,
             6 => SkbDrop,
-            7 => Skb,
-            8 => Ovs,
-            9 => Nft,
-            10 => Ct,
-            11 => Startup,
+            7 => SkResetReason,
+            8 => Skb,
+            9 => Ovs,
+            10 => Nft,
+            11 => Ct,
+            12 => Startup,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -225,6 +232,7 @@ impl SectionId {
             Tracking => "tracking",
             SkbTracking => "skb-tracking",
             SkbDrop => "skb-drop",
+            SkResetReason => "sk-reset-reason",
             Skb => "skb",
             Ovs => "ovs",
             Nft => "nft",

@@ -21,6 +21,7 @@ struct retis_probe_offsets {
 	s8 net;	 /* netns */
 	s8 nft_pktinfo;
 	s8 nft_traceinfo;
+	s8 sk_rst_reason;
 } __attribute__((packed));
 
 /* Common representation of the register values provided to the probes, as this
@@ -102,6 +103,8 @@ struct retis_context {
 	RETIS_GET(ctx, nft_pktinfo, struct nft_pktinfo *)
 #define retis_get_nft_traceinfo(ctx)	\
 	RETIS_GET(ctx, nft_traceinfo, struct nft_traceinfo *)
+#define retis_get_sk_rst_reason(ctx)	\
+	RETIS_GET(ctx, sk_rst_reason, u64)
 
 /* Returns the skb trying to get it first from the arguments (common case)
  * and if not found from the nft_pktinfo (useful for nft).
