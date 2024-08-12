@@ -606,12 +606,13 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{EventSection, EventSectionFactory};
+    use crate::{event_section, EventSectionFactory};
 
     const DATA_TYPE_U64: u8 = 1;
     const DATA_TYPE_U128: u8 = 2;
 
-    #[derive(Default, Deserialize, Serialize, EventSection, EventSectionFactory)]
+    #[derive(EventSectionFactory)]
+    #[event_section("test")]
     struct TestEvent {
         field0: Option<u64>,
         field1: Option<u64>,
