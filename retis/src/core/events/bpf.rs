@@ -364,12 +364,11 @@ pub(crate) fn parse_raw_event<'a>(
         let factory = factories
             .get_mut(&owner)
             .ok_or_else(|| anyhow!("Unknown factory for event section owner {}", &owner))?;
-        event.insert_section(
-            owner,
-            factory
-                .create(sections)
-                .map_err(|e| anyhow!("Failed to parse section {}: {e}", &owner))?,
-        )
+
+        let section = factory
+            .create(sections)
+            .map_err(|e| anyhow!("Failed to parse section {}: {e}", &owner))?;
+        event.insert_section(SectionId::from_u8(section.section_id())?, section)
     })?;
 
     Ok(event)
@@ -612,7 +611,7 @@ mod tests {
     const DATA_TYPE_U128: u8 = 2;
 
     #[derive(EventSectionFactory)]
-    #[event_section("test")]
+    #[event_section(SectionId::Common)]
     struct TestEvent {
         field0: Option<u64>,
         field1: Option<u64>,
