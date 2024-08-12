@@ -14,7 +14,9 @@ use pnet_packet::{
 };
 
 use crate::{
-    core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
+    core::events::{
+        parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
+    },
     event_byte_array,
     events::{net::RawPacket, *},
     helpers, raw_event_section,
@@ -353,7 +355,8 @@ fn unmarshal_l4(
     Ok(())
 }
 
-#[derive(Default, crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::Skb)]
+#[derive(Default)]
 pub(crate) struct SkbEventFactory {
     // Should we report the Ethernet header.
     pub(super) report_eth: bool,

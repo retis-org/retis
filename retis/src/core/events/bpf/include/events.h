@@ -19,19 +19,18 @@ struct retis_log_event {
 	u8 msg[LOG_MAX];
 } __attribute__((packed));
 
-/* We're using the section identifiers defined in retis-events.
+/* We're using the factory identifiers defined in retis-events.
  * Please keep in sync. */
 enum retis_event_owners {
 	COMMON = 1,
 	KERNEL = 2,
 	USERSPACE = 3,
-	/* TRACKING = 4, */
-	COLLECTOR_SKB_TRACKING = 5,
-	COLLECTOR_SKB_DROP = 6,
-	COLLECTOR_SKB = 7,
-	COLLECTOR_OVS = 8,
-	COLLECTOR_NFT = 9,
-	COLLECTOR_CT = 10,
+	COLLECTOR_SKB_TRACKING = 4,
+	COLLECTOR_SKB_DROP = 5,
+	COLLECTOR_SKB = 6,
+	COLLECTOR_OVS = 7,
+	COLLECTOR_NFT = 8,
+	COLLECTOR_CT = 9,
 };
 
 struct retis_raw_event {

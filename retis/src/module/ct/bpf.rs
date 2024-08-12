@@ -9,9 +9,13 @@ use std::net::Ipv6Addr;
 
 use crate::{
     core::{
-        events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
+        events::{
+            parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+            RawEventSectionFactory,
+        },
         inspect::inspector,
     },
+    event_section_factory,
     events::*,
     helpers, raw_event_section,
 };
@@ -73,7 +77,8 @@ pub(crate) struct RawCtEvent {
 
 unsafe impl Plain for RawCtEvent {}
 
-#[derive(Default, crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::Ct)]
+#[derive(Default)]
 pub(crate) struct CtEventFactory {
     tcp_states: HashMap<i32, String>,
 }

@@ -10,9 +10,9 @@ use crate::{
         events::*,
         probe::{manager::ProbeBuilderManager, Hook},
     },
+    event_section_factory,
     events::*,
     module::Module,
-    EventSectionFactory,
 };
 
 #[derive(Default)]
@@ -50,13 +50,13 @@ impl Module for SkbTrackingModule {
     }
 }
 
-#[derive(Default, EventSectionFactory)]
+#[event_section_factory(FactoryId::SkbTracking)]
+#[derive(Default)]
 pub(crate) struct SkbTrackingEventFactory {}
 
 impl RawEventSectionFactory for SkbTrackingEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let event =
-            parse_single_raw_section::<SkbTrackingEvent>(SectionId::SkbTracking, &raw_sections)?;
+        let event = parse_single_raw_section::<SkbTrackingEvent>(&raw_sections)?;
 
         Ok(Box::new(*event))
     }

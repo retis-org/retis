@@ -5,11 +5,11 @@ use std::{collections::HashMap, fmt};
 use anyhow::{bail, Result};
 
 use super::{config::ProbeConfig, inspect::inspect_symbol};
-use crate::EventSectionFactory;
 use crate::{
     core::{
         events::{
-            parse_single_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory,
+            parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+            RawEventSectionFactory,
         },
         kernel::Symbol,
         probe::{
@@ -17,6 +17,7 @@ use crate::{
             ProbeOption,
         },
     },
+    event_section_factory,
     events::*,
     raw_event_section,
 };
@@ -69,7 +70,8 @@ impl fmt::Display for KernelProbe {
     }
 }
 
-#[derive(Default, EventSectionFactory)]
+#[event_section_factory(FactoryId::Kernel)]
+#[derive(Default)]
 pub(crate) struct KernelEventFactory {
     #[cfg(not(test))]
     pub(crate) stack_map: Option<libbpf_rs::MapHandle>,
@@ -124,7 +126,7 @@ pub(crate) struct RawKernelEvent {
 
 impl RawEventSectionFactory for KernelEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let raw = parse_single_raw_section::<RawKernelEvent>(SectionId::Kernel, &raw_sections)?;
+        let raw = parse_single_raw_section::<RawKernelEvent>(&raw_sections)?;
         let mut event = KernelEvent::default();
 
         let symbol_addr = raw.symbol;
