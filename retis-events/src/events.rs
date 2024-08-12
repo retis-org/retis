@@ -34,7 +34,7 @@
 #![allow(dead_code)] // FIXME
 #![allow(clippy::wrong_self_convention)]
 
-use std::{any::Any, collections::HashMap, fmt, str::FromStr};
+use std::{any::Any, collections::HashMap, fmt};
 
 use anyhow::{anyhow, bail, Result};
 use log::debug;
@@ -193,29 +193,6 @@ pub enum SectionId {
     Startup = 11,
     // TODO: use std::mem::variant_count once in stable.
     _MAX = 12,
-}
-
-impl FromStr for SectionId {
-    type Err = anyhow::Error;
-
-    /// Constructs an SectionId from a section unique str identifier.
-    fn from_str(val: &str) -> Result<Self> {
-        use SectionId::*;
-        Ok(match val {
-            "common" => Common,
-            "kernel" => Kernel,
-            "userspace" => Userspace,
-            "tracking" => Tracking,
-            "skb-tracking" => SkbTracking,
-            "skb-drop" => SkbDrop,
-            "skb" => Skb,
-            "ovs" => Ovs,
-            "nft" => Nft,
-            "ct" => Ct,
-            "startup" => Startup,
-            x => bail!("Can't construct a SectionId from {}", x),
-        })
-    }
 }
 
 impl SectionId {
