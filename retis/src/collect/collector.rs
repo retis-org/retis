@@ -28,7 +28,10 @@ use crate::{
 };
 
 #[cfg(not(test))]
-use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
+use crate::core::{
+    events::FactoryId,
+    probe::kernel::{config::init_stack_map, kernel::KernelEventFactory},
+};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
     core::{
@@ -338,7 +341,7 @@ impl Collectors {
             self.probes
                 .builder_mut()?
                 .reuse_map("log_map", self.factory.log_map_fd())?;
-            match section_factories.get_mut(&SectionId::Kernel) {
+            match section_factories.get_mut(&FactoryId::Kernel) {
                 Some(kernel_factory) => {
                     kernel_factory
                         .as_any_mut()
@@ -541,7 +544,7 @@ mod tests {
     use super::*;
     use crate::{
         core::{events::bpf::*, probe::ProbeBuilderManager},
-        event_section,
+        event_section, event_section_factory,
         module::Module,
     };
 
@@ -577,7 +580,7 @@ mod tests {
             self
         }
         fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-            Ok(Some(Box::new(TestEvent {})))
+            Ok(Some(Box::new(TestEventFactory {})))
         }
     }
 
@@ -609,12 +612,11 @@ mod tests {
             self
         }
         fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-            Ok(Some(Box::new(TestEvent {})))
+            Ok(Some(Box::new(TestEventFactory {})))
         }
     }
 
     #[event_section(SectionId::Common)]
-    #[derive(crate::EventSectionFactory)]
     struct TestEvent {}
 
     impl EventFmt for TestEvent {
@@ -623,7 +625,10 @@ mod tests {
         }
     }
 
-    impl RawEventSectionFactory for TestEvent {
+    #[event_section_factory(FactoryId::Common)]
+    struct TestEventFactory {}
+
+    impl RawEventSectionFactory for TestEventFactory {
         fn create(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
             Ok(Box::<TestEvent>::default())
         }

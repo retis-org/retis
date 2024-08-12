@@ -13,10 +13,12 @@ const SKB_DROP_REASON_SUBSYS_SHIFT: u32 = 16;
 use crate::{
     core::{
         events::{
-            parse_single_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory,
+            parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+            RawEventSectionFactory,
         },
         inspect::inspector,
     },
+    event_section_factory,
     events::*,
 };
 
@@ -81,7 +83,7 @@ impl DropReasons {
     }
 }
 
-#[derive(crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::SkbDrop)]
 pub(crate) struct SkbDropEventFactory {
     /// Map of sub-system reason ids to their custom drop reason definitions.
     reasons: HashMap<u16, DropReasons>,
@@ -89,7 +91,7 @@ pub(crate) struct SkbDropEventFactory {
 
 impl RawEventSectionFactory for SkbDropEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let raw = parse_single_raw_section::<BpfSkbDropEvent>(SectionId::SkbDrop, &raw_sections)?;
+        let raw = parse_single_raw_section::<BpfSkbDropEvent>(&raw_sections)?;
 
         let drop_reason = raw.drop_reason;
         let (subsys, drop_reason) = self.get_reason(drop_reason);

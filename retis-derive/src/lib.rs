@@ -1,6 +1,5 @@
-use proc_macro::{self, TokenStream};
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Item, ItemStruct};
+use syn::{parse_macro_input, Item, ItemStruct};
 
 #[proc_macro_attribute]
 pub fn raw_event_section(
@@ -79,13 +78,29 @@ pub fn event_type(
         .expect("Invalid tokens from event_section macro")
 }
 
-#[proc_macro_derive(EventSectionFactory)]
-pub fn derive_event_section_factory(input: TokenStream) -> TokenStream {
-    let input: DeriveInput = parse_macro_input!(input);
+#[proc_macro_attribute]
+pub fn event_section_factory(
+    args: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let input: ItemStruct = parse_macro_input!(item);
     let ident = &input.ident;
 
+    let id: syn::Expr = syn::parse(args).expect("Invalid factory id");
+
     let output = quote! {
+        #input
+
+        impl #ident {
+            pub(crate) const FACTORY_ID: u8 = #id as u8;
+
+        }
+
         impl EventSectionFactory for #ident {
+            fn id(&self) -> u8 {
+                Self::FACTORY_ID
+            }
+
             fn as_any_mut(&mut self) -> &mut dyn std::any::Any
                 where Self: Sized,
             {

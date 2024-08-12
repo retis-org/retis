@@ -9,11 +9,10 @@ use super::{
 use crate::{
     collect::Collector,
     core::{
-        events::{CommonEventFactory, EventSectionFactory, SectionFactories},
+        events::{CommonEventFactory, EventSectionFactory, FactoryId, SectionFactories},
         probe::{kernel::KernelEventFactory, user::UserEventFactory},
     },
     events::*,
-    process::tracking::TrackingInfoEventFactory,
 };
 
 /// Trait that must be implemented by Modules
@@ -81,17 +80,13 @@ impl Modules {
         let mut section_factories: SectionFactories = HashMap::new();
 
         // Register core event sections.
-        section_factories.insert(SectionId::Common, Box::<CommonEventFactory>::default());
-        section_factories.insert(SectionId::Kernel, Box::<KernelEventFactory>::default());
-        section_factories.insert(SectionId::Userspace, Box::<UserEventFactory>::default());
-        section_factories.insert(
-            SectionId::Tracking,
-            Box::<TrackingInfoEventFactory>::default(),
-        );
+        section_factories.insert(FactoryId::Common, Box::<CommonEventFactory>::default());
+        section_factories.insert(FactoryId::Kernel, Box::<KernelEventFactory>::default());
+        section_factories.insert(FactoryId::Userspace, Box::<UserEventFactory>::default());
 
-        for (id, module) in self.modules.iter() {
+        for (_, module) in self.modules.iter() {
             if let Some(factory) = module.section_factory()? {
-                section_factories.insert(*id, factory);
+                section_factories.insert(FactoryId::from_u8(factory.id())?, factory);
             }
         }
         Ok(section_factories)

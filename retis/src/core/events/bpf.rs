@@ -17,7 +17,7 @@ use anyhow::{anyhow, bail, Result};
 use log::{error, log, Level};
 use plain::Plain;
 
-use crate::{events::*, helpers::signals::Running, raw_event_section};
+use crate::{event_section_factory, events::*, helpers::signals::Running, raw_event_section};
 
 /// Raw event sections for common.
 pub(super) const COMMON_SECTION_CORE: u64 = 0;
@@ -338,7 +338,7 @@ pub(crate) fn parse_raw_event<'a>(
         }
 
         // Try converting the raw owner id into something we can use.
-        let owner = match SectionId::from_u8(raw_section.header.owner) {
+        let owner = match FactoryId::from_u8(raw_section.header.owner) {
             Ok(owner) => owner,
             Err(e) => {
                 // Skip the section.
@@ -363,11 +363,11 @@ pub(crate) fn parse_raw_event<'a>(
     raw_sections.drain().try_for_each(|(owner, sections)| {
         let factory = factories
             .get_mut(&owner)
-            .ok_or_else(|| anyhow!("Unknown factory for event section owner {}", &owner))?;
+            .ok_or_else(|| anyhow!("Unknown factory {}", owner as u8))?;
 
         let section = factory
             .create(sections)
-            .map_err(|e| anyhow!("Failed to parse section {}: {e}", &owner))?;
+            .map_err(|e| anyhow!("Factory {} failed to parse section: {e}", owner as u8))?;
         event.insert_section(SectionId::from_u8(section.id())?, section)
     })?;
 
@@ -390,12 +390,9 @@ pub(crate) fn parse_raw_section<'a, T>(raw_section: &'a BpfRawSection) -> Result
 
 /// Helper to parse a single raw section from BPF raw sections, checking the
 /// section validity and parsing it into a structured type.
-pub(crate) fn parse_single_raw_section<'a, T>(
-    id: SectionId,
-    raw_sections: &'a [BpfRawSection],
-) -> Result<&'a T> {
+pub(crate) fn parse_single_raw_section<'a, T>(raw_sections: &'a [BpfRawSection]) -> Result<&'a T> {
     if raw_sections.len() != 1 {
-        bail!("{id} event from BPF must be a single section");
+        bail!("Raw event must be a single section");
     }
 
     // We can access the first element safely as we just checked the vector
@@ -410,7 +407,8 @@ pub(crate) struct RawCommonEvent {
     smp_id: u32,
 }
 
-#[derive(Default, crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::Common)]
+#[derive(Default)]
 pub(crate) struct CommonEventFactory {}
 
 impl RawEventSectionFactory for CommonEventFactory {
@@ -545,6 +543,7 @@ unsafe impl Plain for BpfRawSectionHeader {}
 /// Please use `#[retis_derive::event_section_factory]` to implement the common
 /// traits.
 pub(crate) trait EventSectionFactory: RawEventSectionFactory {
+    fn id(&self) -> u8;
     fn as_any_mut(&mut self) -> &mut dyn any::Any;
 }
 
@@ -554,8 +553,43 @@ pub(crate) trait RawEventSectionFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>>;
 }
 
+/// Identifier for factories. Should match their counterparts in the BPF side.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum FactoryId {
+    Common = 1,
+    Kernel = 2,
+    Userspace = 3,
+    SkbTracking = 4,
+    SkbDrop = 5,
+    Skb = 6,
+    Ovs = 7,
+    Nft = 8,
+    Ct = 9,
+    // TODO: use std::mem::variant_count once in stable.
+    _MAX = 10,
+}
+
+impl FactoryId {
+    /// Constructs an FactoryId from a section unique identifier
+    pub(crate) fn from_u8(val: u8) -> Result<Self> {
+        use FactoryId::*;
+        Ok(match val {
+            1 => Common,
+            2 => Kernel,
+            3 => Userspace,
+            4 => SkbTracking,
+            5 => SkbDrop,
+            6 => Skb,
+            7 => Ovs,
+            8 => Nft,
+            9 => Ct,
+            x => bail!("Can't construct a FactoryId from {}", x),
+        })
+    }
+}
+
 /// Type alias to refer to the commonly used EventSectionFactory HashMap.
-pub(crate) type SectionFactories = HashMap<SectionId, Box<dyn EventSectionFactory>>;
+pub(crate) type SectionFactories = HashMap<FactoryId, Box<dyn EventSectionFactory>>;
 
 #[cfg(feature = "benchmark")]
 pub(crate) mod benchmark {
@@ -564,8 +598,7 @@ pub(crate) mod benchmark {
     use super::{RawCommonEvent, RawTaskEvent};
     use crate::{
         benchmark::helpers::*,
-        core::events::{COMMON_SECTION_CORE, COMMON_SECTION_TASK},
-        events::SectionId,
+        core::events::{FactoryId, COMMON_SECTION_CORE, COMMON_SECTION_TASK},
     };
 
     impl RawSectionBuilder for RawCommonEvent {
@@ -573,7 +606,7 @@ pub(crate) mod benchmark {
             let data = RawCommonEvent::default();
             build_raw_section(
                 out,
-                SectionId::Common.to_u8(),
+                FactoryId::Common as u8,
                 COMMON_SECTION_CORE as u8,
                 &mut as_u8_vec(&data),
             );
@@ -591,7 +624,7 @@ pub(crate) mod benchmark {
             data.comm.0[4] = b's';
             build_raw_section(
                 out,
-                SectionId::Common.to_u8(),
+                FactoryId::Common as u8,
                 COMMON_SECTION_TASK as u8,
                 &mut as_u8_vec(&data),
             );
@@ -605,12 +638,11 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{event_section, EventSectionFactory};
+    use crate::{event_section, event_section_factory};
 
     const DATA_TYPE_U64: u8 = 1;
     const DATA_TYPE_U128: u8 = 2;
 
-    #[derive(EventSectionFactory)]
     #[event_section(SectionId::Common)]
     struct TestEvent {
         field0: Option<u64>,
@@ -628,7 +660,11 @@ mod tests {
         }
     }
 
-    impl RawEventSectionFactory for TestEvent {
+    #[event_section_factory(FactoryId::Common)]
+    #[derive(Default)]
+    struct TestEventFactory {}
+
+    impl RawEventSectionFactory for TestEventFactory {
         fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
             let mut event = TestEvent::default();
 
@@ -662,7 +698,7 @@ mod tests {
     #[test]
     fn parse_raw_event() {
         let mut factories: SectionFactories = HashMap::new();
-        factories.insert(SectionId::Common, Box::<TestEvent>::default());
+        factories.insert(FactoryId::Common, Box::<TestEventFactory>::default());
 
         // Empty event.
         let data = [];
