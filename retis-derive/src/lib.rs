@@ -27,36 +27,16 @@ pub fn event_section(
     let name: syn::LitStr = syn::parse(args).expect("Invalid event name");
 
     let output = quote! {
-        #[derive(Default, crate::EventSection)]
+        #[derive(Default)]
         #[crate::event_type]
         #input
 
         impl #ident {
             pub(crate) const SECTION_NAME: &'static str = #name;
         }
-    };
-    output.into()
-}
 
-#[proc_macro_attribute]
-pub fn event_type(
-    _: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    let input: Item = parse_macro_input!(item);
-    let output = quote! {
-        #[serde_with::skip_serializing_none]
-        #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-        #input
-    };
-    output.into()
-}
-
-#[proc_macro_derive(EventSection)]
-pub fn derive_event_section(input: TokenStream) -> TokenStream {
-    let DeriveInput { ident, .. } = parse_macro_input!(input);
-    let output = quote! {
         impl EventSectionInternal for #ident {
+
             fn as_any(&self) -> &dyn std::any::Any
                 where Self: Sized,
             {
@@ -77,6 +57,23 @@ pub fn derive_event_section(input: TokenStream) -> TokenStream {
         }
     };
     output.into()
+}
+
+#[proc_macro_attribute]
+pub fn event_type(
+    _: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    let output = format!(
+        r#"
+        #[serde_with::skip_serializing_none]
+        #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+        {item}
+    "#
+    );
+    output
+        .parse()
+        .expect("Invalid tokens from event_section macro")
 }
 
 #[proc_macro_derive(EventSectionFactory)]
