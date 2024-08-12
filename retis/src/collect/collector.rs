@@ -16,14 +16,25 @@ use nix::unistd::Uid;
 
 use super::cli::Collect;
 use crate::{
-    cli::{CliDisplayFormat, SubCommandRunner},
+    cli::{dynamic::DynamicCommand, CliConfig, CliDisplayFormat, FullCli, SubCommandRunner},
     core::{
-        events::RetisEventsFactory,
-        filters::{meta::filter::FilterMeta, packets::filter::FilterPacketType},
+        events::{BpfEventsFactory, RetisEventsFactory},
+        filters::{
+            filters::{BpfFilter, Filter},
+            meta::filter::FilterMeta,
+            packets::filter::{FilterPacket, FilterPacketType},
+        },
+        inspect::check::collection_prerequisites,
         kernel::Symbol,
-        probe::kernel::utils::parse_probe,
+        probe::{
+            kernel::{probe_stack::ProbeStack, utils::parse_probe},
+            *,
+        },
+        tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
     events::*,
+    helpers::{signals::Running, time::*},
+    module::{ModuleId, Modules},
     process::display::*,
 };
 
@@ -31,22 +42,6 @@ use crate::{
 use crate::core::{
     events::FactoryId,
     probe::kernel::{config::init_stack_map, kernel::KernelEventFactory},
-};
-use crate::{
-    cli::{dynamic::DynamicCommand, CliConfig, FullCli},
-    core::{
-        events::BpfEventsFactory,
-        filters::{
-            filters::{BpfFilter, Filter},
-            packets::filter::FilterPacket,
-        },
-        inspect::check::collection_prerequisites,
-        probe::{kernel::probe_stack::ProbeStack, *},
-        tracking::{gc::TrackingGC, skb_tracking::init_tracking},
-    },
-    events::EventResult,
-    helpers::{signals::Running, time::*},
-    module::{ModuleId, Modules},
 };
 
 /// Generic trait representing a collector. All collectors are required to
