@@ -166,7 +166,7 @@ impl EventFmt for Event {
         f.conf.inc_level(2);
 
         // Finally show all sections.
-        (SectionId::Skb.to_u8()..SectionId::_MAX.to_u8())
+        (SectionId::Skb as u8..SectionId::_MAX as u8)
             .collect::<Vec<u8>>()
             .iter()
             .filter_map(|id| self.0.get(&SectionId::from_u8(*id).unwrap()))
@@ -239,26 +239,6 @@ impl SectionId {
             11 => Startup,
             x => bail!("Can't construct a SectionId from {}", x),
         })
-    }
-
-    /// Converts an SectionId to a section unique identifier.
-    #[allow(dead_code)]
-    pub fn to_u8(self) -> u8 {
-        use SectionId::*;
-        match self {
-            Common => 1,
-            Kernel => 2,
-            Userspace => 3,
-            Tracking => 4,
-            SkbTracking => 5,
-            SkbDrop => 6,
-            Skb => 7,
-            Ovs => 8,
-            Nft => 9,
-            Ct => 10,
-            Startup => 11,
-            _MAX => 12,
-        }
     }
 
     /// Converts an SectionId to a section unique str identifier.
