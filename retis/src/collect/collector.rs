@@ -613,7 +613,7 @@ mod tests {
         }
     }
 
-    #[event_section("test")]
+    #[event_section(SectionId::Common)]
     #[derive(crate::EventSectionFactory)]
     struct TestEvent {}
 

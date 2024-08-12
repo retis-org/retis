@@ -24,7 +24,7 @@ pub fn event_section(
     let input: ItemStruct = parse_macro_input!(item);
     let ident = &input.ident;
 
-    let name: syn::LitStr = syn::parse(args).expect("Invalid event name");
+    let id: syn::Expr = syn::parse(args).expect("Invalid event id");
 
     let output = quote! {
         #[derive(Default)]
@@ -32,10 +32,13 @@ pub fn event_section(
         #input
 
         impl #ident {
-            pub(crate) const SECTION_NAME: &'static str = #name;
+            pub(crate) const SECTION_ID: u8 = #id as u8;
         }
 
         impl EventSectionInternal for #ident {
+            fn id(&self) -> u8 {
+                Self::SECTION_ID
+            }
 
             fn as_any(&self) -> &dyn std::any::Any
                 where Self: Sized,
