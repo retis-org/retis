@@ -17,7 +17,7 @@ use crate::{
     core::events::{
         parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
     },
-    event_byte_array,
+    event_byte_array, event_section_factory,
     events::{net::RawPacket, *},
     helpers, raw_event_section,
 };
