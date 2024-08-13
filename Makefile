@@ -12,7 +12,7 @@ RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '
 
 export ARCH CFLAGS CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
 
-PRINT = echo
+PRINT = printf
 
 VERBOSITY := $(filter 1,$(V))
 
@@ -21,7 +21,7 @@ ifeq ($(VERBOSITY),)
     MAKE += -s
     CARGO += -q
 define out_console
-    $(PRINT) -e "[$(1)]\t$(2)"
+    $(PRINT) "[$(1)]\t$(2)\n"
 endef
 
 .SILENT:
