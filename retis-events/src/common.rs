@@ -20,6 +20,7 @@ impl EventFmt for StartupEvent {
     }
 }
 
+/// Information about a given task.
 #[event_type]
 #[derive(Default)]
 pub struct TaskEvent {
@@ -38,6 +39,7 @@ pub struct CommonEvent {
     pub timestamp: u64,
     /// SMP processor id.
     pub smp_id: Option<u32>,
+    /// Information about the task linked to the event.
     pub task: Option<TaskEvent>,
 }
 
