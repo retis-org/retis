@@ -161,7 +161,8 @@ bool cmp_num(u64 operand1, u64 mmask, u64 operand2, bool sign_bit, u8 cmp_type)
 static __always_inline
 bool cmp_bytes(struct retis_meta_ctx *ctx)
 {
-	char val[META_TARGET_MAX];
+	char val[META_TARGET_MAX] = {0};
+	bool ret;
 	long sz;
 
 	/* if it is an array of chars use its size. Alternatively, use
@@ -173,17 +174,26 @@ bool cmp_bytes(struct retis_meta_ctx *ctx)
 	sz = ctx->nmemb ? : ctx->sz;
 	sz = MIN(sz, sizeof(val));
 
+	if (sz <= 0) {
+		log_error("Wrong size (%ld) for bytes comparison", sz);
+		return false;
+	}
+
 	if (bpf_probe_read_kernel_str(val, sz, (char *)ctx->base + ctx->offset) < 0)
 		return 0;
 
-	if (!sz)
-		return false;
-
 	const char *sp1 = ctx->data, *sp2 = val;
-	while (sz-- > 0 && *sp1 && *sp2 && !(*sp1 - *sp2))
-		sp1++, sp2++;
 
-	return !(*sp1 - *sp2);
+	do {
+		ret = *sp1 - *sp2;
+		if (ret)
+			break;
+
+		if (!(*sp1++ && *sp2++))
+			break;
+	} while (--sz > 0);
+
+	return !ret;
 }
 
 static __always_inline
