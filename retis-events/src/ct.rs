@@ -111,8 +111,9 @@ pub struct CtEvent {
     pub parent: Option<CtConnEvent>,
 }
 
-/// Conntrack event
-#[event_section("ct")]
+/// Conntrack connection information
+#[event_type]
+#[derive(Default)]
 pub struct CtConnEvent {
     /// Zone ID
     pub zone_id: u16,
