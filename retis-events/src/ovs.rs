@@ -8,7 +8,7 @@ use crate::{event_section, event_type, Formatter};
 
 ///The OVS Event
 #[event_section(SectionId::Ovs)]
-#[derive(Default, PartialEq)]
+#[derive(PartialEq)]
 pub struct OvsEvent {
     /// Event data
     #[serde(flatten)]
@@ -23,7 +23,7 @@ impl EventFmt for OvsEvent {
 
 #[event_type]
 #[serde(tag = "event_type")]
-#[derive(Default, PartialEq)]
+#[derive(PartialEq)]
 pub enum OvsEventType {
     /// Upcall event. It indicates the begining of an upcall. An upcall can have multiple enqueue
     /// events.
@@ -51,10 +51,6 @@ pub enum OvsEventType {
     /// Action execution event. It indicates the datapath has executed an action on a packet.
     #[serde(rename = "action_execute")]
     Action(ActionEvent),
-
-    #[serde(rename = "undefined")]
-    #[default]
-    Undefined,
 }
 
 impl EventFmt for OvsEventType {
@@ -67,7 +63,6 @@ impl EventFmt for OvsEventType {
             RecvUpcall(e) => e,
             Operation(e) => e,
             Action(e) => e,
-            Undefined => return write!(f, "?"),
         };
 
         disp.event_fmt(f, format)
@@ -266,7 +261,7 @@ impl EventFmt for RecvUpcallEvent {
 pub struct ActionEvent {
     /// Action to be executed.
     #[serde(flatten)]
-    pub action: OvsAction,
+    pub action: Option<OvsAction>,
     /// Recirculation id.
     pub recirc_id: u32,
     /// Queue id used for tracking. None if not tracking or if the output event did not come from
@@ -284,19 +279,18 @@ impl EventFmt for ActionEvent {
         write!(f, "exec")?;
 
         match &self.action {
-            OvsAction::Unspecified => write!(f, " (unspecified)")?,
-            OvsAction::Output(a) => write!(f, " oport {}", a.port)?,
-            OvsAction::Userspace => write!(f, " userspace")?,
-            OvsAction::Set => write!(f, " tunnel_set")?,
-            OvsAction::PushVlan => write!(f, " push_vlan")?,
-            OvsAction::PopVlan => write!(f, " pop_vlan")?,
-            OvsAction::Sample => write!(f, " sample")?,
-            OvsAction::Recirc(a) => write!(f, " recirc {:#x}", a.id)?,
-            OvsAction::Hash => write!(f, " hash")?,
-            OvsAction::PushMpls => write!(f, " push_mpls")?,
-            OvsAction::PopMpls => write!(f, " pop_mpls")?,
-            OvsAction::SetMasked => write!(f, " set_masked")?,
-            OvsAction::Ct(ct) => {
+            Some(OvsAction::Output(a)) => write!(f, " oport {}", a.port)?,
+            Some(OvsAction::Userspace(_)) => write!(f, " userspace")?,
+            Some(OvsAction::Set(_)) => write!(f, " tunnel_set")?,
+            Some(OvsAction::PushVlan(_)) => write!(f, " push_vlan")?,
+            Some(OvsAction::PopVlan(_)) => write!(f, " pop_vlan")?,
+            Some(OvsAction::Sample(_)) => write!(f, " sample")?,
+            Some(OvsAction::Recirc(a)) => write!(f, " recirc {:#x}", a.id)?,
+            Some(OvsAction::Hash(_)) => write!(f, " hash")?,
+            Some(OvsAction::PushMpls(_)) => write!(f, " push_mpls")?,
+            Some(OvsAction::PopMpls(_)) => write!(f, " pop_mpls")?,
+            Some(OvsAction::SetMasked(_)) => write!(f, " set_masked")?,
+            Some(OvsAction::Ct(ct)) => {
                 write!(f, " ct zone {}", ct.zone_id)?;
 
                 if let Some(nat) = &ct.nat {
@@ -358,17 +352,18 @@ impl EventFmt for ActionEvent {
                     write!(f, " {}", flags.join(","))?;
                 }
             }
-            OvsAction::Trunc => write!(f, " trunc")?,
-            OvsAction::PushEth => write!(f, " push_eth")?,
-            OvsAction::PopEth => write!(f, " pop_eth")?,
-            OvsAction::CtClear => write!(f, " ct_clear")?,
-            OvsAction::PushNsh => write!(f, " push_nsh")?,
-            OvsAction::PopNsh => write!(f, " pop_nsh")?,
-            OvsAction::Meter => write!(f, " meter")?,
-            OvsAction::Clone => write!(f, " clone")?,
-            OvsAction::CheckPktLen => write!(f, " check_pkt_len")?,
-            OvsAction::AddMpls => write!(f, " add_mpls")?,
-            OvsAction::DecTtl => write!(f, " dec_ttl")?,
+            Some(OvsAction::Trunc(_)) => write!(f, " trunc")?,
+            Some(OvsAction::PushEth(_)) => write!(f, " push_eth")?,
+            Some(OvsAction::PopEth(_)) => write!(f, " pop_eth")?,
+            Some(OvsAction::CtClear(_)) => write!(f, " ct_clear")?,
+            Some(OvsAction::PushNsh(_)) => write!(f, " push_nsh")?,
+            Some(OvsAction::PopNsh(_)) => write!(f, " pop_nsh")?,
+            Some(OvsAction::Meter(_)) => write!(f, " meter")?,
+            Some(OvsAction::Clone(_)) => write!(f, " clone")?,
+            Some(OvsAction::CheckPktLen(_)) => write!(f, " check_pkt_len")?,
+            Some(OvsAction::AddMpls(_)) => write!(f, " add_mpls")?,
+            Some(OvsAction::DecTtl(_)) => write!(f, " dec_ttl")?,
+            None => write!(f, " unspec")?,
         }
 
         if let Some(p) = self.queue_id {
@@ -379,59 +374,62 @@ impl EventFmt for ActionEvent {
     }
 }
 
+// Adding unit values in an otherwise complex is not supported by pyo3.
+// FIXME: Remove when arguments from all actions are implemented.
+#[event_type]
+#[derive(PartialEq)]
+pub struct OvsDummyAction;
+
 #[event_type]
 #[serde(tag = "action")]
-#[derive(Default, PartialEq)]
+#[derive(PartialEq)]
 pub enum OvsAction {
-    #[serde(rename = "unspecified")]
-    #[default]
-    Unspecified,
     #[serde(rename = "output")]
     Output(OvsActionOutput),
     #[serde(rename = "userspace")]
-    Userspace,
+    Userspace(OvsDummyAction),
     #[serde(rename = "set")]
-    Set,
+    Set(OvsDummyAction),
     #[serde(rename = "push_vlan")]
-    PushVlan,
+    PushVlan(OvsDummyAction),
     #[serde(rename = "pop_vlan")]
-    PopVlan,
+    PopVlan(OvsDummyAction),
     #[serde(rename = "sample")]
-    Sample,
+    Sample(OvsDummyAction),
     #[serde(rename = "recirc")]
     Recirc(OvsActionRecirc),
     #[serde(rename = "hash")]
-    Hash,
+    Hash(OvsDummyAction),
     #[serde(rename = "push_mpls")]
-    PushMpls,
+    PushMpls(OvsDummyAction),
     #[serde(rename = "pop_mpls")]
-    PopMpls,
+    PopMpls(OvsDummyAction),
     #[serde(rename = "set_masked")]
-    SetMasked,
+    SetMasked(OvsDummyAction),
     #[serde(rename = "ct")]
     Ct(OvsActionCt),
     #[serde(rename = "trunc")]
-    Trunc,
+    Trunc(OvsDummyAction),
     #[serde(rename = "push_eth")]
-    PushEth,
+    PushEth(OvsDummyAction),
     #[serde(rename = "pop_eth")]
-    PopEth,
+    PopEth(OvsDummyAction),
     #[serde(rename = "ct_clear")]
-    CtClear,
+    CtClear(OvsDummyAction),
     #[serde(rename = "push_nsh")]
-    PushNsh,
+    PushNsh(OvsDummyAction),
     #[serde(rename = "pop_nsh")]
-    PopNsh,
+    PopNsh(OvsDummyAction),
     #[serde(rename = "meter")]
-    Meter,
+    Meter(OvsDummyAction),
     #[serde(rename = "clone")]
-    Clone,
+    Clone(OvsDummyAction),
     #[serde(rename = "check_pkt_len")]
-    CheckPktLen,
+    CheckPktLen(OvsDummyAction),
     #[serde(rename = "add_mpls")]
-    AddMpls,
+    AddMpls(OvsDummyAction),
     #[serde(rename = "dec_ttl")]
-    DecTtl,
+    DecTtl(OvsDummyAction),
 }
 
 /// OVS output action data.
@@ -555,7 +553,7 @@ mod tests {
                 r#"{"action":"output","event_type":"action_execute","port":2,"queue_id":1361394472,"recirc_id":0}"#,
                 OvsEvent {
                     event: OvsEventType::Action(ActionEvent {
-                        action: OvsAction::Output(OvsActionOutput { port: 2 }),
+                        action: Some(OvsAction::Output(OvsActionOutput { port: 2 })),
                         recirc_id: 0,
                         queue_id: Some(1361394472),
                     }),
@@ -615,7 +613,7 @@ mod tests {
                 r#"{"action":"ct","event_type":"action_execute","flags":485,"nat":{"dir":"dst","max_addr":"10.244.1.30","max_port":36900,"min_addr":"10.244.1.3","min_port":36895},"recirc_id":34,"zone_id":20}"#,
                 OvsEvent {
                     event: OvsEventType::Action(ActionEvent {
-                        action: OvsAction::Ct(OvsActionCt {
+                        action: Some(OvsAction::Ct(OvsActionCt {
                             zone_id: 20,
                             flags: 485,
                             nat: Some(OvsActionCtNat {
@@ -625,7 +623,7 @@ mod tests {
                                 min_port: Some(36895),
                                 max_port: Some(36900),
                             }),
-                        }),
+                        })),
                         recirc_id: 34,
                         queue_id: None,
                     }),
