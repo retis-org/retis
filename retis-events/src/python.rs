@@ -9,7 +9,7 @@ use anyhow::Result;
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError},
     prelude::*,
-    types::PyDict,
+    types::{PyDict, PyList},
 };
 
 use super::*;
@@ -28,6 +28,8 @@ use super::*;
 /// In addition, some helpers might be available. One of the helpers that
 /// is implemented for all event section types is `raw()`, which returns
 /// the data as a dictionary.
+///
+/// Also, sections can be iterated through the `sections()` helper.
 ///
 /// ## Examples
 ///
@@ -103,6 +105,12 @@ impl PyEvent {
     fn show(&self) -> String {
         let format = crate::DisplayFormat::new().multiline(true);
         format!("{}", self.0.display(&format, &crate::FormatterConf::new()))
+    }
+
+    /// Returns a list of existing section names.
+    pub fn sections(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let sections: Vec<&str> = self.0.sections().map(|s| s.to_str()).collect();
+        PyList::new_bound(py, sections).extract()
     }
 }
 
