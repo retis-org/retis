@@ -120,6 +120,11 @@ impl Event {
 
         serde_json::Value::Object(event)
     }
+
+    /// Iterator over the existing sections
+    pub fn sections(&self) -> impl Iterator<Item = SectionId> + '_ {
+        self.0.keys().map(|s| s.to_owned())
+    }
 }
 
 impl EventFmt for Event {
