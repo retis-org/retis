@@ -329,6 +329,19 @@ impl EventSectionInternal for () {
     }
 }
 
+/// A set of sorted Events with the same tracking id.
+#[derive(Default)]
+pub struct EventSeries {
+    /// Events that comprise the Series.
+    pub events: Vec<Event>,
+}
+
+impl EventSeries {
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::Value::Array(self.events.iter().map(|e| e.to_json()).collect())
+    }
+}
+
 #[cfg(feature = "test-events")]
 pub mod test {
     use super::*;
