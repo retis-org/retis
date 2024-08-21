@@ -2,7 +2,6 @@ use std::io::Write;
 
 use anyhow::Result;
 
-use super::series::EventSeries;
 use crate::events::*;
 
 /// Select the format to follow when printing events with `PrintEvent`.
