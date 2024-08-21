@@ -10,7 +10,10 @@ use clap::Parser;
 
 use crate::{
     cli::*,
-    events::{file::FileEventsFactory, *},
+    events::{
+        file::{FileEventsFactory, FileType},
+        *,
+    },
     helpers::signals::Running,
     module::Modules,
     process::display::*,
@@ -48,15 +51,33 @@ impl SubCommandParserRunner for Print {
                 TimeFormat::MonotonicTimestamp
             });
 
-        // Formatter & printer for events.
-        let mut output = PrintEvent::new(Box::new(stdout()), PrintEventFormat::Text(format));
+        match factory.file_type() {
+            FileType::Event => {
+                // Formatter & printer for events.
+                let mut event_output =
+                    PrintEvent::new(Box::new(stdout()), PrintEventFormat::Text(format));
 
-        while run.running() {
-            match factory.next_event()? {
-                Some(event) => output.process_one(&event)?,
-                None => break,
+                while run.running() {
+                    match factory.next_event()? {
+                        Some(event) => event_output.process_one(&event)?,
+                        None => break,
+                    }
+                }
+            }
+            FileType::Series => {
+                // Formatter & printer for series.
+                let mut series_output =
+                    PrintSeries::new(Box::new(stdout()), PrintEventFormat::Text(format));
+
+                while run.running() {
+                    match factory.next_series()? {
+                        Some(series) => series_output.process_one(&series)?,
+                        None => break,
+                    }
+                }
             }
         }
+
         Ok(())
     }
 }
