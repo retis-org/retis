@@ -71,6 +71,11 @@ impl SubCommandParserRunner for Sort {
         // Create event factory.
         let mut factory = FileEventsFactory::new(self.input.as_path())?;
 
+        if matches!(factory.file_type(), file::FileType::Series) {
+            println!("File already sorted");
+            return Ok(());
+        }
+
         let mut series = EventSorter::new();
         let mut tracker = AddTracking::new();
         let mut printers = Vec::new();

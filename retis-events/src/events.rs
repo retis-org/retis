@@ -53,13 +53,11 @@ impl Event {
         Event::default()
     }
 
-    pub fn from_json(line: String) -> Result<Event> {
+    /// Create an Event from a json object.
+    pub(crate) fn from_json_obj(mut obj: HashMap<String, serde_json::Value>) -> Result<Event> {
         let mut event = Event::new();
 
-        let mut event_js: HashMap<String, serde_json::Value> = serde_json::from_str(line.as_str())
-            .map_err(|e| anyhow!("Failed to parse json event at line {line}: {e}"))?;
-
-        for (owner, value) in event_js.drain() {
+        for (owner, value) in obj.drain() {
             let parser = event_sections()?
                 .get(&owner)
                 .ok_or_else(|| anyhow!("json contains an unsupported event {}", owner))?;
@@ -71,6 +69,14 @@ impl Event {
             event.insert_section(SectionId::from_u8(section.id())?, section)?;
         }
         Ok(event)
+    }
+
+    /// Create an Event from a json string.
+    pub(crate) fn from_json(line: String) -> Result<Event> {
+        let event_js: HashMap<String, serde_json::Value> = serde_json::from_str(line.as_str())
+            .map_err(|e| anyhow!("Failed to parse json event at line {line}: {e}"))?;
+
+        Self::from_json_obj(event_js)
     }
 
     /// Insert a new event field into an event.
@@ -301,6 +307,7 @@ fn event_sections() -> Result<&'static EventSectionMap> {
         insert_section!(events, NftEvent);
         insert_section!(events, CtEvent);
         insert_section!(events, StartupEvent);
+        insert_section!(events, TrackingInfo);
 
         Ok(events)
     })
@@ -367,8 +374,24 @@ pub struct EventSeries {
 }
 
 impl EventSeries {
+    /// Encode the EventSeries into a json object.
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::Value::Array(self.events.iter().map(|e| e.to_json()).collect())
+    }
+
+    /// Create an EventSeries from a json string.
+    pub(crate) fn from_json(line: String) -> Result<EventSeries> {
+        let mut series = EventSeries::default();
+
+        let mut series_js: Vec<HashMap<String, serde_json::Value>> =
+            serde_json::from_str(line.as_str())
+                .map_err(|e| anyhow!("Failed to parse json series at line {line}: {e}"))?;
+
+        for obj in series_js.drain(..) {
+            let event = Event::from_json_obj(obj)?;
+            series.events.push(event);
+        }
+        Ok(series)
     }
 }
 
