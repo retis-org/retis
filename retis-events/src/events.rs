@@ -295,8 +295,8 @@ pub enum EventResult {
 /// having a proper structure is encouraged as it allows easier consumption at
 /// post-processing. Those objects can also define their own specialized
 /// helpers.
-pub trait EventSection: EventSectionInternal + for<'a> EventDisplay<'a> {}
-impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<'a> {}
+pub trait EventSection: EventSectionInternal + for<'a> EventDisplay<'a> + Send {}
+impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<'a> + Send {}
 
 /// EventSection helpers defined in the core for all events. Common definition
 /// needs Sized but that is a requirement for all EventSection.
