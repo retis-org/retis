@@ -92,10 +92,7 @@ impl BtfInfo {
     pub(crate) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<(&Btf, Type)>> {
         let mut types = Vec::new();
 
-        let mut base_types = match self.vmlinux.resolve_types_by_name(name) {
-            Ok(base_types) => base_types,
-            _ => Vec::new(), // Id not found in base.
-        };
+        let mut base_types = self.vmlinux.resolve_types_by_name(name).unwrap_or_default();
 
         for module in self.modules.iter() {
             if let Ok(mut res) = module.resolve_types_by_name(name) {
