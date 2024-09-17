@@ -15,6 +15,7 @@ dnf install -y \
     libpcap-devel \
     git \
     python3-pip \
+    python3-devel \
     socat \
     nftables \
     make \
@@ -111,6 +112,7 @@ Vagrant.configure("2") do |config|
           git \
           pkg-config \
           python3-pip \
+          python3-dev \
           openvswitch-switch \
           socat \
           nftables \
