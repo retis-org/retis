@@ -33,7 +33,7 @@ caps = "0.5"
 clap = { version = "4.0", features = ["derive", "string"] }
 clap_complete = "4.4"
 elf = "0.7"
-events = {version = "1.4", path = "../retis-events", package="retis-events", features=["python"]}
+events = {version = "1.4", path = "../retis-events", package="retis-events", features=["python-embed"]}
 flate2 = "1.0"
 libbpf-rs = "0.22"
 libbpf-sys = "=1.2"

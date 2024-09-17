@@ -5,10 +5,12 @@ edition = "2021"
 
 [features]
 python = ["dep:pyo3", "retis-derive/python"]
+python-embed = ["python", "pyo3/auto-initialize"]
+python-lib = ["python", "pyo3/extension-module", "pyo3/abi3-py38"]
 test-events = []
 
 [lib]
-crate-type = ["lib"]
+crate-type = ["lib", "cdylib"]
 
 [dependencies]
 anyhow = "1.0"
@@ -17,7 +19,7 @@ chrono = "0.4"
 log = { version = "0.4", features = ["std"] }
 once_cell = "1.15"
 retis-derive = {version = "1.4", path = "../retis-derive"}
-pyo3 = {version = "0.22", features = ["gil-refs", "auto-initialize", "multiple-pymethods"], optional = true}
+pyo3 = {version = "0.22", features = ["gil-refs", "multiple-pymethods"], optional = true}
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
 serde_with = "3.0"
