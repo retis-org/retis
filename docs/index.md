@@ -121,6 +121,10 @@ $ PAGER=more retis sort
 $ NOPAGER=1 retis sort
 ```
 
+In addition to built-in post-processing commands, it is possible to use the
+python bindings to implement custom processing. See the
+[python bindings documentation](python.md).
+
 ## Profiles and customization
 
 Retis has the concept of profiles, which are a predefined set of cli arguments
