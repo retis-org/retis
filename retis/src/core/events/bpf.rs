@@ -638,28 +638,11 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{event_section, event_section_factory};
+    use crate::event_section_factory;
+    use crate::events::TestEvent;
 
     const DATA_TYPE_U64: u8 = 1;
     const DATA_TYPE_U128: u8 = 2;
-
-    #[event_section(SectionId::Common)]
-    #[derive(Default)]
-    struct TestEvent {
-        field0: Option<u64>,
-        field1: Option<u64>,
-        field2: Option<u64>,
-    }
-
-    impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> std::fmt::Result {
-            write!(
-                f,
-                "field0: {:?} field1: {:?} field2: {:?}",
-                self.field0, self.field1, self.field2
-            )
-        }
-    }
 
     #[event_section_factory(FactoryId::Common)]
     #[derive(Default)]

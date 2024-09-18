@@ -328,3 +328,30 @@ impl EventSectionInternal for () {
         serde_json::Value::Null
     }
 }
+
+#[cfg(feature = "test-events")]
+pub mod test {
+    use super::*;
+    use crate::event_section;
+
+    #[event_section(SectionId::Common)]
+    #[derive(Default)]
+    pub struct TestEvent {
+        pub field0: Option<u64>,
+        pub field1: Option<u64>,
+        pub field2: Option<u64>,
+    }
+
+    impl EventFmt for TestEvent {
+        fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> std::fmt::Result {
+            write!(
+                f,
+                "field0: {:?} field1: {:?} field2: {:?}",
+                self.field0, self.field1, self.field2
+            )
+        }
+    }
+}
+
+#[cfg(feature = "test-events")]
+pub use test::*;
