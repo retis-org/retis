@@ -541,8 +541,8 @@ mod tests {
     use super::*;
     use crate::{
         core::{events::bpf::*, probe::ProbeBuilderManager},
-        event_section,
         module::Module,
+        EventSectionFactory,
     };
 
     struct DummyCollectorA;
@@ -577,7 +577,7 @@ mod tests {
             self
         }
         fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-            Ok(Box::new(TestEvent {}))
+            Ok(Box::new(TestEventFactory::default()))
         }
     }
 
@@ -609,21 +609,14 @@ mod tests {
             self
         }
         fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-            Ok(Box::new(TestEvent {}))
+            Ok(Box::new(TestEventFactory::default()))
         }
     }
 
-    #[event_section("test")]
-    #[derive(Default, crate::EventSectionFactory)]
-    struct TestEvent {}
+    #[derive(Default, EventSectionFactory)]
+    struct TestEventFactory {}
 
-    impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> std::fmt::Result {
-            write!(f, "test event section")
-        }
-    }
-
-    impl RawEventSectionFactory for TestEvent {
+    impl RawEventSectionFactory for TestEventFactory {
         fn create(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
             Ok(Box::<TestEvent>::default())
         }

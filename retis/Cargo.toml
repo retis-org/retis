@@ -69,3 +69,4 @@ memmap2 = "0.9"
 probe = "0.5"
 serial_test = "3.1"
 test-case = "3.2"
+events = {version = "1.4", path = "../retis-events", package="retis-events", features = ["test-events"]}
