@@ -122,6 +122,20 @@ flavor coding style for the BPF parts.
    latest `main`. This can happen at any time, e.g. when other pull-requests are
    being merged.
 
+### Python bindings development
+
+When changing python bindings, it can be useful to quickly build and install the
+current code into a virtual environment for testing. An easy way to do it is by
+using [maturin](https://github.com/PyO3/maturin):
+
+```
+$ python -m venv venv && source venv/bin/activate # jump into a virtual env (required)
+$ pip install maturin
+$ maturin develop -m retis-events/Cargo.toml -F python-lib
+$ python
+>>> import retis
+```
+
 ### Documentation preview
 
 HTTP documentation is automatically generated for releases and the
