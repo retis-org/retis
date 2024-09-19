@@ -2,3 +2,4 @@
 .out
 __pycache__/
 retis.data
+retis-events/.tox
