@@ -60,9 +60,27 @@ build_python_lib_task:
   container:
     image: ghcr.io/pyo3/maturin
   build_script:
-    - maturin build --release -m retis-events/Cargo.toml -F python-lib  
+    - maturin build --release -m retis-events/Cargo.toml -F python-lib
   dist_artifacts:
     path: "target/wheels/*"
+
+test_python_lib_task:
+  container:
+    matrix:
+      - image: python:3.8
+      - image: python:3.9
+      - image: python:3.10
+      - image: python:3.11
+      - image: python:3.12
+  setup_script:
+    - apt-get update
+    - apt-get install -y curl
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh
+    - chmod +x rustup-init.sh && ./rustup-init.sh -y --profile minimal
+  build_script:
+    - source $HOME/.cargo/env
+    - python -m pip install tox
+    - make pytest
 
 functional_task:
   # Run for PRs with a specific label
