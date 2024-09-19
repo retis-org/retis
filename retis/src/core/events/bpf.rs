@@ -64,6 +64,14 @@ macro_rules! event_byte_array {
     };
 }
 
+/// The return value of EventFactory::next_event()
+pub(crate) enum EventResult {
+    /// The Factory was able to create a new event.
+    Event(Event),
+    /// The timeout went off but a new attempt to retrieve an event might succeed.
+    Timeout,
+}
+
 /// BPF events factory retrieving and unmarshaling events coming from the BPF
 /// parts.
 #[cfg(not(test))]

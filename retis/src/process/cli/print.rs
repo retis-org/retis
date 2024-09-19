@@ -3,7 +3,7 @@
 //! Print is a simple post-processing command that just parses events and prints them back to
 //! stdout
 
-use std::{io::stdout, path::PathBuf, time::Duration};
+use std::{io::stdout, path::PathBuf};
 
 use anyhow::Result;
 use clap::Parser;
@@ -51,12 +51,10 @@ impl SubCommandParserRunner for Print {
         // Formatter & printer for events.
         let mut output = PrintEvent::new(Box::new(stdout()), PrintEventFormat::Text(format));
 
-        use EventResult::*;
         while run.running() {
-            match factory.next_event(Some(Duration::from_secs(1)))? {
-                Event(event) => output.process_one(&event)?,
-                Eof => break,
-                Timeout => continue,
+            match factory.next_event()? {
+                Some(event) => output.process_one(&event)?,
+                None => break,
             }
         }
         Ok(())

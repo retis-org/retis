@@ -32,7 +32,7 @@ use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFact
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, FullCli},
     core::{
-        events::BpfEventsFactory,
+        events::{BpfEventsFactory, EventResult},
         filters::{
             filters::{BpfFilter, Filter},
             packets::filter::FilterPacket,
@@ -41,7 +41,7 @@ use crate::{
         probe::{kernel::probe_stack::ProbeStack, *},
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
-    events::{EventResult, SectionId},
+    events::SectionId,
     helpers::{signals::Running, time::*},
     module::Modules,
 };
@@ -506,7 +506,6 @@ impl Collectors {
                         .iter_mut()
                         .try_for_each(|p| p.process_one(&event))?;
                 }
-                Eof => break,
                 Timeout => continue,
             }
         }
