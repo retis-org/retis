@@ -33,7 +33,7 @@ caps = "0.5"
 clap = { version = "4.0", features = ["derive", "string"] }
 clap_complete = "4.4"
 elf = "0.7"
-events = {version = "1.4", path = "../retis-events", package="retis-events"}
+events = {version = "1.4", path = "../retis-events", package="retis-events", features=["python"]}
 flate2 = "1.0"
 libbpf-rs = "0.22"
 libbpf-sys = "=1.2"
@@ -49,7 +49,7 @@ plain = "0.2"
 pnet_packet = "0.34"
 rbpf = {version = "0.2", optional = true}
 regex = "1.7"
-retis-derive = {version = "1.4", path = "../retis-derive"}
+retis-derive = {version = "1.4", path = "../retis-derive", features=["python"]}
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
 serde_with = "3.0"

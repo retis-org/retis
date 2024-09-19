@@ -28,6 +28,7 @@ pub struct SkbTrackingEvent {
 }
 
 #[allow(dead_code)]
+#[cfg_attr(feature = "python", pyo3::pymethods)]
 impl SkbTrackingEvent {
     /// Get the tracking id.
     pub fn tracking_id(&self) -> u128 {

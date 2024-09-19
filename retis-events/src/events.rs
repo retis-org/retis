@@ -34,7 +34,7 @@
 #![allow(dead_code)] // FIXME
 #![allow(clippy::wrong_self_convention)]
 
-use std::{any::Any, collections::HashMap, fmt};
+use std::{any::Any, collections::HashMap, fmt, str::FromStr};
 
 use anyhow::{anyhow, bail, Result};
 use log::debug;
@@ -104,6 +104,11 @@ impl Event {
             Some(section) => section.as_any_mut().downcast_mut::<T>(),
             None => None,
         }
+    }
+
+    #[allow(clippy::borrowed_box)]
+    pub(super) fn get(&self, owner: SectionId) -> Option<&Box<dyn EventSection>> {
+        self.0.get(&owner)
     }
 
     pub fn to_json(&self) -> serde_json::Value {
@@ -242,6 +247,29 @@ impl fmt::Display for SectionId {
     }
 }
 
+impl FromStr for SectionId {
+    type Err = anyhow::Error;
+
+    /// Constructs an SectionId from a section unique str identifier.
+    fn from_str(val: &str) -> Result<Self> {
+        use SectionId::*;
+        Ok(match val {
+            "common" => Common,
+            "kernel" => Kernel,
+            "userspace" => Userspace,
+            "tracking" => Tracking,
+            "skb-tracking" => SkbTracking,
+            "skb-drop" => SkbDrop,
+            "skb" => Skb,
+            "ovs" => Ovs,
+            "nft" => Nft,
+            "ct" => Ct,
+            "startup" => Startup,
+            x => bail!("Can't construct a SectionId from {}", x),
+        })
+    }
+}
+
 type EventSectionMap = HashMap<String, fn(serde_json::Value) -> Result<Box<dyn EventSection>>>;
 static EVENT_SECTIONS: OnceCell<EventSectionMap> = OnceCell::new();
 
@@ -297,6 +325,8 @@ pub trait EventSectionInternal {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn to_json(&self) -> serde_json::Value;
+    #[cfg(feature = "python")]
+    fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject;
 }
 
 // We need this as the value given as the input when deserializing something
@@ -316,6 +346,11 @@ impl EventSectionInternal for () {
 
     fn to_json(&self) -> serde_json::Value {
         serde_json::Value::Null
+    }
+
+    #[cfg(feature = "python")]
+    fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+        py.None()
     }
 }
 

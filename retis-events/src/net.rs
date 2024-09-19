@@ -53,6 +53,8 @@ pub(crate) fn protocol_str(protocol: u8) -> Option<&'static str> {
 }
 
 /// Represents a raw packet. Stored internally as a `Vec<u8>`.
+/// We don't use #[event_type] as we're implementing serde::Serialize and
+/// serde::Deserialize manually.
 #[derive(Clone, Debug)]
 pub struct RawPacket(pub Vec<u8>);
 
@@ -94,5 +96,12 @@ impl<'de> serde::Deserialize<'de> for RawPacket {
         }
 
         deserializer.deserialize_str(RawPacketVisitor)
+    }
+}
+
+#[cfg(feature = "python")]
+impl pyo3::ToPyObject for RawPacket {
+    fn to_object(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+        pyo3::IntoPy::into_py(self.0.clone(), py)
     }
 }

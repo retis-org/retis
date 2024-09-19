@@ -504,7 +504,7 @@ impl OvsActionCt {
 }
 
 #[event_type]
-#[derive(Default, PartialEq)]
+#[derive(Default)]
 pub enum NatDirection {
     #[default]
     #[serde(rename = "src")]

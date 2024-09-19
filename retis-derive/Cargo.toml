@@ -3,6 +3,9 @@ name = "retis-derive"
 version = "1.4.0"
 edition = "2021"
 
+[features]
+python = []
+
 [lib]
 proc-macro = true
 
