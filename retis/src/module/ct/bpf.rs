@@ -4,10 +4,10 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Result};
 use btf_rs::Type;
-use plain::Plain;
 use std::net::Ipv6Addr;
 
 use crate::{
+    bindings::ct_uapi::*,
     core::{
         events::{
             parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
@@ -17,65 +17,8 @@ use crate::{
     },
     event_section_factory,
     events::*,
-    helpers, raw_event_section,
+    helpers,
 };
-
-/// Raw sections of the Ct event.
-const SECTION_META: u64 = 0;
-const SECTION_BASE_CONN: u64 = 1;
-const SECTION_PARENT_CONN: u64 = 2;
-
-/// Retis-specific flags.
-pub(super) const RETIS_CT_DIR_ORIG: u32 = 1 << 0;
-pub(super) const RETIS_CT_DIR_REPLY: u32 = 1 << 1;
-pub(super) const RETIS_CT_IPV4: u32 = 1 << 2;
-pub(super) const RETIS_CT_IPV6: u32 = 1 << 3;
-pub(super) const RETIS_CT_PROTO_TCP: u32 = 1 << 4;
-pub(super) const RETIS_CT_PROTO_UDP: u32 = 1 << 5;
-pub(super) const RETIS_CT_PROTO_ICMP: u32 = 1 << 6;
-
-#[raw_event_section]
-pub(crate) struct RawCtMetaEvent {
-    state: u8,
-}
-
-#[derive(Clone, Copy)]
-#[repr(C, packed)]
-union IP {
-    ipv4: u32,
-    ipv6: u128,
-}
-
-impl Default for IP {
-    fn default() -> Self {
-        IP { ipv6: 0 }
-    }
-}
-
-#[derive(Clone, Copy)]
-#[raw_event_section]
-struct IpProto {
-    addr: IP,
-    data: u16,
-}
-
-#[derive(Clone, Copy)]
-#[raw_event_section]
-struct NfConnTuple {
-    src: IpProto,
-    dst: IpProto,
-}
-
-#[raw_event_section]
-pub(crate) struct RawCtEvent {
-    flags: u32,
-    zone_id: u16,
-    orig: NfConnTuple,
-    reply: NfConnTuple,
-    tcp_state: u8,
-}
-
-unsafe impl Plain for RawCtEvent {}
 
 #[event_section_factory(FactoryId::Ct)]
 #[derive(Default)]
@@ -87,10 +30,10 @@ impl RawEventSectionFactory for CtEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = CtEvent {
             state: {
-                let raw = parse_raw_section::<RawCtMetaEvent>(
+                let raw = parse_raw_section::<ct_meta_event>(
                     raw_sections
                         .iter()
-                        .find(|s| s.header.data_type as u64 == SECTION_META)
+                        .find(|s| s.header.data_type as u32 == SECTION_META)
                         .ok_or_else(|| anyhow!("CT BPF event does not have a meta section"))?,
                 )?;
 
@@ -110,7 +53,7 @@ impl RawEventSectionFactory for CtEventFactory {
             base: self.unmarshal_ct(
                 raw_sections
                     .iter()
-                    .find(|s| s.header.data_type as u64 == SECTION_BASE_CONN)
+                    .find(|s| s.header.data_type as u32 == SECTION_BASE_CONN)
                     .ok_or_else(|| anyhow!("CT BPF event does not have a base section"))?,
             )?,
             parent: None,
@@ -118,7 +61,7 @@ impl RawEventSectionFactory for CtEventFactory {
 
         if let Some(raw_section) = raw_sections
             .iter()
-            .find(|s| s.header.data_type as u64 == SECTION_PARENT_CONN)
+            .find(|s| s.header.data_type as u32 == SECTION_PARENT_CONN)
         {
             event.parent = Some(self.unmarshal_ct(raw_section)?);
         }
@@ -161,7 +104,7 @@ impl CtEventFactory {
     }
 
     pub(super) fn unmarshal_ct(&mut self, raw_section: &BpfRawSection) -> Result<CtConnEvent> {
-        let raw = parse_raw_section::<RawCtEvent>(raw_section)?;
+        let raw = parse_raw_section::<ct_event>(raw_section)?;
         let flags = raw.flags;
 
         let zone_dir = match flags {
@@ -282,9 +225,9 @@ pub(crate) mod benchmark {
     use super::*;
     use crate::{benchmark::helpers::*, core::events::FactoryId};
 
-    impl RawSectionBuilder for RawCtMetaEvent {
+    impl RawSectionBuilder for ct_meta_event {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
-            let data = RawCtMetaEvent::default();
+            let data = ct_meta_event::default();
             build_raw_section(
                 out,
                 FactoryId::Ct as u8,
@@ -295,9 +238,9 @@ pub(crate) mod benchmark {
         }
     }
 
-    impl RawSectionBuilder for RawCtEvent {
+    impl RawSectionBuilder for ct_event {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
-            let data = RawCtEvent {
+            let data = ct_event {
                 flags: RETIS_CT_DIR_REPLY | RETIS_CT_IPV4 | RETIS_CT_PROTO_TCP,
                 ..Default::default()
             };
