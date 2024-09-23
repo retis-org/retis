@@ -1,50 +1,14 @@
 use anyhow::Result;
 
 use crate::{
+    bindings::nft_uapi::*,
     core::events::{
         parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
         RawEventSectionFactory,
     },
-    event_byte_array, event_section_factory,
+    event_section_factory,
     events::*,
-    raw_event_section,
 };
-
-// Please keep in sync with its bpf counterpart under
-// src/modules/nft/bpf/nft.bpf.c
-const NFT_NAME_SIZE: usize = 128;
-event_byte_array!(NftName, NFT_NAME_SIZE);
-/// Nft specific parameter offsets; keep in sync with its BPF counterpart in
-/// bpf/nft.bpf.c
-#[derive(Clone, Copy)]
-#[repr(C, packed)]
-pub(super) struct NftOffsets {
-    pub(super) nft_chain: i8,
-    pub(super) nft_rule: i8,
-    pub(super) nft_verdict: i8,
-    pub(super) nft_type: i8,
-}
-
-impl Default for NftOffsets {
-    fn default() -> NftOffsets {
-        NftOffsets {
-            nft_chain: -1,
-            nft_rule: -1,
-            nft_verdict: -1,
-            nft_type: -1,
-        }
-    }
-}
-
-/// Global configuration passed down the BPF part.
-#[derive(Default)]
-#[repr(C, packed)]
-pub(super) struct NftConfig {
-    /// Bitfield of events to collect based on the verdict.
-    /// The values follow the kernel definitions as they are uapi.
-    pub(super) verdicts: u64,
-    pub(super) offsets: NftOffsets,
-}
 
 /// Allowed verdicts in an event.
 /// They are the actual verdict values, scaled to be positive.
@@ -64,28 +28,6 @@ pub(super) const VERD_QUEUE: u64 = 8;
 pub(super) const VERD_REPEAT: u64 = 9;
 pub(super) const VERD_MAX: u64 = VERD_REPEAT;
 
-// Please keep in sync with its bpf counterpart under
-// src/modules/nft/bpf/nft.bpf.c
-#[raw_event_section]
-struct NftBpfEvent {
-    /// Table name.
-    tn: NftName,
-    /// Chain name.
-    cn: NftName,
-    /// Verdict.
-    v: i32,
-    /// Verdict chain name.
-    vcn: NftName,
-    /// Table handle
-    th: i64,
-    /// Chain handle
-    ch: i64,
-    /// Rule handle
-    rh: i64,
-    /// Verdict refers to the policy
-    p: u8,
-}
-
 #[event_section_factory(FactoryId::Nft)]
 #[derive(Default)]
 pub(crate) struct NftEventFactory {}
@@ -93,18 +35,18 @@ pub(crate) struct NftEventFactory {}
 impl RawEventSectionFactory for NftEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = NftEvent::default();
-        let raw = parse_single_raw_section::<NftBpfEvent>(&raw_sections)?;
+        let raw = parse_single_raw_section::<nft_event>(&raw_sections)?;
 
-        event.table_name = raw.tn.to_string()?;
-        event.chain_name = raw.cn.to_string()?;
-        event.table_handle = raw.th;
-        event.chain_handle = raw.ch;
-        event.policy = raw.p == 1;
-        event.rule_handle = match raw.rh {
+        event.table_name = nft_event::to_string(&raw.table_name)?;
+        event.chain_name = nft_event::to_string(&raw.chain_name)?;
+        event.table_handle = raw.t_handle;
+        event.chain_handle = raw.c_handle;
+        event.policy = raw.policy == 1;
+        event.rule_handle = match raw.r_handle {
             -1 => None,
-            _ => Some(raw.rh),
+            _ => Some(raw.r_handle),
         };
-        match raw.v {
+        match raw.verdict as i32 {
             -1 => "continue",
             -2 => "break",
             -3 => "jump",
@@ -122,8 +64,8 @@ impl RawEventSectionFactory for NftEventFactory {
         .clone_into(&mut event.verdict);
 
         // Destination chain is only valid for NFT_JUMP/NFT_GOTO.
-        if raw.v == -3 || raw.v == -4 {
-            event.verdict_chain_name = raw.vcn.to_string_opt()?;
+        if raw.verdict as i32 == -3 || raw.verdict as i32 == -4 {
+            event.verdict_chain_name = nft_event::to_string_opt(&raw.verdict_chain_name)?;
         }
 
         Ok(Box::new(event))
