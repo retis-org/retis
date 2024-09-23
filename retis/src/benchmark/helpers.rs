@@ -3,9 +3,8 @@ use std::{mem, slice};
 use anyhow::Result;
 
 use crate::{
-    bindings::ct_uapi::*,
+    bindings::{ct_uapi::*, tracking_hook_uapi::skb_tracking_event},
     core::{events::*, probe::kernel::RawKernelEvent},
-    events::*,
     module::{ovs::bpf::*, skb::bpf::*},
 };
 
@@ -53,7 +52,7 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     RawCommonEvent::build_raw(&mut event)?;
     RawTaskEvent::build_raw(&mut event)?;
     RawKernelEvent::build_raw(&mut event)?;
-    SkbTrackingEvent::build_raw(&mut event)?;
+    skb_tracking_event::build_raw(&mut event)?;
     RawDevEvent::build_raw(&mut event)?;
     RawNsEvent::build_raw(&mut event)?;
     RawPacketEvent::build_raw(&mut event)?;

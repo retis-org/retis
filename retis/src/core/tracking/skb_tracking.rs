@@ -85,15 +85,17 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
-use plain::Plain;
 
 use super::gc::TrackingGC;
 
-use crate::core::{
-    kernel::Symbol,
-    probe::{
-        manager::{ProbeBuilderManager, PROBE_MAX},
-        Probe, ProbeOption,
+use crate::{
+    bindings::skb_tracking_uapi::{tracking_config, tracking_info},
+    core::{
+        kernel::Symbol,
+        probe::{
+            manager::{ProbeBuilderManager, PROBE_MAX},
+            Probe, ProbeOption,
+        },
     },
 };
 
@@ -118,7 +120,7 @@ fn config_map() -> Result<libbpf_rs::MapHandle> {
         libbpf_rs::MapType::Hash,
         Some("tracking_config_map"),
         mem::size_of::<u64>() as u32,
-        mem::size_of::<TrackingConfig>() as u32,
+        mem::size_of::<tracking_config>() as u32,
         PROBE_MAX as u32,
         &opts,
     )
@@ -136,7 +138,7 @@ fn tracking_map() -> Result<libbpf_rs::MapHandle> {
         libbpf_rs::MapType::Hash,
         Some("tracking_map"),
         mem::size_of::<u64>() as u32,
-        mem::size_of::<TrackingInfo>() as u32,
+        mem::size_of::<tracking_info>() as u32,
         8192,
         &opts,
     )
@@ -156,7 +158,7 @@ pub(crate) fn init_tracking(
     // track free events.
     let symbol = Symbol::from_name("skb_free_head")?;
     let key = symbol.addr()?.to_ne_bytes();
-    let cfg = TrackingConfig {
+    let cfg = tracking_config {
         free: 1,
         partial_free: 0,
         inv_head: 0,
@@ -171,7 +173,7 @@ pub(crate) fn init_tracking(
     // Then track partial frees (head isn't freed but merged in another skb).
     let symbol = Symbol::from_name("kfree_skb_partial")?;
     let key = symbol.addr()?.to_ne_bytes();
-    let cfg = TrackingConfig {
+    let cfg = tracking_config {
         free: 1,
         partial_free: 1,
         inv_head: 0,
@@ -186,7 +188,7 @@ pub(crate) fn init_tracking(
     // Finally track invalidation head events.
     let symbol = Symbol::from_name("pskb_expand_head")?;
     let key = symbol.addr()?.to_ne_bytes();
-    let cfg = TrackingConfig {
+    let cfg = tracking_config {
         free: 0,
         partial_free: 0,
         inv_head: 1,
@@ -203,7 +205,7 @@ pub(crate) fn init_tracking(
     // tracking id.
     let symbol = Symbol::from_name("skb_release_head_state")?;
     let key = symbol.addr()?.to_ne_bytes();
-    let cfg = TrackingConfig {
+    let cfg = tracking_config {
         free: 0,
         partial_free: 0,
         inv_head: 0,
@@ -217,7 +219,7 @@ pub(crate) fn init_tracking(
     // id.
     let symbol = Symbol::from_name("kfree_skbmem")?;
     let key = symbol.addr()?.to_ne_bytes();
-    let cfg = TrackingConfig {
+    let cfg = tracking_config {
         free: 0,
         partial_free: 0,
         inv_head: 0,
@@ -235,7 +237,7 @@ pub(crate) fn init_tracking(
     // [1] https://lore.kernel.org/lkml/4DE877E1.7000606@jp.fujitsu.com/T/
     let symbol = Symbol::from_name("net:net_dev_xmit")?;
     let key = symbol.addr()?.to_ne_bytes();
-    let cfg = TrackingConfig {
+    let cfg = tracking_config {
         free: 0,
         partial_free: 0,
         inv_head: 0,
@@ -253,7 +255,7 @@ pub(crate) fn init_tracking(
             "skb-tracking-gc",
             HashMap::from([("skb_tracking", tracking_map)]),
             |v| {
-                let mut info = TrackingInfo::default();
+                let mut info = tracking_info::default();
                 plain::copy_from_bytes(&mut info, &v[..]).map_err(|e| anyhow!("{:?}", e))?;
                 Ok(Duration::from_nanos(info.last_seen))
             },
@@ -263,25 +265,3 @@ pub(crate) fn init_tracking(
         config_map,
     ))
 }
-
-// Please keep in sync with its BPF counterpart.
-#[repr(C, packed)]
-struct TrackingConfig {
-    free: u8,
-    partial_free: u8,
-    inv_head: u8,
-    no_tracking: u8,
-}
-
-unsafe impl Plain for TrackingConfig {}
-
-// Please keep in sync with its BPF counterpart.
-#[derive(Default)]
-#[repr(C, packed)]
-struct TrackingInfo {
-    timestamp: u64,
-    last_seen: u64,
-    orig_head: u64,
-}
-
-unsafe impl Plain for TrackingInfo {}
