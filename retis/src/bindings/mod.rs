@@ -86,3 +86,11 @@ impl Default for nft_event {
         }
     }
 }
+
+pub(crate) mod skb_tracking_uapi;
+use skb_tracking_uapi::*;
+
+unsafe impl plain::Plain for tracking_config {}
+unsafe impl plain::Plain for tracking_info {}
+
+pub(crate) mod tracking_hook_uapi;
