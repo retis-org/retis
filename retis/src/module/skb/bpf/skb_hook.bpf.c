@@ -43,10 +43,10 @@ struct skb_netdev_event {
 	u8 dev_name[IFNAMSIZ];
 	u32 ifindex;
 	u32 iif;
-} __attribute__((packed));
+};
 struct skb_netns_event {
 	u32 netns;
-} __attribute__((packed));
+};
 struct skb_meta_event {
 	u32 len;
 	u32 data_len;
@@ -55,21 +55,21 @@ struct skb_meta_event {
 	u32 csum;
 	u8 csum_level;
 	u32 priority;
-} __attribute__((packed));
+};
 struct skb_data_ref_event {
 	u8 nohdr;
 	u8 cloned;
 	u8 fclone;
 	u8 users;
 	u8 dataref;
-} __attribute__((packed));
+};
 struct skb_gso_event {
 	u8 flags;
 	u8 nr_frags;
 	u32 gso_size;
 	u32 gso_segs;
 	u32 gso_type;
-} __attribute__((packed));
+};
 /* Please keep the following structs in sync with its Rust counterpart in
  * module::skb::event.
  */
@@ -79,7 +79,7 @@ struct skb_packet_event {
 #define PACKET_CAPTURE_SIZE	255
 	u8 packet[PACKET_CAPTURE_SIZE];
 	u8 fake_eth;
-} __attribute__((packed));
+};
 
 /* Retrieve an skb linear len */
 static __always_inline int skb_linear_len(struct sk_buff *skb)

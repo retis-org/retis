@@ -54,3 +54,26 @@ impl RawEventSectionFactory for SkbTrackingEventFactory {
         Ok(Box::new(*event))
     }
 }
+
+#[cfg(feature = "benchmark")]
+pub(crate) mod benchmark {
+    use anyhow::Result;
+
+    use crate::{
+        benchmark::helpers::*,
+        events::{SectionId, SkbTrackingEvent},
+    };
+
+    impl RawSectionBuilder for SkbTrackingEvent {
+        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
+            let data = SkbTrackingEvent::default();
+            build_raw_section(
+                out,
+                SectionId::SkbTracking.to_u8(),
+                0,
+                &mut as_u8_vec(&data),
+            );
+            Ok(())
+        }
+    }
+}
