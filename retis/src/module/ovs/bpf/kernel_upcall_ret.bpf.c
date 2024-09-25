@@ -1,12 +1,11 @@
 #include <common.h>
 #include <ovs_common.h>
 
-/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct upcall_ret_event {
 	u64 upcall_ts;
 	u32 upcall_cpu;
 	int ret;
-};
+} __binding;
 
 /* Hook for kretprobe:ovs_dp_upcall */
 DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,

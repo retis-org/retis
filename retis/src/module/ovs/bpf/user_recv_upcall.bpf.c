@@ -5,15 +5,14 @@
 #include <ovs_common.h>
 #include <ovs_operation.h>
 
-/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct recv_upcall_event {
-	u32 type;
-	u32 pkt_size;
 	u64 key_size;
-	u32 queue_id;
 	u64 batch_ts;
+	u32 pkt_size;
+	u32 queue_id;
+	u32 type;
 	u8 batch_idx;
-};
+} __binding;
 
 static __always_inline u32 queue_id_gen_data(void *data, u32 len)
 {

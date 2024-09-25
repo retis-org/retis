@@ -2,8 +2,8 @@
 #define __MODULE_OVS_COMMON__
 
 #include <bpf/bpf_core_read.h>
-#include <bpf/bpf_helpers.h>
 
+#include <common_defs.h>
 #include "jhash.h"
 
 /* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
@@ -22,11 +22,10 @@ enum trace_ovs_data_type {
 
 /* Used to keep the context of an upcall operation for its upcall enqueue
  * events. It should uniquely identify a specific upcall. */
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::ovs.rs. */
 struct upcall_context {
 	u64 ts;
 	u32 cpu;
-};
+} __binding;
 
 #define MAX_INFLIGHT_UPCALLS 50
 struct {
@@ -50,10 +49,10 @@ struct {
 
 /* Context saved between the begining and end of ovs_execute_actions calls. */
 struct execute_actions_ctx {
-	struct sk_buff *skb;
+	BINDING_PTR(struct sk_buff *, skb);
 	u32 queue_id;
 	bool command;
-};
+} __binding;
 
 /* Map used to store context between the begining and end of
  * ovs_execute_actions calls. Indexed by pid_tgid. */

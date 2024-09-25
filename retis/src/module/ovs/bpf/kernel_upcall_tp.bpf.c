@@ -4,12 +4,11 @@
 #include <common.h>
 #include <ovs_common.h>
 
-/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct upcall_event {
-	u8 cmd;
 	u32 port;
 	u32 cpu;
-};
+	u8 cmd;
+} __binding;
 
 /* Hook for raw_tracepoint:openvswitch:ovs_dp_upcall. */
 DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
