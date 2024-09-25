@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{bail, Result};
 
 use super::{bpf::CtEventFactory, ct_hook};
@@ -5,7 +7,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        events::EventSectionFactory,
+        events::*,
         inspect,
         probe::{Hook, ProbeBuilderManager},
     },
@@ -51,7 +53,12 @@ impl Collector for CtModule {
         Ok(())
     }
 
-    fn init(&mut self, _cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn init(
+        &mut self,
+        _cli: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        _: Arc<RetisEventsFactory>,
+    ) -> Result<()> {
         // Register our generic conntrack hook.
         probes.register_kernel_hook(Hook::from(ct_hook::DATA))?;
         self.init = true;

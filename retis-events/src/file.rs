@@ -32,7 +32,7 @@ impl FileEventsFactory {
 }
 
 impl FileEventsFactory {
-    /// Retrieve the next event. This is a blocking call and never returns EOF.
+    /// Retrieve the next event. This is a blocking call.
     pub fn next_event(&mut self, _timeout: Option<Duration>) -> Result<EventResult> {
         let mut line = String::new();
 

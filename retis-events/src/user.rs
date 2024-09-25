@@ -21,7 +21,7 @@ pub struct UserEvent {
 }
 
 impl EventFmt for UserEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(f, "[u] {}", self.symbol)?;
         if let Some((_, bin)) = self.path.rsplit_once('/') {
             write!(f, " ({})", bin)?;

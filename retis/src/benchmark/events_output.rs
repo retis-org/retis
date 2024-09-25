@@ -14,7 +14,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
         true => 1,
     };
 
-    // PrintSingle benchmark
+    // PrintEvent benchmark
 
     let mut factory = FileEventsFactory::new("retis/test_data/test_events_bench.json")?;
     let event = match factory.next_event(None)? {
@@ -22,9 +22,9 @@ pub(super) fn bench(ci: bool) -> Result<()> {
         _ => bail!("Could not get event from test file"),
     };
 
-    let mut p = PrintSingle::text(
+    let mut p = PrintEvent::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        DisplayFormat::SingleLine,
+        PrintEventFormat::Text(DisplayFormat::new()),
     );
     let now = Instant::now();
     for _ in 0..iters {
@@ -35,9 +35,9 @@ pub(super) fn bench(ci: bool) -> Result<()> {
         now.elapsed().as_micros()
     );
 
-    let mut p = PrintSingle::text(
+    let mut p = PrintEvent::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        DisplayFormat::MultiLine,
+        PrintEventFormat::Text(DisplayFormat::new().multiline(true)),
     );
     let now = Instant::now();
     for _ in 0..iters {
@@ -45,7 +45,10 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     }
     println!("1M_print_single_multiline_us {}", now.elapsed().as_micros());
 
-    let mut p = PrintSingle::json(Box::new(OpenOptions::new().write(true).open("/dev/null")?));
+    let mut p = PrintEvent::new(
+        Box::new(OpenOptions::new().write(true).open("/dev/null")?),
+        PrintEventFormat::Json,
+    );
     let now = Instant::now();
     for _ in 0..iters {
         p.process_one(&event)?;
@@ -64,9 +67,9 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     }
     let series = series.pop_oldest()?.unwrap();
 
-    let mut p = PrintSeries::text(
+    let mut p = PrintSeries::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        DisplayFormat::SingleLine,
+        PrintEventFormat::Text(DisplayFormat::new()),
     );
     let now = Instant::now();
     for _ in 0..iters {
@@ -77,9 +80,9 @@ pub(super) fn bench(ci: bool) -> Result<()> {
         now.elapsed().as_micros()
     );
 
-    let mut p = PrintSeries::text(
+    let mut p = PrintSeries::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        DisplayFormat::MultiLine,
+        PrintEventFormat::Text(DisplayFormat::new().multiline(true)),
     );
     let now = Instant::now();
     for _ in 0..iters {
@@ -87,7 +90,10 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     }
     println!("1M_print_series_multiline_us {}", now.elapsed().as_micros());
 
-    let mut p = PrintSeries::json(Box::new(OpenOptions::new().write(true).open("/dev/null")?));
+    let mut p = PrintSeries::new(
+        Box::new(OpenOptions::new().write(true).open("/dev/null")?),
+        PrintEventFormat::Json,
+    );
     let now = Instant::now();
     for _ in 0..iters {
         p.process_one(&series)?;

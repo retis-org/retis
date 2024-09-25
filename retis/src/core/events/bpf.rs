@@ -428,7 +428,7 @@ impl RawEventSectionFactory for CommonEventFactory {
                     let raw = parse_raw_section::<RawCommonEvent>(section)?;
 
                     common.timestamp = raw.timestamp;
-                    common.smp_id = raw.smp_id;
+                    common.smp_id = Some(raw.smp_id);
                 }
                 COMMON_SECTION_TASK => common.task = Some(unmarshal_task(section)?),
                 _ => bail!("Unknown data type"),
@@ -623,7 +623,7 @@ mod tests {
     }
 
     impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: DisplayFormat) -> std::fmt::Result {
+        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: &DisplayFormat) -> std::fmt::Result {
             write!(
                 f,
                 "field0: {:?} field1: {:?} field2: {:?}",

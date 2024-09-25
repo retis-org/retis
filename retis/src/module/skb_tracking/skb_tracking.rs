@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 
 use super::tracking_hook;
@@ -29,7 +31,12 @@ impl Collector for SkbTrackingModule {
         cmd.register_module_noargs(SectionId::SkbTracking)
     }
 
-    fn init(&mut self, _: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn init(
+        &mut self,
+        _: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        _: Arc<RetisEventsFactory>,
+    ) -> Result<()> {
         probes.register_kernel_hook(Hook::from(tracking_hook::DATA))
     }
 }

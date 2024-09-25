@@ -6,6 +6,7 @@ use std::{
     io::{self, BufWriter},
     process::{Command, Stdio},
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 
@@ -15,13 +16,15 @@ use nix::unistd::Uid;
 
 use super::cli::Collect;
 use crate::{
-    cli::SubCommandRunner,
+    cli::{CliDisplayFormat, SubCommandRunner},
     core::{
+        events::RetisEventsFactory,
         filters::{meta::filter::FilterMeta, packets::filter::FilterPacketType},
         kernel::Symbol,
         probe::kernel::utils::parse_probe,
     },
-    process::display::PrintSingle,
+    events::*,
+    process::display::*,
 };
 
 #[cfg(not(test))]
@@ -39,7 +42,7 @@ use crate::{
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
     events::{EventResult, SectionId},
-    helpers::signals::Running,
+    helpers::{signals::Running, time::*},
     module::Modules,
 };
 
@@ -78,7 +81,12 @@ pub(crate) trait Collector {
     /// will make the whole program to fail. In general collectors should try
     /// hard to run in various setups, see the `crate::collector` top
     /// documentation for more information.
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()>;
+    fn init(
+        &mut self,
+        cli: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        events_factory: Arc<RetisEventsFactory>,
+    ) -> Result<()>;
     /// Start the collector.
     fn start(&mut self) -> Result<()> {
         Ok(())
@@ -100,6 +108,8 @@ pub(crate) struct Collectors {
     // Keep a reference on the tracking configuration map.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
     loaded: Vec<SectionId>,
+    // Retis events factory.
+    events_factory: Arc<RetisEventsFactory>,
 }
 
 impl Collectors {
@@ -116,6 +126,7 @@ impl Collectors {
             tracking_gc: None,
             tracking_config_map: None,
             loaded: Vec::new(),
+            events_factory: Arc::new(RetisEventsFactory::default()),
         })
     }
 
@@ -193,6 +204,19 @@ impl Collectors {
             bail!("Retis needs to be run as root when --allow-system-changes is used");
         }
 
+        // Generate an initial event with the startup section.
+        self.events_factory.add_event(|event| {
+            event.insert_section(
+                SectionId::Startup,
+                Box::new(StartupEvent {
+                    retis_version: option_env!("RELEASE_VERSION")
+                        .unwrap_or("unspec")
+                        .to_string(),
+                    clock_monotonic_offset: monotonic_clock_offset()?,
+                }),
+            )
+        })?;
+
         // Try initializing all collectors.
         for name in &collect.args()?.collectors {
             let id = SectionId::from_str(name)?;
@@ -213,7 +237,11 @@ impl Collectors {
                 }
             }
 
-            if let Err(e) = c.init(cli, self.probes.builder_mut()?) {
+            if let Err(e) = c.init(
+                cli,
+                self.probes.builder_mut()?,
+                Arc::clone(&self.events_factory),
+            ) {
                 bail!("Could not initialize the {} collector: {}", id, e);
             }
 
@@ -401,22 +429,34 @@ impl Collectors {
         // Write events to stdout if we don't write to a file (--out) or if
         // explicitly asked to (--print).
         if collect.out.is_none() || collect.print {
-            printers.push(PrintSingle::text(
+            let format = DisplayFormat::new()
+                .multiline(collect.format == CliDisplayFormat::MultiLine)
+                .time_format(if collect.utc {
+                    TimeFormat::UtcDate
+                } else {
+                    TimeFormat::MonotonicTimestamp
+                })
+                .monotonic_offset(monotonic_clock_offset()?);
+
+            printers.push(PrintEvent::new(
                 Box::new(io::stdout()),
-                collect.format.into(),
+                PrintEventFormat::Text(format),
             ));
         }
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            printers.push(PrintSingle::json(Box::new(BufWriter::new(
-                OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(out)
-                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-            ))));
+            printers.push(PrintEvent::new(
+                Box::new(BufWriter::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(out)
+                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+                )),
+                PrintEventFormat::Json,
+            ));
         }
 
         if let Some(cmd) = collect.cmd.to_owned() {
@@ -447,6 +487,15 @@ impl Collectors {
 
         use EventResult::*;
         while self.run.running() {
+            // First always try to dequeue all Retis events. This is not a
+            // blocking call.
+            while let Some(event) = self.events_factory.next_event() {
+                printers
+                    .iter_mut()
+                    .try_for_each(|p| p.process_one(&event))?;
+            }
+
+            // Then get raw events, if any.
             match self.factory.next_event(Some(Duration::from_secs(1)))? {
                 Event(mut event) => {
                     if collect.probe_stack {
@@ -493,7 +542,6 @@ mod tests {
     use crate::{
         core::{events::bpf::*, probe::ProbeBuilderManager},
         event_section,
-        events::*,
         module::Module,
     };
 
@@ -510,7 +558,13 @@ mod tests {
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
             cli.register_module_noargs(SectionId::Skb)
         }
-        fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
+        fn init(
+            &mut self,
+            _: &CliConfig,
+            _: &mut ProbeBuilderManager,
+            factory: Arc<RetisEventsFactory>,
+        ) -> Result<()> {
+            factory.add_event(|_| Ok(()))?;
             Ok(())
         }
         fn start(&mut self) -> Result<()> {
@@ -537,7 +591,12 @@ mod tests {
         fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
             cli.register_module_noargs(SectionId::Ovs)
         }
-        fn init(&mut self, _: &CliConfig, _: &mut ProbeBuilderManager) -> Result<()> {
+        fn init(
+            &mut self,
+            _: &CliConfig,
+            _: &mut ProbeBuilderManager,
+            _: Arc<RetisEventsFactory>,
+        ) -> Result<()> {
             bail!("Could not initialize")
         }
         fn start(&mut self) -> Result<()> {
@@ -559,7 +618,7 @@ mod tests {
     struct TestEvent {}
 
     impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: DisplayFormat) -> std::fmt::Result {
+        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: &DisplayFormat) -> std::fmt::Result {
             write!(f, "test event section")
         }
     }
@@ -609,10 +668,15 @@ mod tests {
 
         let mut collectors = Collectors::new(group)?;
         let mut mgr = ProbeBuilderManager::new()?;
+        let factory = Arc::new(RetisEventsFactory::default());
         let config = get_cli("skb,ovs")?.run()?;
 
-        assert!(dummy_a.init(&config, &mut mgr).is_ok());
-        assert!(dummy_b.init(&config, &mut mgr).is_err());
+        assert!(dummy_a
+            .init(&config, &mut mgr, Arc::clone(&factory))
+            .is_ok());
+        assert!(dummy_b
+            .init(&config, &mut mgr, Arc::clone(&factory))
+            .is_err());
 
         assert!(collectors.init(&config).is_err());
         Ok(())

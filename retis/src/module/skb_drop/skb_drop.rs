@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::{bail, Result};
 use log::warn;
 
@@ -6,7 +8,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
-        events::EventSectionFactory,
+        events::*,
         inspect::{inspector, kernel_version::KernelVersionReq},
         kernel::Symbol,
         probe::{Hook, Probe, ProbeBuilderManager},
@@ -75,7 +77,12 @@ impl Collector for SkbDropModule {
         Ok(())
     }
 
-    fn init(&mut self, _: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn init(
+        &mut self,
+        _: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        _: Arc<RetisEventsFactory>,
+    ) -> Result<()> {
         let mut probe = Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?;
         let hook = Hook::from(skb_drop_hook::DATA);
 

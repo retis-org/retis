@@ -2,6 +2,7 @@ use std::{
     mem,
     os::fd::{AsFd, AsRawFd},
     process::{Command, Stdio},
+    sync::Arc,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -14,7 +15,7 @@ use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::{cli::Collect, Collector},
     core::{
-        events::EventSectionFactory,
+        events::*,
         inspect,
         kernel::Symbol,
         probe::{Hook, Probe, ProbeBuilderManager},
@@ -173,7 +174,12 @@ impl Collector for NftModule {
         Ok(())
     }
 
-    fn init(&mut self, cli: &CliConfig, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn init(
+        &mut self,
+        cli: &CliConfig,
+        probes: &mut ProbeBuilderManager,
+        _: Arc<RetisEventsFactory>,
+    ) -> Result<()> {
         if self.install_chain {
             // Ignore if delete fails here as the table might not exist
             let _ = self.delete_table(NFT_TRACE_TABLE.to_owned());

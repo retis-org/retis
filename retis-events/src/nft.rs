@@ -17,7 +17,7 @@ pub struct NftEvent {
 }
 
 impl EventFmt for NftEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(
             f,
             "table {} ({}) chain {} ({})",
