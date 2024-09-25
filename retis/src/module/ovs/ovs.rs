@@ -11,6 +11,10 @@ use clap::{arg, Parser};
 
 use super::{bpf::OvsEventFactory, hooks};
 use crate::{
+    bindings::{
+        ovs_common_uapi::{execute_actions_ctx, upcall_context},
+        ovs_operation_uapi::upcall_batch,
+    },
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
@@ -184,13 +188,6 @@ impl OvsModule {
     }
 
     fn create_inflight_exec_map() -> Result<libbpf_rs::MapHandle> {
-        // Please keep in sync with its C counterpart in bpf/ovs_common.h
-        #[repr(C)]
-        struct ExecuteActionsContext {
-            skb: u64,
-            queue_id: u32,
-            command: bool,
-        }
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
@@ -200,7 +197,7 @@ impl OvsModule {
             libbpf_rs::MapType::Hash,
             Some("inflight_exec"),
             mem::size_of::<u64>() as u32,
-            mem::size_of::<ExecuteActionsContext>() as u32,
+            mem::size_of::<execute_actions_ctx>() as u32,
             50,
             &opts,
         )
@@ -208,12 +205,6 @@ impl OvsModule {
     }
 
     fn create_inflight_upcalls_map() -> Result<libbpf_rs::MapHandle> {
-        // Please keep in sync with its C counterpart in bpf/ovs_common.h
-        #[repr(C)]
-        struct UpcallContext {
-            ts: u64,
-            cpu: u32,
-        }
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
@@ -223,7 +214,7 @@ impl OvsModule {
             libbpf_rs::MapType::Hash,
             Some("inflight_upcalls"),
             mem::size_of::<u64>() as u32,
-            mem::size_of::<UpcallContext>() as u32,
+            mem::size_of::<upcall_context>() as u32,
             50,
             &opts,
         )
@@ -239,22 +230,6 @@ impl OvsModule {
             .collect();
         let nhandlers = handlers.len();
 
-        // Please keep in sync with its C counterpart in bpf/ovs_operation.h
-        #[repr(C)]
-        struct UserUpcallInfo {
-            queue_id: u32,
-            process_ops: u8,
-            skip_event: bool,
-        }
-        #[repr(C)]
-        struct UpcallBatch {
-            leater_ts: u64,
-            processing: bool,
-            current_upcall: u8,
-            total: u8,
-            upcalls: [UserUpcallInfo; 64],
-        }
-
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
@@ -265,7 +240,7 @@ impl OvsModule {
                 libbpf_rs::MapType::Array,
                 Some("upcall_batches"),
                 mem::size_of::<u32>() as u32,
-                mem::size_of::<UpcallBatch>() as u32,
+                mem::size_of::<upcall_batch>() as u32,
                 nhandlers as u32,
                 &opts,
             )
