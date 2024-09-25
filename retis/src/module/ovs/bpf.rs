@@ -7,12 +7,20 @@ use std::net::Ipv6Addr;
 use anyhow::{bail, Result};
 
 use crate::{
+    bindings::{
+        kernel_enqueue_uapi::upcall_enqueue_event,
+        kernel_exec_tp_uapi::{exec_ct, exec_event, exec_output, exec_recirc, exec_track_event},
+        kernel_upcall_ret_uapi::upcall_ret_event,
+        kernel_upcall_tp_uapi::upcall_event,
+        ovs_operation_uapi::ovs_operation_event,
+        user_recv_upcall_uapi::recv_upcall_event,
+    },
     core::events::{
         parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
     },
     event_section_factory,
     events::*,
-    helpers, raw_event_section,
+    helpers,
 };
 
 /// Event data types supported by the ovs module.
@@ -76,24 +84,19 @@ pub(crate) fn ensure_undefined(event: &OvsEvent, received: OvsDataType) -> Resul
 
 pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
     ensure_undefined(event, OvsDataType::Upcall)?;
-    let upcall = parse_raw_section::<UpcallEvent>(raw_section)?;
-    event.event = OvsEventType::Upcall(*upcall);
+    let raw = parse_raw_section::<upcall_event>(raw_section)?;
+    event.event = OvsEventType::Upcall(UpcallEvent {
+        cmd: raw.cmd,
+        port: raw.port,
+        cpu: raw.cpu,
+    });
     Ok(())
 }
 
-/// OVS action event data.
-#[raw_event_section]
-pub(crate) struct BpfActionEvent {
-    /// Action to be executed.
-    action: u8,
-    /// Recirculation id.
-    recirc_id: u32,
-}
-
 pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    let raw = parse_raw_section::<BpfActionEvent>(raw_section)?;
+    let raw = parse_raw_section::<exec_event>(raw_section)?;
 
-    // Any of the action-related bpf events (e.g BpfActionTrackEvent, BpfActionTrackEvent, etc)
+    // Any of the action-related bpf events (e.g exec_track_event, exec_track_event, etc)
     // might have been received before. If so, event.event is already a valid
     // OvsEventType::Action.
     match &mut event.event {
@@ -154,20 +157,13 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent)
     Ok(())
 }
 
-/// OVS action tracking event data.
-#[raw_event_section]
-struct BpfActionTrackEvent {
-    /// Queue id.
-    queue_id: u32,
-}
-
 pub(super) fn unmarshall_exec_track(
     raw_section: &BpfRawSection,
     event: &mut OvsEvent,
 ) -> Result<()> {
-    let raw = parse_raw_section::<BpfActionTrackEvent>(raw_section)?;
+    let raw = parse_raw_section::<exec_track_event>(raw_section)?;
 
-    // Any of the action-related bpf events (e.g BpfActionEvent, BpfActionTrackEvent, etc)
+    // Any of the action-related bpf events (e.g exec_event, exec_track_event, etc)
     // might have been received before. If so, event.event is already a valid
     // OvsEventType::Action.
     match &mut event.event {
@@ -192,7 +188,7 @@ pub(super) fn unmarshall_exec_track(
 }
 
 fn update_action_event(event: &mut OvsEvent, action: OvsAction) -> Result<()> {
-    // Any of the action-related bpf events (e.g BpfActionEvent, BpfActionTrackEvent, etc)
+    // Any of the action-related bpf events (e.g exec_event, exec_track_event, etc)
     // might have been received before. If so, event.event is already a valid
     // OvsEventType::Action.
     match &mut event.event {
@@ -217,40 +213,18 @@ fn update_action_event(event: &mut OvsEvent, action: OvsAction) -> Result<()> {
 }
 
 pub(super) fn unmarshall_output(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    let output = parse_raw_section::<OvsActionOutput>(raw_section)?;
+    let raw = parse_raw_section::<exec_output>(raw_section)?;
 
-    update_action_event(event, OvsAction::Output(*output))
+    update_action_event(event, OvsAction::Output(OvsActionOutput { port: raw.port }))
 }
 
 pub(super) fn unmarshall_recirc(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    let recirc = parse_raw_section::<OvsActionRecirc>(raw_section)?;
-    update_action_event(event, OvsAction::Recirc(*recirc))
+    let raw = parse_raw_section::<exec_recirc>(raw_section)?;
+    update_action_event(event, OvsAction::Recirc(OvsActionRecirc { id: raw.id }))
 }
 
 pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    #[repr(C, packed)]
-    union IP {
-        ipv4: u32,
-        ipv6: u128,
-    }
-
-    impl Default for IP {
-        fn default() -> Self {
-            IP { ipv6: 0 }
-        }
-    }
-
-    #[raw_event_section]
-    struct BpfConntrackAction {
-        flags: u32,
-        zone_id: u16,
-        min_addr: IP,
-        max_addr: IP,
-        min_port: u16,
-        max_port: u16,
-    }
-
-    let raw = parse_raw_section::<BpfConntrackAction>(raw_section)?;
+    let raw = parse_raw_section::<exec_ct>(raw_section)?;
     let nat = if raw.flags & R_OVS_CT_NAT != 0 {
         let flags = raw.flags;
         let dir = match flags {
@@ -261,15 +235,15 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
 
         let (min_addr, max_addr) = if raw.flags & R_OVS_CT_NAT_RANGE_MAP_IPS != 0 {
             if raw.flags & R_OVS_CT_IP4 != 0 {
-                let min_addr = unsafe { raw.min_addr.ipv4 };
-                let max_addr = unsafe { raw.max_addr.ipv4 };
+                let min_addr = unsafe { raw.min.addr4 };
+                let max_addr = unsafe { raw.max.addr4 };
                 (
                     Some(helpers::net::parse_ipv4_addr(u32::from_be(min_addr))?),
                     Some(helpers::net::parse_ipv4_addr(u32::from_be(max_addr))?),
                 )
             } else if raw.flags & R_OVS_CT_IP6 != 0 {
-                let min_addr = unsafe { raw.min_addr.ipv6 };
-                let max_addr = unsafe { raw.max_addr.ipv6 };
+                let min_addr = unsafe { raw.min.addr6 };
+                let max_addr = unsafe { raw.max.addr6 };
                 (
                     Some(Ipv6Addr::from(u128::from_be(min_addr)).to_string()),
                     Some(Ipv6Addr::from(u128::from_be(max_addr)).to_string()),
@@ -310,8 +284,15 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
 
 pub(super) fn unmarshall_recv(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
     ensure_undefined(event, OvsDataType::RecvUpcall)?;
-    let recv = parse_raw_section::<RecvUpcallEvent>(raw_section)?;
-    event.event = OvsEventType::RecvUpcall(*recv);
+    let raw = parse_raw_section::<recv_upcall_event>(raw_section)?;
+    event.event = OvsEventType::RecvUpcall(RecvUpcallEvent {
+        key_size: raw.key_size,
+        batch_ts: raw.batch_ts,
+        pkt_size: raw.pkt_size,
+        queue_id: raw.queue_id,
+        r#type: raw.type_,
+        batch_idx: raw.batch_idx,
+    });
 
     Ok(())
 }
@@ -321,9 +302,14 @@ pub(super) fn unmarshall_operation(
     event: &mut OvsEvent,
 ) -> Result<()> {
     ensure_undefined(event, OvsDataType::Operation)?;
-    let op = parse_raw_section::<OperationEvent>(raw_section)?;
+    let raw = parse_raw_section::<ovs_operation_event>(raw_section)?;
 
-    event.event = OvsEventType::Operation(*op);
+    event.event = OvsEventType::Operation(OperationEvent {
+        batch_ts: raw.batch_ts,
+        queue_id: raw.queue_id,
+        batch_idx: raw.batch_idx,
+        op_type: raw.type_,
+    });
     Ok(())
 }
 
@@ -332,9 +318,16 @@ pub(super) fn unmarshall_upcall_enqueue(
     event: &mut OvsEvent,
 ) -> Result<()> {
     ensure_undefined(event, OvsDataType::UpcallEnqueue)?;
-    let enqueue = parse_raw_section::<UpcallEnqueueEvent>(raw_section)?;
+    let raw = parse_raw_section::<upcall_enqueue_event>(raw_section)?;
 
-    event.event = OvsEventType::UpcallEnqueue(*enqueue);
+    event.event = OvsEventType::UpcallEnqueue(UpcallEnqueueEvent {
+        ret: raw.ret,
+        cmd: raw.cmd,
+        port: raw.port,
+        upcall_ts: raw.upcall_ts,
+        upcall_cpu: raw.upcall_cpu,
+        queue_id: raw.queue_id,
+    });
     Ok(())
 }
 
@@ -343,9 +336,13 @@ pub(super) fn unmarshall_upcall_return(
     event: &mut OvsEvent,
 ) -> Result<()> {
     ensure_undefined(event, OvsDataType::UpcallReturn)?;
-    let uret = parse_raw_section::<UpcallReturnEvent>(raw_section)?;
+    let raw = parse_raw_section::<upcall_ret_event>(raw_section)?;
 
-    event.event = OvsEventType::UpcallReturn(*uret);
+    event.event = OvsEventType::UpcallReturn(UpcallReturnEvent {
+        upcall_ts: raw.upcall_ts,
+        upcall_cpu: raw.upcall_cpu,
+        ret: raw.ret,
+    });
     Ok(())
 }
 
@@ -383,9 +380,9 @@ pub(crate) mod benchmark {
     use super::*;
     use crate::{benchmark::helpers::*, core::events::FactoryId};
 
-    impl RawSectionBuilder for BpfActionEvent {
+    impl RawSectionBuilder for exec_event {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
-            let data = BpfActionEvent {
+            let data = Self {
                 action: 1,
                 recirc_id: 3,
             };
