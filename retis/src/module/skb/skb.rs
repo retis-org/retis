@@ -10,6 +10,7 @@ use log::warn;
 
 use super::{bpf::*, skb_hook};
 use crate::{
+    bindings::skb_hook_uapi::*,
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::Collector,
     core::{
@@ -109,7 +110,7 @@ impl Collector for SkbModule {
         let config_map = Self::config_map()?;
 
         // Set the config.
-        let cfg = RawConfig { sections };
+        let cfg = skb_config { sections };
         let cfg = unsafe { plain::as_bytes(&cfg) };
 
         let key = 0_u32.to_ne_bytes();
@@ -150,7 +151,7 @@ impl SkbModule {
             libbpf_rs::MapType::Array,
             Some("skb_config_map"),
             mem::size_of::<u32>() as u32,
-            mem::size_of::<RawConfig>() as u32,
+            mem::size_of::<skb_config>() as u32,
             1,
             &opts,
         )
