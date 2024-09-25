@@ -8,7 +8,10 @@
     non_camel_case_types,
     non_snake_case
 )]
-use std::ffi::{c_char, CStr};
+use std::{
+    ffi::{c_char, CStr},
+    mem,
+};
 
 use anyhow::{anyhow, Result};
 
@@ -96,3 +99,19 @@ unsafe impl plain::Plain for tracking_info {}
 pub(crate) mod tracking_hook_uapi;
 
 pub(crate) mod skb_hook_uapi;
+
+pub(crate) mod kernel_enqueue_uapi;
+pub(crate) mod kernel_exec_tp_uapi;
+pub(crate) mod kernel_upcall_ret_uapi;
+pub(crate) mod kernel_upcall_tp_uapi;
+use kernel_exec_tp_uapi::exec_ip;
+
+impl Default for exec_ip {
+    fn default() -> Self {
+        unsafe { mem::zeroed() }
+    }
+}
+
+pub(crate) mod ovs_common_uapi;
+pub(crate) mod ovs_operation_uapi;
+pub(crate) mod user_recv_upcall_uapi;
