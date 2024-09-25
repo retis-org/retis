@@ -6,7 +6,7 @@ use base64::{
 };
 
 /// Returns a translation of some ethertypes into a readable format.
-pub(crate) fn etype_str(etype: u16) -> Option<&'static str> {
+pub fn etype_str(etype: u16) -> Option<&'static str> {
     Some(match etype {
         0x0800 => "IPv4",
         0x0806 => "ARP",

@@ -16,7 +16,10 @@ use pnet_packet::{
 use crate::{
     core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
     event_byte_array,
-    events::{net::RawPacket, *},
+    events::{
+        net::{etype_str, RawPacket},
+        *,
+    },
     helpers, raw_event_section,
 };
 
@@ -309,7 +312,17 @@ pub(super) fn unmarshal_packet(
                 unmarshal_l4(event, ip.get_next_header(), ip.payload())?;
             };
         }
-        _ => (),
+        // If we did not generate any data in the skb section, this means we do
+        // not support yet the protocol used. At least provide the ethertype (if
+        // it looks valid).
+        _ => {
+            if event.eth.is_none() {
+                let eth = unmarshal_eth(&eth)?;
+                if etype_str(eth.etype).is_some() {
+                    event.eth = Some(eth);
+                }
+            }
+        }
     }
 
     Ok(())
