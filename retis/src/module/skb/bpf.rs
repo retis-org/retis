@@ -309,7 +309,13 @@ pub(super) fn unmarshal_packet(
                 unmarshal_l4(event, ip.get_next_header(), ip.payload())?;
             };
         }
-        _ => (),
+        // If we did not generate any data in the skb section, this means we do
+        // not support yet the protocol used. At least provide the ethertype.
+        _ => {
+            if event.eth.is_none() {
+                event.eth = Some(unmarshal_eth(&eth)?);
+            }
+        }
     }
 
     Ok(())
