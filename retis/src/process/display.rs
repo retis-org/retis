@@ -33,11 +33,13 @@ impl PrintEvent {
                     format.monotonic_offset = Some(common.clock_monotonic_offset);
                 }
 
-                let event = format!("{}", e.display(format));
+                let mut event = format!("{}", e.display(format, &FormatterConf::new()));
                 if !event.is_empty() {
+                    event.push('\n');
+                    if format.multiline {
+                        event.push('\n');
+                    }
                     self.writer.write_all(event.as_bytes())?;
-                    self.writer
-                        .write_all(if format.multiline { b"\n\n" } else { b"\n" })?;
                 }
             }
             PrintEventFormat::Json => {
@@ -67,36 +69,27 @@ impl PrintSeries {
         Self { writer, format }
     }
 
-    fn indent(n_spaces: usize, lines: String) -> String {
-        if n_spaces == 0 || lines.is_empty() {
-            return lines;
-        }
-
-        let mut res = Vec::new();
-        let mut delim = "↳ ";
-        for line in lines.split('\n') {
-            res.push(format!("{}{}{}", " ".repeat(n_spaces), delim, line));
-            delim = "  ";
-        }
-
-        res.join("\n")
-    }
-
     /// Process events one by one (format & print).
     pub(crate) fn process_one(&mut self, series: &EventSeries) -> Result<()> {
         let mut content = String::new();
         match self.format {
             PrintEventFormat::Text(ref mut format) => {
-                let mut indent = 0;
+                let mut fconf = FormatterConf::new();
+                let mut first = true;
+
                 for event in series.events.iter() {
                     if let Some(common) = event.get_section::<StartupEvent>(SectionId::Startup) {
                         format.monotonic_offset = Some(common.clock_monotonic_offset);
                     }
 
-                    content.push_str(&Self::indent(indent, format!("{}", event.display(format))));
+                    content.push_str(&format!("{}", event.display(format, &fconf)));
                     if !content.is_empty() {
                         content.push('\n');
-                        indent = 2;
+                        if first {
+                            first = false;
+                            fconf.inc_level(4);
+                            fconf.set_item(Some('↳'));
+                        }
                     }
                 }
 

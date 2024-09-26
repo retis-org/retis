@@ -2,7 +2,7 @@ use std::fmt;
 
 use chrono::{DateTime, Utc};
 
-use crate::{event_section, event_type, *};
+use crate::*;
 
 /// Startup event section. Contains global information about a collection as a
 /// whole, with data gathered at collection startup time.
@@ -15,7 +15,7 @@ pub struct StartupEvent {
 }
 
 impl EventFmt for StartupEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(f, "Retis version {}", self.retis_version)
     }
 }
@@ -44,7 +44,7 @@ pub struct CommonEvent {
 }
 
 impl EventFmt for CommonEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         match format.time_format {
             TimeFormat::MonotonicTimestamp => write!(f, "{}", self.timestamp)?,
             TimeFormat::UtcDate => match format.monotonic_offset {

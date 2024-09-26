@@ -4,7 +4,7 @@ use super::{
     net::{etype_str, protocol_str, RawPacket},
     *,
 };
-use crate::{event_section, event_type};
+use crate::{event_section, event_type, Formatter};
 
 /// Skb event section.
 #[event_section("skb")]
@@ -38,7 +38,7 @@ pub struct SkbEvent {
 }
 
 impl EventFmt for SkbEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         let mut len = 0;
 
         let mut space = DelimWriter::new(' ');
@@ -65,16 +65,11 @@ impl EventFmt for SkbEvent {
         if let Some(eth) = &self.eth {
             space.write(f)?;
 
-            let ethertype = match etype_str(eth.etype) {
-                Some(s) => format!(" {}", s),
-                None => String::new(),
-            };
-
-            write!(
-                f,
-                "{} > {} ethertype{} ({:#06x})",
-                eth.src, eth.dst, ethertype, eth.etype
-            )?;
+            write!(f, "{} > {} ethertype", eth.src, eth.dst)?;
+            if let Some(etype) = etype_str(eth.etype) {
+                write!(f, " {etype}")?;
+            }
+            write!(f, " ({:#06x})", eth.etype)?;
         }
 
         if let Some(arp) = &self.arp {
@@ -153,18 +148,17 @@ impl EventFmt for SkbEvent {
                 }
             }
 
-            let protocol = match protocol_str(ip.protocol) {
-                Some(s) => format!(" {}", s),
-                None => String::new(),
-            };
-
             // In some rare cases the IP header might not be fully filled yet,
             // length might be unset.
             if ip.len != 0 {
                 write!(f, " len {}", ip.len)?;
             }
 
-            write!(f, " proto{} ({})", protocol, ip.protocol)?;
+            if let Some(proto) = protocol_str(ip.protocol) {
+                write!(f, " proto {}", proto)?;
+            }
+
+            write!(f, " ({})", ip.protocol)?;
         }
 
         if let Some(tcp) = &self.tcp {

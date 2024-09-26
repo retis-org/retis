@@ -1,6 +1,6 @@
 #!/bin/bash
 
-make bench V=1
+make bench -j$(nproc)
 
 time_single_single=0
 time_single_multi=0

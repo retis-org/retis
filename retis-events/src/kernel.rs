@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::*;
-use crate::{event_section, event_type};
+use crate::{event_section, event_type, Formatter};
 
 #[event_section("kernel")]
 pub struct KernelEvent {
@@ -14,7 +14,7 @@ pub struct KernelEvent {
 }
 
 impl EventFmt for KernelEvent {
-    fn event_fmt(&self, f: &mut fmt::Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(
             f,
             "[{}] {}",
@@ -42,11 +42,11 @@ impl StackTrace {
 }
 
 impl EventFmt for StackTrace {
-    fn event_fmt(&self, f: &mut fmt::Formatter, format: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         let last = self.0.len() - 1;
         if format.multiline {
             self.0.iter().enumerate().try_for_each(|(i, sym)| {
-                write!(f, "    {sym}")?;
+                write!(f, "{sym}")?;
                 if i != last {
                     writeln!(f)?;
                 }

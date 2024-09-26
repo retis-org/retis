@@ -618,7 +618,7 @@ mod tests {
     struct TestEvent {}
 
     impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut std::fmt::Formatter, _: &DisplayFormat) -> std::fmt::Result {
+        fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> std::fmt::Result {
             write!(f, "test event section")
         }
     }
