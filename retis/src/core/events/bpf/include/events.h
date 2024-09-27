@@ -10,6 +10,8 @@
 #define RAW_EVENT_DATA_SIZE	1024 - 2 /* Remove the size field */
 #define RETIS_MAX_COMM		64
 
+__binding const int retis_max_comm = RETIS_MAX_COMM;
+
 /* Please keep the below in sync with its Rust counterpart. */
 #define LOG_MAX			127
 #define LOG_EVENTS_MAX		32
@@ -126,9 +128,14 @@ struct common_event {
 	u32 smp_id;
 } __binding;
 
+/**
+ * Skip Default trait implementation:
+ *
+ * <div rustbindgen nodefault></div>
+ */
 struct common_task_event {
 	u64 pid;
 	char comm[RETIS_MAX_COMM];
-};
+} __binding;
 
 #endif /* __CORE_PROBE_KERNEL_BPF_EVENTS__ */

@@ -4,9 +4,17 @@ pub type __u32 = ::std::os::raw::c_uint;
 pub type __u64 = ::std::os::raw::c_ulonglong;
 pub type u32_ = __u32;
 pub type u64_ = __u64;
+pub const retis_max_comm: ::std::os::raw::c_int = 64;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct common_event {
     pub timestamp: u64_,
     pub smp_id: u32_,
+}
+#[doc = " Skip Default trait implementation:\n\n <div rustbindgen nodefault></div>"]
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct common_task_event {
+    pub pid: u64_,
+    pub comm: [::std::os::raw::c_char; 64usize],
 }
