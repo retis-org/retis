@@ -4,10 +4,10 @@ use anyhow::Result;
 
 use crate::{
     bindings::{
-        ct_uapi::*, kernel_exec_tp_uapi::exec_event, skb_hook_uapi::*,
+        common_uapi::kernel_event, ct_uapi::*, kernel_exec_tp_uapi::exec_event, skb_hook_uapi::*,
         tracking_hook_uapi::skb_tracking_event,
     },
-    core::{events::*, probe::kernel::RawKernelEvent},
+    core::events::*,
 };
 
 /// Raw event sections can implement this trait to provide a way to build a raw
@@ -53,7 +53,7 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     // Build sections.
     RawCommonEvent::build_raw(&mut event)?;
     RawTaskEvent::build_raw(&mut event)?;
-    RawKernelEvent::build_raw(&mut event)?;
+    kernel_event::build_raw(&mut event)?;
     skb_tracking_event::build_raw(&mut event)?;
     skb_netdev_event::build_raw(&mut event)?;
     skb_netns_event::build_raw(&mut event)?;
