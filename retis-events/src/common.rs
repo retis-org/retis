@@ -6,7 +6,7 @@ use crate::*;
 
 /// Startup event section. Contains global information about a collection as a
 /// whole, with data gathered at collection startup time.
-#[event_section("startup")]
+#[event_section(SectionId::Startup)]
 pub struct StartupEvent {
     /// Retis version used while collecting events.
     pub retis_version: String,
@@ -33,7 +33,7 @@ pub struct TaskEvent {
 }
 
 /// Common event section.
-#[event_section("common")]
+#[event_section(SectionId::Common)]
 pub struct CommonEvent {
     /// Timestamp of when the event was generated.
     pub timestamp: u64,

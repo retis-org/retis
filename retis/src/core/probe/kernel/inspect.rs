@@ -26,6 +26,9 @@ pub(super) fn inspect_symbol(symbol: &Symbol) -> Result<ProbeConfig> {
     if let Some(offset) = symbol.parameter_offset("struct nft_traceinfo *")? {
         cfg.offsets.nft_traceinfo = offset as i8;
     }
+    if let Some(offset) = symbol.parameter_offset("enum sk_rst_reason")? {
+        cfg.offsets.sk_rst_reason = offset as i8;
+    }
 
     Ok(cfg)
 }

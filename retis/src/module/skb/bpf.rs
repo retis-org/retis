@@ -14,8 +14,10 @@ use pnet_packet::{
 };
 
 use crate::{
-    core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
-    event_byte_array,
+    core::events::{
+        parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
+    },
+    event_byte_array, event_section_factory,
     events::{net::RawPacket, *},
     helpers, raw_event_section,
 };
@@ -309,7 +311,13 @@ pub(super) fn unmarshal_packet(
                 unmarshal_l4(event, ip.get_next_header(), ip.payload())?;
             };
         }
-        _ => (),
+        // If we did not generate any data in the skb section, this means we do
+        // not support yet the protocol used. At least provide the ethertype.
+        _ => {
+            if event.eth.is_none() {
+                event.eth = Some(unmarshal_eth(&eth)?);
+            }
+        }
     }
 
     Ok(())
@@ -347,7 +355,8 @@ fn unmarshal_l4(
     Ok(())
 }
 
-#[derive(Default, crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::Skb)]
+#[derive(Default)]
 pub(crate) struct SkbEventFactory {
     // Should we report the Ethernet header.
     pub(super) report_eth: bool,

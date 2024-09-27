@@ -15,7 +15,7 @@ use crate::{event_section, Formatter};
 /// Tl;dr; the tracking unique id is `(timestamp, orig_head)` and `skb` can be
 /// used to distinguished between clones.
 #[derive(Copy, PartialEq)]
-#[event_section("skb-tracking")]
+#[event_section(SectionId::SkbTracking)]
 #[repr(C)]
 pub struct SkbTrackingEvent {
     /// Head of buffer (`skb->head`) when the packet was first seen by the
@@ -54,7 +54,7 @@ impl EventFmt for SkbTrackingEvent {
 
 /// Tracking event section. Generated at postprocessing with combined skb and ovs
 /// tracking information.
-#[event_section("tracking")]
+#[event_section(SectionId::Tracking)]
 pub struct TrackingInfo {
     /// Tracking information of the original packet.
     pub skb: SkbTrackingEvent,

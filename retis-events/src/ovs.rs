@@ -8,7 +8,7 @@ use crate::{event_section, event_type, Formatter};
 
 ///The OVS Event
 #[derive(PartialEq)]
-#[event_section("ovs")]
+#[event_section(SectionId::Ovs)]
 pub struct OvsEvent {
     /// Event data
     #[serde(flatten)]

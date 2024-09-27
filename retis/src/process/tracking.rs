@@ -14,19 +14,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 
-use crate::{
-    core::events::{BpfRawSection, EventSectionFactory, RawEventSectionFactory},
-    events::*,
-};
-
-#[derive(Default, crate::EventSectionFactory)]
-pub(crate) struct TrackingInfoEventFactory {}
-
-impl RawEventSectionFactory for TrackingInfoEventFactory {
-    fn create(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        bail!("TrackingInfoEvents cannot be created from bpf")
-    }
-}
+use crate::events::*;
 
 // Data identifying an OvsUpcall Event
 #[derive(Debug, PartialEq, Eq, Hash)]

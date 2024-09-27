@@ -2,9 +2,10 @@ use anyhow::Result;
 
 use crate::{
     core::events::{
-        parse_single_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory,
+        parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+        RawEventSectionFactory,
     },
-    event_byte_array,
+    event_byte_array, event_section_factory,
     events::*,
     raw_event_section,
 };
@@ -85,13 +86,14 @@ struct NftBpfEvent {
     p: u8,
 }
 
-#[derive(Default, crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::Nft)]
+#[derive(Default)]
 pub(crate) struct NftEventFactory {}
 
 impl RawEventSectionFactory for NftEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = NftEvent::default();
-        let raw = parse_single_raw_section::<NftBpfEvent>(SectionId::Nft, &raw_sections)?;
+        let raw = parse_single_raw_section::<NftBpfEvent>(&raw_sections)?;
 
         event.table_name = raw.tn.to_string()?;
         event.chain_name = raw.cn.to_string()?;

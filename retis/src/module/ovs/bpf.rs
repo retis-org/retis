@@ -7,7 +7,10 @@ use std::net::Ipv6Addr;
 use anyhow::{bail, Result};
 
 use crate::{
-    core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
+    core::events::{
+        parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
+    },
+    event_section_factory,
     events::*,
     helpers, raw_event_section,
 };
@@ -346,7 +349,8 @@ pub(super) fn unmarshall_upcall_return(
     Ok(())
 }
 
-#[derive(Default, crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::Ovs)]
+#[derive(Default)]
 pub(crate) struct OvsEventFactory {}
 
 impl RawEventSectionFactory for OvsEventFactory {

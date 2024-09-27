@@ -3,7 +3,7 @@ use std::fmt;
 use super::*;
 use crate::{event_section, event_type, Formatter};
 
-#[event_section("kernel")]
+#[event_section(SectionId::Kernel)]
 pub struct KernelEvent {
     /// Kernel symbol name associated with the event (i.e. which probe generated
     /// the event).

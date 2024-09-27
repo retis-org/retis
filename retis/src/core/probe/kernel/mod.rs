@@ -22,6 +22,10 @@
 pub(crate) mod kernel;
 pub(crate) use kernel::*;
 
+// Re-export common_types.rs
+pub(crate) mod common_types;
+pub(crate) use common_types::*;
+
 pub(crate) mod config;
 pub(crate) mod probe_stack;
 
