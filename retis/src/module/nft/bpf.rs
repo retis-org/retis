@@ -8,6 +8,7 @@ use crate::{
     },
     event_section_factory,
     events::*,
+    raw_to_string, raw_to_string_opt,
 };
 
 /// Allowed verdicts in an event.
@@ -37,8 +38,8 @@ impl RawEventSectionFactory for NftEventFactory {
         let mut event = NftEvent::default();
         let raw = parse_single_raw_section::<nft_event>(&raw_sections)?;
 
-        event.table_name = nft_event::to_string(&raw.table_name)?;
-        event.chain_name = nft_event::to_string(&raw.chain_name)?;
+        event.table_name = raw_to_string!(&raw.table_name)?;
+        event.chain_name = raw_to_string!(&raw.chain_name)?;
         event.table_handle = raw.t_handle;
         event.chain_handle = raw.c_handle;
         event.policy = raw.policy == 1;
@@ -65,7 +66,7 @@ impl RawEventSectionFactory for NftEventFactory {
 
         // Destination chain is only valid for NFT_JUMP/NFT_GOTO.
         if raw.verdict as i32 == -3 || raw.verdict as i32 == -4 {
-            event.verdict_chain_name = nft_event::to_string_opt(&raw.verdict_chain_name)?;
+            event.verdict_chain_name = raw_to_string_opt!(&raw.verdict_chain_name)?;
         }
 
         Ok(Box::new(event))

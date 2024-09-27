@@ -53,28 +53,6 @@ impl Default for nft_offsets {
     }
 }
 
-impl nft_event {
-    pub(crate) fn to_string(c_array: &[c_char]) -> Result<String> {
-        let _null_pos = c_array
-            .iter()
-            .position(|&c| c == 0)
-            .ok_or_else(|| anyhow!("String is not NULL terminated"))?;
-
-        let cstr = unsafe { CStr::from_ptr(c_array.as_ptr()) };
-        Ok(cstr.to_string_lossy().into_owned())
-    }
-
-    pub(crate) fn to_string_opt(c_array: &[c_char]) -> Result<Option<String>> {
-        let res = Self::to_string(c_array)?;
-
-        if res.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(res))
-    }
-}
-
 impl Default for nft_event {
     fn default() -> Self {
         Self {
@@ -128,27 +106,5 @@ impl Default for common_task_event {
             pid: 0,
             comm: [0; retis_max_comm as usize],
         }
-    }
-}
-
-impl common_task_event {
-    pub(crate) fn to_string(c_array: &[c_char]) -> Result<String> {
-        let _null_pos = c_array
-            .iter()
-            .position(|&c| c == 0)
-            .ok_or_else(|| anyhow!("String is not NULL terminated"))?;
-
-        let cstr = unsafe { CStr::from_ptr(c_array.as_ptr()) };
-        Ok(cstr.to_string_lossy().into_owned())
-    }
-
-    pub(crate) fn to_string_opt(c_array: &[c_char]) -> Result<Option<String>> {
-        let res = Self::to_string(c_array)?;
-
-        if res.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(res))
     }
 }
