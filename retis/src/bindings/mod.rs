@@ -115,3 +115,5 @@ impl Default for exec_ip {
 pub(crate) mod ovs_common_uapi;
 pub(crate) mod ovs_operation_uapi;
 pub(crate) mod user_recv_upcall_uapi;
+
+pub(crate) mod events_uapi;
