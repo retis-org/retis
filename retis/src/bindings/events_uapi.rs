@@ -4,9 +4,25 @@ pub type __u32 = ::std::os::raw::c_uint;
 pub type __u64 = ::std::os::raw::c_ulonglong;
 pub type u32_ = __u32;
 pub type u64_ = __u64;
+pub const retis_max_comm: ::std::os::raw::c_int = 64;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct common_event {
     pub timestamp: u64_,
     pub smp_id: u32_,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct common_task_event {
+    pub pid: u64_,
+    pub comm: [::std::os::raw::c_char; 64usize],
+}
+impl Default for common_task_event {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
 }
