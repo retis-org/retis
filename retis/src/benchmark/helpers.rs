@@ -4,8 +4,12 @@ use anyhow::Result;
 
 use crate::{
     bindings::{
-        common_uapi::kernel_event, ct_uapi::*, events_uapi::common_event,
-        kernel_exec_tp_uapi::exec_event, skb_hook_uapi::*, tracking_hook_uapi::skb_tracking_event,
+        common_uapi::kernel_event,
+        ct_uapi::*,
+        events_uapi::{common_event, common_task_event},
+        kernel_exec_tp_uapi::exec_event,
+        skb_hook_uapi::*,
+        tracking_hook_uapi::skb_tracking_event,
     },
     core::events::*,
 };
@@ -52,7 +56,7 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
 
     // Build sections.
     common_event::build_raw(&mut event)?;
-    RawTaskEvent::build_raw(&mut event)?;
+    common_task_event::build_raw(&mut event)?;
     kernel_event::build_raw(&mut event)?;
     skb_tracking_event::build_raw(&mut event)?;
     skb_netdev_event::build_raw(&mut event)?;
