@@ -313,4 +313,9 @@ impl DelimWriter {
         }
         Ok(())
     }
+
+    /// Was the DelimWriter used?
+    pub fn used(&self) -> bool {
+        !self.first
+    }
 }
