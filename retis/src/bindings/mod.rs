@@ -90,6 +90,8 @@ impl Default for nft_event {
     }
 }
 
+pub(crate) mod skb_drop_hook_uapi;
+
 pub(crate) mod skb_tracking_uapi;
 use skb_tracking_uapi::*;
 
