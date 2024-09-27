@@ -16,10 +16,10 @@
 /* Kernel section of the event data. */
 struct kernel_event {
 	u64 symbol;
+	long stack_id;
 	/* values from enum kernel_probe_type */
 	u8 type;
-	long stack_id;
-};
+} __binding;
 
 /* Per-probe configuration. */
 struct retis_probe_config {
