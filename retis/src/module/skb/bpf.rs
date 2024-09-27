@@ -290,6 +290,13 @@ pub(super) fn unmarshal_packet(
             anyhow!("Could not parse Ethernet packet (buffer size less than minimal)")
         })?;
 
+    // We can report non-Ethernet packets, sanity check they look like one. We
+    // could still get invalid ones, if the data at the right offset looks like
+    // an ethernet packet; but what else can we do?
+    if etype_str(eth.get_ethertype().0).is_none() {
+        return Ok(());
+    }
+
     if report_eth && raw.fake_eth == 0 {
         event.eth = Some(unmarshal_eth(&eth)?);
     }
@@ -313,14 +320,11 @@ pub(super) fn unmarshal_packet(
             };
         }
         // If we did not generate any data in the skb section, this means we do
-        // not support yet the protocol used. At least provide the ethertype (if
-        // it looks valid).
+        // not support yet the protocol used. At least provide the ethertype (we
+        // already checked it looked valid).
         _ => {
             if event.eth.is_none() {
-                let eth = unmarshal_eth(&eth)?;
-                if etype_str(eth.etype).is_some() {
-                    event.eth = Some(eth);
-                }
+                event.eth = Some(unmarshal_eth(&eth)?);
             }
         }
     }
