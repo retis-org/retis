@@ -8,10 +8,6 @@
     non_camel_case_types,
     non_snake_case
 )]
-use std::ffi::{c_char, CStr};
-
-use anyhow::{anyhow, Result};
-
 pub(crate) mod common_uapi;
 use common_uapi::{retis_probe_config, retis_probe_offsets};
 
@@ -37,7 +33,7 @@ use ct_uapi::ct_event;
 unsafe impl plain::Plain for ct_event {}
 
 pub(crate) mod nft_uapi;
-use nft_uapi::{nft_event, nft_offsets};
+use nft_uapi::nft_offsets;
 
 impl Default for nft_offsets {
     fn default() -> Self {
@@ -47,28 +43,6 @@ impl Default for nft_offsets {
             nft_verdict: -1,
             nft_type: -1,
         }
-    }
-}
-
-impl nft_event {
-    pub(crate) fn to_string(c_array: &[c_char]) -> Result<String> {
-        let _null_pos = c_array
-            .iter()
-            .position(|&c| c == 0)
-            .ok_or_else(|| anyhow!("String is not NULL terminated"))?;
-
-        let cstr = unsafe { CStr::from_ptr(c_array.as_ptr()) };
-        Ok(cstr.to_string_lossy().into_owned())
-    }
-
-    pub(crate) fn to_string_opt(c_array: &[c_char]) -> Result<Option<String>> {
-        let res = Self::to_string(c_array)?;
-
-        if res.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(res))
     }
 }
 
@@ -94,27 +68,3 @@ pub(crate) mod ovs_operation_uapi;
 pub(crate) mod user_recv_upcall_uapi;
 
 pub(crate) mod events_uapi;
-
-use events_uapi::common_task_event;
-
-impl common_task_event {
-    pub(crate) fn to_string(c_array: &[c_char]) -> Result<String> {
-        let _null_pos = c_array
-            .iter()
-            .position(|&c| c == 0)
-            .ok_or_else(|| anyhow!("String is not NULL terminated"))?;
-
-        let cstr = unsafe { CStr::from_ptr(c_array.as_ptr()) };
-        Ok(cstr.to_string_lossy().into_owned())
-    }
-
-    pub(crate) fn to_string_opt(c_array: &[c_char]) -> Result<Option<String>> {
-        let res = Self::to_string(c_array)?;
-
-        if res.is_empty() {
-            return Ok(None);
-        }
-
-        Ok(Some(res))
-    }
-}
