@@ -16,10 +16,18 @@ __binding const int retis_max_comm = RETIS_MAX_COMM;
 #define LOG_MAX			127
 #define LOG_EVENTS_MAX		32
 
+__binding const int log_max = LOG_MAX;
+__binding const int log_events_max = LOG_EVENTS_MAX;
+
+/**
+ * Skip Default trait implementation:
+ *
+ * <div rustbindgen nodefault></div>
+ */
 struct retis_log_event {
 	u8 level;
-	u8 msg[LOG_MAX];
-} __packed;
+	char msg[LOG_MAX];
+} __binding;
 
 /* We're using the factory identifiers defined in retis-events.
  * Please keep in sync. */

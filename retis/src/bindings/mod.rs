@@ -8,12 +8,7 @@
     non_camel_case_types,
     non_snake_case
 )]
-use std::{
-    ffi::{c_char, CStr},
-    mem,
-};
-
-use anyhow::{anyhow, Result};
+use std::mem;
 
 pub(crate) mod common_uapi;
 use common_uapi::{retis_probe_config, retis_probe_offsets};
@@ -98,7 +93,7 @@ pub(crate) mod user_recv_upcall_uapi;
 
 pub(crate) mod events_uapi;
 
-use events_uapi::{common_task_event, retis_max_comm};
+use events_uapi::*;
 
 impl Default for common_task_event {
     fn default() -> Self {
@@ -108,3 +103,14 @@ impl Default for common_task_event {
         }
     }
 }
+
+impl Default for retis_log_event {
+    fn default() -> Self {
+        Self {
+            level: 0,
+            msg: [0; log_max as usize],
+        }
+    }
+}
+
+unsafe impl plain::Plain for retis_log_event {}
