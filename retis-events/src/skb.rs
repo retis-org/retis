@@ -8,6 +8,7 @@ use crate::{event_section, event_type, Formatter};
 
 /// Skb event section.
 #[event_section("skb")]
+#[derive(Default)]
 pub struct SkbEvent {
     /// Ethernet fields, if any.
     pub eth: Option<SkbEthEvent>,

@@ -27,7 +27,7 @@ pub fn event_section(
     let name: syn::LitStr = syn::parse(args).expect("Invalid event name");
 
     let output = quote! {
-        #[derive(Default, crate::EventSection)]
+        #[derive(crate::EventSection)]
         #[crate::event_type]
         #input
 

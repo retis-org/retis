@@ -34,6 +34,7 @@ pub struct TaskEvent {
 
 /// Common event section.
 #[event_section("common")]
+#[derive(Default)]
 pub struct CommonEvent {
     /// Timestamp of when the event was generated.
     pub timestamp: u64,

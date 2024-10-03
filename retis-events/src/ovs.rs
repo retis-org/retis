@@ -7,7 +7,7 @@ use super::*;
 use crate::{event_section, event_type, Formatter};
 
 ///The OVS Event
-#[derive(PartialEq)]
+#[derive(Default, PartialEq)]
 #[event_section("ovs")]
 pub struct OvsEvent {
     /// Event data

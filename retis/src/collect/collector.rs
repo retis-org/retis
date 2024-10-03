@@ -614,7 +614,7 @@ mod tests {
     }
 
     #[event_section("test")]
-    #[derive(crate::EventSectionFactory)]
+    #[derive(Default, crate::EventSectionFactory)]
     struct TestEvent {}
 
     impl EventFmt for TestEvent {
