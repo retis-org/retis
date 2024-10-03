@@ -16,7 +16,10 @@ use pnet_packet::{
 use crate::{
     core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
     event_byte_array,
-    events::{net::RawPacket, *},
+    events::{
+        net::{etype_str, RawPacket},
+        *,
+    },
     helpers, raw_event_section,
 };
 
@@ -287,6 +290,13 @@ pub(super) fn unmarshal_packet(
             anyhow!("Could not parse Ethernet packet (buffer size less than minimal)")
         })?;
 
+    // We can report non-Ethernet packets, sanity check they look like one. We
+    // could still get invalid ones, if the data at the right offset looks like
+    // an ethernet packet; but what else can we do?
+    if etype_str(eth.get_ethertype().0).is_none() {
+        return Ok(());
+    }
+
     if report_eth && raw.fake_eth == 0 {
         event.eth = Some(unmarshal_eth(&eth)?);
     }
@@ -309,7 +319,14 @@ pub(super) fn unmarshal_packet(
                 unmarshal_l4(event, ip.get_next_header(), ip.payload())?;
             };
         }
-        _ => (),
+        // If we did not generate any data in the skb section, this means we do
+        // not support yet the protocol used. At least provide the ethertype (we
+        // already checked it looked valid).
+        _ => {
+            if event.eth.is_none() {
+                event.eth = Some(unmarshal_eth(&eth)?);
+            }
+        }
     }
 
     Ok(())

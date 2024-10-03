@@ -285,6 +285,13 @@ impl EventFmt for SkbEvent {
             write!(f, "size {}]", gso.size)?;
         }
 
+        // If we didn't print any section, it means the section has raw packet
+        // data but we were unable to decode it. Print something.
+        if !space.used() {
+            space.write(f)?;
+            write!(f, "unknown packet (see raw data)")?;
+        }
+
         Ok(())
     }
 }

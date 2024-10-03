@@ -121,9 +121,9 @@ static __always_inline u16 skb_protocol(struct sk_buff *skb)
 	bpf_probe_read_kernel(&ip_version, sizeof(ip_version), head + network);
 	ip_version >>= 4;
 	if (ip_version == 4 && l4hlen == sizeof(struct iphdr)) {
-		return bpf_ntohs(ETH_P_IP);
+		return bpf_htons(ETH_P_IP);
 	} else if (ip_version == 6 && l4hlen == sizeof(struct ipv6hdr)) {
-		return bpf_ntohs(ETH_P_IPV6);
+		return bpf_htons(ETH_P_IPV6);
 	}
 
 	return 0;
