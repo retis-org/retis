@@ -4,6 +4,7 @@ use super::*;
 use crate::{event_section, event_type, Formatter};
 
 #[event_section(SectionId::Kernel)]
+#[derive(Default)]
 pub struct KernelEvent {
     /// Kernel symbol name associated with the event (i.e. which probe generated
     /// the event).

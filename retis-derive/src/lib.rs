@@ -26,7 +26,6 @@ pub fn event_section(
     let id: syn::Expr = syn::parse(args).expect("Invalid event id");
 
     let output = quote! {
-        #[derive(Default)]
         #[crate::event_type]
         #input
 

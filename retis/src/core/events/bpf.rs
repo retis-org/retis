@@ -644,6 +644,7 @@ mod tests {
     const DATA_TYPE_U128: u8 = 2;
 
     #[event_section(SectionId::Common)]
+    #[derive(Default)]
     struct TestEvent {
         field0: Option<u64>,
         field1: Option<u64>,

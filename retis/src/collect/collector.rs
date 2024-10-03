@@ -612,6 +612,7 @@ mod tests {
     }
 
     #[event_section(SectionId::Common)]
+    #[derive(Default)]
     struct TestEvent {}
 
     impl EventFmt for TestEvent {
