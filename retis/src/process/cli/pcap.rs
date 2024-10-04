@@ -284,11 +284,9 @@ where
 
     // See if we matched (not processed!) at least one event.
     let mut matched = false;
-
-    use EventResult::*;
     while run.running() {
-        match factory.next_event(Some(Duration::from_secs(1)))? {
-            Event(event) => {
+        match factory.next_event()? {
+            Some(event) => {
                 if let Some(kernel) = event.get_section::<KernelEvent>(SectionId::Kernel) {
                     // Check the event is matching the requested symbol.
                     if !filter(&kernel.probe_type, &kernel.symbol) {
@@ -299,8 +297,7 @@ where
                     parser.parse(&event)?;
                 }
             }
-            Eof => break,
-            Timeout => continue,
+            None => break,
         }
     }
 

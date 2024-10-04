@@ -432,6 +432,7 @@ pub(crate) fn get_cli() -> Result<ThinCli> {
     cli.add_subcommand(Box::new(Collect::new()?))?;
     cli.add_subcommand(Box::new(Print::new()?))?;
     cli.add_subcommand(Box::new(Sort::new()?))?;
+    cli.add_subcommand(Box::new(PythonCli::new()?))?;
     cli.add_subcommand(Box::new(Pcap::new()?))?;
     cli.add_subcommand(Box::new(Inspect::new()?))?;
     cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
