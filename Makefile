@@ -97,6 +97,9 @@ $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	CFLAGS_INCLUDES="$(INCLUDES)" \
 	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@
 
+rust-analyzer:
+	$(CARGO) check --quiet --message-format=json --all-targets --keep-going
+
 clean-ebpf:
 	$(call out_console,CLEAN,cleaning ebpf progs...)
 	for i in $(EBPF_PROBES) $(EBPF_HOOKS); do \
@@ -120,6 +123,7 @@ help:
 	$(PRINT) 'ebpf                --  Builds only the eBPF programs.'
 	$(PRINT) 'install             --  Installs Retis.'
 	$(PRINT) 'release             --  Builds Retis with the release option.'
+	$(PRINT) 'rust-analyzer       --  Runs cargo check. The target is always verbose regardless of $$(V).'
 	$(PRINT) 'test                --  Builds and runs unit tests.'
 	$(PRINT)
 	$(PRINT) 'Optional variables that can be used to override the default behavior:'
