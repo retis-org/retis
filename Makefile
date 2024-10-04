@@ -9,8 +9,9 @@ ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET)
 
 RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
+RELEASE_FLAGS = -Dwarnings
 
-export ARCH CFLAGS CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
+export ARCH CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
 
 PRINT = printf
 CONTAINER_RUNTIME := podman
@@ -61,27 +62,28 @@ EBPF_HOOKS := $(abspath $(wildcard retis/src/module/*/bpf))
 all: debug
 
 install: release
+	RUSTFLAGS="$(RUSTFLAGS) $(RELEASE_FLAGS)" \
 	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS) --path=$(ROOT_DIR)/retis --offline --frozen
 
 define build
 	$(call out_console,CARGO,$(strip $(2)) ...)
 	jobs=$(patsubst -j%,%,$(filter -j%,$(MAKEFLAGS))); \
 	CARGO_BUILD_JOBS=$${jobs:-1} \
+	RUSTFLAGS="$(RUSTFLAGS) $(3)" \
 	$(CARGO) $(CARGO_OPTS) $(1) $(CARGO_CMD_OPTS)
 endef
 
 debug: ebpf
-	$(call build, build, building retis (debug))
+	$(call build,build,building retis (debug))
 
-release: $(eval RUSTFLAGS += -D warnings)
 release: ebpf
-	$(call build, build --release, building retis (release))
+	$(call build,build --release,building retis (release),$(RELEASE_FLAGS))
 
 test: ebpf
-	$(call build, test, building and running tests)
+	$(call build,test,building and running tests)
 
 bench: ebpf
-	$(call build, build -F benchmark --release, building benchmarks)
+	$(call build,build -F benchmark --release,building benchmarks)
 
 ifeq ($(NOVENDOR),)
 $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
@@ -95,7 +97,7 @@ $(EBPF_PROBES): OUT_NAME := PROBE
 $(EBPF_HOOKS):  OUT_NAME := HOOK
 $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	$(call out_console,$(OUT_NAME),building $@ ...)
-	CFLAGS_INCLUDES="$(INCLUDES)" \
+	CFLAGS="$(INCLUDES) $(CFLAGS)" \
 	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@
 
 pylib:
@@ -110,7 +112,7 @@ pytest: pytest-deps
 	cd retis-events && tox
 
 clean-ebpf:
-	$(call out_console,CLEAN,cleaning ebpf progs...)
+	$(call out_console,CLEAN,cleaning ebpf progs ...)
 	for i in $(EBPF_PROBES) $(EBPF_HOOKS); do \
 	    $(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $$i clean; \
 	done
