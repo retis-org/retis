@@ -72,8 +72,8 @@ endef
 debug: ebpf
 	$(call build, build, building retis (debug))
 
-release: $(eval RUSTFLAGS += -D warnings)
 release: ebpf
+	$(eval RUSTFLAGS += -D warnings)
 	$(call build, build --release, building retis (release))
 
 test: ebpf
