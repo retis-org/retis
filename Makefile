@@ -99,6 +99,15 @@ $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	CFLAGS="$(INCLUDES) $(CFLAGS)" \
 	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@
 
+define analyzer_tmpl
+  $(1): CARGO_CMD_OPTS ?= $(if $(filter 1,$(RA)),--quiet --message-format=json --all-targets --keep-going,)
+  $(1): PRINT +=$(if $(filter 1,$(RA)),>/dev/null,)
+  $(1):
+	$$(call build,$$(@), running $$@)
+endef
+
+$(foreach tgt,check clippy,$(eval $(call analyzer_tmpl,$(tgt))))
+
 clean-ebpf:
 	$(call out_console,CLEAN,cleaning ebpf progs ...)
 	for i in $(EBPF_PROBES) $(EBPF_HOOKS); do \
@@ -122,6 +131,8 @@ help:
 	$(PRINT) 'ebpf                --  Builds only the eBPF programs.'
 	$(PRINT) 'install             --  Installs Retis.'
 	$(PRINT) 'release             --  Builds Retis with the release option.'
+	$(PRINT) 'check               --  Runs cargo check.'
+	$(PRINT) 'clippy              --  Runs cargo clippy.'
 	$(PRINT) 'test                --  Builds and runs unit tests.'
 	$(PRINT)
 	$(PRINT) 'Optional variables that can be used to override the default behavior:'
@@ -137,5 +148,7 @@ help:
 	$(PRINT) 'CARGO_OPTS          --  Changes `cargo` default behavior (e.g. --verbose).'
 	$(PRINT) 'NOVENDOR            --  Avoid to self detect and consume the vendored headers'
 	$(PRINT) '                        shipped with libbpf-sys.'
+	$(PRINT) 'RA                  --  Applies to check and clippy and runs those targets with the options needed'
+	$(PRINT) '                        for rust-analyzer. When $$(RA) is used, $$(V) becomes ineffective.'
 
 .PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test
