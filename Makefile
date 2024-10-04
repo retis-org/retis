@@ -16,6 +16,10 @@ export ARCH CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
 PRINT = printf
 CONTAINER_RUNTIME := podman
 
+define help_once
+    @$(PRINT) '$(1)\n'
+endef
+
 VERBOSITY := $(filter 1,$(V))
 
 ifeq ($(VERBOSITY),)
@@ -23,7 +27,7 @@ ifeq ($(VERBOSITY),)
     MAKE += -s
     CARGO += -q
 define out_console
-    $(PRINT) "[$(1)]\t$(2)\n"
+    $(PRINT) '%-12s %s\n' "[$(1)]" "$(2)"
 endef
 
 .SILENT:
@@ -134,35 +138,36 @@ clean: clean-ebpf
 	$(CARGO) clean
 
 help:
-	$(PRINT) 'all                 --  Builds the tool (both eBPF programs and retis).'
-	$(PRINT) 'bench               --  Builds benchmarks.'
-	$(PRINT) 'clean               --  Deletes all the files generated during the build process'
-	$(PRINT) '	                  (eBPF and rust directory).'
-	$(PRINT) 'clean-ebpf          --  Deletes all the files generated during the build process'
-	$(PRINT) '	                  (eBPF only).'
-	$(PRINT) 'ebpf                --  Builds only the eBPF programs.'
-	$(PRINT) 'install             --  Installs Retis.'
-	$(PRINT) 'release             --  Builds Retis with the release option.'
-	$(PRINT) 'check               --  Runs cargo check.'
-	$(PRINT) 'clippy              --  Runs cargo clippy.'
-	$(PRINT) 'test                --  Builds and runs unit tests.'
-	$(PRINT) 'pylib 	      --  Builds the python bindings.'
-	$(PRINT) 'pytest 	      --  Tests the python bindings (requires "tox" installed).'
-	$(PRINT)
-	$(PRINT) 'Optional variables that can be used to override the default behavior:'
-	$(PRINT) 'V                   --  If set to 1 the verbose output will be printed.'
-	$(PRINT) '                        cargo verbosity is set to default.'
-	$(PRINT) '                        To override `cargo` behavior please refer to $$(CARGO_OPTS),'
-	$(PRINT) '                        $$(CARGO_CMD_OPTS) and for the install $$(CARGO_INSTALL_OPTS).'
-	$(PRINT) '                        For further `cargo` customization please refer to configuration'
-	$(PRINT) '                        environment variables'
-	$(PRINT) '                        (https://doc.rust-lang.org/cargo/reference/environment-variables.html).'
-	$(PRINT) 'CARGO_CMD_OPTS      --  Changes `cargo` subcommand default behavior (e.g. --features <features> for `build`).'
-	$(PRINT) 'CARGO_INSTALL_OPTS  --  Changes `cargo` install subcommand default behavior.'
-	$(PRINT) 'CARGO_OPTS          --  Changes `cargo` default behavior (e.g. --verbose).'
-	$(PRINT) 'NOVENDOR            --  Avoid to self detect and consume the vendored headers'
-	$(PRINT) '                        shipped with libbpf-sys.'
-	$(PRINT) 'RA                  --  Applies to check and clippy and runs those targets with the options needed'
-	$(PRINT) '                        for rust-analyzer. When $$(RA) is used, $$(V) becomes ineffective.'
+	$(call help_once,all                 --  Builds the tool (both eBPF programs and retis).)
+	$(call help_once,bench               --  Builds benchmarks.)
+	$(call help_once,clean               --  Deletes all the files generated during the build process)
+	$(call help_once,                        (eBPF and rust directory).)
+	$(call help_once,clean-ebpf          --  Deletes all the files generated during the build process)
+	$(call help_once,                        (eBPF only).)
+	$(call help_once,ebpf                --  Builds only the eBPF programs.)
+	$(call help_once,install             --  Installs Retis.)
+	$(call help_once,release             --  Builds Retis with the release option.)
+	$(call help_once,check               --  Runs cargo check.)
+	$(call help_once,clippy              --  Runs cargo clippy.)
+	$(call help_once,rust-analyzer       --  Runs cargo check. The target is always verbose regardless of $$(V).)
+	$(call help_once,test                --  Builds and runs unit tests.)
+	$(call help_once,pylib               --  Builds the python bindings.)
+	$(call help_once,pytest              --  Tests the python bindings (requires "tox" installed).)
+	$(call help_once)
+	$(call help_once,Optional variables that can be used to override the default behavior:)
+	$(call help_once,V                   --  If set to 1 the verbose output will be printed.)
+	$(call help_once,                        cargo verbosity is set to default.)
+	$(call help_once,                        To override `cargo` behavior please refer to $$(CARGO_OPTS),)
+	$(call help_once,                        $$(CARGO_CMD_OPTS) and for the install $$(CARGO_INSTALL_OPTS).)
+	$(call help_once,                        For further `cargo` customization please refer to configuration)
+	$(call help_once,                        environment variables)
+	$(call help_once,                        (https://doc.rust-lang.org/cargo/reference/environment-variables.html).)
+	$(call help_once,CARGO_CMD_OPTS      --  Changes `cargo` subcommand default behavior (e.g. --features <features> for `build`).)
+	$(call help_once,CARGO_INSTALL_OPTS  --  Changes `cargo` install subcommand default behavior.)
+	$(call help_once,CARGO_OPTS          --  Changes `cargo` default behavior (e.g. --verbose).)
+	$(call help_once,NOVENDOR            --  Avoid to self detect and consume the vendored headers)
+	$(call help_once,                        shipped with libbpf-sys.)
+	$(call help_once,RA                  --  Applies to check and clippy and runs those targets with the options needed)
+	$(call help_once,                        for rust-analyzer. When $$(RA) is used, $$(V) becomes ineffective.)
 
 .PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test pylib pytest-deps pytest
