@@ -65,7 +65,11 @@ install: release
 define build
 	$(call out_console,CARGO,$(strip $(2)) ...)
 	jobs=$(patsubst -j%,%,$(filter -j%,$(MAKEFLAGS))); \
-	CARGO_BUILD_JOBS=$${jobs:-1} \
+	CARGO_BUILD_JOBS=$${jobs:-1}; \
+	if [ "$(COV)" ]; then \
+		bash -c 'source <(cargo llvm-cov show-env --export-prefix)'; \
+		$(CARGO) llvm-cov clean --workspace; \
+	fi; \
 	$(CARGO) $(CARGO_OPTS) $(1) $(CARGO_CMD_OPTS)
 endef
 
@@ -77,10 +81,14 @@ release: ebpf
 	$(call build, build --release, building retis (release))
 
 test: ebpf
-	$(call build, test, building and running tests)
+	$(call build, llvm-cov, building and running tests)
 
 bench: ebpf
 	$(call build, build -F benchmark --release, building benchmarks)
+
+cov-report:
+	@bash -c 'source <(cargo llvm-cov show-env --export-prefix)'; \
+	$(CARGO) llvm-cov report --html
 
 ifeq ($(NOVENDOR),)
 $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
@@ -108,6 +116,7 @@ clean-ebpf:
 
 clean: clean-ebpf
 	$(call out_console,CLEAN,cleaning retis ...)
+	$(CARGO) llvm-cov clean --workspace
 	$(CARGO) clean
 
 help:
@@ -135,5 +144,6 @@ help:
 	$(PRINT) 'CARGO_OPTS          --  Changes `cargo` default behavior (e.g. --verbose).'
 	$(PRINT) 'NOVENDOR            --  Avoid to self detect and consume the vendored headers'
 	$(PRINT) '                        shipped with libbpf-sys.'
+	$(PRINT) 'COV                 --  enable code coverage for builds.'
 
 .PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test
