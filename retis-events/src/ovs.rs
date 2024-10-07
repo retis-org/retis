@@ -87,7 +87,6 @@ fn fmt_upcall_cmd(cmd: u8) -> &'static str {
 /// OVS upcall event
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
-#[repr(C)]
 pub struct UpcallEvent {
     /// Upcall command. Holds OVS_PACKET_CMD:
     ///   OVS_PACKET_CMD_UNSPEC   = 0
@@ -116,7 +115,6 @@ impl EventFmt for UpcallEvent {
 /// Upcall enqueue event.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
-#[repr(C)]
 pub struct UpcallEnqueueEvent {
     /// Return code. Any value different from zero indicates the upcall enqueue
     /// failed probably indicating a packet drop.
@@ -150,7 +148,6 @@ impl EventFmt for UpcallEnqueueEvent {
 /// Upcall return event
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
-#[repr(C)]
 pub struct UpcallReturnEvent {
     pub upcall_ts: u64,
     pub upcall_cpu: u32,
@@ -233,7 +230,6 @@ impl EventFmt for OperationEvent {
 /// OVS Receive Event
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
-#[repr(C)]
 pub struct RecvUpcallEvent {
     /// Type of upcall
     pub r#type: u32,
@@ -437,7 +433,6 @@ pub enum OvsAction {
 /// OVS output action data.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
-#[repr(C)]
 pub struct OvsActionOutput {
     /// Output port.
     pub port: u32,
@@ -446,7 +441,6 @@ pub struct OvsActionOutput {
 /// OVS recirc action data.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
-#[repr(C)]
 pub struct OvsActionRecirc {
     /// Recirculation id.
     pub id: u32,

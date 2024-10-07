@@ -1,6 +1,8 @@
 #ifndef __MODULE_OVS_OPERATION__
 #define __MODULE_OVS_OPERATION__
 
+#include <events.h>
+
 #include "ovs_common.h"
 
 /* Please keep in sync with its Rust counterpart in retis-events::ovs. */
@@ -9,14 +11,13 @@ enum ovs_operation_type {
 	OVS_OP_PUT = 1,
 };
 
-/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct ovs_operation_event {
+	u64 batch_ts;
+	u32 queue_id;
+	u8 batch_idx;
 	/* enum ovs_operation_type */
 	u8 type;
-	u32 queue_id;
-	u64 batch_ts;
-	u8 batch_idx;
-};
+} __binding;
 
 /* Upcall Batching.
  *
@@ -35,34 +36,30 @@ struct ovs_operation_event {
  * handler threads.
  */
 
-/* Upcall information that is carried through userspace events
- * Please keep in sync with its Rust counterpart in crate::module::ovs::ovs.rs.
- */
+/* Upcall information that is carried through userspace events. */
 struct user_upcall_info {
 	u32 queue_id;
-
-	/* Bitmask of processed operations. Bit order corresponds to
-	 * enum ovs_operation_type values.*/
-	u8 processed_ops;
 
 	/* It indicates that the upcall event was filtered out so no events
 	 * related to this upcall should be generated. */
 	bool skip_event;
-};
+
+	/* Bitmask of processed operations. Bit order corresponds to
+	 * enum ovs_operation_type values.*/
+	u8 processed_ops;
+} __binding;
 
 #define UPCALL_MAX_BATCH 64
 
-/* Upcall batch information.
- * Please keep in sync with its Rust counterpart in crate::module::ovs::ovs.rs.
- */
+/* Upcall batch information. */
 struct upcall_batch {
 	u64 leader_ts;	 /* Timestamp of the first upcall in the batch. */
 	bool processing;		/* Whether we're still batching (false) or we
 				are processing batched upcalls. */
+	struct user_upcall_info upcalls[UPCALL_MAX_BATCH]; /* Upcalls in batch */
 	u8 current_upcall; /* Current upcall being processed */
 	u8 total;		  /* Number of upcalls of the batch */
-	struct user_upcall_info upcalls[UPCALL_MAX_BATCH]; /* Upcalls in batch */
-};
+} __binding;
 
 
 /* Array of batches. This is a placeholder as this array must be created

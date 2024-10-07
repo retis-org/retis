@@ -4,6 +4,9 @@
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 
+#define __packed __attribute__((packed))
+#define __binding __attribute__((annotate("uapi")))
+
 /* Keep in sync with its Rust counterpart in crate::core::probe */
 #define PROBE_MAX	1024
 
