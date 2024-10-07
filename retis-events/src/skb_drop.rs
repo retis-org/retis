@@ -4,7 +4,7 @@ use super::*;
 use crate::{event_section, Formatter};
 
 /// Skb drop event section.
-#[event_section("skb-drop")]
+#[event_section(SectionId::SkbDrop)]
 pub struct SkbDropEvent {
     /// Sub-system who generated the below drop reason. None for core reasons.
     pub subsys: Option<String>,

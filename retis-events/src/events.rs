@@ -34,7 +34,7 @@
 #![allow(dead_code)] // FIXME
 #![allow(clippy::wrong_self_convention)]
 
-use std::{any::Any, collections::HashMap, fmt, str::FromStr};
+use std::{any::Any, collections::HashMap, fmt};
 
 use anyhow::{anyhow, bail, Result};
 use log::debug;
@@ -60,18 +60,15 @@ impl Event {
             .map_err(|e| anyhow!("Failed to parse json event at line {line}: {e}"))?;
 
         for (owner, value) in event_js.drain() {
-            let owner_mod = SectionId::from_str(&owner)?;
             let parser = event_sections()?
                 .get(&owner)
                 .ok_or_else(|| anyhow!("json contains an unsupported event {}", owner))?;
 
             debug!("Unmarshaling event section {owner}: {value}");
-            event.insert_section(
-                owner_mod,
-                parser(value).map_err(|e| {
-                    anyhow!("Failed to create EventSection for owner {owner} from json: {e}")
-                })?,
-            )?;
+            let section = parser(value).map_err(|e| {
+                anyhow!("Failed to create EventSection for owner {owner} from json: {e}")
+            })?;
+            event.insert_section(SectionId::from_u8(section.id())?, section)?;
         }
         Ok(event)
     }
@@ -166,7 +163,7 @@ impl EventFmt for Event {
         f.conf.inc_level(2);
 
         // Finally show all sections.
-        (SectionId::Skb.to_u8()..SectionId::_MAX.to_u8())
+        (SectionId::Skb as u8..SectionId::_MAX as u8)
             .collect::<Vec<u8>>()
             .iter()
             .filter_map(|id| self.0.get(&SectionId::from_u8(*id).unwrap()))
@@ -198,29 +195,6 @@ pub enum SectionId {
     _MAX = 12,
 }
 
-impl FromStr for SectionId {
-    type Err = anyhow::Error;
-
-    /// Constructs an SectionId from a section unique str identifier.
-    fn from_str(val: &str) -> Result<Self> {
-        use SectionId::*;
-        Ok(match val {
-            CommonEvent::SECTION_NAME => Common,
-            KernelEvent::SECTION_NAME => Kernel,
-            UserEvent::SECTION_NAME => Userspace,
-            TrackingInfo::SECTION_NAME => Tracking,
-            SkbTrackingEvent::SECTION_NAME => SkbTracking,
-            SkbDropEvent::SECTION_NAME => SkbDrop,
-            SkbEvent::SECTION_NAME => Skb,
-            OvsEvent::SECTION_NAME => Ovs,
-            NftEvent::SECTION_NAME => Nft,
-            CtEvent::SECTION_NAME => Ct,
-            StartupEvent::SECTION_NAME => Startup,
-            x => bail!("Can't construct a SectionId from {}", x),
-        })
-    }
-}
-
 impl SectionId {
     /// Constructs an SectionId from a section unique identifier
     pub fn from_u8(val: u8) -> Result<SectionId> {
@@ -241,41 +215,21 @@ impl SectionId {
         })
     }
 
-    /// Converts an SectionId to a section unique identifier.
-    #[allow(dead_code)]
-    pub fn to_u8(self) -> u8 {
-        use SectionId::*;
-        match self {
-            Common => 1,
-            Kernel => 2,
-            Userspace => 3,
-            Tracking => 4,
-            SkbTracking => 5,
-            SkbDrop => 6,
-            Skb => 7,
-            Ovs => 8,
-            Nft => 9,
-            Ct => 10,
-            Startup => 11,
-            _MAX => 12,
-        }
-    }
-
     /// Converts an SectionId to a section unique str identifier.
     pub fn to_str(self) -> &'static str {
         use SectionId::*;
         match self {
-            Common => CommonEvent::SECTION_NAME,
-            Kernel => KernelEvent::SECTION_NAME,
-            Userspace => UserEvent::SECTION_NAME,
-            Tracking => TrackingInfo::SECTION_NAME,
-            SkbTracking => SkbTrackingEvent::SECTION_NAME,
-            SkbDrop => SkbDropEvent::SECTION_NAME,
-            Skb => SkbEvent::SECTION_NAME,
-            Ovs => OvsEvent::SECTION_NAME,
-            Nft => NftEvent::SECTION_NAME,
-            Ct => CtEvent::SECTION_NAME,
-            Startup => StartupEvent::SECTION_NAME,
+            Common => "common",
+            Kernel => "kernel",
+            Userspace => "userspace",
+            Tracking => "tracking",
+            SkbTracking => "skb-tracking",
+            SkbDrop => "skb-drop",
+            Skb => "skb",
+            Ovs => "ovs",
+            Nft => "nft",
+            Ct => "ct",
+            Startup => "startup",
             _MAX => "_max",
         }
     }
@@ -291,39 +245,30 @@ impl fmt::Display for SectionId {
 type EventSectionMap = HashMap<String, fn(serde_json::Value) -> Result<Box<dyn EventSection>>>;
 static EVENT_SECTIONS: OnceCell<EventSectionMap> = OnceCell::new();
 
+macro_rules! insert_section {
+    ($events: expr, $ty: ty) => {
+        $events.insert(
+            SectionId::from_u8(<$ty>::SECTION_ID)?.to_str().to_string(),
+            |v| Ok(Box::new(serde_json::from_value::<$ty>(v)?)),
+        );
+    };
+}
+
 fn event_sections() -> Result<&'static EventSectionMap> {
     EVENT_SECTIONS.get_or_try_init(|| {
         let mut events = EventSectionMap::new();
-        events.insert(CommonEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<CommonEvent>(v)?))
-        });
-        events.insert(KernelEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<KernelEvent>(v)?))
-        });
-        events.insert(UserEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<UserEvent>(v)?))
-        });
-        events.insert(SkbTrackingEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<SkbTrackingEvent>(v)?))
-        });
-        events.insert(SkbDropEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<SkbDropEvent>(v)?))
-        });
-        events.insert(SkbEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<SkbEvent>(v)?))
-        });
-        events.insert(OvsEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<OvsEvent>(v)?))
-        });
-        events.insert(NftEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<NftEvent>(v)?))
-        });
-        events.insert(CtEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<CtEvent>(v)?))
-        });
-        events.insert(StartupEvent::SECTION_NAME.to_string(), |v| {
-            Ok(Box::new(serde_json::from_value::<StartupEvent>(v)?))
-        });
+
+        insert_section!(events, CommonEvent);
+        insert_section!(events, KernelEvent);
+        insert_section!(events, UserEvent);
+        insert_section!(events, SkbTrackingEvent);
+        insert_section!(events, SkbDropEvent);
+        insert_section!(events, SkbEvent);
+        insert_section!(events, OvsEvent);
+        insert_section!(events, NftEvent);
+        insert_section!(events, CtEvent);
+        insert_section!(events, StartupEvent);
+
         Ok(events)
     })
 }
@@ -358,6 +303,7 @@ impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<
 ///
 /// There should not be a need to have per-object implementations for this.
 pub trait EventSectionInternal {
+    fn id(&self) -> u8;
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn to_json(&self) -> serde_json::Value;
@@ -366,6 +312,10 @@ pub trait EventSectionInternal {
 // We need this as the value given as the input when deserializing something
 // into an event could be mapped to (), e.g. serde_json::Value::Null.
 impl EventSectionInternal for () {
+    fn id(&self) -> u8 {
+        SectionId::_MAX as u8
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

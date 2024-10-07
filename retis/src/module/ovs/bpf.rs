@@ -7,7 +7,10 @@ use std::net::Ipv6Addr;
 use anyhow::{bail, Result};
 
 use crate::{
-    core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
+    core::events::{
+        parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
+    },
+    event_section_factory,
     events::*,
     helpers, raw_event_section,
 };
@@ -346,7 +349,8 @@ pub(super) fn unmarshall_upcall_return(
     Ok(())
 }
 
-#[derive(Default, crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::Ovs)]
+#[derive(Default)]
 pub(crate) struct OvsEventFactory {}
 
 impl RawEventSectionFactory for OvsEventFactory {
@@ -377,7 +381,7 @@ pub(crate) mod benchmark {
     use anyhow::Result;
 
     use super::*;
-    use crate::{benchmark::helpers::*, events::SectionId};
+    use crate::{benchmark::helpers::*, core::events::FactoryId};
 
     impl RawSectionBuilder for BpfActionEvent {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
@@ -387,7 +391,7 @@ pub(crate) mod benchmark {
             };
             build_raw_section(
                 out,
-                SectionId::Ovs.to_u8(),
+                FactoryId::Ovs as u8,
                 OvsDataType::ActionExec as u8,
                 &mut as_u8_vec(&data),
             );

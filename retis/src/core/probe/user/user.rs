@@ -4,13 +4,13 @@ use std::{any::Any, collections::HashMap, fmt, path::PathBuf};
 
 use anyhow::{anyhow, bail, Result};
 
-use crate::EventSectionFactory;
 use crate::{
     core::{
-        events::{BpfRawSection, EventSectionFactory, RawEventSectionFactory},
+        events::{BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory},
         probe::common::{Counters, CountersKey},
         user::proc::Process,
     },
+    event_section_factory,
     events::*,
 };
 
@@ -79,7 +79,8 @@ impl fmt::Display for UsdtProbe {
     }
 }
 
-#[derive(Default, EventSectionFactory)]
+#[event_section_factory(FactoryId::Userspace)]
+#[derive(Default)]
 pub(crate) struct UserEventFactory {
     cache: HashMap<String, Box<dyn Any>>,
 }

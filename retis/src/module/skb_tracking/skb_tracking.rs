@@ -10,9 +10,9 @@ use crate::{
         events::*,
         probe::{manager::ProbeBuilderManager, Hook},
     },
+    event_section_factory,
     events::*,
     module::Module,
-    EventSectionFactory,
 };
 
 #[derive(Default)]
@@ -45,18 +45,18 @@ impl Module for SkbTrackingModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
     }
-    fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-        Ok(Box::new(SkbTrackingEventFactory {}))
+    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
+        Ok(Some(Box::new(SkbTrackingEventFactory {})))
     }
 }
 
-#[derive(Default, EventSectionFactory)]
+#[event_section_factory(FactoryId::SkbTracking)]
+#[derive(Default)]
 pub(crate) struct SkbTrackingEventFactory {}
 
 impl RawEventSectionFactory for SkbTrackingEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let event =
-            parse_single_raw_section::<SkbTrackingEvent>(SectionId::SkbTracking, &raw_sections)?;
+        let event = parse_single_raw_section::<SkbTrackingEvent>(&raw_sections)?;
 
         Ok(Box::new(*event))
     }
@@ -66,20 +66,12 @@ impl RawEventSectionFactory for SkbTrackingEventFactory {
 pub(crate) mod benchmark {
     use anyhow::Result;
 
-    use crate::{
-        benchmark::helpers::*,
-        events::{SectionId, SkbTrackingEvent},
-    };
+    use crate::{benchmark::helpers::*, core::events::FactoryId, events::SkbTrackingEvent};
 
     impl RawSectionBuilder for SkbTrackingEvent {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
             let data = SkbTrackingEvent::default();
-            build_raw_section(
-                out,
-                SectionId::SkbTracking.to_u8(),
-                0,
-                &mut as_u8_vec(&data),
-            );
+            build_raw_section(out, FactoryId::SkbTracking as u8, 0, &mut as_u8_vec(&data));
             Ok(())
         }
     }

@@ -9,9 +9,13 @@ use std::net::Ipv6Addr;
 
 use crate::{
     core::{
-        events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
+        events::{
+            parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+            RawEventSectionFactory,
+        },
         inspect::inspector,
     },
+    event_section_factory,
     events::*,
     helpers, raw_event_section,
 };
@@ -73,7 +77,8 @@ pub(crate) struct RawCtEvent {
 
 unsafe impl Plain for RawCtEvent {}
 
-#[derive(Default, crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::Ct)]
+#[derive(Default)]
 pub(crate) struct CtEventFactory {
     tcp_states: HashMap<i32, String>,
 }
@@ -124,11 +129,7 @@ impl RawEventSectionFactory for CtEventFactory {
 
 impl CtEventFactory {
     pub(super) fn new() -> Result<Self> {
-        Ok(Self::default())
-    }
-
-    pub(super) fn bpf() -> Result<Self> {
-        let mut me = Self::new()?;
+        let mut me = Self::default();
         me.parse_tcp_states()?;
         Ok(me)
     }
@@ -279,14 +280,14 @@ pub(crate) mod benchmark {
     use anyhow::Result;
 
     use super::*;
-    use crate::{benchmark::helpers::*, events::SectionId};
+    use crate::{benchmark::helpers::*, core::events::FactoryId};
 
     impl RawSectionBuilder for RawCtMetaEvent {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
             let data = RawCtMetaEvent::default();
             build_raw_section(
                 out,
-                SectionId::Ct.to_u8(),
+                FactoryId::Ct as u8,
                 SECTION_META as u8,
                 &mut as_u8_vec(&data),
             );
@@ -302,7 +303,7 @@ pub(crate) mod benchmark {
             };
             build_raw_section(
                 out,
-                SectionId::Ct.to_u8(),
+                FactoryId::Ct as u8,
                 SECTION_BASE_CONN as u8,
                 &mut as_u8_vec(&data),
             );

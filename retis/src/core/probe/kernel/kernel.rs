@@ -5,11 +5,11 @@ use std::{collections::HashMap, fmt};
 use anyhow::{bail, Result};
 
 use super::{config::ProbeConfig, inspect::inspect_symbol};
-use crate::EventSectionFactory;
 use crate::{
     core::{
         events::{
-            parse_single_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory,
+            parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+            RawEventSectionFactory,
         },
         kernel::Symbol,
         probe::{
@@ -17,6 +17,7 @@ use crate::{
             ProbeOption,
         },
     },
+    event_section_factory,
     events::*,
     raw_event_section,
 };
@@ -69,7 +70,8 @@ impl fmt::Display for KernelProbe {
     }
 }
 
-#[derive(Default, EventSectionFactory)]
+#[event_section_factory(FactoryId::Kernel)]
+#[derive(Default)]
 pub(crate) struct KernelEventFactory {
     #[cfg(not(test))]
     pub(crate) stack_map: Option<libbpf_rs::MapHandle>,
@@ -124,7 +126,7 @@ pub(crate) struct RawKernelEvent {
 
 impl RawEventSectionFactory for KernelEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let raw = parse_single_raw_section::<RawKernelEvent>(SectionId::Kernel, &raw_sections)?;
+        let raw = parse_single_raw_section::<RawKernelEvent>(&raw_sections)?;
         let mut event = KernelEvent::default();
 
         let symbol_addr = raw.symbol;
@@ -157,7 +159,10 @@ pub(crate) mod benchmark {
     use anyhow::Result;
 
     use super::RawKernelEvent;
-    use crate::{benchmark::helpers::*, core::kernel::Symbol, events::SectionId};
+    use crate::{
+        benchmark::helpers::*,
+        core::{events::FactoryId, kernel::Symbol},
+    };
 
     impl RawSectionBuilder for RawKernelEvent {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
@@ -166,7 +171,7 @@ pub(crate) mod benchmark {
                 r#type: 2, // Raw tracepoint.
                 stack_id: u64::MAX,
             };
-            build_raw_section(out, SectionId::Kernel.to_u8(), 0, &mut as_u8_vec(&data));
+            build_raw_section(out, FactoryId::Kernel as u8, 0, &mut as_u8_vec(&data));
             Ok(())
         }
     }

@@ -14,8 +14,10 @@ use pnet_packet::{
 };
 
 use crate::{
-    core::events::{parse_raw_section, BpfRawSection, EventSectionFactory, RawEventSectionFactory},
-    event_byte_array,
+    core::events::{
+        parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
+    },
+    event_byte_array, event_section_factory,
     events::{
         net::{etype_str, RawPacket},
         *,
@@ -364,7 +366,8 @@ fn unmarshal_l4(
     Ok(())
 }
 
-#[derive(Default, crate::EventSectionFactory)]
+#[event_section_factory(FactoryId::Skb)]
+#[derive(Default)]
 pub(crate) struct SkbEventFactory {
     // Should we report the Ethernet header.
     pub(super) report_eth: bool,
@@ -395,7 +398,7 @@ pub(crate) mod benchmark {
     use anyhow::Result;
 
     use super::*;
-    use crate::{benchmark::helpers::*, events::SectionId};
+    use crate::{benchmark::helpers::*, core::events::FactoryId};
 
     impl RawSectionBuilder for RawDevEvent {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
@@ -407,7 +410,7 @@ pub(crate) mod benchmark {
             };
             build_raw_section(
                 out,
-                SectionId::Skb.to_u8(),
+                FactoryId::Skb as u8,
                 SECTION_DEV as u8,
                 &mut as_u8_vec(&data),
             );
@@ -420,7 +423,7 @@ pub(crate) mod benchmark {
             let data = RawNsEvent::default();
             build_raw_section(
                 out,
-                SectionId::Skb.to_u8(),
+                FactoryId::Skb as u8,
                 SECTION_NS as u8,
                 &mut as_u8_vec(&data),
             );
@@ -450,7 +453,7 @@ pub(crate) mod benchmark {
             };
             build_raw_section(
                 out,
-                SectionId::Skb.to_u8(),
+                FactoryId::Skb as u8,
                 SECTION_PACKET as u8,
                 &mut as_u8_vec(&data),
             );

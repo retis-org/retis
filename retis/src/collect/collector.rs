@@ -16,34 +16,32 @@ use nix::unistd::Uid;
 
 use super::cli::Collect;
 use crate::{
-    cli::{CliDisplayFormat, SubCommandRunner},
+    cli::{dynamic::DynamicCommand, CliConfig, CliDisplayFormat, FullCli, SubCommandRunner},
     core::{
-        events::RetisEventsFactory,
-        filters::{meta::filter::FilterMeta, packets::filter::FilterPacketType},
+        events::{BpfEventsFactory, RetisEventsFactory},
+        filters::{
+            filters::{BpfFilter, Filter},
+            meta::filter::FilterMeta,
+            packets::filter::{FilterPacket, FilterPacketType},
+        },
+        inspect::check::collection_prerequisites,
         kernel::Symbol,
-        probe::kernel::utils::parse_probe,
+        probe::{
+            kernel::{probe_stack::ProbeStack, utils::parse_probe},
+            *,
+        },
+        tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
     events::*,
+    helpers::{signals::Running, time::*},
+    module::{ModuleId, Modules},
     process::display::*,
 };
 
 #[cfg(not(test))]
-use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
-use crate::{
-    cli::{dynamic::DynamicCommand, CliConfig, FullCli},
-    core::{
-        events::BpfEventsFactory,
-        filters::{
-            filters::{BpfFilter, Filter},
-            packets::filter::FilterPacket,
-        },
-        inspect::check::collection_prerequisites,
-        probe::{kernel::probe_stack::ProbeStack, *},
-        tracking::{gc::TrackingGC, skb_tracking::init_tracking},
-    },
-    events::{EventResult, SectionId},
-    helpers::{signals::Running, time::*},
-    module::Modules,
+use crate::core::{
+    events::FactoryId,
+    probe::kernel::{config::init_stack_map, kernel::KernelEventFactory},
 };
 
 /// Generic trait representing a collector. All collectors are required to
@@ -107,7 +105,7 @@ pub(crate) struct Collectors {
     tracking_gc: Option<TrackingGC>,
     // Keep a reference on the tracking configuration map.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
-    loaded: Vec<SectionId>,
+    loaded: Vec<ModuleId>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
 }
@@ -219,7 +217,7 @@ impl Collectors {
 
         // Try initializing all collectors.
         for name in &collect.args()?.collectors {
-            let id = SectionId::from_str(name)?;
+            let id = ModuleId::from_str(name)?;
             let c = self
                 .modules
                 .get_collector(&id)
@@ -338,7 +336,7 @@ impl Collectors {
             self.probes
                 .builder_mut()?
                 .reuse_map("log_map", self.factory.log_map_fd())?;
-            match section_factories.get_mut(&SectionId::Kernel) {
+            match section_factories.get_mut(&FactoryId::Kernel) {
                 Some(kernel_factory) => {
                     kernel_factory
                         .as_any_mut()
@@ -541,7 +539,7 @@ mod tests {
     use super::*;
     use crate::{
         core::{events::bpf::*, probe::ProbeBuilderManager},
-        event_section,
+        event_section, event_section_factory,
         module::Module,
     };
 
@@ -576,8 +574,8 @@ mod tests {
         fn collector(&mut self) -> &mut dyn Collector {
             self
         }
-        fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-            Ok(Box::new(TestEvent {}))
+        fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
+            Ok(Some(Box::new(TestEventFactory {})))
         }
     }
 
@@ -608,13 +606,12 @@ mod tests {
         fn collector(&mut self) -> &mut dyn Collector {
             self
         }
-        fn section_factory(&self) -> Result<Box<dyn EventSectionFactory>> {
-            Ok(Box::new(TestEvent {}))
+        fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
+            Ok(Some(Box::new(TestEventFactory {})))
         }
     }
 
-    #[event_section("test")]
-    #[derive(crate::EventSectionFactory)]
+    #[event_section(SectionId::Common)]
     struct TestEvent {}
 
     impl EventFmt for TestEvent {
@@ -623,7 +620,10 @@ mod tests {
         }
     }
 
-    impl RawEventSectionFactory for TestEvent {
+    #[event_section_factory(FactoryId::Common)]
+    struct TestEventFactory {}
+
+    impl RawEventSectionFactory for TestEventFactory {
         fn create(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
             Ok(Box::<TestEvent>::default())
         }
@@ -637,10 +637,10 @@ mod tests {
     fn register_collectors() -> Result<()> {
         let mut group = Modules::new()?;
         assert!(group
-            .register(SectionId::Skb, Box::new(DummyCollectorA::new()?),)
+            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
             .is_ok());
         assert!(group
-            .register(SectionId::Ovs, Box::new(DummyCollectorB::new()?),)
+            .register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?),)
             .is_ok());
         Ok(())
     }
@@ -649,10 +649,10 @@ mod tests {
     fn register_uniqueness() -> Result<()> {
         let mut group = Modules::new()?;
         assert!(group
-            .register(SectionId::Skb, Box::new(DummyCollectorA::new()?),)
+            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
             .is_ok());
         assert!(group
-            .register(SectionId::Skb, Box::new(DummyCollectorA::new()?),)
+            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
             .is_err());
         Ok(())
     }
@@ -663,8 +663,8 @@ mod tests {
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
-        group.register(SectionId::Skb, Box::new(DummyCollectorA::new()?))?;
-        group.register(SectionId::Ovs, Box::new(DummyCollectorB::new()?))?;
+        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         let mut collectors = Collectors::new(group)?;
         let mut mgr = ProbeBuilderManager::new()?;
@@ -688,8 +688,8 @@ mod tests {
         let mut dummy_a = Box::new(DummyCollectorA::new()?);
         let mut dummy_b = Box::new(DummyCollectorB::new()?);
 
-        group.register(SectionId::Skb, Box::new(DummyCollectorA::new()?))?;
-        group.register(SectionId::Ovs, Box::new(DummyCollectorB::new()?))?;
+        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
+        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
 
         let mut collectors = Collectors::new(group)?;
 
