@@ -3,7 +3,7 @@ LLC := llc
 CLANG := clang
 OBJCOPY := llvm-objcopy
 
-CARGO := cargo
+CARGO := cargo $(CARGO_OPTS)
 DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
 ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$(DEFAULT_ARCH))
 
@@ -67,14 +67,14 @@ all: debug
 
 install: release
 	RUSTFLAGS="$(RUSTFLAGS) $(RELEASE_FLAGS)" \
-	$(CARGO) $(CARGO_OPTS) install $(CARGO_INSTALL_OPTS) --path=$(ROOT_DIR)/retis --offline --frozen
+	$(CARGO) install $(CARGO_INSTALL_OPTS) --path=$(ROOT_DIR)/retis --offline --frozen
 
 define build
 	$(call out_console,CARGO,$(strip $(2)) ...)
 	jobs=$(patsubst -j%,%,$(filter -j%,$(MAKEFLAGS))); \
 	CARGO_BUILD_JOBS=$${jobs:-1} \
 	RUSTFLAGS="$(RUSTFLAGS) $(3)" \
-	$(CARGO) $(CARGO_OPTS) $(1) $(CARGO_CMD_OPTS)
+	$(CARGO) $(1) $(CARGO_CMD_OPTS)
 endef
 
 debug: ebpf
