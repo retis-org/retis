@@ -273,16 +273,6 @@ fn event_sections() -> Result<&'static EventSectionMap> {
     })
 }
 
-/// The return value of EventFactory::next_event()
-pub enum EventResult {
-    /// The Factory was able to create a new event.
-    Event(Event),
-    /// The source has been consumed.
-    Eof,
-    /// The timeout went off but a new attempt to retrieve an event might succeed.
-    Timeout,
-}
-
 /// Per-module event section, should map 1:1 with a SectionId. Requiring specific
 /// traits to be implemented helps handling those sections in the core directly
 /// without requiring all modules to serialize and deserialize their events by

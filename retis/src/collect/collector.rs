@@ -18,7 +18,7 @@ use super::cli::Collect;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, CliDisplayFormat, FullCli, SubCommandRunner},
     core::{
-        events::{BpfEventsFactory, RetisEventsFactory},
+        events::{BpfEventsFactory, EventResult, RetisEventsFactory},
         filters::{
             filters::{BpfFilter, Filter},
             meta::filter::FilterMeta,
@@ -504,7 +504,6 @@ impl Collectors {
                         .iter_mut()
                         .try_for_each(|p| p.process_one(&event))?;
                 }
-                Eof => break,
                 Timeout => continue,
             }
         }
