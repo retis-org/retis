@@ -61,6 +61,7 @@ struct ct_event {
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
 	u8 tcp_state;
+	u32 mark;
 };
 
 static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
@@ -100,6 +101,9 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 
 		e->zone_id = (u8) BPF_CORE_READ(ct, zone.id);
 	}
+
+	if (bpf_core_field_exists(ct->mark))
+		e->mark = BPF_CORE_READ(ct, mark);
 
 	switch (l3num) {
 	case NFPROTO_IPV4:
