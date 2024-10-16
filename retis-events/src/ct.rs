@@ -142,7 +142,7 @@ impl EventFmt for CtEvent {
         Self::format_conn(&self.base, f)?;
 
         if let Some(parent) = &self.parent {
-            write!(f, " parent [")?;
+            write!(f, "\n\\ parent [")?;
             Self::format_conn(parent, f)?;
             write!(f, "]")?;
         }
