@@ -1,0 +1,10 @@
+**
+!Makefile
+!ebpf.mk
+!**/Cargo.*
+!retis-derive
+!retis-events
+!retis/profiles
+!retis/build.rs
+!retis/src
+!tools

@@ -6,34 +6,18 @@ RUN dnf install -y \
     libpcap-devel \ 
     clang \
     llvm \ 
-    rustfmt \
     cargo \
     elfutils-libelf-devel \
     zlib-devel \
     make \
     jq
 
-RUN cargo install rustfmt
-RUN cargo init
-
-# Only download the dependencies for now so these steps can be cached.
-COPY retis-derive retis-derive
-# `cargo -C <path>` is unstable for now.
-RUN cd retis-derive && cargo fetch --locked
-COPY Cargo.lock .
-COPY Cargo.toml .
-RUN cargo fetch --locked
-
-# Now copy the rest of the source and build.
-COPY Makefile .
-COPY ebpf.mk .
-COPY build.rs .
-COPY src src
-COPY tools tools
-COPY profiles profiles
+# Only the allowlisted files are copied,
+# see .containerignore for more details.
+COPY . /retis
 
 # Build Retis
-RUN make clean-ebpf && make V=1 release
+RUN make clean-ebpf && make CARGO_CMD_OPTS=--locked V=1 release -j$(nproc)
 
 # Final image
 FROM quay.io/centos/centos:stream9
@@ -46,7 +30,7 @@ RUN dnf install -y \
     nftables
 
 COPY --from=builder /retis/target/release/retis /usr/bin/retis
-COPY --from=builder /retis/profiles /etc/retis/profiles
+COPY --from=builder /retis/retis/profiles /etc/retis/profiles
 
 WORKDIR /data
 ENTRYPOINT ["/usr/bin/retis", "--kconf", "/kconfig"]
