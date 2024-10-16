@@ -1,0 +1,66 @@
+name: Build and push container image
+
+on:
+  # Manual trigger for the workflow.
+  workflow_dispatch:
+    inputs:
+      release_tags:
+        required: false
+        default: 'next'
+
+  # Every day at 01:32 AM UTC.
+  schedule:
+    - cron: "32 01 * * *"
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # This is kept intentionally separate from "Set environment".
+      - name: Check scheduled run
+        if: github.event_name == 'schedule'
+        run: |
+          last_commit=$(git log -n1 --since=yesterday --oneline)
+          if [ -z "${last_commit}" ]; then
+              echo "No new commits found, cancelling ..."
+              exit 1
+          else
+              echo "Proceeding with the current tip:"
+              echo "  ${last_commit}"
+          fi
+
+      - name: Set environment
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "RELEASE_TAGS=${{ github.event.inputs.release_tags }}" >> $GITHUB_ENV
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+              echo "RELEASE_TAGS=next" >> $GITHUB_ENV
+          elif [ "${{ github.event_name }}" = "release" ]; then
+              :
+          fi
+
+      - name: Build container image
+        id: build_image
+        uses: redhat-actions/buildah-build@v2
+        with:
+          containerfiles: ./Containerfile
+          image: retis
+          tags: ${{ env.RELEASE_TAGS }}
+
+      - name: Push container image
+        id: push_image
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ steps.build_image.outputs.image }}
+          tags: ${{ steps.build_image.outputs.tags }}
+          registry: quay.io/retis
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "${{ toJSON(steps.push_image.outputs) }}"
