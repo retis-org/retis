@@ -74,6 +74,7 @@ pub struct ct_event {
     pub orig: nf_conn_tuple,
     pub reply: nf_conn_tuple,
     pub flags: u32_,
+    pub mark: u32_,
     pub zone_id: u16_,
     pub tcp_state: u8_,
 }

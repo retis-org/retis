@@ -59,6 +59,7 @@ struct ct_event {
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
 	u32 flags;
+	u32 mark;
 	u16 zone_id;
 	u8 tcp_state;
 } __binding;
@@ -100,6 +101,9 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 
 		e->zone_id = (u8) BPF_CORE_READ(ct, zone.id);
 	}
+
+	if (bpf_core_field_exists(ct->mark))
+		e->mark = BPF_CORE_READ(ct, mark);
 
 	switch (l3num) {
 	case NFPROTO_IPV4:
@@ -212,16 +216,16 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	if (!ct_protocol_is_supported(l3num, protonum))
 		return 0;
 
-	e = get_event_section(event, COLLECTOR_CT, SECTION_BASE_CONN,
-			      sizeof(*e));
+	e = get_event_zsection(event, COLLECTOR_CT, SECTION_BASE_CONN,
+			       sizeof(*e));
 	if (!e)
 		return 0;
 	process_nf_conn(e, nf_conn, l3num, protonum);
 
 	nf_conn = BPF_CORE_READ(nf_conn, master);
 	if (nf_conn) {
-		e = get_event_section(event, COLLECTOR_CT, SECTION_PARENT_CONN,
-				      sizeof(*e));
+		e = get_event_zsection(event, COLLECTOR_CT, SECTION_PARENT_CONN,
+				       sizeof(*e));
 		if (!e)
 			return 0;
 		process_nf_conn(e, nf_conn,
