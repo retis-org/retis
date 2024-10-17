@@ -37,6 +37,19 @@ $ chmod +x retis_in_container.sh
 $ ./retis_in_container.sh --help
 ```
 
+By default the above script uses the latest stable version of Retis. An
+environment variable, `RETIS_TAG`, can be used to set a specific version.
+Available tags can be seen on [quay.io](https://quay.io/repository/retis/retis?tab=tags).
+
+In addition a special tag, `next`, points to the latest daily build of the
+[main](https://github.com/retis-org/retis/tree/main) branch. Using this tag
+comes with a tradeoff: it allows access to the latest features but might not be
+fully functional.
+
+```none
+$ RETIS_TAG=next ./retis_in_container.sh --help
+```
+
 ### From sources
 
 Retis depends on the following (in addition to Git and Cargo):
