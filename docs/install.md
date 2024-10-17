@@ -24,36 +24,18 @@ $ retis --help
 
 ### Container image
 
-The preferred method to run Retis in a container is by using the provided
-[retis_in_container.sh](https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh)
-script,
+We provide a script to run Retis in a container,
+[retis_in_container.sh](https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh).
+The current directory is mounted with read-write permissions to the container
+working directory. This allows Retis to read and write files (eg. events, pcap).
+Both the Podman and Docker runtimes are supported (which is auto-detected by the
+above script).
 
 ```none
 $ curl -O https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh
 $ chmod +x retis_in_container.sh
 $ ./retis_in_container.sh --help
 ```
-
-The Retis container can also be run manually,
-
-```none
-$ podman run --privileged --rm -it --pid=host \
-      --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
-      -v /sys/kernel/btf:/sys/kernel/btf:ro \
-      -v /sys/kernel/debug:/sys/kernel/debug:ro \
-      -v /boot/config-$(uname -r):/kconfig:ro \
-      -v $(pwd):/data:rw \
-      quay.io/retis/retis:latest --help
-```
-
-- Or using `docker` in place of `podman` in the above.
-
-- When running on CoreOS, Fedora Silverblue and friends replace `-v
-  /boot/config-$(uname -r):/kconfig:ro` with `-v /lib/modules/$(uname
-  -r)/config:/kconfig:ro` in the above.
-
-The `/data` container mount point is used to allow storing persistent data for
-future use (e.g. logged events using the `-o` cli option).
 
 ### From sources
 
