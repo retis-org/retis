@@ -89,7 +89,7 @@ Finally, profiles should be installed in either `/etc/retis/profiles` or
 
 ```none
 $ mkdir -p /etc/retis/profiles
-$ cp profiles/* /etc/retis/profiles
+$ cp retis/profiles/* /etc/retis/profiles
 ```
 
 #### Cross-compilation
