@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::*;
+use super::{helpers::U128, *};
 use crate::{event_section, event_type, Formatter};
 
 #[event_type]
@@ -127,6 +127,8 @@ pub struct CtConnEvent {
     pub tcp_state: Option<String>,
     /// Connection mark tracking label
     pub mark: Option<u32>,
+    /// Connection tracking labels.
+    pub labels: Option<U128>,
 }
 
 impl EventFmt for CtEvent {
@@ -210,6 +212,10 @@ impl CtEvent {
 
         if let Some(mark) = conn.mark {
             write!(f, " mark {}", mark)?;
+        }
+
+        if let Some(labels) = &conn.labels {
+            write!(f, " labels {:#x}", labels.bits())?;
         }
 
         Ok(())

@@ -60,6 +60,7 @@ struct ct_event {
 	struct nf_conn_tuple reply;
 	u32 flags;
 	u32 mark;
+	u8 labels[16];
 	u16 zone_id;
 	u8 tcp_state;
 } __binding;
@@ -84,6 +85,34 @@ static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
 	}
 
 	return true;
+}
+
+/* See ctnetlink_dump_labels(). */
+static __always_inline void get_nf_ct_labels(struct ct_event *e,
+					     struct nf_conn *ct)
+{
+	struct nf_ct_ext *ext = BPF_CORE_READ(ct, ext);
+	struct nf_conn_labels *labels;
+	int offset, nf_ct_ext_labels;
+
+	/* Conntrack labels depend on CONFIG_NF_CONNTRACK_LABELS, the following
+	 * enum variant is only defined if enabled.
+	 */
+	if (!bpf_core_enum_value_exists(enum nf_ct_ext_id, NF_CT_EXT_LABELS))
+		return;
+
+	if (!ext)
+		return;
+
+	nf_ct_ext_labels = bpf_core_enum_value(enum nf_ct_ext_id, NF_CT_EXT_LABELS);
+	offset = BPF_CORE_READ(ext, offset)[nf_ct_ext_labels];
+	if (!offset)
+		return;
+
+	labels = (void *)ext + offset;
+
+	BUILD_BUG_ON(sizeof(labels->bits) != sizeof(e->labels));
+	bpf_core_read(&e->labels, sizeof(labels->bits), &labels->bits);
 }
 
 static __always_inline int process_nf_conn(struct ct_event *e,
@@ -183,6 +212,8 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 		break;
 	}
 
+	get_nf_ct_labels(e, ct);
+
 	return 0;
 }
 
@@ -231,6 +262,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 		process_nf_conn(e, nf_conn,
 				(u16)BPF_CORE_READ(nf_conn, ORIG.src.l3num),
 				(u8)BPF_CORE_READ(nf_conn, ORIG.dst.protonum));
+
 	}
 
 	m = get_event_section(event, COLLECTOR_CT, SECTION_META, sizeof(*m));

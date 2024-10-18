@@ -5,6 +5,12 @@
 
 #define MIN(a, b)	(((a) < (b)) ? (a) : (b))
 
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+#define BUILD_BUG_ON(cond)	_Static_assert(!(cond), "BUILD_BUG_ON failed " #cond)
+#else
+#define BUILD_BUG_ON(cond)
+#endif
+
 enum bpf_func_id___x { BPF_FUNC_get_func_ip___5_15_0 = 42 };
 
 /* The following helper retrieves the function IP in kprobes.
