@@ -61,6 +61,9 @@ struct ct_event {
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
 	u8 tcp_state;
+	u32 mark;
+	/* See struct nf_conn_labels definition for the below array size */
+	u128 labels;
 };
 
 static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
@@ -85,6 +88,27 @@ static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
 	return true;
 }
 
+/* See ctnetlink_dump_labels(). */
+static __always_inline u128 get_nf_ct_labels(struct nf_conn *ct)
+{
+	struct nf_ct_ext *ext = BPF_CORE_READ(ct, ext);
+	struct nf_conn_labels *labels;
+	int offset;
+	u128 bits;
+
+	if (!ext)
+		return 0;
+
+	offset = BPF_CORE_READ(ext, offset)[NF_CT_EXT_LABELS];
+	if (!offset)
+		return 0;
+
+	labels = (void *)ext + offset;
+	bpf_core_read(&bits, sizeof(labels->bits), &labels->bits);
+
+	return bits;
+}
+
 static __always_inline int process_nf_conn(struct ct_event *e,
 					   struct nf_conn *ct, u16 l3num,
 					   u8 protonum)
@@ -100,6 +124,9 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 
 		e->zone_id = (u8) BPF_CORE_READ(ct, zone.id);
 	}
+
+	if (bpf_core_field_exists(ct->mark))
+		e->mark = BPF_CORE_READ(ct, mark);
 
 	switch (l3num) {
 	case NFPROTO_IPV4:
@@ -179,6 +206,12 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 		break;
 	}
 
+	/* Conntrack labels depend on CONFIG_NF_CONNTRACK_LABELS, the following
+	 * enum variant is only defined if enabled.
+	 */
+	e->labels = bpf_core_enum_value_exists(enum nf_ct_ext_id, NF_CT_EXT_LABELS) ?
+		get_nf_ct_labels(ct) : 0;
+
 	return 0;
 }
 
@@ -227,6 +260,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 		process_nf_conn(e, nf_conn,
 				(u16)BPF_CORE_READ(nf_conn, ORIG.src.l3num),
 				(u8)BPF_CORE_READ(nf_conn, ORIG.dst.protonum));
+
 	}
 
 	m = get_event_section(event, COLLECTOR_CT, SECTION_META, sizeof(*m));

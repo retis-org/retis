@@ -125,6 +125,10 @@ pub struct CtConnEvent {
     pub reply: CtTuple,
     /// TCP state; if any
     pub tcp_state: Option<String>,
+    /// Connection mark tracking label
+    pub mark: Option<u32>,
+    /// Connection tracking labels.
+    pub labels: Option<u128>,
 }
 
 impl EventFmt for CtEvent {
@@ -142,7 +146,7 @@ impl EventFmt for CtEvent {
         Self::format_conn(&self.base, f)?;
 
         if let Some(parent) = &self.parent {
-            write!(f, " parent [")?;
+            write!(f, "\nparent [")?;
             Self::format_conn(parent, f)?;
             write!(f, "]")?;
         }
@@ -204,6 +208,14 @@ impl CtEvent {
             ZoneDir::Reply => write!(f, "reply-zone {}", conn.zone_id)?,
             ZoneDir::Default => write!(f, "zone {}", conn.zone_id)?,
             ZoneDir::None => (),
+        }
+
+        if let Some(mark) = conn.mark {
+            write!(f, " mark {}", mark)?;
+        }
+
+        if let Some(labels) = conn.labels {
+            write!(f, " labels {:#x}", labels)?;
         }
 
         Ok(())
