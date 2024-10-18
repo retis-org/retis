@@ -24,9 +24,12 @@ $ retis --help
 
 ### Container image
 
-The preferred method to run Retis in a container is by using the provided
-[retis_in_container.sh](https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh)
-script,
+We provide a script to run Retis in a container,
+[retis_in_container.sh](https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh).
+The current directory is mounted with read-write permissions to the container
+working directory. This allows Retis to read and write files (eg. events, pcap).
+Both the Podman and Docker runtimes are supported (which is auto-detected by the
+above script).
 
 ```none
 $ curl -O https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh
@@ -34,26 +37,18 @@ $ chmod +x retis_in_container.sh
 $ ./retis_in_container.sh --help
 ```
 
-The Retis container can also be run manually,
+By default the above script uses the latest stable version of Retis. An
+environment variable, `RETIS_TAG`, can be used to set a specific version.
+Available tags can be seen on [quay.io](https://quay.io/repository/retis/retis?tab=tags).
+
+In addition a special tag, `next`, points to the latest daily build of the
+[main](https://github.com/retis-org/retis/tree/main) branch. Using this tag
+comes with a tradeoff: it allows access to the latest features but might not be
+fully functional.
 
 ```none
-$ podman run --privileged --rm -it --pid=host \
-      --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
-      -v /sys/kernel/btf:/sys/kernel/btf:ro \
-      -v /sys/kernel/debug:/sys/kernel/debug:ro \
-      -v /boot/config-$(uname -r):/kconfig:ro \
-      -v $(pwd):/data:rw \
-      quay.io/retis/retis:latest --help
+$ RETIS_TAG=next ./retis_in_container.sh --help
 ```
-
-- Or using `docker` in place of `podman` in the above.
-
-- When running on CoreOS, Fedora Silverblue and friends replace `-v
-  /boot/config-$(uname -r):/kconfig:ro` with `-v /lib/modules/$(uname
-  -r)/config:/kconfig:ro` in the above.
-
-The `/data` container mount point is used to allow storing persistent data for
-future use (e.g. logged events using the `-o` cli option).
 
 ### From sources
 
@@ -94,7 +89,7 @@ Finally, profiles should be installed in either `/etc/retis/profiles` or
 
 ```none
 $ mkdir -p /etc/retis/profiles
-$ cp profiles/* /etc/retis/profiles
+$ cp retis/profiles/* /etc/retis/profiles
 ```
 
 #### Cross-compilation
