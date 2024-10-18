@@ -74,6 +74,7 @@ pub(crate) struct RawCtEvent {
     reply: NfConnTuple,
     tcp_state: u8,
     mark: u32,
+    labels: u128,
 }
 
 unsafe impl Plain for RawCtEvent {}
@@ -82,6 +83,7 @@ unsafe impl Plain for RawCtEvent {}
 #[derive(Default)]
 pub(crate) struct CtEventFactory {
     mark_available: bool,
+    labels_available: bool,
     tcp_states: HashMap<i32, String>,
 }
 
@@ -131,12 +133,17 @@ impl RawEventSectionFactory for CtEventFactory {
 
 impl CtEventFactory {
     pub(super) fn new() -> Result<Self> {
-        let kconf_mark = inspector()?
+        let inspector = inspector()?;
+        let kconf_mark = inspector
             .kernel
             .get_config_option("CONFIG_NF_CONNTRACK_MARK")?;
+        let kconf_labels = inspector
+            .kernel
+            .get_config_option("CONFIG_NF_CONNTRACK_LABELS")?;
 
         let mut me = Self {
             mark_available: kconf_mark == Some("y") || kconf_mark == Some("m"),
+            labels_available: kconf_labels == Some("y") || kconf_labels == Some("m"),
             ..Default::default()
         };
 
@@ -283,6 +290,11 @@ impl CtEventFactory {
             tcp_state,
             mark: if self.mark_available {
                 Some(raw.mark)
+            } else {
+                None
+            },
+            labels: if self.labels_available && raw.labels != 0 {
+                Some(raw.labels)
             } else {
                 None
             },
