@@ -1,4 +1,5 @@
 **
+!.git
 !Makefile
 !ebpf.mk
 !**/Cargo.*
