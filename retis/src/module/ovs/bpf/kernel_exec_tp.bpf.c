@@ -6,26 +6,22 @@
 #include <ovs_uapi.h>
 #include <netlink.h>
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 struct exec_event {
-	u8 action;
 	u32 recirc_id;
-};
+	u8 action;
+} __binding;
 
-/* Please keep in sync with its Rust counterpart in crate::module::ovs::bpf.rs. */
 struct exec_track_event {
 	u32 queue_id;
-};
+} __binding;
 
-/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct exec_output {
 	u32 port;
-};
+} __binding;
 
-/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct exec_recirc {
 	u32 id;
-};
+} __binding;
 
 /* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 #define R_OVS_CT_COMMIT				(1 << 0)
@@ -44,16 +40,16 @@ struct exec_recirc {
 union exec_ip {
 	u32 addr4;
 	u128 addr6;
-} __attribute((packed))__;
+} __binding;
 
 struct exec_ct {
-	u32 flags;
-	u16 zone_id;
 	union exec_ip min;
 	union exec_ip max;
+	u32 flags;
+	u16 zone_id;
 	u16 min_port;
 	u16 max_port;
-};
+} __binding;
 
 static __always_inline void fill_nat(struct ovs_conntrack_info *info,
 				     struct exec_ct *ct)

@@ -26,7 +26,7 @@ struct tracking_config {
 	 * probe. We can still read existing tracking data.
 	 */
 	u8 no_tracking;
-} __attribute__((packed));
+} __packed __binding;
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, PROBE_MAX);
@@ -49,7 +49,7 @@ struct tracking_info {
 	u64 last_seen;
 	/* Original head address; useful when the head is invalidated */
 	u64 orig_head;
-};
+} __binding;
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 8192);

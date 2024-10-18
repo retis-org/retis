@@ -16,18 +16,16 @@
 /* Kernel section of the event data. */
 struct kernel_event {
 	u64 symbol;
+	long stack_id;
 	/* values from enum kernel_probe_type */
 	u8 type;
-	long stack_id;
-};
+} __binding;
 
-/* Per-probe configuration; keep in sync with its Rust counterpart in
- * core::probe::kernel::config.
- */
+/* Per-probe configuration. */
 struct retis_probe_config {
 	struct retis_probe_offsets offsets;
 	u8 stack_trace;
-} __attribute__((packed));
+} __binding;
 
 /* Probe configuration; the key is the target symbol address */
 struct {
