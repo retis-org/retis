@@ -1,16 +1,11 @@
 name: Build and push container image
 
 on:
-  # Manual trigger for the workflow.
   workflow_dispatch:
     inputs:
       release_tags:
         required: false
         default: 'next'
-
-  # Every day at 01:32 AM UTC.
-  schedule:
-    - cron: "32 01 * * *"
 
 jobs:
   build-and-push-image:
@@ -19,19 +14,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      # This is kept intentionally separate from "Set environment".
-      - name: Check scheduled run
-        if: github.event_name == 'schedule'
-        run: |
-          last_commit=$(git log -n1 --since=yesterday --oneline)
-          if [ -z "${last_commit}" ]; then
-              echo "No new commits found, cancelling ..."
-              exit 1
-          else
-              echo "Proceeding with the current tip:"
-              echo "  ${last_commit}"
-          fi
 
       - name: Set environment
         run: |
