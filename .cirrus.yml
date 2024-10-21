@@ -100,6 +100,7 @@ functional_task:
       env:
         DISTRO: x86_64-c8s
         TEST_EXTRA_ARGS: "--ignore=test_ovs.py --ignore=test_nft.py"
+        CARGO_CMD_OPTS: "--no-default-features"
     - name: Centos 9 Stream (x86_64)
       env:
         DISTRO: x86_64-c9s
@@ -151,7 +152,7 @@ functional_task:
     - ssh ${DISTRO} 'sh -exc "uname -a"'
 
   test_script: &functional_test
-    - ssh -tt ${DISTRO} 'bash --login -exc "cd /vagrant && make V=1"'
+    - ssh -tt ${DISTRO} "env CARGO_CMD_OPTS=$CARGO_CMD_OPTS bash --login -exc 'cd /vagrant && make V=1'"
     - ssh -tt ${DISTRO} "cd /vagrant/tests && sudo python3 -m pytest ${TEST_EXTRA_ARGS}"
 
 # Manual trigger for non-PR branches.
