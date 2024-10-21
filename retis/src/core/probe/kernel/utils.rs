@@ -11,17 +11,34 @@ pub(crate) fn parse_probe<F>(probe: &str, filter: F) -> Result<Vec<Probe>>
 where
     F: Fn(&Symbol) -> bool,
 {
-    let (type_str, target) = match probe.split_once(':') {
-        Some((type_str, target)) => (type_str, target),
-        None => ("kprobe", probe),
+    // We only need a lightweight version of `ProbeType` here; this simplifies
+    // the below logic.
+    enum ProbeType {
+        Kprobe,
+        Kretprobe,
+        RawTracepoint,
+    }
+    use ProbeType::*;
+
+    let (r#type, target) = match probe.split_once(':') {
+        Some((type_str, target)) => match type_str {
+            "kprobe" => (Kprobe, target),
+            "kretprobe" => (Kretprobe, target),
+            "raw_tracepoint" | "tp" => (RawTracepoint, target),
+            // If a single ':' was found in the probe name but we didn't match
+            // any known type, defaults to trying using it as a raw tracepoint.
+            _ if probe.chars().filter(|c| *c == ':').count() == 1 => (RawTracepoint, probe),
+            x => bail!("Invalid TYPE {}. See the help.", x),
+        },
+        // If no ':' was found, defaults to kprobe.
+        None => (Kprobe, probe),
     };
 
     // Convert the target to a list of matching ones for probe types
     // supporting it.
-    let mut symbols = match type_str {
-        "kprobe" | "kretprobe" => matching_functions_to_symbols(target)?,
-        "raw_tracepoint" | "tp" => matching_events_to_symbols(target)?,
-        x => bail!("Invalid TYPE {}. See the help.", x),
+    let mut symbols = match r#type {
+        Kprobe | Kretprobe => matching_functions_to_symbols(target)?,
+        RawTracepoint => matching_events_to_symbols(target)?,
     };
 
     let mut probes = Vec::new();
@@ -31,11 +48,10 @@ where
             continue;
         }
 
-        probes.push(match type_str {
-            "kprobe" => Probe::kprobe(symbol)?,
-            "kretprobe" => Probe::kretprobe(symbol)?,
-            "raw_tracepoint" | "tp" => Probe::raw_tracepoint(symbol)?,
-            x => bail!("Invalid TYPE {}. See the help.", x),
+        probes.push(match r#type {
+            Kprobe => Probe::kprobe(symbol)?,
+            Kretprobe => Probe::kretprobe(symbol)?,
+            RawTracepoint => Probe::raw_tracepoint(symbol)?,
         })
     }
 
@@ -51,6 +67,7 @@ mod tests {
         // Valid probes.
         assert!(super::parse_probe("consume_skb", filter).is_ok());
         assert!(super::parse_probe("kprobe:kfree_skb_reason", filter).is_ok());
+        assert!(super::parse_probe("skb:kfree_skb", filter).is_ok());
         assert!(super::parse_probe("tp:skb:kfree_skb", filter).is_ok());
         assert!(super::parse_probe("tcp_v6_*", filter).is_ok());
         assert!(super::parse_probe("kprobe:tcp_v6_*", filter).is_ok());
@@ -70,7 +87,6 @@ mod tests {
 
         // Invalid probe: wrong TYPE.
         assert!(super::parse_probe("kprobe:skb:kfree_skb", filter).is_err());
-        assert!(super::parse_probe("skb:kfree_skb", filter).is_err());
         assert!(super::parse_probe("foo:kfree_skb", filter).is_err());
 
         // Invalid probe: empty parts.
