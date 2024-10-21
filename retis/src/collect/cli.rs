@@ -44,8 +44,8 @@ When TYPE is not specified it is set to 'kprobe', except if a single ':' is foun
 in which case 'raw_tracepoint' is set instead. Those default types might evolve over time.
 
 Valid TYPEs:
-- kprobe: kernel probes.
-- kretprobe: kernel return probes.
+- kprobe | k: kernel probes.
+- kretprobe | kr: kernel return probes.
 - raw_tracepoint | tp: kernel tracepoints.
 
 Wildcards (*) can be used, eg. \"kprobe:tcp_*\" or \"tp:skb:*\".

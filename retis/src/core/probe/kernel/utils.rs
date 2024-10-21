@@ -22,8 +22,8 @@ where
 
     let (r#type, target) = match probe.split_once(':') {
         Some((type_str, target)) => match type_str {
-            "kprobe" => (Kprobe, target),
-            "kretprobe" => (Kretprobe, target),
+            "kprobe" | "k" => (Kprobe, target),
+            "kretprobe" | "kr" => (Kretprobe, target),
             "raw_tracepoint" | "tp" => (RawTracepoint, target),
             // If a single ':' was found in the probe name but we didn't match
             // any known type, defaults to trying using it as a raw tracepoint.
@@ -67,6 +67,7 @@ mod tests {
         // Valid probes.
         assert!(super::parse_probe("consume_skb", filter).is_ok());
         assert!(super::parse_probe("kprobe:kfree_skb_reason", filter).is_ok());
+        assert!(super::parse_probe("k:kfree_skb_reason", filter).is_ok());
         assert!(super::parse_probe("skb:kfree_skb", filter).is_ok());
         assert!(super::parse_probe("tp:skb:kfree_skb", filter).is_ok());
         assert!(super::parse_probe("tcp_v6_*", filter).is_ok());
@@ -75,6 +76,7 @@ mod tests {
             .unwrap()
             .is_empty());
         assert!(super::parse_probe("kretprobe:tcp_*", filter).is_ok());
+        assert!(super::parse_probe("kr:tcp_*", filter).is_ok());
         assert!(super::parse_probe("tp:skb:kfree_*", filter).is_ok());
         assert!(super::parse_probe("tp:*skb*", filter).is_ok());
 
