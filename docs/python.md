@@ -6,6 +6,15 @@ python bindings exist to enable writing custom post-processing scripts.
 These bindings can be used in two different ways: the built-in python
 interpreter and the external python library.
 
+## Requirements
+
+Python >= 3.7 is required. In order to build retis on older distros where
+this python version is not available, please run:
+
+```
+$ CARGO_CMD_OPTS="--no-default-features" make
+```
+
 ## Overview
 
 Python bindings currently provide the following basic python classes that

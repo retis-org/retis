@@ -8,7 +8,9 @@ pub(crate) use self::pcap::*;
 pub(crate) mod print;
 pub(crate) use print::*;
 
+#[cfg(feature = "python")]
 pub(crate) mod python;
+#[cfg(feature = "python")]
 pub(crate) use python::*;
 
 pub(crate) mod sort;
