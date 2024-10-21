@@ -64,6 +64,14 @@ macro_rules! event_byte_array {
     };
 }
 
+/// The return value of EventFactory::next_event()
+pub(crate) enum EventResult {
+    /// The Factory was able to create a new event.
+    Event(Event),
+    /// The timeout went off but a new attempt to retrieve an event might succeed.
+    Timeout,
+}
+
 /// BPF events factory retrieving and unmarshaling events coming from the BPF
 /// parts.
 #[cfg(not(test))]
@@ -638,27 +646,11 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::*;
-    use crate::{event_section, event_section_factory};
+    use crate::event_section_factory;
+    use crate::events::TestEvent;
 
     const DATA_TYPE_U64: u8 = 1;
     const DATA_TYPE_U128: u8 = 2;
-
-    #[event_section(SectionId::Common)]
-    struct TestEvent {
-        field0: Option<u64>,
-        field1: Option<u64>,
-        field2: Option<u64>,
-    }
-
-    impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> std::fmt::Result {
-            write!(
-                f,
-                "field0: {:?} field1: {:?} field2: {:?}",
-                self.field0, self.field1, self.field2
-            )
-        }
-    }
 
     #[event_section_factory(FactoryId::Common)]
     #[derive(Default)]

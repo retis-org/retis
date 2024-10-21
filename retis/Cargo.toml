@@ -19,6 +19,8 @@ release_name = "senyoret"
 maintenance = { status = "actively-developed" }
 
 [features]
+default = ["python"]
+python = ["retis-derive/python", "events/python-embed"]
 test_bindgen_layout = []
 test_cap_bpf = []
 benchmark = []
@@ -33,7 +35,7 @@ caps = "0.5"
 clap = { version = "4.0", features = ["derive", "string"] }
 clap_complete = "4.4"
 elf = "0.7"
-events = {version = "1.4", path = "../retis-events", package="retis-events"}
+events = {version = "1.4", path = "../retis-events", package="retis-events" }
 flate2 = "1.0"
 libbpf-rs = "0.22"
 libbpf-sys = "=1.2"
@@ -69,3 +71,4 @@ memmap2 = "0.9"
 probe = "0.5"
 serial_test = "3.1"
 test-case = "3.2"
+events = {version = "1.4", path = "../retis-events", package="retis-events", features = ["test-events"]}

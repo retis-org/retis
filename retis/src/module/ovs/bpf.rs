@@ -4,7 +4,7 @@
 
 use std::net::Ipv6Addr;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 
 use crate::{
     core::events::{
@@ -59,26 +59,11 @@ impl OvsDataType {
     }
 }
 
-// OVS module supports several event data types but many of them end up setting the OvsEvent
-// to one of its variants which mean they are mutally exclusive.
-// This helper ensures the event has was not set before to any of its variants to help
-// report his error condition.
-pub(crate) fn ensure_undefined(event: &OvsEvent, received: OvsDataType) -> Result<()> {
-    match &event.event {
-        OvsEventType::Undefined => Ok(()),
-        other => bail!(
-            "Conflicting OVS event types. Received {:?} data type but event is already {:#?}",
-            received,
-            other
-        ),
-    }
-}
-
-pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    ensure_undefined(event, OvsDataType::Upcall)?;
+pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let upcall = parse_raw_section::<UpcallEvent>(raw_section)?;
-    event.event = OvsEventType::Upcall(*upcall);
-    Ok(())
+    Ok(OvsEvent {
+        event: OvsEventType::Upcall(*upcall),
+    })
 }
 
 /// OVS action event data.
@@ -90,68 +75,50 @@ pub(crate) struct BpfActionEvent {
     recirc_id: u32,
 }
 
-pub(super) fn unmarshall_exec(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
+pub(super) fn unmarshall_exec(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let raw = parse_raw_section::<BpfActionEvent>(raw_section)?;
 
-    // Any of the action-related bpf events (e.g BpfActionTrackEvent, BpfActionTrackEvent, etc)
-    // might have been received before. If so, event.event is already a valid
-    // OvsEventType::Action.
-    match &mut event.event {
-        OvsEventType::Action(action) => {
-            // One of the specific action events has already been received and it has initialized
-            // the action.data enum. Only the common data has to be set here.
-            action.recirc_id = raw.recirc_id;
-        }
-        OvsEventType::Undefined => {
-            // When we implement event data types for every action we will be able to create the
-            // specific action variant when unmarshaling its event data type. Until then, we need to
-            // initialize the Action here based on the action_id (which corresponds to ovs_action_attr
-            // defined in uapi/linux/openvswitch.h).
-            event.event = OvsEventType::Action(ActionEvent {
-                action: match raw.action {
-                    0 => OvsAction::Unspecified,
-                    1 => OvsAction::Output(OvsActionOutput::default()),
-                    2 => OvsAction::Userspace,
-                    3 => OvsAction::Set,
-                    4 => OvsAction::PushVlan,
-                    5 => OvsAction::PopVlan,
-                    6 => OvsAction::Sample,
-                    7 => OvsAction::Recirc(OvsActionRecirc::default()),
-                    8 => OvsAction::Hash,
-                    9 => OvsAction::PushMpls,
-                    10 => OvsAction::PopMpls,
-                    11 => OvsAction::SetMasked,
-                    12 => OvsAction::Ct(OvsActionCt::default()),
-                    13 => OvsAction::Trunc,
-                    14 => OvsAction::PushEth,
-                    15 => OvsAction::PopEth,
-                    16 => OvsAction::CtClear,
-                    17 => OvsAction::PushNsh,
-                    18 => OvsAction::PopNsh,
-                    19 => OvsAction::Meter,
-                    20 => OvsAction::Clone,
-                    21 => OvsAction::CheckPktLen,
-                    22 => OvsAction::AddMpls,
-                    23 => OvsAction::DecTtl,
-                    // The private OVS_ACTION_ATTR_SET_TO_MASKED action is used
-                    // in the same way as OVS_ACTION_ATTR_SET_MASKED. Use only
-                    // one action to avoid confusion
-                    25 => OvsAction::SetMasked,
-                    val => bail!("Unsupported action id {val}"),
-                },
-                recirc_id: raw.recirc_id,
-                ..ActionEvent::default()
-            });
-        }
-        other => {
-            bail!(
-                "Conflicting OVS event types. Received {:?} data type but event is already {:#?}",
-                OvsDataType::ActionExec,
-                other
-            );
-        }
-    }
-    Ok(())
+    // When we implement event data types for every action we will be able to create the
+    // specific action variant when unmarshaling its event data type. Until then, we need to
+    // initialize the Action here based on the action_id (which corresponds to ovs_action_attr
+    // defined in uapi/linux/openvswitch.h).
+    Ok(OvsEvent {
+        event: OvsEventType::Action(ActionEvent {
+            action: match raw.action {
+                0 => None,
+                1 => Some(OvsAction::Output(OvsActionOutput::default())),
+                2 => Some(OvsAction::Userspace(OvsDummyAction)),
+                3 => Some(OvsAction::Set(OvsDummyAction)),
+                4 => Some(OvsAction::PushVlan(OvsDummyAction)),
+                5 => Some(OvsAction::PopVlan(OvsDummyAction)),
+                6 => Some(OvsAction::Sample(OvsDummyAction)),
+                7 => Some(OvsAction::Recirc(OvsActionRecirc::default())),
+                8 => Some(OvsAction::Hash(OvsDummyAction)),
+                9 => Some(OvsAction::PushMpls(OvsDummyAction)),
+                10 => Some(OvsAction::PopMpls(OvsDummyAction)),
+                11 => Some(OvsAction::SetMasked(OvsDummyAction)),
+                12 => Some(OvsAction::Ct(OvsActionCt::default())),
+                13 => Some(OvsAction::Trunc(OvsDummyAction)),
+                14 => Some(OvsAction::PushEth(OvsDummyAction)),
+                15 => Some(OvsAction::PopEth(OvsDummyAction)),
+                16 => Some(OvsAction::CtClear(OvsDummyAction)),
+                17 => Some(OvsAction::PushNsh(OvsDummyAction)),
+                18 => Some(OvsAction::PopNsh(OvsDummyAction)),
+                19 => Some(OvsAction::Meter(OvsDummyAction)),
+                20 => Some(OvsAction::Clone(OvsDummyAction)),
+                21 => Some(OvsAction::CheckPktLen(OvsDummyAction)),
+                22 => Some(OvsAction::AddMpls(OvsDummyAction)),
+                23 => Some(OvsAction::DecTtl(OvsDummyAction)),
+                // The private OVS_ACTION_ATTR_SET_TO_MASKED action is used
+                // in the same way as OVS_ACTION_ATTR_SET_MASKED. Use only
+                // one action to avoid confusion
+                25 => Some(OvsAction::SetMasked(OvsDummyAction)),
+                val => bail!("Unsupported action id {val}"),
+            },
+            recirc_id: raw.recirc_id,
+            ..ActionEvent::default()
+        }),
+    })
 }
 
 /// OVS action tracking event data.
@@ -167,19 +134,8 @@ pub(super) fn unmarshall_exec_track(
 ) -> Result<()> {
     let raw = parse_raw_section::<BpfActionTrackEvent>(raw_section)?;
 
-    // Any of the action-related bpf events (e.g BpfActionEvent, BpfActionTrackEvent, etc)
-    // might have been received before. If so, event.event is already a valid
-    // OvsEventType::Action.
     match &mut event.event {
         OvsEventType::Action(ref mut action) => action.queue_id = Some(raw.queue_id),
-        OvsEventType::Undefined => {
-            // We received the tracking event before the generic one.
-            // Initialize the Action Event.
-            event.event = OvsEventType::Action(ActionEvent {
-                queue_id: Some(raw.queue_id),
-                ..ActionEvent::default()
-            });
-        }
         other => {
             bail!(
                 "Conflicting OVS event types. Received {:?} data type but event is already {:#?}",
@@ -192,19 +148,8 @@ pub(super) fn unmarshall_exec_track(
 }
 
 fn update_action_event(event: &mut OvsEvent, action: OvsAction) -> Result<()> {
-    // Any of the action-related bpf events (e.g BpfActionEvent, BpfActionTrackEvent, etc)
-    // might have been received before. If so, event.event is already a valid
-    // OvsEventType::Action.
     match &mut event.event {
-        OvsEventType::Action(ref mut event) => event.action = action,
-        OvsEventType::Undefined => {
-            // We received the concrete action data type before the generic one.
-            // Initialize the Action Event.
-            event.event = OvsEventType::Action(ActionEvent {
-                action,
-                ..ActionEvent::default()
-            });
-        }
+        OvsEventType::Action(ref mut event) => event.action = Some(action),
         other => {
             bail!(
                 "Conflicting OVS event types. Received {:?} data type but event is already {:#?}",
@@ -308,45 +253,35 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
     update_action_event(event, OvsAction::Ct(ct))
 }
 
-pub(super) fn unmarshall_recv(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
-    ensure_undefined(event, OvsDataType::RecvUpcall)?;
+pub(super) fn unmarshall_recv(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let recv = parse_raw_section::<RecvUpcallEvent>(raw_section)?;
-    event.event = OvsEventType::RecvUpcall(*recv);
-
-    Ok(())
+    Ok(OvsEvent {
+        event: OvsEventType::RecvUpcall(*recv),
+    })
 }
 
-pub(super) fn unmarshall_operation(
-    raw_section: &BpfRawSection,
-    event: &mut OvsEvent,
-) -> Result<()> {
-    ensure_undefined(event, OvsDataType::Operation)?;
+pub(super) fn unmarshall_operation(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let op = parse_raw_section::<OperationEvent>(raw_section)?;
 
-    event.event = OvsEventType::Operation(*op);
-    Ok(())
+    Ok(OvsEvent {
+        event: OvsEventType::Operation(*op),
+    })
 }
 
-pub(super) fn unmarshall_upcall_enqueue(
-    raw_section: &BpfRawSection,
-    event: &mut OvsEvent,
-) -> Result<()> {
-    ensure_undefined(event, OvsDataType::UpcallEnqueue)?;
+pub(super) fn unmarshall_upcall_enqueue(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let enqueue = parse_raw_section::<UpcallEnqueueEvent>(raw_section)?;
 
-    event.event = OvsEventType::UpcallEnqueue(*enqueue);
-    Ok(())
+    Ok(OvsEvent {
+        event: OvsEventType::UpcallEnqueue(*enqueue),
+    })
 }
 
-pub(super) fn unmarshall_upcall_return(
-    raw_section: &BpfRawSection,
-    event: &mut OvsEvent,
-) -> Result<()> {
-    ensure_undefined(event, OvsDataType::UpcallReturn)?;
+pub(super) fn unmarshall_upcall_return(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let uret = parse_raw_section::<UpcallReturnEvent>(raw_section)?;
 
-    event.event = OvsEventType::UpcallReturn(*uret);
-    Ok(())
+    Ok(OvsEvent {
+        event: OvsEventType::UpcallReturn(*uret),
+    })
 }
 
 #[event_section_factory(FactoryId::Ovs)]
@@ -355,24 +290,58 @@ pub(crate) struct OvsEventFactory {}
 
 impl RawEventSectionFactory for OvsEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let mut event = OvsEvent::default();
+        let mut event = None; // = OvsEvent::default();
 
         for section in raw_sections.iter() {
             match OvsDataType::from_u8(section.header.data_type)? {
-                OvsDataType::Upcall => unmarshall_upcall(section, &mut event),
-                OvsDataType::UpcallEnqueue => unmarshall_upcall_enqueue(section, &mut event),
-                OvsDataType::UpcallReturn => unmarshall_upcall_return(section, &mut event),
-                OvsDataType::RecvUpcall => unmarshall_recv(section, &mut event),
-                OvsDataType::Operation => unmarshall_operation(section, &mut event),
-                OvsDataType::ActionExec => unmarshall_exec(section, &mut event),
-                OvsDataType::ActionExecTrack => unmarshall_exec_track(section, &mut event),
-                OvsDataType::OutputAction => unmarshall_output(section, &mut event),
-                OvsDataType::RecircAction => unmarshall_recirc(section, &mut event),
-                OvsDataType::ConntrackAction => unmarshall_ct(section, &mut event),
-            }?;
+                OvsDataType::Upcall => {
+                    event = Some(unmarshall_upcall(section)?);
+                }
+                OvsDataType::UpcallEnqueue => {
+                    event = Some(unmarshall_upcall_enqueue(section)?);
+                }
+                OvsDataType::UpcallReturn => {
+                    event = Some(unmarshall_upcall_return(section)?);
+                }
+                OvsDataType::RecvUpcall => {
+                    event = Some(unmarshall_recv(section)?);
+                }
+                OvsDataType::Operation => {
+                    event = Some(unmarshall_operation(section)?);
+                }
+                OvsDataType::ActionExec => {
+                    event = Some(unmarshall_exec(section)?);
+                }
+                OvsDataType::ActionExecTrack => unmarshall_exec_track(
+                    section,
+                    event
+                        .as_mut()
+                        .ok_or_else(|| anyhow!("received action track without action"))?,
+                )?,
+                OvsDataType::OutputAction => unmarshall_output(
+                    section,
+                    event
+                        .as_mut()
+                        .ok_or_else(|| anyhow!("received action data without action"))?,
+                )?,
+                OvsDataType::RecircAction => unmarshall_recirc(
+                    section,
+                    event
+                        .as_mut()
+                        .ok_or_else(|| anyhow!("received action data without action"))?,
+                )?,
+                OvsDataType::ConntrackAction => unmarshall_ct(
+                    section,
+                    event
+                        .as_mut()
+                        .ok_or_else(|| anyhow!("received action data without action"))?,
+                )?,
+            };
         }
 
-        Ok(Box::new(event))
+        Ok(Box::new(
+            event.ok_or_else(|| anyhow!("Incomplete OVS event"))?,
+        ))
     }
 }
 

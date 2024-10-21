@@ -9,20 +9,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 use anyhow::{anyhow, Result};
 
-use crate::events::{CommonEvent, Event, SectionId, TrackingInfo};
-
-/// A set of sorted Events with the same tracking id.
-#[derive(Default)]
-pub(crate) struct EventSeries {
-    /// Events that comprise the Series.
-    pub(crate) events: Vec<Event>,
-}
-
-impl EventSeries {
-    pub(crate) fn to_json(&self) -> serde_json::Value {
-        serde_json::Value::Array(self.events.iter().map(|e| e.to_json()).collect())
-    }
-}
+use crate::events::{CommonEvent, Event, EventSeries, SectionId, TrackingInfo};
 
 #[derive(Default)]
 pub(crate) struct EventSorter {

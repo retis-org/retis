@@ -100,6 +100,7 @@ flavor coding style for the BPF parts.
    1. `cargo clippy -- -D warnings`
    1. `make test V=1`, or to include runtime tests,
       `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=sudo CARGO_CMD_OPTS="--features=test_cap_bpf" make test V=1`
+   1. `make pytest V=1`
 1. Make sure commits are
    [signed off](https://www.kernel.org/doc/html/latest/process/submitting-patches.html?highlight=signed%20off#developer-s-certificate-of-origin-1-1).
 1. Use a clear, concise and descriptive title.
@@ -121,6 +122,20 @@ flavor coding style for the BPF parts.
 1. If the pull-request has a conflict and cannot be merged, please rebase on the
    latest `main`. This can happen at any time, e.g. when other pull-requests are
    being merged.
+
+### Python bindings development
+
+When changing python bindings, it can be useful to quickly build and install the
+current code into a virtual environment for testing. An easy way to do it is by
+using [maturin](https://github.com/PyO3/maturin):
+
+```
+$ python -m venv venv && source venv/bin/activate # jump into a virtual env (required)
+$ pip install maturin
+$ maturin develop -m retis-events/Cargo.toml -F python-lib
+$ python
+>>> import retis
+```
 
 ### Documentation preview
 

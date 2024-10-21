@@ -4,6 +4,7 @@ use super::*;
 use crate::{event_section, event_type, Formatter};
 
 #[event_section(SectionId::Kernel)]
+#[derive(Default)]
 pub struct KernelEvent {
     /// Kernel symbol name associated with the event (i.e. which probe generated
     /// the event).
@@ -55,5 +56,12 @@ impl EventFmt for StackTrace {
         } else {
             write!(f, "[{}]", self.0.join(", "))
         }
+    }
+}
+
+#[cfg(feature = "python")]
+impl pyo3::ToPyObject for StackTrace {
+    fn to_object(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+        pyo3::IntoPy::into_py(self.0.clone(), py)
     }
 }
