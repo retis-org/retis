@@ -1,6 +1,6 @@
 # Release checklist
 
-1. Release a new version of `retis-derive` and `btf-rs` if needed.
+1. Release a new version of `btf-rs` and/or sub-crates if needed.
 1. Release a new version on GitHub.
    1. Make sure the README is up-to-date (collectors, build instructions, etc).
    1. Add new authors to the authors file if needed, by running
