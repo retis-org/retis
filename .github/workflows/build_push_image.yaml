@@ -1,16 +1,14 @@
 name: Build and push container image
 
 on:
-  # Manual trigger for the workflow.
   workflow_dispatch:
     inputs:
       release_tags:
         required: false
-        default: 'next'
+        default: "next"
 
-  # Every day at 01:32 AM UTC.
-  schedule:
-    - cron: "32 01 * * *"
+  release:
+    types: [released]
 
 jobs:
   build-and-push-image:
@@ -20,27 +18,28 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # This is kept intentionally separate from "Set environment".
-      - name: Check scheduled run
-        if: github.event_name == 'schedule'
-        run: |
-          last_commit=$(git log -n1 --since=yesterday --oneline)
-          if [ -z "${last_commit}" ]; then
-              echo "No new commits found, cancelling ..."
-              exit 1
-          else
-              echo "Proceeding with the current tip:"
-              echo "  ${last_commit}"
-          fi
-
       - name: Set environment
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" == "release" ]; then
+              # https://github.com/orgs/community/discussions/64736
+              latest_tag=$(
+                  curl -L \
+                      -H "Accept: application/vnd.github+json" \
+                      -H "Authorization: Bearer ${{ github.token }}" \
+                      -H "X-GitHub-Api-Version: 2022-11-28" \
+                      https://api.github.com/repos/${{ github.repository }}/releases/latest |
+                  jq -r '.tag_name'
+              )
+              tags=${{ github.ref_name }}
+              if [ "${latest_tag}" == "${{ github.ref_name }}" ]; then
+                  tags="${tags} latest"
+              fi
+              echo "RELEASE_TAGS=${tags}" >> $GITHUB_ENV
+          else
+              if [ -z "${{ github.event.inputs.release_tags }}" ]; then
+                  exit 1
+              fi
               echo "RELEASE_TAGS=${{ github.event.inputs.release_tags }}" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" = "schedule" ]; then
-              echo "RELEASE_TAGS=next" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" = "release" ]; then
-              :
           fi
 
       - name: Build container image
