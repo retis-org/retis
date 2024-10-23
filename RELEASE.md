@@ -16,10 +16,8 @@
       1. Make sure the right set of distributions is enabled for the group. If
          not that can be set in the project settings.
       1. `Packages > Rebuild`.
-   1. Build and push the container image.
-      1. Manually run the workflow [Build and push container image](https://github.com/retis-org/retis/actions/workflows/build_push_image.yaml)
-         (in the Actions tab on the Retis Github page) selecting the branch and setting the
-         `release_tags` with the space separated list of tags (i.e. release_tags="x.y.z latest").
 1. Write and publish a release notes in the GitHub interface. This must be done
    once the rpm and the image successfully built to allow pushing last minute
    build fixes.
+   1. Make sure "Set as the latest release" is checked only for y-stream
+      releases and z-stream releases of the latest major version.
