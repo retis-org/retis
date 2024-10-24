@@ -72,7 +72,7 @@ impl SubCommandParserRunner for Sort {
         let mut factory = FileEventsFactory::new(self.input.as_path())?;
 
         if matches!(factory.file_type(), file::FileType::Series) {
-            println!("File already sorted");
+            log::info!("File already sorted");
             return Ok(());
         }
 
