@@ -56,6 +56,32 @@ python_task:
     - python3 -m pip install black
     - python3 -m black --check --diff tests/*.py
 
+build_python_lib_task:
+  container:
+    image: ghcr.io/pyo3/maturin
+  build_script:
+    - maturin build --release -m retis-events/Cargo.toml -F python-lib
+  dist_artifacts:
+    path: "target/wheels/*"
+
+test_python_lib_task:
+  container:
+    matrix:
+      - image: python:3.8
+      - image: python:3.9
+      - image: python:3.10
+      - image: python:3.11
+      - image: python:3.12
+  setup_script:
+    - apt-get update
+    - apt-get install -y curl
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh
+    - chmod +x rustup-init.sh && ./rustup-init.sh -y --profile minimal
+  build_script:
+    - source $HOME/.cargo/env
+    - python -m pip install tox
+    - make pytest
+
 functional_task:
   # Run for PRs with a specific label
   required_pr_labels: run-functional-tests
@@ -74,6 +100,7 @@ functional_task:
       env:
         DISTRO: x86_64-c8s
         TEST_EXTRA_ARGS: "--ignore=test_ovs.py --ignore=test_nft.py"
+        CARGO_CMD_OPTS: "--no-default-features"
     - name: Centos 9 Stream (x86_64)
       env:
         DISTRO: x86_64-c9s
@@ -125,7 +152,7 @@ functional_task:
     - ssh ${DISTRO} 'sh -exc "uname -a"'
 
   test_script: &functional_test
-    - ssh -tt ${DISTRO} 'bash --login -exc "cd /vagrant && make V=1"'
+    - ssh -tt ${DISTRO} "env CARGO_CMD_OPTS=$CARGO_CMD_OPTS bash --login -exc 'cd /vagrant && make V=1'"
     - ssh -tt ${DISTRO} "cd /vagrant/tests && sudo python3 -m pytest ${TEST_EXTRA_ARGS}"
 
 # Manual trigger for non-PR branches.

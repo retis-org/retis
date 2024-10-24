@@ -18,7 +18,7 @@ use super::cli::Collect;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig, CliDisplayFormat, FullCli, SubCommandRunner},
     core::{
-        events::{BpfEventsFactory, RetisEventsFactory},
+        events::{BpfEventsFactory, EventResult, RetisEventsFactory},
         filters::{
             filters::{BpfFilter, Filter},
             meta::filter::FilterMeta,
@@ -504,7 +504,6 @@ impl Collectors {
                         .iter_mut()
                         .try_for_each(|p| p.process_one(&event))?;
                 }
-                Eof => break,
                 Timeout => continue,
             }
         }
@@ -539,7 +538,7 @@ mod tests {
     use super::*;
     use crate::{
         core::{events::bpf::*, probe::ProbeBuilderManager},
-        event_section, event_section_factory,
+        event_section_factory,
         module::Module,
     };
 
@@ -575,7 +574,7 @@ mod tests {
             self
         }
         fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-            Ok(Some(Box::new(TestEventFactory {})))
+            Ok(Some(Box::new(TestEventFactory::default())))
         }
     }
 
@@ -607,20 +606,12 @@ mod tests {
             self
         }
         fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-            Ok(Some(Box::new(TestEventFactory {})))
-        }
-    }
-
-    #[event_section(SectionId::Common)]
-    struct TestEvent {}
-
-    impl EventFmt for TestEvent {
-        fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> std::fmt::Result {
-            write!(f, "test event section")
+            Ok(Some(Box::new(TestEventFactory::default())))
         }
     }
 
     #[event_section_factory(FactoryId::Common)]
+    #[derive(Default)]
     struct TestEventFactory {}
 
     impl RawEventSectionFactory for TestEventFactory {

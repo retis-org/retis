@@ -13,6 +13,7 @@ RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '
 export ARCH CFLAGS CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION RUSTFLAGS
 
 PRINT = printf
+CONTAINER_RUNTIME := podman
 
 VERBOSITY := $(filter 1,$(V))
 
@@ -97,6 +98,17 @@ $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	CFLAGS_INCLUDES="$(INCLUDES)" \
 	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@
 
+pylib:
+	$(call out_console,MATURIN,Building python bindings ...)
+	$(CONTAINER_RUNTIME) run --rm --name retis_build_maturin -v $$PWD:/io:z ghcr.io/pyo3/maturin build -m retis-events/Cargo.toml -F python-lib
+
+pytest-deps:
+	@which tox &> /dev/null || (echo "Please install tox ('pip install tox')."; exit 1)
+
+pytest: pytest-deps
+	$(call out_console,TOX,Testing python bindings ...)
+	cd retis-events && tox
+
 clean-ebpf:
 	$(call out_console,CLEAN,cleaning ebpf progs...)
 	for i in $(EBPF_PROBES) $(EBPF_HOOKS); do \
@@ -121,6 +133,8 @@ help:
 	$(PRINT) 'install             --  Installs Retis.'
 	$(PRINT) 'release             --  Builds Retis with the release option.'
 	$(PRINT) 'test                --  Builds and runs unit tests.'
+	$(PRINT) 'pylib 	      --  Builds the python bindings.'
+	$(PRINT) 'pytest 	      --  Tests the python bindings (requires "tox" installed).'
 	$(PRINT)
 	$(PRINT) 'Optional variables that can be used to override the default behavior:'
 	$(PRINT) 'V                   --  If set to 1 the verbose output will be printed.'
@@ -136,4 +150,4 @@ help:
 	$(PRINT) 'NOVENDOR            --  Avoid to self detect and consume the vendored headers'
 	$(PRINT) '                        shipped with libbpf-sys.'
 
-.PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test
+.PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test pylib pytest-deps pytest

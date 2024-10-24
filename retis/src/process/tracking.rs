@@ -133,7 +133,6 @@ impl AddTracking {
                         self.process_skb(event)?;
                     }
                 },
-                Undefined => bail!("Cannot track undefined ovs event"),
             }
         } else {
             // It's not an OVS event, try skb-only tracking.

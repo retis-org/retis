@@ -77,7 +77,7 @@ where
 
     /// Creates an iterator over the key->value pairs within a range of keys in the bimap in
     /// ascending order.
-    pub(crate) fn range_by_left<'a, R>(&'a self, target: &'a R) -> KeyRange<'_, K, V>
+    pub(crate) fn range_by_left<'a, R>(&'a self, target: &'a R) -> KeyRange<'a, K, V>
     where
         Arc<K>: Borrow<K>,
         R: RangeBounds<K>,

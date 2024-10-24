@@ -1,0 +1,35 @@
+[build-system]
+requires = ["maturin>=1.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+bindings = "pyo3"
+features = ["python-lib"]
+
+[project]
+name = "retis"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+
+    "Operating System :: POSIX :: Linux",
+
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python",
+    "Programming Language :: Rust",
+
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+]
+description = "Python bindings for Retis events"
+readme = "PYTHON_LIB_README.md"
+
+[project.urls]
+HomePage = "https://github.com/retis-org/retis"
+Documentation = "https://retis.readthedocs.io/"
+Repository = "https://github.com/retis-org/retis"

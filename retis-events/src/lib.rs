@@ -14,6 +14,10 @@ pub use display::*;
 
 pub mod file;
 pub mod net;
+#[cfg(feature = "python")]
+pub mod python;
+#[cfg(feature = "python-embed")]
+pub mod python_embed;
 
 pub mod common;
 pub use common::*;
@@ -38,3 +42,17 @@ pub use user::*;
 
 // Re-export derive macros.
 use retis_derive::*;
+
+#[cfg(feature = "python-lib")]
+use pyo3::prelude::*;
+
+#[cfg(feature = "python-lib")]
+#[pymodule]
+fn retis(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<python::PyEvent>()?;
+    m.add_class::<python::PyEventSeries>()?;
+    m.add_class::<python::PyEventReader>()?;
+    m.add_class::<python::PySeriesReader>()?;
+    m.add_class::<python::PyEventFile>()?;
+    Ok(())
+}

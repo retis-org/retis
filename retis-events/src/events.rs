@@ -34,7 +34,7 @@
 #![allow(dead_code)] // FIXME
 #![allow(clippy::wrong_self_convention)]
 
-use std::{any::Any, collections::HashMap, fmt};
+use std::{any::Any, collections::HashMap, fmt, str::FromStr};
 
 use anyhow::{anyhow, bail, Result};
 use log::debug;
@@ -53,13 +53,11 @@ impl Event {
         Event::default()
     }
 
-    pub fn from_json(line: String) -> Result<Event> {
+    /// Create an Event from a json object.
+    pub(crate) fn from_json_obj(mut obj: HashMap<String, serde_json::Value>) -> Result<Event> {
         let mut event = Event::new();
 
-        let mut event_js: HashMap<String, serde_json::Value> = serde_json::from_str(line.as_str())
-            .map_err(|e| anyhow!("Failed to parse json event at line {line}: {e}"))?;
-
-        for (owner, value) in event_js.drain() {
+        for (owner, value) in obj.drain() {
             let parser = event_sections()?
                 .get(&owner)
                 .ok_or_else(|| anyhow!("json contains an unsupported event {}", owner))?;
@@ -71,6 +69,14 @@ impl Event {
             event.insert_section(SectionId::from_u8(section.id())?, section)?;
         }
         Ok(event)
+    }
+
+    /// Create an Event from a json string.
+    pub(crate) fn from_json(line: String) -> Result<Event> {
+        let event_js: HashMap<String, serde_json::Value> = serde_json::from_str(line.as_str())
+            .map_err(|e| anyhow!("Failed to parse json event at line {line}: {e}"))?;
+
+        Self::from_json_obj(event_js)
     }
 
     /// Insert a new event field into an event.
@@ -106,6 +112,11 @@ impl Event {
         }
     }
 
+    #[allow(clippy::borrowed_box)]
+    pub(super) fn get(&self, owner: SectionId) -> Option<&Box<dyn EventSection>> {
+        self.0.get(&owner)
+    }
+
     pub fn to_json(&self) -> serde_json::Value {
         let mut event = serde_json::Map::new();
 
@@ -114,6 +125,11 @@ impl Event {
         }
 
         serde_json::Value::Object(event)
+    }
+
+    /// Iterator over the existing sections
+    pub fn sections(&self) -> impl Iterator<Item = SectionId> + '_ {
+        self.0.keys().map(|s| s.to_owned())
     }
 }
 
@@ -242,6 +258,29 @@ impl fmt::Display for SectionId {
     }
 }
 
+impl FromStr for SectionId {
+    type Err = anyhow::Error;
+
+    /// Constructs an SectionId from a section unique str identifier.
+    fn from_str(val: &str) -> Result<Self> {
+        use SectionId::*;
+        Ok(match val {
+            "common" => Common,
+            "kernel" => Kernel,
+            "userspace" => Userspace,
+            "tracking" => Tracking,
+            "skb-tracking" => SkbTracking,
+            "skb-drop" => SkbDrop,
+            "skb" => Skb,
+            "ovs" => Ovs,
+            "nft" => Nft,
+            "ct" => Ct,
+            "startup" => Startup,
+            x => bail!("Can't construct a SectionId from {}", x),
+        })
+    }
+}
+
 type EventSectionMap = HashMap<String, fn(serde_json::Value) -> Result<Box<dyn EventSection>>>;
 static EVENT_SECTIONS: OnceCell<EventSectionMap> = OnceCell::new();
 
@@ -268,19 +307,10 @@ fn event_sections() -> Result<&'static EventSectionMap> {
         insert_section!(events, NftEvent);
         insert_section!(events, CtEvent);
         insert_section!(events, StartupEvent);
+        insert_section!(events, TrackingInfo);
 
         Ok(events)
     })
-}
-
-/// The return value of EventFactory::next_event()
-pub enum EventResult {
-    /// The Factory was able to create a new event.
-    Event(Event),
-    /// The source has been consumed.
-    Eof,
-    /// The timeout went off but a new attempt to retrieve an event might succeed.
-    Timeout,
 }
 
 /// Per-module event section, should map 1:1 with a SectionId. Requiring specific
@@ -295,8 +325,8 @@ pub enum EventResult {
 /// having a proper structure is encouraged as it allows easier consumption at
 /// post-processing. Those objects can also define their own specialized
 /// helpers.
-pub trait EventSection: EventSectionInternal + for<'a> EventDisplay<'a> {}
-impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<'a> {}
+pub trait EventSection: EventSectionInternal + for<'a> EventDisplay<'a> + Send {}
+impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<'a> + Send {}
 
 /// EventSection helpers defined in the core for all events. Common definition
 /// needs Sized but that is a requirement for all EventSection.
@@ -307,6 +337,8 @@ pub trait EventSectionInternal {
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
     fn to_json(&self) -> serde_json::Value;
+    #[cfg(feature = "python")]
+    fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject;
 }
 
 // We need this as the value given as the input when deserializing something
@@ -327,4 +359,65 @@ impl EventSectionInternal for () {
     fn to_json(&self) -> serde_json::Value {
         serde_json::Value::Null
     }
+
+    #[cfg(feature = "python")]
+    fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+        py.None()
+    }
 }
+
+/// A set of sorted Events with the same tracking id.
+#[derive(Default)]
+pub struct EventSeries {
+    /// Events that comprise the Series.
+    pub events: Vec<Event>,
+}
+
+impl EventSeries {
+    /// Encode the EventSeries into a json object.
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::Value::Array(self.events.iter().map(|e| e.to_json()).collect())
+    }
+
+    /// Create an EventSeries from a json string.
+    pub(crate) fn from_json(line: String) -> Result<EventSeries> {
+        let mut series = EventSeries::default();
+
+        let mut series_js: Vec<HashMap<String, serde_json::Value>> =
+            serde_json::from_str(line.as_str())
+                .map_err(|e| anyhow!("Failed to parse json series at line {line}: {e}"))?;
+
+        for obj in series_js.drain(..) {
+            let event = Event::from_json_obj(obj)?;
+            series.events.push(event);
+        }
+        Ok(series)
+    }
+}
+
+#[cfg(feature = "test-events")]
+pub mod test {
+    use super::*;
+    use crate::event_section;
+
+    #[event_section(SectionId::Common)]
+    #[derive(Default)]
+    pub struct TestEvent {
+        pub field0: Option<u64>,
+        pub field1: Option<u64>,
+        pub field2: Option<u64>,
+    }
+
+    impl EventFmt for TestEvent {
+        fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> std::fmt::Result {
+            write!(
+                f,
+                "field0: {:?} field1: {:?} field2: {:?}",
+                self.field0, self.field1, self.field2
+            )
+        }
+    }
+}
+
+#[cfg(feature = "test-events")]
+pub use test::*;
