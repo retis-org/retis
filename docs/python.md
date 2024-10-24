@@ -28,11 +28,11 @@ access the events.
 - **EventReader**: Class capable of reading a file created by `retis collect`
 and iterate over its events.
 - **SeriesReader**: Class capable of reading a file created by `retis sort`
-and iterate over the its series.
+and iterate over the series.
 - **EventFile**: Reads an event file, determines whether it is sorted or not
 and allow the creation of `EventReader` and `SeriesReader` instances.
 
-More details can be found in the `retis_events` crate documentation.
+More details can be found in the `retis-events` crate documentation.
 
 ## Builtin python interpreter
 
