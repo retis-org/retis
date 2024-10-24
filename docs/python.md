@@ -66,7 +66,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> reader.sorted()
 False
 >>> events = reader.events()
->>> events 
+>>> events
 <builtins.EventReader object at 0x7f44e17eaf60>
 >>> print("Got {} events".format(sum(1 for _ in events)))
 Got 783 events
@@ -86,7 +86,7 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> reader.sorted()
 True
 >>> series = reader.series()
->>> series 
+>>> series
 <builtins.SeriesReader object at 0x7f44e17e5b60>
 >>> print("Got {} series".format(sum(1 for _ in series))
 Got 149 series
