@@ -89,11 +89,21 @@ static __always_inline void *get_event_section(struct retis_raw_event *event,
 					       u8 owner, u8 data_type, u16 size)
 {
 	struct retis_raw_event_section_header *header;
-	u16 left = RAW_EVENT_DATA_SIZE - event->size;
+	u16 requested, left;
 	void *section;
 
-	if (sizeof(*header) + size > left || event->size > sizeof(event->data)) {
-		log_error("Failed to get event section: no space left");
+	/* Keep the verifier happy, as we're going to substract one to the other
+	 * below. This can't happen in practice.
+	 */
+	if (unlikely(event->size > sizeof(event->data)))
+	    return NULL;
+
+	requested = sizeof(*header) + size;
+	left = sizeof(event->data) - event->size;
+
+	if (unlikely(requested > left)) {
+		log_error("Failed to get event section: no space left (%u > %u)",
+			  requested, left);
 		return NULL;
 	}
 
@@ -103,8 +113,8 @@ static __always_inline void *get_event_section(struct retis_raw_event *event,
 	header->data_type = data_type;
 	header->size = size;
 
-	section = event->data + event->size + sizeof(*header);
-	event->size += sizeof(*header) + size;
+	section = (void *)header + sizeof(*header);
+	event->size += requested;
 
 	return section;
 }
