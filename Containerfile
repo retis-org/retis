@@ -11,7 +11,8 @@ RUN dnf install -y \
     zlib-devel \
     make \
     jq \
-    git
+    git \
+    python3-devel
 
 # Only the allowlisted files are copied,
 # see .containerignore for more details.
