@@ -17,7 +17,7 @@
  * user-space as defines cannot be annotated.
  * This MUST NOT be modified by the loader.
  */
-#define LOG_EVENTS_MAX		32
+#define LOG_EVENTS_MAX		128
 __binding const int log_events_max = LOG_EVENTS_MAX;
 
 struct retis_log_event {

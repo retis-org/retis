@@ -6,7 +6,7 @@ pub type __u64 = ::std::os::raw::c_ulonglong;
 pub type u8_ = __u8;
 pub type u32_ = __u32;
 pub type u64_ = __u64;
-pub const log_events_max: ::std::os::raw::c_int = 32;
+pub const log_events_max: ::std::os::raw::c_int = 128;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct retis_log_event {
