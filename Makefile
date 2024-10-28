@@ -111,7 +111,7 @@ gen-bindings: clean-bindings
 	               $$binding \
 	               $$opts \
 	               -o $$out_path \
-	               -- $(INCLUDES) $(BPF_CFLAGS); \
+	               -- -D__BINDGEN__ $(INCLUDES) $(BPF_CFLAGS); \
 	    $(call out_console,BINDINGS,generated bindings in "$$out_path" ...); \
 	done
 

@@ -4,15 +4,14 @@
 #include <common.h>
 #include <ovs_common.h>
 
-/* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 struct upcall_enqueue_event {
-	s32 ret;
-	u8 cmd;
-	u32 port;
 	u64 upcall_ts;
 	u32 upcall_cpu;
 	u32 queue_id;
-};
+	u32 port;
+	s32 ret;
+	u8 cmd;
+} __binding;
 
 static __always_inline u8 update_upcall_tracking(u32 queue_id, u64 ts)
 {
