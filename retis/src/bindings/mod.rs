@@ -27,3 +27,8 @@ impl Default for retis_probe_offsets {
 }
 
 unsafe impl plain::Plain for retis_probe_config {}
+
+pub(crate) mod ct_uapi;
+use ct_uapi::ct_event;
+
+unsafe impl plain::Plain for ct_event {}

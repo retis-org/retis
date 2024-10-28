@@ -107,6 +107,7 @@ gen-bindings: clean-bindings
 	    out_path=$(ROOT_DIR)/retis/src/bindings/$${fname%%.*}_uapi.rs; \
 	    $(BINDGEN) --no-layout-tests \
 	               --with-derive-default \
+	               --no-prepend-enum-name \
 	               $$binding \
 	               $$opts \
 	               -o $$out_path \
