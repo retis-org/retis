@@ -6,8 +6,6 @@ pub type __u32 = ::std::os::raw::c_uint;
 pub type u8_ = __u8;
 pub type u16_ = __u16;
 pub type u32_ = __u32;
-pub type __u128 = u128;
-pub type u128_ = __u128;
 pub const SECTION_META: ct_sections = 0;
 pub const SECTION_BASE_CONN: ct_sections = 1;
 pub const SECTION_PARENT_CONN: ct_sections = 2;
@@ -26,11 +24,10 @@ pub struct ct_meta_event {
     pub state: u8_,
 }
 #[repr(C)]
-#[repr(align(16))]
 #[derive(Copy, Clone)]
 pub union nf_conn_ip {
     pub ipv4: u32_,
-    pub ipv6: u128_,
+    pub ipv6: [u8_; 16usize],
 }
 impl Default for nf_conn_ip {
     fn default() -> Self {
@@ -42,7 +39,6 @@ impl Default for nf_conn_ip {
     }
 }
 #[repr(C)]
-#[repr(align(16))]
 #[derive(Copy, Clone)]
 pub struct nf_conn_addr_proto {
     pub addr: nf_conn_ip,
@@ -58,7 +54,6 @@ impl Default for nf_conn_addr_proto {
     }
 }
 #[repr(C)]
-#[repr(align(16))]
 #[derive(Copy, Clone)]
 pub struct nf_conn_tuple {
     pub src: nf_conn_addr_proto,
@@ -74,14 +69,12 @@ impl Default for nf_conn_tuple {
     }
 }
 #[repr(C)]
-#[repr(align(16))]
 #[derive(Copy, Clone)]
 pub struct ct_event {
-    pub flags: u32_,
-    pub zone_id: u16_,
-    pub __bindgen_padding_0: u64,
     pub orig: nf_conn_tuple,
     pub reply: nf_conn_tuple,
+    pub flags: u32_,
+    pub zone_id: u16_,
     pub tcp_state: u8_,
 }
 impl Default for ct_event {

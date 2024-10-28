@@ -138,15 +138,15 @@ impl CtEventFactory {
             let s = unsafe { raw.orig.src.addr.ipv6 };
             let d = unsafe { raw.orig.dst.addr.ipv6 };
             let orig = CtIp {
-                src: format!("{}", Ipv6Addr::from(u128::from_be(s))),
-                dst: format!("{}", Ipv6Addr::from(u128::from_be(d))),
+                src: format!("{}", Ipv6Addr::from(u128::from_be_bytes(s))),
+                dst: format!("{}", Ipv6Addr::from(u128::from_be_bytes(d))),
                 version: CtIpVersion::V6,
             };
             let s = unsafe { raw.reply.src.addr.ipv6 };
             let d = unsafe { raw.reply.dst.addr.ipv6 };
             let reply = CtIp {
-                src: format!("{}", Ipv6Addr::from(u128::from_be(s))),
-                dst: format!("{}", Ipv6Addr::from(u128::from_be(d))),
+                src: format!("{}", Ipv6Addr::from(u128::from_be_bytes(s))),
+                dst: format!("{}", Ipv6Addr::from(u128::from_be_bytes(d))),
                 version: CtIpVersion::V6,
             };
             (orig, reply)

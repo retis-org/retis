@@ -40,7 +40,7 @@ struct ct_meta_event {
 
 union nf_conn_ip {
 	u32 ipv4;
-	u128 ipv6;
+	u8 ipv6[16];
 } __binding;
 
 struct nf_conn_addr_proto {
@@ -56,10 +56,10 @@ struct nf_conn_tuple {
 
 /* Conntrack event information */
 struct ct_event {
-	u32 flags;
-	u16 zone_id;
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
+	u32 flags;
+	u16 zone_id;
 	u8 tcp_state;
 } __binding;
 
