@@ -3,9 +3,10 @@ use std::{mem, slice};
 use anyhow::Result;
 
 use crate::{
+    bindings::ct_uapi::*,
     core::{events::*, probe::kernel::RawKernelEvent},
     events::*,
-    module::{ct::bpf::*, ovs::bpf::*, skb::bpf::*},
+    module::{ovs::bpf::*, skb::bpf::*},
 };
 
 /// Raw event sections can implement this trait to provide a way to build a raw
@@ -56,8 +57,8 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     RawDevEvent::build_raw(&mut event)?;
     RawNsEvent::build_raw(&mut event)?;
     RawPacketEvent::build_raw(&mut event)?;
-    RawCtMetaEvent::build_raw(&mut event)?;
-    RawCtEvent::build_raw(&mut event)?;
+    ct_meta_event::build_raw(&mut event)?;
+    ct_event::build_raw(&mut event)?;
     BpfActionEvent::build_raw(&mut event)?;
 
     // Construct the raw event.
