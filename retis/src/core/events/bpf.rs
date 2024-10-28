@@ -28,44 +28,6 @@ pub(super) const COMMON_SECTION_TASK: u64 = 1;
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
 
-/// Macro that define Default-able fixed size sequence of bytes aimed
-/// to contain zero-terminated strings. Useful for unmarshaling array
-/// of characters bigger than 32 elements.
-#[macro_export]
-macro_rules! event_byte_array {
-    ($name:ident, $size:expr) => {
-        #[repr(C)]
-        struct $name([u8; $size]);
-
-        impl Default for $name {
-            fn default() -> Self {
-                // Safety is respected as the type is well defined and
-                // controlled.
-                unsafe { std::mem::zeroed() }
-            }
-        }
-
-        #[allow(dead_code)]
-        impl $name {
-            fn to_string(&self) -> Result<String> {
-                Ok(std::ffi::CStr::from_bytes_until_nul(&self.0)?
-                    .to_str()?
-                    .into())
-            }
-
-            fn to_string_opt(&self) -> Result<Option<String>> {
-                let res = self.to_string()?;
-
-                if res.is_empty() {
-                    return Ok(None);
-                }
-
-                Ok(Some(res))
-            }
-        }
-    };
-}
-
 /// Macro used to convert c_char into String.
 /// The macro returns error if the conversion fails.
 #[macro_export]
