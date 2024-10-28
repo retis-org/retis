@@ -18,8 +18,10 @@ use log::{error, log, Level};
 use plain::Plain;
 
 use crate::{
-    bindings::events_uapi::common_event, event_section_factory, events::*,
-    helpers::signals::Running, raw_event_section,
+    bindings::events_uapi::{common_event, common_task_event},
+    event_section_factory,
+    events::*,
+    helpers::signals::Running,
 };
 
 /// Raw event sections for common.
@@ -436,23 +438,12 @@ impl RawEventSectionFactory for CommonEventFactory {
     }
 }
 
-event_byte_array!(TaskName, 64);
-
-/// Task information retrieved in common probes.
-#[raw_event_section]
-pub(crate) struct RawTaskEvent {
-    /// pid/tgid.
-    pid: u64,
-    /// Current task name.
-    comm: TaskName,
-}
-
 pub(super) fn unmarshal_task(raw_section: &BpfRawSection) -> Result<TaskEvent> {
     let mut task_event = TaskEvent::default();
-    let raw = parse_raw_section::<RawTaskEvent>(raw_section)?;
+    let raw = parse_raw_section::<common_task_event>(raw_section)?;
 
     (task_event.tgid, task_event.pid) = ((raw.pid & 0xFFFFFFFF) as i32, (raw.pid >> 32) as i32);
-    task_event.comm = raw.comm.to_string()?;
+    task_event.comm = common_task_event::to_string(&raw.comm)?;
 
     Ok(task_event)
 }
@@ -599,7 +590,7 @@ pub(crate) type SectionFactories = HashMap<FactoryId, Box<dyn EventSectionFactor
 pub(crate) mod benchmark {
     use anyhow::Result;
 
-    use super::RawTaskEvent;
+    use super::common_task_event;
     use crate::{
         benchmark::helpers::*,
         bindings::events_uapi::common_event,
@@ -619,14 +610,14 @@ pub(crate) mod benchmark {
         }
     }
 
-    impl RawSectionBuilder for RawTaskEvent {
+    impl RawSectionBuilder for common_task_event {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
-            let mut data = RawTaskEvent::default();
-            data.comm.0[0] = b'r';
-            data.comm.0[1] = b'e';
-            data.comm.0[2] = b't';
-            data.comm.0[3] = b'i';
-            data.comm.0[4] = b's';
+            let mut data = common_task_event::default();
+            data.comm[0] = b'r' as i8;
+            data.comm[1] = b'e' as i8;
+            data.comm[2] = b't' as i8;
+            data.comm[3] = b'i' as i8;
+            data.comm[4] = b's' as i8;
             build_raw_section(
                 out,
                 FactoryId::Common as u8,
