@@ -21,13 +21,11 @@ struct kernel_event {
 	long stack_id;
 };
 
-/* Per-probe configuration; keep in sync with its Rust counterpart in
- * core::probe::kernel::config.
- */
+/* Per-probe configuration. */
 struct retis_probe_config {
 	struct retis_probe_offsets offsets;
 	u8 stack_trace;
-} __packed;
+} __binding;
 
 /* Probe configuration; the key is the target symbol address */
 struct {
