@@ -129,6 +129,6 @@ struct common_event {
 struct common_task_event {
 	u64 pid;
 	char comm[RETIS_MAX_COMM];
-};
+} __binding;
 
 #endif /* __CORE_PROBE_KERNEL_BPF_EVENTS__ */
