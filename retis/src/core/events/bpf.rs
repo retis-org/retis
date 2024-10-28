@@ -17,7 +17,10 @@ use anyhow::{anyhow, bail, Result};
 use log::{error, log, Level};
 use plain::Plain;
 
-use crate::{event_section_factory, events::*, helpers::signals::Running, raw_event_section};
+use crate::{
+    bindings::events_uapi::common_event, event_section_factory, events::*,
+    helpers::signals::Running, raw_event_section,
+};
 
 /// Raw event sections for common.
 pub(super) const COMMON_SECTION_CORE: u64 = 0;
@@ -408,13 +411,6 @@ pub(crate) fn parse_single_raw_section<'a, T>(raw_sections: &'a [BpfRawSection])
     parse_raw_section::<T>(&raw_sections[0])
 }
 
-/// Common information from all BPF events.
-#[raw_event_section]
-pub(crate) struct RawCommonEvent {
-    timestamp: u64,
-    smp_id: u32,
-}
-
 #[event_section_factory(FactoryId::Common)]
 #[derive(Default)]
 pub(crate) struct CommonEventFactory {}
@@ -426,7 +422,7 @@ impl RawEventSectionFactory for CommonEventFactory {
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
                 COMMON_SECTION_CORE => {
-                    let raw = parse_raw_section::<RawCommonEvent>(section)?;
+                    let raw = parse_raw_section::<common_event>(section)?;
 
                     common.timestamp = raw.timestamp;
                     common.smp_id = Some(raw.smp_id);
@@ -603,15 +599,16 @@ pub(crate) type SectionFactories = HashMap<FactoryId, Box<dyn EventSectionFactor
 pub(crate) mod benchmark {
     use anyhow::Result;
 
-    use super::{RawCommonEvent, RawTaskEvent};
+    use super::RawTaskEvent;
     use crate::{
         benchmark::helpers::*,
+        bindings::events_uapi::common_event,
         core::events::{FactoryId, COMMON_SECTION_CORE, COMMON_SECTION_TASK},
     };
 
-    impl RawSectionBuilder for RawCommonEvent {
+    impl RawSectionBuilder for common_event {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
-            let data = RawCommonEvent::default();
+            let data = Self::default();
             build_raw_section(
                 out,
                 FactoryId::Common as u8,
