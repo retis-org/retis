@@ -80,3 +80,4 @@ unsafe impl plain::Plain for tracking_info {}
 
 pub(crate) mod tracking_hook_uapi;
 
+pub(crate) mod skb_hook_uapi;

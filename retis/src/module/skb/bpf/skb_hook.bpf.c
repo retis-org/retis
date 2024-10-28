@@ -10,24 +10,22 @@
 #define ETH_P_ARP	0x0806
 #define ETH_P_IPV6	0x86dd
 
-/* Skb raw event sections.
- *
- * Please keep in sync with its Rust counterpart in module::skb::bpf.
- */
-#define COLLECT_PACKET		1
-#define COLLECT_DEV		2
-#define COLLECT_NS		3
-#define COLLECT_META		4
-#define COLLECT_DATA_REF	5
-#define COLLECT_GSO		6
+/* Skb raw event sections. */
+enum skb_sections {
+	SECTION_PACKET = 1,
+	SECTION_DEV,
+	SECTION_NS,
+	SECTION_META,
+	SECTION_DATA_REF,
+	SECTION_GSO,
+} __binding;
 
-/* Skb hook configuration. A map is used to set the config from userspace.
- *
- * Please keep in sync with its Rust counterpart in module::skb::bpf.
+/* Skb hook configuration. A map is used to set the config from
+ * userspace.
  */
 struct skb_config {
 	u64 sections;
-} __attribute__((packed));
+} __binding;
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(max_entries, 1);
@@ -35,18 +33,21 @@ struct {
 	__type(value, struct skb_config);
 } skb_config_map SEC(".maps");
 
-/* Please keep the following structs in sync with its Rust counterpart in
- * module::skb::bpf.
- */
-struct skb_netdev_event {
 #define IFNAMSIZ	16
+/* Defining a global variable is needed to export the binding to
+ * user-space as defines cannot be annotated.
+ * This MUST NOT be modified by the loader.
+ */
+const u8 __binding ifnamesz = IFNAMSIZ;
+
+struct skb_netdev_event {
 	u8 dev_name[IFNAMSIZ];
 	u32 ifindex;
 	u32 iif;
-};
+} __binding;
 struct skb_netns_event {
 	u32 netns;
-};
+} __binding;
 struct skb_meta_event {
 	u32 len;
 	u32 data_len;
@@ -55,31 +56,28 @@ struct skb_meta_event {
 	u32 csum;
 	u8 csum_level;
 	u32 priority;
-};
+} __binding;
 struct skb_data_ref_event {
 	u8 nohdr;
 	u8 cloned;
 	u8 fclone;
 	u8 users;
 	u8 dataref;
-};
+} __binding;
 struct skb_gso_event {
 	u8 flags;
 	u8 nr_frags;
 	u32 gso_size;
 	u32 gso_segs;
 	u32 gso_type;
-};
-/* Please keep the following structs in sync with its Rust counterpart in
- * module::skb::event.
- */
+} __binding;
 struct skb_packet_event {
 	u32 len;
 	u32 capture_len;
 #define PACKET_CAPTURE_SIZE	255
 	u8 packet[PACKET_CAPTURE_SIZE];
 	u8 fake_eth;
-};
+} __binding;
 
 /* Retrieve an skb linear len */
 static __always_inline int skb_linear_len(struct sk_buff *skb)
@@ -162,7 +160,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		if (size <= 0)
 			return 0;
 
-		e = get_event_section(event, COLLECTOR_SKB, COLLECT_PACKET,
+		e = get_event_section(event, COLLECTOR_SKB, SECTION_PACKET,
 				      sizeof(*e));
 		if (!e)
 			return 0;
@@ -191,7 +189,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		if (size <= 0)
 			return 0;
 
-		e = get_event_section(event, COLLECTOR_SKB, COLLECT_PACKET,
+		e = get_event_section(event, COLLECTOR_SKB, SECTION_PACKET,
 				      sizeof(*e));
 		if (!e)
 			return 0;
@@ -232,13 +230,13 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 	/* Always retrieve the raw packet */
 	process_packet(event, skb);
 
-	if (cfg->sections & BIT(COLLECT_DEV) && dev) {
+	if (cfg->sections & BIT(SECTION_DEV) && dev) {
 		int ifindex = BPF_CORE_READ(dev, ifindex);
 
 		if (ifindex > 0) {
 			struct skb_netdev_event *e =
 				get_event_section(event, COLLECTOR_SKB,
-						  COLLECT_DEV, sizeof(*e));
+						  SECTION_DEV, sizeof(*e));
 			if (!e)
 				return 0;
 
@@ -248,7 +246,7 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 		}
 	}
 
-	if (cfg->sections & BIT(COLLECT_NS)) {
+	if (cfg->sections & BIT(SECTION_NS)) {
 		struct skb_netns_event *e;
 		u32 netns;
 
@@ -267,7 +265,7 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 			netns = BPF_CORE_READ(sk, __sk_common.skc_net.net, ns.inum);
 		}
 
-		e = get_event_section(event, COLLECTOR_SKB, COLLECT_NS, sizeof(*e));
+		e = get_event_section(event, COLLECTOR_SKB, SECTION_NS, sizeof(*e));
 		if (!e)
 			return 0;
 
@@ -275,10 +273,10 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 	}
 
 skip_netns:
-	if (cfg->sections & BIT(COLLECT_META)) {
+	if (cfg->sections & BIT(SECTION_META)) {
 		struct skb_meta_event *e =
 			get_event_section(event, COLLECTOR_SKB,
-					  COLLECT_META, sizeof(*e));
+					  SECTION_META, sizeof(*e));
 		if (!e)
 			return 0;
 
@@ -291,11 +289,11 @@ skip_netns:
 		e->priority = BPF_CORE_READ(skb, priority);
 	}
 
-	if (cfg->sections & BIT(COLLECT_DATA_REF)) {
+	if (cfg->sections & BIT(SECTION_DATA_REF)) {
 		unsigned char *head = BPF_CORE_READ(skb, head);
 		struct skb_data_ref_event *e =
 			get_event_section(event, COLLECTOR_SKB,
-					  COLLECT_DATA_REF, sizeof(*e));
+					  SECTION_DATA_REF, sizeof(*e));
 		if (!e)
 			return 0;
 
@@ -308,7 +306,7 @@ skip_netns:
 		e->dataref = (u8)BPF_CORE_READ(si, dataref.counter);
 	}
 
-	if (cfg->sections & BIT(COLLECT_GSO)) {
+	if (cfg->sections & BIT(SECTION_GSO)) {
 		struct skb_shared_info *shinfo;
 		struct skb_gso_event *e;
 
@@ -318,7 +316,7 @@ skip_netns:
 		if (!BPF_CORE_READ(shinfo, gso_size))
 			goto skip_gso;
 
-		e = get_event_section(event, COLLECTOR_SKB, COLLECT_GSO,
+		e = get_event_section(event, COLLECTOR_SKB, SECTION_GSO,
 				      sizeof(*e));
 		if (!e)
 			return 0;
