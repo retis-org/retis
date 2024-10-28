@@ -18,10 +18,7 @@ use log::{error, log, Level};
 use plain::Plain;
 
 use crate::{
-    bindings::events_uapi::{common_event, common_task_event},
-    event_section_factory,
-    events::*,
-    helpers::signals::Running,
+    bindings::events_uapi::*, event_section_factory, events::*, helpers::signals::Running,
 };
 
 /// Raw event sections for common.
@@ -162,7 +159,7 @@ impl BpfEventsFactory {
             Some("log_map"),
             0,
             0,
-            mem::size_of::<LogEvent>() as u32 * BPF_LOG_EVENTS_MAX,
+            mem::size_of::<retis_log_event>() as u32 * log_events_max as u32,
             &opts,
         )
         .or_else(|e| bail!("Failed to create log map: {}", e))?;
@@ -262,7 +259,7 @@ impl BpfEventsFactory {
         let run_state = self.run_state.clone();
         // Closure to handle the log events coming from the BPF part.
         let process_log = move |data: &[u8]| -> i32 {
-            if data.len() != mem::size_of::<LogEvent>() {
+            if data.len() != mem::size_of::<retis_log_event>() {
                 error!("Unexpected log event size");
                 return 0;
             }
@@ -275,7 +272,7 @@ impl BpfEventsFactory {
                 return -4;
             }
 
-            let mut log_event = LogEvent::default();
+            let mut log_event = retis_log_event::default();
             if let Err(e) = plain::copy_from_bytes(&mut log_event, data) {
                 error!("Can't read eBPF log event {:?}", e);
                 return 0;
@@ -293,7 +290,7 @@ impl BpfEventsFactory {
                 }
             };
 
-            match log_event.msg.to_string() {
+            match raw_to_string!(&log_event.msg) {
                 Ok(msg) => log!(log_level, "[eBPF] {msg}"),
                 Err(e) => error!("Unable to convert eBPF log string: {e}"),
             }
@@ -518,26 +515,6 @@ impl BpfEventsFactory {
         Ok(())
     }
 }
-
-/// Size of msg for a single log event. Please keep in sync with its
-/// BPF counterpart.
-pub(super) const BPF_LOG_MAX: usize = 127;
-
-/// Max number of log events we can store at once in the shared map. Please keep in
-/// sync with its BPF counterpart.
-pub(super) const BPF_LOG_EVENTS_MAX: u32 = 32;
-
-event_byte_array!(BpfLogMsg, BPF_LOG_MAX);
-
-/// Log event. Please keep in sync with its BPF counterpart.
-#[derive(Default)]
-#[repr(C, packed)]
-pub(super) struct LogEvent {
-    level: u8,
-    msg: BpfLogMsg,
-}
-
-unsafe impl Plain for LogEvent {}
 
 /// Max number of events we can store at once in the shared map. Please keep in
 /// sync with its BPF counterpart.
