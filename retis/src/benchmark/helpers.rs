@@ -3,9 +3,9 @@ use std::{mem, slice};
 use anyhow::Result;
 
 use crate::{
-    bindings::{ct_uapi::*, tracking_hook_uapi::skb_tracking_event},
+    bindings::{ct_uapi::*, skb_hook_uapi::*, tracking_hook_uapi::skb_tracking_event},
     core::{events::*, probe::kernel::RawKernelEvent},
-    module::{ovs::bpf::*, skb::bpf::*},
+    module::ovs::bpf::*,
 };
 
 /// Raw event sections can implement this trait to provide a way to build a raw
@@ -53,9 +53,9 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     RawTaskEvent::build_raw(&mut event)?;
     RawKernelEvent::build_raw(&mut event)?;
     skb_tracking_event::build_raw(&mut event)?;
-    RawDevEvent::build_raw(&mut event)?;
-    RawNsEvent::build_raw(&mut event)?;
-    RawPacketEvent::build_raw(&mut event)?;
+    skb_netdev_event::build_raw(&mut event)?;
+    skb_netns_event::build_raw(&mut event)?;
+    skb_packet_event::build_raw(&mut event)?;
     ct_meta_event::build_raw(&mut event)?;
     ct_event::build_raw(&mut event)?;
     BpfActionEvent::build_raw(&mut event)?;
