@@ -12,6 +12,7 @@ use serde_json::json;
 
 use super::{bpf::*, nft_hook};
 use crate::{
+    bindings::nft_uapi::nft_config,
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::{cli::Collect, Collector},
     core::{
@@ -121,7 +122,7 @@ impl NftModule {
             libbpf_rs::MapType::Array,
             Some("nft_config_map"),
             mem::size_of::<u32>() as u32,
-            mem::size_of::<NftConfig>() as u32,
+            mem::size_of::<nft_config>() as u32,
             1,
             &opts,
         )
@@ -208,7 +209,7 @@ impl Collector for NftModule {
         let config_map = Self::config_map()?;
         let sym = Symbol::from_name("__nft_trace_packet")?;
 
-        let mut cfg = NftConfig {
+        let mut cfg = nft_config {
             verdicts,
             ..Default::default()
         };
