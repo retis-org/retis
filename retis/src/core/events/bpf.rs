@@ -69,6 +69,51 @@ macro_rules! event_byte_array {
     };
 }
 
+/// Macro used to convert c_char into String.
+/// The macro returns error if the conversion fails.
+#[macro_export]
+macro_rules! raw_to_string {
+    ($c_array:expr) => {{
+        use anyhow::{anyhow, Result};
+        use std::{ffi::CStr, os::raw::c_char};
+
+        let to_string = |arr: &[c_char]| -> Result<String> {
+            let _null_pos = arr
+                .iter()
+                .position(|&c| c == 0)
+                .ok_or_else(|| anyhow!("String is not NULL terminated"))?;
+
+            let cstr = unsafe { CStr::from_ptr(arr.as_ptr()) };
+            Ok(cstr.to_string_lossy().into_owned())
+        };
+
+        to_string($c_array)
+    }};
+}
+
+/// A macro for converting a `c_char` array into a `String`.  It
+/// returns an error in case of failure. Upon successful conversion,
+/// it checks if the resulting `String` is empty, returning `Ok(None)`
+/// if it is.
+#[macro_export]
+macro_rules! raw_to_string_opt {
+    ($c_array:expr) => {{
+        use anyhow::Result;
+        use std::os::raw::c_char;
+        let to_string_opt = |arr: &[c_char]| -> Result<Option<String>> {
+            let res = raw_to_string!(arr)?;
+
+            if res.is_empty() {
+                return Ok(None);
+            }
+
+            Ok(Some(res))
+        };
+
+        to_string_opt($c_array)
+    }};
+}
+
 /// The return value of EventFactory::next_event()
 pub(crate) enum EventResult {
     /// The Factory was able to create a new event.
@@ -443,7 +488,7 @@ pub(super) fn unmarshal_task(raw_section: &BpfRawSection) -> Result<TaskEvent> {
     let raw = parse_raw_section::<common_task_event>(raw_section)?;
 
     (task_event.tgid, task_event.pid) = ((raw.pid & 0xFFFFFFFF) as i32, (raw.pid >> 32) as i32);
-    task_event.comm = common_task_event::to_string(&raw.comm)?;
+    task_event.comm = raw_to_string!(&raw.comm)?;
 
     Ok(task_event)
 }
