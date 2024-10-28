@@ -3,9 +3,11 @@ use std::{mem, slice};
 use anyhow::Result;
 
 use crate::{
-    bindings::{ct_uapi::*, skb_hook_uapi::*, tracking_hook_uapi::skb_tracking_event},
+    bindings::{
+        ct_uapi::*, kernel_exec_tp_uapi::exec_event, skb_hook_uapi::*,
+        tracking_hook_uapi::skb_tracking_event,
+    },
     core::{events::*, probe::kernel::RawKernelEvent},
-    module::ovs::bpf::*,
 };
 
 /// Raw event sections can implement this trait to provide a way to build a raw
@@ -58,7 +60,7 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     skb_packet_event::build_raw(&mut event)?;
     ct_meta_event::build_raw(&mut event)?;
     ct_event::build_raw(&mut event)?;
-    BpfActionEvent::build_raw(&mut event)?;
+    exec_event::build_raw(&mut event)?;
 
     // Construct the raw event.
     let size = event.len() as u16;
