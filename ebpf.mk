@@ -7,8 +7,6 @@ s390x := s390
 # Mappings takes precedence over custom ARCH
 BPF_ARCH := $(if $($(ARCH)),$($(ARCH)),$(ARCH))
 
-LOCAL_INCLUDE := $(abspath $(wildcard ./include))
-INCLUDES_EXTRA := $(if $(LOCAL_INCLUDE),$(addprefix -I,$(LOCAL_INCLUDE)),)
 OUT_DIR := .out
 OBJS := $(patsubst %.c,$(OUT_DIR)/%.o,$(wildcard *.c))
 DEP := $(OBJS:%.o=%.d)
