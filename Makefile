@@ -202,7 +202,6 @@ help:
 	$(call help_once,release             --  Builds Retis with the release option.)
 	$(call help_once,check               --  Runs cargo check.)
 	$(call help_once,clippy              --  Runs cargo clippy.)
-	$(call help_once,rust-analyzer       --  Runs cargo check. The target is always verbose regardless of $$(V).)
 	$(call help_once,test                --  Builds and runs unit tests.)
 	$(call help_once,pylib               --  Builds the python bindings.)
 	$(call help_once,pytest              --  Tests the python bindings (requires "tox" installed).)
@@ -210,7 +209,7 @@ help:
 	$(call help_once,Optional variables that can be used to override the default behavior:)
 	$(call help_once,V                   --  If set to 1 the verbose output will be printed.)
 	$(call help_once,                        cargo verbosity is set to default.)
-	$(call help_once,                        To override `cargo` behavior please refer to $$(CARGO_OPTS),)
+	$(call help_once,                        To override `cargo` behavior please refer to $$(CARGO_OPTS))
 	$(call help_once,                        $$(CARGO_CMD_OPTS) and for the install $$(CARGO_INSTALL_OPTS).)
 	$(call help_once,                        For further `cargo` customization please refer to configuration)
 	$(call help_once,                        environment variables)
@@ -221,7 +220,7 @@ help:
 	$(call help_once,NOVENDOR            --  Avoid to self detect and consume the vendored headers)
 	$(call help_once,                        shipped with libbpf-sys.)
 	$(call help_once,RA                  --  Applies to check and clippy and runs those targets with the options needed)
-	$(call help_once,                        for rust-analyzer. When $$(RA) is used, $$(V) becomes ineffective.)
+	$(call help_once,                        for rust-analyzer. When $$(RA) is used $$(V) becomes ineffective.)
 
 .PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib
 .PHONY: test pytest-deps pytest
