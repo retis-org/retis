@@ -562,13 +562,15 @@ pub(crate) struct CollectRunner {}
 
 impl SubCommandRunner for CollectRunner {
     fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
-        // Initialize collectors.
-        let mut collectors = Collectors::new(modules)?;
         // Collector arguments are arealdy registered when build FullCli
         let cli = cli.run()?;
+
+        // Initialize & start collectors.
+        let mut collectors = Collectors::new(modules)?;
         collectors.check(&cli)?;
         collectors.init(&cli)?;
         collectors.start()?;
+
         // Starts a loop.
         collectors.process(&cli)?;
         Ok(())
