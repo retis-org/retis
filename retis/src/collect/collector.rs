@@ -174,8 +174,30 @@ impl Collectors {
         Ok(())
     }
 
+    /// Check prerequisites and cli arguments to ensure we can run.
+    fn check(&self, cli: &CliConfig) -> Result<()> {
+        let collect = cli
+            .subcommand
+            .as_any()
+            .downcast_ref::<Collect>()
+            .ok_or_else(|| anyhow!("wrong subcommand"))?
+            .args()?;
+
+        if collect.probe_stack && collect.packet_filter.is_none() && collect.meta_filter.is_none() {
+            bail!("Probe-stack mode requires filtering (--filter-packet and/or --filter-meta)");
+        }
+
+        // --allow-system-changes requires root.
+        if collect.allow_system_changes && !Uid::effective().is_root() {
+            bail!("Retis needs to be run as root when --allow-system-changes is used");
+        }
+
+        // Check prerequisites.
+        collection_prerequisites()
+    }
+
     /// Initialize all collectors by calling their `init()` function.
-    pub(crate) fn init(&mut self, cli: &CliConfig) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig) -> Result<()> {
         self.run.register_term_signals()?;
 
         let collect = cli
@@ -183,18 +205,6 @@ impl Collectors {
             .as_any()
             .downcast_ref::<Collect>()
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
-
-        if collect.args()?.probe_stack
-            && collect.args()?.packet_filter.is_none()
-            && collect.args()?.meta_filter.is_none()
-        {
-            bail!("Probe-stack mode requires filtering (--filter-packet and/or --filter-meta)");
-        }
-
-        // --allow-system-changes requires root.
-        if collect.args()?.allow_system_changes && !Uid::effective().is_root() {
-            bail!("Retis needs to be run as root when --allow-system-changes is used");
-        }
 
         // Check if we need to report stack traces in the events.
         if collect.args()?.stack || collect.args()?.probe_stack {
@@ -517,15 +527,12 @@ impl Collectors {
 pub(crate) struct CollectRunner {}
 
 impl SubCommandRunner for CollectRunner {
-    fn check_prerequisites(&self) -> Result<()> {
-        collection_prerequisites()
-    }
-
     fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
         // Initialize collectors.
         let mut collectors = Collectors::new(modules)?;
         // Collector arguments are arealdy registered when build FullCli
         let cli = cli.run()?;
+        collectors.check(&cli)?;
         collectors.init(&cli)?;
         collectors.start()?;
         // Starts a loop.
