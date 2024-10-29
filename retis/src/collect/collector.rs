@@ -191,15 +191,16 @@ impl Collectors {
             bail!("Probe-stack mode requires filtering (--filter-packet and/or --filter-meta)");
         }
 
+        // --allow-system-changes requires root.
+        if collect.args()?.allow_system_changes && !Uid::effective().is_root() {
+            bail!("Retis needs to be run as root when --allow-system-changes is used");
+        }
+
+        // Check if we need to report stack traces in the events.
         if collect.args()?.stack || collect.args()?.probe_stack {
             self.probes
                 .builder_mut()?
                 .set_probe_opt(probe::ProbeOption::StackTrace)?;
-        }
-
-        // --allow-system-changes requires root.
-        if collect.args()?.allow_system_changes && !Uid::effective().is_root() {
-            bail!("Retis needs to be run as root when --allow-system-changes is used");
         }
 
         // Generate an initial event with the startup section.
