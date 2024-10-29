@@ -190,8 +190,8 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
                 let min_addr = unsafe { raw.min.addr6 };
                 let max_addr = unsafe { raw.max.addr6 };
                 (
-                    Some(Ipv6Addr::from(u128::from_be(min_addr)).to_string()),
-                    Some(Ipv6Addr::from(u128::from_be(max_addr)).to_string()),
+                    Some(Ipv6Addr::from(u128::from_be_bytes(min_addr)).to_string()),
+                    Some(Ipv6Addr::from(u128::from_be_bytes(max_addr)).to_string()),
                 )
             } else {
                 bail!("Unknown ct address family");

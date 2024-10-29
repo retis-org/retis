@@ -6,8 +6,6 @@ pub type __u32 = ::std::os::raw::c_uint;
 pub type u8_ = __u8;
 pub type u16_ = __u16;
 pub type u32_ = __u32;
-pub type __u128 = u128;
-pub type u128_ = __u128;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct exec_event {
@@ -30,11 +28,10 @@ pub struct exec_recirc {
     pub id: u32_,
 }
 #[repr(C)]
-#[repr(align(16))]
 #[derive(Copy, Clone)]
 pub union exec_ip {
     pub addr4: u32_,
-    pub addr6: u128_,
+    pub addr6: [u8_; 16usize],
 }
 impl Default for exec_ip {
     fn default() -> Self {
@@ -46,7 +43,6 @@ impl Default for exec_ip {
     }
 }
 #[repr(C)]
-#[repr(align(16))]
 #[derive(Copy, Clone)]
 pub struct exec_ct {
     pub min: exec_ip,

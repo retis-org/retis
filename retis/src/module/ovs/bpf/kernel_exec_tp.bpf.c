@@ -39,7 +39,7 @@ struct exec_recirc {
 
 union exec_ip {
 	u32 addr4;
-	u128 addr6;
+	u8 addr6[16];
 } __binding;
 
 struct exec_ct {
