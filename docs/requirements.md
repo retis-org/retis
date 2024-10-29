@@ -9,7 +9,7 @@ the `collect` sub-command.
 - Access to `/sys/kernel/btf` and `/proc/kallsyms` to parse kernel functions and
   types.
 - `debugfs` should be mounted to `/sys/kernel/debug` to allow filtering
-  functions and events.
+  functions and events (or `--allow-system-changes` must be set).
 
 ## Kernel Kconfig options
 

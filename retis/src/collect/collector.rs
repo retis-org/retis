@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
-use nix::unistd::Uid;
+use nix::{errno::Errno, mount::*, unistd::Uid};
 
 use super::cli::Collect;
 use crate::{
@@ -108,6 +108,8 @@ pub(crate) struct Collectors {
     loaded: Vec<ModuleId>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
+    // Did we mount debugfs ourselves?
+    mounted_debugfs: bool,
 }
 
 impl Collectors {
@@ -125,6 +127,7 @@ impl Collectors {
             tracking_config_map: None,
             loaded: Vec::new(),
             events_factory: Arc::new(RetisEventsFactory::default()),
+            mounted_debugfs: false,
         })
     }
 
@@ -175,7 +178,7 @@ impl Collectors {
     }
 
     /// Check prerequisites and cli arguments to ensure we can run.
-    fn check(&self, cli: &CliConfig) -> Result<()> {
+    fn check(&mut self, cli: &CliConfig) -> Result<()> {
         let collect = cli
             .subcommand
             .as_any()
@@ -190,6 +193,31 @@ impl Collectors {
         // --allow-system-changes requires root.
         if collect.allow_system_changes && !Uid::effective().is_root() {
             bail!("Retis needs to be run as root when --allow-system-changes is used");
+        }
+
+        // Mount debugfs if not already mounted (and if we can). This is
+        // especially useful when running Retis in namespaces and containers.
+        if collect.allow_system_changes {
+            const DEBUGFS_TARGET: &str = "/sys/kernel/debug";
+
+            let err = mount(
+                None::<&std::path::Path>,
+                std::path::Path::new(DEBUGFS_TARGET),
+                Some("debugfs"),
+                MsFlags::empty(),
+                None::<&str>,
+            );
+
+            match err {
+                Ok(_) => {
+                    debug!("Mounted debugfs to {DEBUGFS_TARGET}");
+                    self.mounted_debugfs = true;
+                }
+                Err(errno) => match errno {
+                    Errno::EBUSY => debug!("Debugfs is already mounted to {DEBUGFS_TARGET}"),
+                    _ => warn!("Could not mount debugfs to {DEBUGFS_TARGET}: {errno}"),
+                },
+            }
         }
 
         // Check prerequisites.
@@ -418,6 +446,12 @@ impl Collectors {
 
         debug!("Stopping events");
         self.factory.stop()?;
+
+        // If we mounted debugfs, unmount it.
+        if self.mounted_debugfs {
+            debug!("Unmounting debugfs");
+            umount("/sys/kernel/debug")?;
+        }
 
         Ok(())
     }
