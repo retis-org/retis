@@ -7,6 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
+use libbpf_rs::MapCore;
 use log::{debug, info, warn};
 use plain::Plain;
 

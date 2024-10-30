@@ -85,6 +85,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
+use libbpf_rs::MapCore;
 
 use super::gc::TrackingGC;
 

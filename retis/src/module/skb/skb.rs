@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::{bail, Result};
 use clap::{arg, builder::PossibleValuesParser, Parser};
+use libbpf_rs::MapCore;
 use log::warn;
 
 use super::{bpf::*, skb_hook};
