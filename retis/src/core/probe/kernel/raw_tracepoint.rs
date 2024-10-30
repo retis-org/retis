@@ -5,10 +5,13 @@
 //! in two parts, the Rust code (here) and the eBPF one
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
 
-use std::os::fd::{AsFd, AsRawFd, RawFd};
+use std::{
+    mem::MaybeUninit,
+    os::fd::{AsFd, AsRawFd, RawFd},
+};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::SkelBuilder;
+use libbpf_rs::skel::{OpenSkel, Skel, SkelBuilder};
 
 use crate::core::{filters::Filter, probe::builder::*, probe::*};
 
@@ -22,7 +25,6 @@ pub(crate) struct RawTracepointBuilder {
     hooks: Vec<Hook>,
     filters: Vec<Filter>,
     links: Vec<libbpf_rs::Link>,
-    obj: Option<libbpf_rs::Object>,
     map_fds: Vec<(String, RawFd)>,
 }
 
@@ -45,30 +47,32 @@ impl ProbeBuilder for RawTracepointBuilder {
     }
 
     fn attach(&mut self, probe: &Probe) -> Result<()> {
-        let mut skel = RawTracepointSkelBuilder::default().open()?;
+        let mut open_object = MaybeUninit::uninit();
+        let mut skel = RawTracepointSkelBuilder::default().open(&mut open_object)?;
 
         let probe = match probe.r#type() {
             ProbeType::RawTracepoint(probe) => probe,
             _ => bail!("Wrong probe type {}", probe),
         };
 
-        skel.rodata_mut().ksym = probe.symbol.addr()?;
-        skel.rodata_mut().nargs = probe.symbol.nargs()?;
-        skel.rodata_mut().nhooks = self.hooks.len() as u32;
-        skel.rodata_mut().log_level = log::max_level() as u8;
+        skel.maps.rodata_data.ksym = probe.symbol.addr()?;
+        skel.maps.rodata_data.nargs = probe.symbol.nargs()?;
+        skel.maps.rodata_data.nhooks = self.hooks.len() as u32;
+        skel.maps.rodata_data.log_level = log::max_level() as u8;
 
         self.filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {
-                skel.rodata_mut().nmeta = m.0.len() as u32
+                skel.maps.rodata_data.nmeta = m.0.len() as u32
             }
         });
 
-        let open_obj = skel.obj;
-        reuse_map_fds(&open_obj, &self.map_fds)?;
+        reuse_map_fds(skel.open_object_mut(), &self.map_fds)?;
 
-        let mut obj = open_obj.load()?;
-        let prog = obj
-            .prog_mut("probe_raw_tracepoint")
+        let skel = skel.load()?;
+        let prog = skel
+            .object()
+            .progs_mut()
+            .find(|p| p.name() == "probe_raw_tracepoint")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
 
         let mut links = replace_hooks(prog.as_fd().as_raw_fd(), &self.hooks)?;
@@ -76,7 +80,6 @@ impl ProbeBuilder for RawTracepointBuilder {
 
         self.links
             .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
-        self.obj = Some(obj);
         Ok(())
     }
 
