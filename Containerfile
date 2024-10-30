@@ -10,11 +10,13 @@ RUN dnf install -y \
     elfutils-libelf-devel \
     zlib-devel \
     make \
-    jq
+    jq \
+    git \
+    python3-devel
 
 # Only the allowlisted files are copied,
 # see .containerignore for more details.
-COPY . /retis
+COPY . .git /retis
 
 # Build Retis
 RUN make clean-ebpf && make CARGO_CMD_OPTS=--locked V=1 release -j$(nproc)

@@ -15,9 +15,9 @@ tag=$(git tag --points-at HEAD)
 if [ ! -z $tag ]; then
 	version=$tag
 else
-	tag=$(git describe --abbrev=0 --tags)
+	tag=$(git describe --abbrev=0 --tags 2>/dev/null)
 
-	# If we still don't have a tag, there's a serious issue.
+	# If we still don't have a tag, we're in a shallow clone.
 	[ -z $tag ] && tag=$cargo_version
 
 	version="$tag-$(git log --abbrev=12 --pretty=%h -1)"

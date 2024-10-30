@@ -1,0 +1,23 @@
+name: Daily check for new commits in main
+
+on:
+  # Every day at 01:32 AM UTC.
+  schedule:
+    - cron: "32 01 * * *"
+
+jobs:
+  daily-change-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for new commits in main and trigger actions
+        run: |
+          if [ -z "$(git log -n1 --since=yesterday --oneline)" ]; then
+              exit 0
+          fi
+          gh workflow run build_push_image.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
