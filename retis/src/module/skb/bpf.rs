@@ -20,7 +20,7 @@ use crate::{
     },
     event_section_factory,
     events::{
-        net::{etype_str, RawPacket},
+        helpers::{etype_str, RawPacket},
         *,
     },
     helpers,

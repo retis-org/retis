@@ -5,6 +5,8 @@ use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
 
+use crate::event_type;
+
 /// Returns a translation of some ethertypes into a readable format.
 pub fn etype_str(etype: u16) -> Option<&'static str> {
     Some(match etype {
