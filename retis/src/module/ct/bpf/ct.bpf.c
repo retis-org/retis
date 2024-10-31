@@ -3,23 +3,6 @@
 
 #include <common.h>
 
-/* Ct event sections.
- *
- * Please keep in sync with its Rust counterpart in module::ct::bpf.
- */
-#define SECTION_META		0
-#define SECTION_BASE_CONN	1
-#define SECTION_PARENT_CONN	2
-
-/* Retis-specific flags */
-#define RETIS_CT_DIR_ORIG	1 << 0
-#define RETIS_CT_DIR_REPLY	1 << 1
-#define RETIS_CT_IPV4		1 << 2
-#define RETIS_CT_IPV6		1 << 3
-#define RETIS_CT_PROTO_TCP	1 << 4
-#define RETIS_CT_PROTO_UDP	1 << 5
-#define RETIS_CT_PROTO_ICMP	1 << 6
-
 /* Please keep these in sync with
 * include/linux/netfilter/nf_conntrack_common.h.
 */
@@ -34,34 +17,51 @@
 #define ORIG tuplehash[IP_CT_DIR_ORIGINAL].tuple
 #define REPLY tuplehash[IP_CT_DIR_REPLY].tuple
 
+enum ct_sections {
+	SECTION_META = 0,
+	SECTION_BASE_CONN,
+	SECTION_PARENT_CONN,
+} __binding;
+
+/* Retis-specific flags */
+enum ct_flags {
+	RETIS_CT_DIR_ORIG	= 1 << 0,
+	RETIS_CT_DIR_REPLY	= 1 << 1,
+	RETIS_CT_IPV4		= 1 << 2,
+	RETIS_CT_IPV6		= 1 << 3,
+	RETIS_CT_PROTO_TCP	= 1 << 4,
+	RETIS_CT_PROTO_UDP	= 1 << 5,
+	RETIS_CT_PROTO_ICMP	= 1 << 6,
+} __binding;
+
 struct ct_meta_event {
 	u8 state;
-};
+} __binding;
 
 union nf_conn_ip {
-	u32 ip;
-	u128 ip6;
-} __attribute((packed))__;
+	u32 ipv4;
+	u8 ipv6[16];
+} __binding;
 
 struct nf_conn_addr_proto {
 	union nf_conn_ip addr;
 	/* per-protocol generic data */
 	u16 data;
-};
+} __binding;
 
 struct nf_conn_tuple {
 	struct nf_conn_addr_proto src;
 	struct nf_conn_addr_proto dst;
-};
+} __binding;
 
 /* Conntrack event information */
 struct ct_event {
-	u32 flags;
-	u16 zone_id;
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
+	u32 flags;
+	u16 zone_id;
 	u8 tcp_state;
-};
+} __binding;
 
 static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
 {
@@ -104,32 +104,32 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 	switch (l3num) {
 	case NFPROTO_IPV4:
 		e->flags |= RETIS_CT_IPV4;
-		bpf_core_read(&e->orig.src.addr.ip,
-			      sizeof(e->orig.src.addr.ip),
+		bpf_core_read(&e->orig.src.addr.ipv4,
+			      sizeof(e->orig.src.addr.ipv4),
 			      &ct->ORIG.src.u3.ip);
-		bpf_core_read(&e->orig.dst.addr.ip,
-			      sizeof(e->orig.dst.addr.ip),
+		bpf_core_read(&e->orig.dst.addr.ipv4,
+			      sizeof(e->orig.dst.addr.ipv4),
 			      &ct->ORIG.dst.u3.ip);
-		bpf_core_read(&e->reply.src.addr.ip,
-			      sizeof(e->reply.src.addr.ip),
+		bpf_core_read(&e->reply.src.addr.ipv4,
+			      sizeof(e->reply.src.addr.ipv4),
 			      &ct->REPLY.src.u3.ip);
-		bpf_core_read(&e->reply.dst.addr.ip,
-			      sizeof(e->reply.dst.addr.ip),
+		bpf_core_read(&e->reply.dst.addr.ipv4,
+			      sizeof(e->reply.dst.addr.ipv4),
 			      &ct->REPLY.dst.u3.ip);
 		break;
 	case NFPROTO_IPV6:
 		e->flags |= RETIS_CT_IPV6;
-		bpf_core_read(&e->orig.src.addr.ip6,
-			      sizeof(e->orig.src.addr.ip6),
+		bpf_core_read(&e->orig.src.addr.ipv6,
+			      sizeof(e->orig.src.addr.ipv6),
 			      &ct->ORIG.src.u3.ip6);
-		bpf_core_read(&e->orig.dst.addr.ip6,
-			      sizeof(e->orig.dst.addr.ip6),
+		bpf_core_read(&e->orig.dst.addr.ipv6,
+			      sizeof(e->orig.dst.addr.ipv6),
 			      &ct->ORIG.dst.u3.ip6);
-		bpf_core_read(&e->reply.src.addr.ip6,
-			      sizeof(e->reply.src.addr.ip6),
+		bpf_core_read(&e->reply.src.addr.ipv6,
+			      sizeof(e->reply.src.addr.ipv6),
 			      &ct->REPLY.src.u3.ip6);
-		bpf_core_read(&e->reply.dst.addr.ip6,
-			      sizeof(e->reply.dst.addr.ip6),
+		bpf_core_read(&e->reply.dst.addr.ipv6,
+			      sizeof(e->reply.dst.addr.ipv6),
 			      &ct->REPLY.dst.u3.ip6);
 		break;
 	}

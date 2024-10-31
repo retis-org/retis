@@ -12,12 +12,18 @@
 
 /* Please keep the below in sync with its Rust counterpart. */
 #define LOG_MAX			127
-#define LOG_EVENTS_MAX		32
+
+/* Defining a global variable is needed to export the binding to
+ * user-space as defines cannot be annotated.
+ * This MUST NOT be modified by the loader.
+ */
+#define LOG_EVENTS_MAX		128
+__binding const int log_events_max = LOG_EVENTS_MAX;
 
 struct retis_log_event {
 	u8 level;
-	u8 msg[LOG_MAX];
-} __attribute__((packed));
+	char msg[LOG_MAX];
+} __binding;
 
 /* We're using the factory identifiers defined in retis-events.
  * Please keep in sync. */
@@ -36,14 +42,14 @@ enum retis_event_owners {
 struct retis_raw_event {
 	u16 size;
 	u8 data[RAW_EVENT_DATA_SIZE];
-} __attribute__((packed));
+} __packed;
 
 /* Please keep synced with its Rust counterpart. */
 struct retis_raw_event_section_header {
 	u8 owner;
 	u8 data_type;
 	u16 size;
-} __attribute__((packed));
+} __packed;
 
 /* Please keep synced with its Rust counterpart. */
 struct {
@@ -83,11 +89,21 @@ static __always_inline void *get_event_section(struct retis_raw_event *event,
 					       u8 owner, u8 data_type, u16 size)
 {
 	struct retis_raw_event_section_header *header;
-	u16 left = RAW_EVENT_DATA_SIZE - event->size;
+	u16 requested, left;
 	void *section;
 
-	if (sizeof(*header) + size > left || event->size > sizeof(event->data)) {
-		log_error("Failed to get event section: no space left");
+	/* Keep the verifier happy, as we're going to substract one to the other
+	 * below. This can't happen in practice.
+	 */
+	if (unlikely(event->size > sizeof(event->data)))
+	    return NULL;
+
+	requested = sizeof(*header) + size;
+	left = sizeof(event->data) - event->size;
+
+	if (unlikely(requested > left)) {
+		log_error("Failed to get event section: no space left (%u > %u)",
+			  requested, left);
 		return NULL;
 	}
 
@@ -97,8 +113,8 @@ static __always_inline void *get_event_section(struct retis_raw_event *event,
 	header->data_type = data_type;
 	header->size = size;
 
-	section = event->data + event->size + sizeof(*header);
-	event->size += sizeof(*header) + size;
+	section = (void *)header + sizeof(*header);
+	event->size += requested;
 
 	return section;
 }
@@ -124,11 +140,11 @@ static __always_inline u16 get_event_size(struct retis_raw_event *event)
 struct common_event {
 	u64 timestamp;
 	u32 smp_id;
-};
+} __binding;
 
 struct common_task_event {
 	u64 pid;
 	char comm[RETIS_MAX_COMM];
-};
+} __binding;
 
 #endif /* __CORE_PROBE_KERNEL_BPF_EVENTS__ */

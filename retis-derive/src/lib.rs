@@ -2,20 +2,6 @@ use quote::quote;
 use syn::{parse_macro_input, Fields, Ident, Item, ItemStruct};
 
 #[proc_macro_attribute]
-pub fn raw_event_section(
-    _: proc_macro::TokenStream,
-    item: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    let input: Item = parse_macro_input!(item);
-    let output = quote! {
-        #[derive(Default)]
-        #[repr(C)]
-        #input
-    };
-    output.into()
-}
-
-#[proc_macro_attribute]
 pub fn event_section(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,

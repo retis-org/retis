@@ -1,9 +1,10 @@
-ROOT_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 LLC := llc
 CLANG := clang
 OBJCOPY := llvm-objcopy
 
 CARGO := cargo $(CARGO_OPTS)
+BINDGEN := bindgen
 DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
 ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$(DEFAULT_ARCH))
 
@@ -11,7 +12,26 @@ RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
 RELEASE_FLAGS = -Dwarnings
 
-export ARCH CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
+# Needs to be set because of PT_REGS_PARMx() and any other target
+# specific facility.
+x86_64 := x86
+aarch64 := arm64
+powerpc64 := powerpc
+s390x := s390
+# Mappings takes precedence over custom ARCH
+BPF_ARCH := $(if $($(ARCH)),$($(ARCH)),$(ARCH))
+
+BPF_CFLAGS := -target bpf \
+              -Wall \
+              -Wno-unused-value \
+              -Wno-pointer-sign \
+              -Wno-compare-distinct-pointer-types \
+              -fno-stack-protector \
+              -Werror \
+              -D__TARGET_ARCH_$(BPF_ARCH) \
+              -O2
+
+export CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
 
 PRINT = printf
 CONTAINER_RUNTIME := podman
@@ -31,6 +51,10 @@ define out_console
 endef
 
 .SILENT:
+else
+define out_console
+    :
+endef
 endif
 
 ifeq ($(NOVENDOR),)
@@ -69,6 +93,28 @@ install: release
 	RUSTFLAGS="$(RUSTFLAGS) $(RELEASE_FLAGS)" \
 	$(CARGO) install $(CARGO_INSTALL_OPTS) --path=$(ROOT_DIR)/retis --offline --frozen
 
+# Skip out path and vmlinux.h
+BINDINGS := $(shell find $(ROOT_DIR)/retis/src -name '*.[ch]' -not -name 'vmlinux.h' -not -path '*/.out/*' -exec grep -l "__binding" {} \;)
+gen-bindings: clean-bindings
+	-mkdir -p $(ROOT_DIR)/retis/src/bindings; \
+	for binding in $(BINDINGS); do \
+	    $(call out_console,BINDINGS,processing $$binding ...); \
+	    annotations="`$(ROOT_DIR)/tools/annotations.py "$$binding" "uapi" $(INCLUDES) $(BPF_CFLAGS)`"; \
+	    opts=; \
+	    for a in $$annotations; do opts="--allowlist-item $$a $$opts"; done; \
+	    [ -z "$$opts" ] && continue; \
+	    fname=$${binding##*/}; \
+	    out_path=$(ROOT_DIR)/retis/src/bindings/$${fname%%.*}_uapi.rs; \
+	    $(BINDGEN) --no-layout-tests \
+	               --with-derive-default \
+	               --no-prepend-enum-name \
+	               $$binding \
+	               $$opts \
+	               -o $$out_path \
+	               -- -D__BINDGEN__ $(INCLUDES) $(BPF_CFLAGS); \
+	    $(call out_console,BINDINGS,generated bindings in "$$out_path" ...); \
+	done
+
 define build
 	$(call out_console,CARGO,$(strip $(2)) ...)
 	jobs=$(patsubst -j%,%,$(filter -j%,$(MAKEFLAGS))); \
@@ -101,6 +147,8 @@ $(EBPF_PROBES): OUT_NAME := PROBE
 $(EBPF_HOOKS):  OUT_NAME := HOOK
 $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	$(call out_console,$(OUT_NAME),building $@ ...)
+	BPF_ARCH="$(BPF_ARCH)" \
+	BPF_CFLAGS="$(BPF_CFLAGS)" \
 	CFLAGS="$(INCLUDES) $(CFLAGS)" \
 	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@
 
@@ -124,6 +172,10 @@ endef
 
 $(foreach tgt,check clippy,$(eval $(call analyzer_tmpl,$(tgt))))
 
+clean-bindings:
+	$(call out_console,CLEAN,cleaning bindings ...)
+	-find $(ROOT_DIR)/retis/src/bindings -type f -not -name 'mod.rs' -name '*.rs' -exec rm -f {} \;
+
 clean-ebpf:
 	$(call out_console,CLEAN,cleaning ebpf progs ...)
 	for i in $(EBPF_PROBES) $(EBPF_HOOKS); do \
@@ -145,11 +197,11 @@ help:
 	$(call help_once,clean-ebpf          --  Deletes all the files generated during the build process)
 	$(call help_once,                        (eBPF only).)
 	$(call help_once,ebpf                --  Builds only the eBPF programs.)
+	$(call gen-bindings                  --  Generate Rust bindings for bpf programs.)
 	$(call help_once,install             --  Installs Retis.)
 	$(call help_once,release             --  Builds Retis with the release option.)
 	$(call help_once,check               --  Runs cargo check.)
 	$(call help_once,clippy              --  Runs cargo clippy.)
-	$(call help_once,rust-analyzer       --  Runs cargo check. The target is always verbose regardless of $$(V).)
 	$(call help_once,test                --  Builds and runs unit tests.)
 	$(call help_once,pylib               --  Builds the python bindings.)
 	$(call help_once,pytest              --  Tests the python bindings (requires "tox" installed).)
@@ -157,7 +209,7 @@ help:
 	$(call help_once,Optional variables that can be used to override the default behavior:)
 	$(call help_once,V                   --  If set to 1 the verbose output will be printed.)
 	$(call help_once,                        cargo verbosity is set to default.)
-	$(call help_once,                        To override `cargo` behavior please refer to $$(CARGO_OPTS),)
+	$(call help_once,                        To override `cargo` behavior please refer to $$(CARGO_OPTS))
 	$(call help_once,                        $$(CARGO_CMD_OPTS) and for the install $$(CARGO_INSTALL_OPTS).)
 	$(call help_once,                        For further `cargo` customization please refer to configuration)
 	$(call help_once,                        environment variables)
@@ -168,6 +220,8 @@ help:
 	$(call help_once,NOVENDOR            --  Avoid to self detect and consume the vendored headers)
 	$(call help_once,                        shipped with libbpf-sys.)
 	$(call help_once,RA                  --  Applies to check and clippy and runs those targets with the options needed)
-	$(call help_once,                        for rust-analyzer. When $$(RA) is used, $$(V) becomes ineffective.)
+	$(call help_once,                        for rust-analyzer. When $$(RA) is used $$(V) becomes ineffective.)
 
-.PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test pylib pytest-deps pytest
+.PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib
+.PHONY: test pytest-deps pytest
+.PHONY: clean clean-bindings clean-ebpf

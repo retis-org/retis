@@ -3,6 +3,7 @@ use std::str::FromStr;
 use anyhow::{anyhow, Result};
 use log::{info, trace, warn, LevelFilter};
 
+mod bindings;
 mod cli;
 mod collect;
 mod core;

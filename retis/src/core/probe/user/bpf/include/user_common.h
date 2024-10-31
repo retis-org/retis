@@ -17,7 +17,7 @@ struct user_event {
 	u64 symbol;
 	u64 pid;
 	u8  event_type;
-} __attribute__((packed));
+} __packed;
 
 /* Userspace context */
 struct user_ctx {

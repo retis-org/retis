@@ -3,9 +3,15 @@ use std::{mem, slice};
 use anyhow::Result;
 
 use crate::{
-    core::{events::*, probe::kernel::RawKernelEvent},
-    events::*,
-    module::{ct::bpf::*, ovs::bpf::*, skb::bpf::*},
+    bindings::{
+        common_uapi::kernel_event,
+        ct_uapi::*,
+        events_uapi::{common_event, common_task_event},
+        kernel_exec_tp_uapi::exec_event,
+        skb_hook_uapi::*,
+        tracking_hook_uapi::skb_tracking_event,
+    },
+    core::events::*,
 };
 
 /// Raw event sections can implement this trait to provide a way to build a raw
@@ -49,16 +55,16 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     let mut event = Vec::with_capacity(BPF_RAW_EVENT_DATA_SIZE);
 
     // Build sections.
-    RawCommonEvent::build_raw(&mut event)?;
-    RawTaskEvent::build_raw(&mut event)?;
-    RawKernelEvent::build_raw(&mut event)?;
-    SkbTrackingEvent::build_raw(&mut event)?;
-    RawDevEvent::build_raw(&mut event)?;
-    RawNsEvent::build_raw(&mut event)?;
-    RawPacketEvent::build_raw(&mut event)?;
-    RawCtMetaEvent::build_raw(&mut event)?;
-    RawCtEvent::build_raw(&mut event)?;
-    BpfActionEvent::build_raw(&mut event)?;
+    common_event::build_raw(&mut event)?;
+    common_task_event::build_raw(&mut event)?;
+    kernel_event::build_raw(&mut event)?;
+    skb_tracking_event::build_raw(&mut event)?;
+    skb_netdev_event::build_raw(&mut event)?;
+    skb_netns_event::build_raw(&mut event)?;
+    skb_packet_event::build_raw(&mut event)?;
+    ct_meta_event::build_raw(&mut event)?;
+    ct_event::build_raw(&mut event)?;
+    exec_event::build_raw(&mut event)?;
 
     // Construct the raw event.
     let size = event.len() as u16;

@@ -4,6 +4,18 @@
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 
+/* Skip the specified `type` from being processed while generating
+ * bindings.
+ */
+#ifdef __BINDGEN__
+#define BINDING_PTR(type, member) void *member
+#else
+#define BINDING_PTR(type, member) type member
+#endif
+
+#define __packed __attribute__((packed))
+#define __binding __attribute__((annotate("uapi")))
+
 /* Keep in sync with its Rust counterpart in crate::core::probe */
 #define PROBE_MAX	1024
 
