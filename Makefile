@@ -84,7 +84,12 @@ release: ebpf
 	$(call build,build --release,building retis (release),$(RELEASE_FLAGS))
 
 test: ebpf
+ifeq ($(COV),1)
+	$(CARGO) llvm-cov clean --workspace -q
+	$(call build,llvm-cov $(if $(VERBOSITY),,-q),running tests with coverage)
+else
 	$(call build,test,building and running tests)
+endif
 
 bench: ebpf
 	$(call build,build -F benchmark --release,building benchmarks)
@@ -124,6 +129,12 @@ endef
 
 $(foreach tgt,check clippy,$(eval $(call analyzer_tmpl,$(tgt))))
 
+report-cov:
+	$(CARGO) llvm-cov report $(CARGO_CMD_OPTS)
+
+clean-cov:
+	$(CARGO) llvm-cov clean --workspace
+
 clean-ebpf:
 	$(call out_console,CLEAN,cleaning ebpf progs ...)
 	for i in $(EBPF_PROBES) $(EBPF_HOOKS); do \
@@ -153,6 +164,8 @@ help:
 	$(call help_once,test                --  Builds and runs unit tests.)
 	$(call help_once,pylib               --  Builds the python bindings.)
 	$(call help_once,pytest              --  Tests the python bindings (requires "tox" installed).)
+	$(call help_once,report-cov          --  Generate coverage report after code coverage testing.)
+	$(call help_once,clean-cov           --  Deletes all the files generated during code coverage testing.)
 	$(call help_once)
 	$(call help_once,Optional variables that can be used to override the default behavior:)
 	$(call help_once,V                   --  If set to 1 the verbose output will be printed.)
@@ -169,5 +182,7 @@ help:
 	$(call help_once,                        shipped with libbpf-sys.)
 	$(call help_once,RA                  --  Applies to check and clippy and runs those targets with the options needed)
 	$(call help_once,                        for rust-analyzer. When $$(RA) is used, $$(V) becomes ineffective.)
+	$(call help_once,COV                 --  enable code coverage for testing, applies only to the target "test",)
+	$(call help_once,                        requires llvm-cov and preferably rustup toolchain.)
 
-.PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test pylib pytest-deps pytest
+.PHONY: all bench clean clean-ebpf ebpf $(EBPF_PROBES) $(EBPF_HOOKS) help install release test pylib pytest-deps pytest clean-cov report-cov
