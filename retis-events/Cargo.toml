@@ -4,7 +4,7 @@ version = "1.4.0"
 edition = "2021"
 
 [features]
-python = ["dep:pyo3", "retis-derive/python"]
+python = ["retis-derive/python"]
 python-embed = ["python", "pyo3/auto-initialize"]
 python-lib = ["python", "pyo3/extension-module", "pyo3/abi3-py38"]
 test-events = []
