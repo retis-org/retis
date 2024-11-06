@@ -243,7 +243,7 @@ impl OvsCollector {
                 nhandlers as u32,
                 &opts,
             )
-            .or_else(|e| bail!("Could not create the upcall_batches map: {}", e))?,
+            .or_else(|e| bail!("Could not create the pid_to_batch map: {}", e))?,
         );
 
         /* Populate pid_to_batch map. */
