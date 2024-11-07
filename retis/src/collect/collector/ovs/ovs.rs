@@ -10,7 +10,8 @@ use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
 use libbpf_rs::MapCore;
 
-use super::hooks;
+use super::{bpf::OvsEventFactory, flow_info::FlowEnricher, hooks};
+
 use crate::{
     bindings::{
         ovs_common_uapi::{execute_actions_ctx, upcall_context},
@@ -47,6 +48,13 @@ pub(crate) struct OvsCollectorArgs {
 See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions."
     )]
     ovs_track: bool,
+    #[arg(
+        long,
+        default_value = "false",
+        help = "Enable OpenvSwitch datapath flow enrichment via unixctl command.
+Requires OpenvSwitch >= 3.4"
+    )]
+    ovs_enrich_flows: bool,
 }
 
 #[derive(Default)]
@@ -63,6 +71,8 @@ pub(crate) struct OvsCollector {
     /* Batch tracking maps. */
     upcall_batches: Option<libbpf_rs::MapHandle>,
     pid_to_batch: Option<libbpf_rs::MapHandle>,
+
+    flow_enricher: Option<FlowEnricher>,
 }
 
 impl Collector for OvsCollector {
@@ -96,10 +106,17 @@ impl Collector for OvsCollector {
         &mut self,
         cli: &Collect,
         probes: &mut ProbeBuilderManager,
-        _: Arc<RetisEventsFactory>,
-        _: &mut SectionFactories,
+        retis_factory: Arc<RetisEventsFactory>,
+        section_factories: &mut SectionFactories,
     ) -> Result<()> {
-        self.track = cli.collector_args.ovs.ovs_track;
+        let args = &cli.collector_args.ovs;
+
+        self.track = args.ovs_track;
+
+        if args.ovs_enrich_flows {
+            self.init_flow_enricher(retis_factory, section_factories)?;
+        }
+
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
         // Create tracking maps and add USDT hooks.
@@ -120,14 +137,21 @@ impl Collector for OvsCollector {
         if let Some(gc) = &mut self.gc {
             gc.start(self.running.clone())?;
         }
+        if let Some(enricher) = &mut self.flow_enricher {
+            enricher.start(self.running.clone())?;
+        }
         Ok(())
     }
 
     fn stop(&mut self) -> Result<()> {
+        #[cfg(not(test))]
+        self.running.terminate();
+
         if let Some(gc) = &mut self.gc {
-            #[cfg(not(test))]
-            self.running.terminate();
             gc.join()?;
+        }
+        if let Some(enricher) = &mut self.flow_enricher {
+            enricher.join()?;
         }
         Ok(())
     }
@@ -431,6 +455,23 @@ impl OvsCollector {
             .interval(OVS_TRACKING_GC_INTERVAL)
             .limit(TRACKING_OLD_LIMIT),
         );
+        Ok(())
+    }
+
+    fn init_flow_enricher(
+        &mut self,
+        retis_factory: Arc<RetisEventsFactory>,
+        section_factories: &mut SectionFactories,
+    ) -> Result<()> {
+        let flow_enricher = FlowEnricher::new(retis_factory);
+
+        let ovs_section_factory: &mut OvsEventFactory =
+            section_factories.get_mut(&FactoryId::Ovs)?;
+
+        ovs_section_factory.ufid_sender(flow_enricher.sender().clone());
+
+        self.flow_enricher = Some(flow_enricher);
+
         Ok(())
     }
 }
