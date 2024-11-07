@@ -631,6 +631,32 @@ impl fmt::Display for Ufid {
     }
 }
 
+/// The OVS flow information event
+#[event_section(SectionId::OvsFlowInfo)]
+pub struct OvsFlowInfoEvent {
+    /// Unique FLow ID
+    pub ufid: Ufid,
+    /// Datapath flow string
+    pub dpflow: String,
+    /// Openflow flows
+    pub ofpflows: Vec<String>,
+}
+
+impl EventFmt for OvsFlowInfoEvent {
+    fn event_fmt(&self, f: &mut Formatter, d: &DisplayFormat) -> fmt::Result {
+        write!(f, "ufid:{} {}", self.ufid, self.dpflow)?;
+        if d.multiline {
+            write!(f, "\nopenflow:")?;
+            f.conf.inc_level(4);
+            write!(f, "{}", self.ofpflows.join("\n"))?;
+            f.conf.reset_level();
+        } else {
+            write!(f, "  openflow: {}", self.ofpflows.join(" "))?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
