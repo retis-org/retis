@@ -207,8 +207,9 @@ pub enum SectionId {
     Nft = 9,
     Ct = 10,
     Startup = 11,
+    OvsFlowInfo = 12,
     // TODO: use std::mem::variant_count once in stable.
-    _MAX = 12,
+    _MAX = 13,
 }
 
 impl SectionId {
@@ -227,6 +228,7 @@ impl SectionId {
             9 => Nft,
             10 => Ct,
             11 => Startup,
+            12 => OvsFlowInfo,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -246,6 +248,7 @@ impl SectionId {
             Nft => "nft",
             Ct => "ct",
             Startup => "startup",
+            OvsFlowInfo => "ovs-detrace",
             _MAX => "_max",
         }
     }
@@ -276,6 +279,7 @@ impl FromStr for SectionId {
             "nft" => Nft,
             "ct" => Ct,
             "startup" => Startup,
+            "ovs-detrace" => OvsFlowInfo,
             x => bail!("Can't construct a SectionId from {}", x),
         })
     }
@@ -308,6 +312,7 @@ fn event_sections() -> Result<&'static EventSectionMap> {
         insert_section!(events, CtEvent);
         insert_section!(events, StartupEvent);
         insert_section!(events, TrackingInfo);
+        insert_section!(events, OvsFlowInfoEvent);
 
         Ok(events)
     })
