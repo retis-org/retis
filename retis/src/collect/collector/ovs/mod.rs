@@ -10,6 +10,7 @@ pub(crate) use ovs::*;
 
 pub(crate) mod bpf;
 pub(crate) use bpf::OvsEventFactory;
+pub(crate) mod flow_info;
 
 mod hooks {
     pub(super) mod kernel_enqueue {
