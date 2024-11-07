@@ -1,6 +1,6 @@
 use std::fmt;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use serde::{de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer, Serializer};
 
 use super::*;
@@ -115,37 +115,6 @@ impl EventFmt for UpcallEvent {
             fmt_upcall_cmd(self.cmd),
             self.port,
             self.cpu
-        )
-    }
-}
-
-fn fmt_ufid(ufid: &[u32]) -> String {
-    format!(
-        "{:08x}-{:04x}-{:04x}-{:04x}-{:04x}{:08x}",
-        ufid[0],
-        ufid[1] >> 16,
-        ufid[1] & 0xffff,
-        ufid[2] >> 16,
-        ufid[2] & 0xffff,
-        ufid[3]
-    )
-}
-
-#[event_type]
-#[derive(Copy, Default, PartialEq)]
-pub struct Ufid(pub [u32; 4]);
-
-impl fmt::Display for Ufid {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{:08x}-{:04x}-{:04x}-{:04x}-{:04x}{:08x}",
-            self.0[0],
-            self.0[1] >> 16,
-            self.0[1] & 0xffff,
-            self.0[2] >> 16,
-            self.0[2] & 0xffff,
-            self.0[3]
         )
     }
 }
@@ -603,6 +572,65 @@ pub struct OvsActionCtNat {
     pub max_port: Option<u16>,
 }
 
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
+pub struct Ufid(pub u32, pub u32, pub u32, pub u32);
+
+#[cfg(feature = "python")]
+#[cfg_attr(feature = "python", pyo3::pymethods)]
+impl Ufid {
+    // Unfortunately we don't have a good way of customizing __repr__ yet, see
+    // https://github.com/retis-org/retis/issues/443.
+    fn show(&self) -> String {
+        format!("{}", self)
+    }
+}
+
+impl From<[u32; 4]> for Ufid {
+    fn from(parts: [u32; 4]) -> Self {
+        Ufid(parts[0], parts[1], parts[2], parts[3])
+    }
+}
+
+impl TryFrom<&str> for Ufid {
+    type Error = anyhow::Error;
+    /// Creates a Ufid from a string.
+    ///
+    /// Format is the same as UUID_v4:
+    /// "01234567-89ab-cdef-0123-456789abcdef"
+    fn try_from(ufid_str: &str) -> Result<Ufid> {
+        let mut parts: [u32; 4] = [0; 4];
+        match ufid_str.split('-').collect::<Vec<&str>>()[..] {
+            [p0, p1, p2, p3, p4] => {
+                let (p4, p5) = p4
+                    .split_at_checked(4)
+                    .ok_or_else(|| anyhow!("invalid Ufid string {}", ufid_str))?;
+                parts[0] = u32::from_str_radix(p0, 16)?;
+                parts[1] = (u32::from_str_radix(p1, 16)? << 16) | u32::from_str_radix(p2, 16)?;
+                parts[2] = (u32::from_str_radix(p3, 16)? << 16) | u32::from_str_radix(p4, 16)?;
+                parts[3] = u32::from_str_radix(p5, 16)?;
+            }
+            _ => bail!("invalid Ufid string {}", ufid_str),
+        }
+        Ok(Ufid::from(parts))
+    }
+}
+
+impl fmt::Display for Ufid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:08x}-{:04x}-{:04x}-{:04x}-{:04x}{:08x}",
+            self.0,
+            self.1 >> 16,
+            self.1 & 0xffff,
+            self.2 >> 16,
+            self.2 & 0xffff,
+            self.3
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -734,6 +762,14 @@ mod tests {
                 .map_err(|e| anyhow!("Failed to convert json '{event_json}' to event: {e}"))?;
             assert_eq!(&parsed, event);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_ufid() -> Result<()> {
+        let ufid_str = "177746cc-5e95-4c23-8d40-96d5bee7c6eb";
+        let ufid = Ufid::try_from(ufid_str)?;
+        assert_eq!(format!("{}", ufid), ufid_str);
         Ok(())
     }
 }

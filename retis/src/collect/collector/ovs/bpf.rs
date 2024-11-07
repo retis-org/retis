@@ -84,7 +84,7 @@ pub(super) fn unmarshall_flow_lookup(raw_section: &BpfRawSection) -> Result<OvsE
         flow_lookup: LookupEvent {
             flow: raw.flow as usize as u64,
             sf_acts: raw.sf_acts as usize as u64,
-            ufid: Ufid(raw.ufid),
+            ufid: Ufid::from(raw.ufid),
             n_mask_hit: raw.n_mask_hit,
             n_cache_hit: raw.n_cache_hit,
         },
