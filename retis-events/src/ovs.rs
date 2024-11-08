@@ -573,7 +573,7 @@ pub struct OvsActionCtNat {
 }
 
 #[event_type]
-#[derive(Copy, Default, PartialEq)]
+#[derive(Copy, Default, PartialEq, Eq, Hash)]
 pub struct Ufid(pub u32, pub u32, pub u32, pub u32);
 
 #[cfg(feature = "python")]
@@ -636,6 +636,10 @@ impl fmt::Display for Ufid {
 pub struct OvsFlowInfoEvent {
     /// Unique FLow ID
     pub ufid: Ufid,
+    /// Flow pointer
+    pub flow: u64,
+    /// Actions pointer
+    pub sf_acts: u64,
     /// Datapath flow string
     pub dpflow: String,
     /// Openflow flows
