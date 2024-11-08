@@ -17,7 +17,9 @@ use anyhow::{anyhow, bail, Result};
 use log::{error, log, Level};
 use plain::Plain;
 
-use crate::{event_section_factory, events::*, helpers::signals::Running, raw_event_section};
+use crate::{
+    bindings::events_uapi::*, event_section_factory, events::*, helpers::signals::Running,
+};
 
 /// Raw event sections for common.
 pub(super) const COMMON_SECTION_CORE: u64 = 0;
@@ -26,42 +28,49 @@ pub(super) const COMMON_SECTION_TASK: u64 = 1;
 /// Timeout when polling for new events from BPF.
 const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
 
-/// Macro that define Default-able fixed size sequence of bytes aimed
-/// to contain zero-terminated strings. Useful for unmarshaling array
-/// of characters bigger than 32 elements.
+/// Macro used to convert c_char into String.
+/// The macro returns error if the conversion fails.
 #[macro_export]
-macro_rules! event_byte_array {
-    ($name:ident, $size:expr) => {
-        #[repr(C)]
-        struct $name([u8; $size]);
+macro_rules! raw_to_string {
+    ($c_array:expr) => {{
+        use anyhow::{anyhow, Result};
+        use std::{ffi::CStr, os::raw::c_char};
 
-        impl Default for $name {
-            fn default() -> Self {
-                // Safety is respected as the type is well defined and
-                // controlled.
-                unsafe { std::mem::zeroed() }
+        let to_string = |arr: &[c_char]| -> Result<String> {
+            let _null_pos = arr
+                .iter()
+                .position(|&c| c == 0)
+                .ok_or_else(|| anyhow!("String is not NULL terminated"))?;
+
+            let cstr = unsafe { CStr::from_ptr(arr.as_ptr()) };
+            Ok(cstr.to_string_lossy().into_owned())
+        };
+
+        to_string($c_array)
+    }};
+}
+
+/// A macro for converting a `c_char` array into a `String`.  It
+/// returns an error in case of failure. Upon successful conversion,
+/// it checks if the resulting `String` is empty, returning `Ok(None)`
+/// if it is.
+#[macro_export]
+macro_rules! raw_to_string_opt {
+    ($c_array:expr) => {{
+        use anyhow::Result;
+        use std::os::raw::c_char;
+        let to_string_opt = |arr: &[c_char]| -> Result<Option<String>> {
+            let res = raw_to_string!(arr)?;
+
+            if res.is_empty() {
+                return Ok(None);
             }
-        }
 
-        #[allow(dead_code)]
-        impl $name {
-            fn to_string(&self) -> Result<String> {
-                Ok(std::ffi::CStr::from_bytes_until_nul(&self.0)?
-                    .to_str()?
-                    .into())
-            }
+            Ok(Some(res))
+        };
 
-            fn to_string_opt(&self) -> Result<Option<String>> {
-                let res = self.to_string()?;
-
-                if res.is_empty() {
-                    return Ok(None);
-                }
-
-                Ok(Some(res))
-            }
-        }
-    };
+        to_string_opt($c_array)
+    }};
 }
 
 /// The return value of EventFactory::next_event()
@@ -112,7 +121,7 @@ impl BpfEventsFactory {
             Some("log_map"),
             0,
             0,
-            mem::size_of::<LogEvent>() as u32 * BPF_LOG_EVENTS_MAX,
+            mem::size_of::<retis_log_event>() as u32 * log_events_max as u32,
             &opts,
         )
         .or_else(|e| bail!("Failed to create log map: {}", e))?;
@@ -212,7 +221,7 @@ impl BpfEventsFactory {
         let run_state = self.run_state.clone();
         // Closure to handle the log events coming from the BPF part.
         let process_log = move |data: &[u8]| -> i32 {
-            if data.len() != mem::size_of::<LogEvent>() {
+            if data.len() != mem::size_of::<retis_log_event>() {
                 error!("Unexpected log event size");
                 return 0;
             }
@@ -225,7 +234,7 @@ impl BpfEventsFactory {
                 return -4;
             }
 
-            let mut log_event = LogEvent::default();
+            let mut log_event = retis_log_event::default();
             if let Err(e) = plain::copy_from_bytes(&mut log_event, data) {
                 error!("Can't read eBPF log event {:?}", e);
                 return 0;
@@ -243,7 +252,7 @@ impl BpfEventsFactory {
                 }
             };
 
-            match log_event.msg.to_string() {
+            match raw_to_string!(&log_event.msg) {
                 Ok(msg) => log!(log_level, "[eBPF] {msg}"),
                 Err(e) => error!("Unable to convert eBPF log string: {e}"),
             }
@@ -408,13 +417,6 @@ pub(crate) fn parse_single_raw_section<'a, T>(raw_sections: &'a [BpfRawSection])
     parse_raw_section::<T>(&raw_sections[0])
 }
 
-/// Common information from all BPF events.
-#[raw_event_section]
-pub(crate) struct RawCommonEvent {
-    timestamp: u64,
-    smp_id: u32,
-}
-
 #[event_section_factory(FactoryId::Common)]
 #[derive(Default)]
 pub(crate) struct CommonEventFactory {}
@@ -426,7 +428,7 @@ impl RawEventSectionFactory for CommonEventFactory {
         for section in raw_sections.iter() {
             match section.header.data_type as u64 {
                 COMMON_SECTION_CORE => {
-                    let raw = parse_raw_section::<RawCommonEvent>(section)?;
+                    let raw = parse_raw_section::<common_event>(section)?;
 
                     common.timestamp = raw.timestamp;
                     common.smp_id = Some(raw.smp_id);
@@ -440,23 +442,12 @@ impl RawEventSectionFactory for CommonEventFactory {
     }
 }
 
-event_byte_array!(TaskName, 64);
-
-/// Task information retrieved in common probes.
-#[raw_event_section]
-pub(crate) struct RawTaskEvent {
-    /// pid/tgid.
-    pid: u64,
-    /// Current task name.
-    comm: TaskName,
-}
-
 pub(super) fn unmarshal_task(raw_section: &BpfRawSection) -> Result<TaskEvent> {
     let mut task_event = TaskEvent::default();
-    let raw = parse_raw_section::<RawTaskEvent>(raw_section)?;
+    let raw = parse_raw_section::<common_task_event>(raw_section)?;
 
     (task_event.tgid, task_event.pid) = ((raw.pid & 0xFFFFFFFF) as i32, (raw.pid >> 32) as i32);
-    task_event.comm = raw.comm.to_string()?;
+    task_event.comm = raw_to_string!(&raw.comm)?;
 
     Ok(task_event)
 }
@@ -486,26 +477,6 @@ impl BpfEventsFactory {
         Ok(())
     }
 }
-
-/// Size of msg for a single log event. Please keep in sync with its
-/// BPF counterpart.
-pub(super) const BPF_LOG_MAX: usize = 127;
-
-/// Max number of log events we can store at once in the shared map. Please keep in
-/// sync with its BPF counterpart.
-pub(super) const BPF_LOG_EVENTS_MAX: u32 = 32;
-
-event_byte_array!(BpfLogMsg, BPF_LOG_MAX);
-
-/// Log event. Please keep in sync with its BPF counterpart.
-#[derive(Default)]
-#[repr(C, packed)]
-pub(super) struct LogEvent {
-    level: u8,
-    msg: BpfLogMsg,
-}
-
-unsafe impl Plain for LogEvent {}
 
 /// Max number of events we can store at once in the shared map. Please keep in
 /// sync with its BPF counterpart.
@@ -603,15 +574,16 @@ pub(crate) type SectionFactories = HashMap<FactoryId, Box<dyn EventSectionFactor
 pub(crate) mod benchmark {
     use anyhow::Result;
 
-    use super::{RawCommonEvent, RawTaskEvent};
+    use super::common_task_event;
     use crate::{
         benchmark::helpers::*,
+        bindings::events_uapi::common_event,
         core::events::{FactoryId, COMMON_SECTION_CORE, COMMON_SECTION_TASK},
     };
 
-    impl RawSectionBuilder for RawCommonEvent {
+    impl RawSectionBuilder for common_event {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
-            let data = RawCommonEvent::default();
+            let data = Self::default();
             build_raw_section(
                 out,
                 FactoryId::Common as u8,
@@ -622,14 +594,14 @@ pub(crate) mod benchmark {
         }
     }
 
-    impl RawSectionBuilder for RawTaskEvent {
+    impl RawSectionBuilder for common_task_event {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
-            let mut data = RawTaskEvent::default();
-            data.comm.0[0] = b'r';
-            data.comm.0[1] = b'e';
-            data.comm.0[2] = b't';
-            data.comm.0[3] = b'i';
-            data.comm.0[4] = b's';
+            let mut data = common_task_event::default();
+            data.comm[0] = b'r' as i8;
+            data.comm[1] = b'e' as i8;
+            data.comm[2] = b't' as i8;
+            data.comm[3] = b'i' as i8;
+            data.comm[4] = b's' as i8;
             build_raw_section(
                 out,
                 FactoryId::Common as u8,

@@ -4,8 +4,9 @@ use std::{collections::HashMap, fmt};
 
 use anyhow::{bail, Result};
 
-use super::{config::ProbeConfig, inspect::inspect_symbol};
+use super::inspect::inspect_symbol;
 use crate::{
+    bindings::common_uapi::{kernel_event, retis_probe_config},
     core::{
         events::{
             parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
@@ -19,7 +20,6 @@ use crate::{
     },
     event_section_factory,
     events::*,
-    raw_event_section,
 };
 
 // Split to exclude from tests.
@@ -38,7 +38,7 @@ impl KernelProbe {
     }
 
     /// Generate the probe BPF configuration from a list of options.
-    pub(crate) fn gen_config(&self, options: &[ProbeOption]) -> Result<ProbeConfig> {
+    pub(crate) fn gen_config(&self, options: &[ProbeOption]) -> Result<retis_probe_config> {
         let mut config = inspect_symbol(&self.symbol)?;
 
         #[allow(clippy::single_match)]
@@ -117,16 +117,9 @@ impl KernelEventFactory {
     }
 }
 
-#[raw_event_section]
-pub(crate) struct RawKernelEvent {
-    symbol: u64,
-    r#type: u8,
-    stack_id: u64,
-}
-
 impl RawEventSectionFactory for KernelEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let raw = parse_single_raw_section::<RawKernelEvent>(&raw_sections)?;
+        let raw = parse_single_raw_section::<kernel_event>(&raw_sections)?;
         let mut event = KernelEvent::default();
 
         let symbol_addr = raw.symbol;
@@ -139,7 +132,7 @@ impl RawEventSectionFactory for KernelEventFactory {
             }
         };
 
-        event.probe_type = match raw.r#type {
+        event.probe_type = match raw.type_ {
             0 => "kprobe",
             1 => "kretprobe",
             2 => "raw_tracepoint",
@@ -158,18 +151,18 @@ impl RawEventSectionFactory for KernelEventFactory {
 pub(crate) mod benchmark {
     use anyhow::Result;
 
-    use super::RawKernelEvent;
     use crate::{
         benchmark::helpers::*,
+        bindings::common_uapi::kernel_event,
         core::{events::FactoryId, kernel::Symbol},
     };
 
-    impl RawSectionBuilder for RawKernelEvent {
+    impl RawSectionBuilder for kernel_event {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
-            let data = RawKernelEvent {
+            let data = Self {
                 symbol: Symbol::from_name("openvswitch:ovs_do_execute_action")?.addr()?,
-                r#type: 2, // Raw tracepoint.
-                stack_id: u64::MAX,
+                type_: 2, // Raw tracepoint.
+                stack_id: -1,
             };
             build_raw_section(out, FactoryId::Kernel as u8, 0, &mut as_u8_vec(&data));
             Ok(())

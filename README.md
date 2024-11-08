@@ -116,7 +116,7 @@ $ nft -a list table inet firewalld
 
 ## Installation
 
-Retis can be installed from [COPR](https://copr.fedorainfracloud.org/coprs/atenart/retis/)
+Retis can be installed from [COPR](https://copr.fedorainfracloud.org/coprs/g/retis/retis/)
 for rpm-compatible distributions, from a container image or from sources.
 
 ### COPR

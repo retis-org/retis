@@ -2,45 +2,7 @@ use std::mem;
 
 use anyhow::Result;
 
-use crate::core::probe::PROBE_MAX;
-
-/// Per-probe parameter offsets; keep in sync with its BPF counterpart in
-/// bpf/include/retis_context.h
-#[derive(Clone, Copy)]
-#[repr(C, packed)]
-pub(super) struct ProbeOffsets {
-    pub(super) sk_buff: i8,
-    pub(super) skb_drop_reason: i8,
-    pub(super) net_device: i8,
-    pub(super) net: i8,
-    pub(super) nft_pktinfo: i8,
-    pub(super) nft_traceinfo: i8,
-}
-
-impl Default for ProbeOffsets {
-    fn default() -> ProbeOffsets {
-        // -1 means the argument isn't available.
-        ProbeOffsets {
-            sk_buff: -1,
-            skb_drop_reason: -1,
-            net_device: -1,
-            net: -1,
-            nft_pktinfo: -1,
-            nft_traceinfo: -1,
-        }
-    }
-}
-
-/// Per-probe configuration; keep in sync with its BPF counterpart in
-/// bpf/include/common.h
-#[derive(Default, Clone)]
-#[repr(C, packed)]
-pub(crate) struct ProbeConfig {
-    pub(super) offsets: ProbeOffsets,
-    pub(super) stack_trace: u8,
-}
-
-unsafe impl plain::Plain for ProbeConfig {}
+use crate::{bindings::common_uapi::*, core::probe::PROBE_MAX};
 
 // When testing this isn't used as the config map is hidden.
 #[cfg_attr(test, allow(dead_code))]
@@ -54,7 +16,7 @@ pub(crate) fn init_config_map() -> Result<libbpf_rs::MapHandle> {
         libbpf_rs::MapType::Hash,
         Some("config_map"),
         mem::size_of::<u64>() as u32,
-        mem::size_of::<ProbeConfig>() as u32,
+        mem::size_of::<retis_probe_config>() as u32,
         PROBE_MAX as u32,
         &opts,
     )?)

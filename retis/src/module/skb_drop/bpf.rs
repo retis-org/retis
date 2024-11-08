@@ -4,7 +4,7 @@ use anyhow::Result;
 use btf_rs::Type;
 use log::warn;
 
-use crate::raw_event_section;
+use crate::bindings::skb_drop_hook_uapi::skb_drop_event;
 
 // Keep in sync with definition in include/net/dropreason-core.h (Linux
 // sources).
@@ -21,11 +21,6 @@ use crate::{
     event_section_factory,
     events::*,
 };
-
-#[raw_event_section]
-struct BpfSkbDropEvent {
-    drop_reason: i32,
-}
 
 fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u32, String>> {
     let mut values = HashMap::new();
@@ -91,7 +86,7 @@ pub(crate) struct SkbDropEventFactory {
 
 impl RawEventSectionFactory for SkbDropEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let raw = parse_single_raw_section::<BpfSkbDropEvent>(&raw_sections)?;
+        let raw = parse_single_raw_section::<skb_drop_event>(&raw_sections)?;
 
         let drop_reason = raw.drop_reason;
         let (subsys, drop_reason) = self.get_reason(drop_reason);

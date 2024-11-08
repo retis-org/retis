@@ -17,20 +17,23 @@
 #define retis_get_nft_type(ctx, cfg)		\
 	RETIS_HOOK_GET(ctx, cfg->offsets, nft_type, enum nft_trace_types)
 
-/* Nft hook configuration.
+/**
+ * Nft hook configuration.
  *
- * Please keep in sync with its Rust counterpart in module::nft::bpf.
+ * Skip Default trait implementation:
+ *
+ * <div rustbindgen nodefault></div>
  */
 struct nft_offsets {
 	s8 nft_chain;
 	s8 nft_rule;
 	s8 nft_verdict;
 	s8 nft_type;
-} __attribute__((packed));
+};
 struct nft_config {
 	u64 verdicts;
 	struct nft_offsets offsets;
-} __attribute__((packed));
+} __binding;
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(max_entries, 1);
@@ -38,7 +41,6 @@ struct {
 	__type(value, struct nft_config);
 } nft_config_map SEC(".maps");
 
-/* Please keep in sync with its Rust counterpart */
 struct nft_event {
 	char table_name[NFT_NAME_SIZE];
 	char chain_name[NFT_NAME_SIZE];
@@ -48,7 +50,7 @@ struct nft_event {
 	s64 c_handle;
 	s64 r_handle;
 	u8 policy;
-};
+} __binding;
 
 /* Specialized macro. Deals with different types with similar layout. */
 #define __nft_get_rule_handle(__info, __verdict, __rule) ({	\
