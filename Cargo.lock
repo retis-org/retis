@@ -895,6 +895,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
+name = "ovs-unixctl"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a97512398a192253d9e9e164834be6469723b6b9502392c071a87978d4bb0b48"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "pager"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1216,6 +1227,7 @@ dependencies = [
  "memoffset",
  "nix",
  "once_cell",
+ "ovs-unixctl",
  "pager",
  "pcap",
  "pcap-file",
