@@ -6,9 +6,10 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::{arg, Parser};
 use libbpf_rs::MapCore;
+use log::warn;
 
 use super::{bpf::OvsEventFactory, flow_info::FlowEnricher, hooks};
 
@@ -463,7 +464,14 @@ impl OvsCollector {
         retis_factory: Arc<RetisEventsFactory>,
         section_factories: &mut SectionFactories,
     ) -> Result<()> {
-        let flow_enricher = FlowEnricher::new(retis_factory);
+        let flow_enricher =
+            FlowEnricher::new(retis_factory).context("Failed to connect to OVS via unixctl")?;
+
+        if !flow_enricher.detrace_supported() {
+            warn!(
+                "Running OpenvSwitch does not support 'ofproto/detrace', only datapath flows will be enriched"
+            );
+        }
 
         let ovs_section_factory: &mut OvsEventFactory =
             section_factories.get_mut(&FactoryId::Ovs)?;
