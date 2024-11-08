@@ -462,8 +462,8 @@ impl Collectors {
 
         for (name, c) in &mut self.collectors {
             debug!("Starting collector {name}");
-            if c.start().is_err() {
-                warn!("Could not start collector {name}");
+            if let Err(e) = c.start() {
+                warn!("Could not start collector {name}: {e}");
             }
         }
 
