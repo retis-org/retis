@@ -29,6 +29,8 @@ use crate::{
     helpers,
 };
 
+use super::flow_info;
+
 /// Event data types supported by the ovs module.
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub(crate) enum OvsDataType {
@@ -272,7 +274,7 @@ pub(super) fn unmarshall_upcall_return(raw_section: &BpfRawSection) -> Result<Ov
 #[derive(Default)]
 pub(crate) struct OvsEventFactory {
     ovs_actions: HashMap<u32, String>,
-    ufid_sender: Option<mpsc::Sender<Ufid>>,
+    ufid_sender: Option<mpsc::Sender<flow_info::EnrichRequest>>,
 }
 
 impl OvsEventFactory {
@@ -289,15 +291,18 @@ impl OvsEventFactory {
         })
     }
 
-    pub fn ufid_sender(&mut self, ufid_sender: mpsc::Sender<Ufid>) {
+    pub fn ufid_sender(&mut self, ufid_sender: mpsc::Sender<flow_info::EnrichRequest>) {
         self.ufid_sender = Some(ufid_sender)
     }
 
     fn unmarshall_flow_lookup(&mut self, raw_section: &BpfRawSection) -> Result<OvsEvent> {
         let raw = parse_raw_section::<flow_lookup_ret_event>(raw_section)?;
         let ufid = Ufid::from(raw.ufid);
+        let flow = raw.flow as usize as u64;
+        let sf_acts = raw.sf_acts as usize as u64;
+
         if let Some(sender) = &self.ufid_sender {
-            sender.send(ufid)?;
+            sender.send(flow_info::EnrichRequest::new(ufid, flow, sf_acts))?;
         }
         Ok(OvsEvent::DpLookup {
             flow_lookup: LookupEvent {
