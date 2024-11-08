@@ -125,14 +125,18 @@ impl<'a, 'inner> Formatter<'a, 'inner> {
             prefix = " ".repeat(self.level);
         }
 
+        // If the buffer ends with a newline, the last split will be empty. In
+        // such case only print the newline.
         lines.try_for_each(|line| {
             self.inner.write_char('\n')?;
-            self.inner.write_str(&prefix)?;
-            self.inner.write_str(line)
+            if !line.is_empty() {
+                self.inner.write_str(&prefix)?;
+                self.inner.write_str(line)?;
+            }
+            Ok(())
         })?;
 
         if self.buf.ends_with('\n') {
-            self.inner.write_char('\n')?;
             self.start = true;
         }
 
