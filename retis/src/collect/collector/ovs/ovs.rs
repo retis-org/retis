@@ -111,7 +111,7 @@ impl Collector for OvsCollector {
         // Upcall related hooks:
         self.add_upcall_hooks(probes)?;
         // Exec related hooks
-        self.add_exec_hooks(probes)?;
+        self.add_processing_hooks(probes)?;
 
         Ok(())
     }
@@ -296,7 +296,7 @@ impl OvsCollector {
     }
 
     /// Add exec hooks.
-    fn add_exec_hooks(&mut self, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn add_processing_hooks(&mut self, probes: &mut ProbeBuilderManager) -> Result<()> {
         let inflight_exec_map = Self::create_inflight_exec_map()?;
 
         // ovs_execute_actions kprobe
@@ -324,6 +324,33 @@ impl OvsCollector {
         let mut probe =
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?;
         probe.add_hook(exec_action_hook)?;
+        probes.register_probe(probe)?;
+
+        // ovs_dp_process_packet kprobe
+        let mut ovs_dp_process_packet_hook = Hook::from(hooks::kernel_process_packet::DATA);
+        ovs_dp_process_packet_hook
+            .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        let mut probe = Probe::kprobe(Symbol::from_name("ovs_dp_process_packet")?)?;
+        probe.set_option(ProbeOption::NoGenericHook)?;
+        probe.add_hook(ovs_dp_process_packet_hook)?;
+        probes.register_probe(probe)?;
+
+        // ovs_flow_tbl_lookup_stats kprobe
+        let mut ovs_flow_tbl_lookup_stats = Hook::from(hooks::kernel_tbl_lookup::DATA);
+        ovs_flow_tbl_lookup_stats
+            .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        let mut probe = Probe::kprobe(Symbol::from_name("ovs_flow_tbl_lookup_stats")?)?;
+        probe.set_option(ProbeOption::NoGenericHook)?;
+        probe.add_hook(ovs_flow_tbl_lookup_stats)?;
+        probes.register_probe(probe)?;
+
+        // ovs_flow_tbl_lookup_stats kretprobe
+        let mut ovs_flow_tbl_lookup_stats = Hook::from(hooks::kernel_tbl_lookup_ret::DATA);
+        ovs_flow_tbl_lookup_stats
+            .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        let mut probe = Probe::kretprobe(Symbol::from_name("ovs_flow_tbl_lookup_stats")?)?;
+        probe.set_option(ProbeOption::NoGenericHook)?;
+        probe.add_hook(ovs_flow_tbl_lookup_stats)?;
         probes.register_probe(probe)?;
 
         self.inflight_exec_map = Some(inflight_exec_map);
