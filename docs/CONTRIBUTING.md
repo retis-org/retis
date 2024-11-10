@@ -161,6 +161,33 @@ For example, on Fedora, you can simply use `dnf -y install python3-clang`.
    latest `main`. This can happen at any time, e.g. when other pull-requests are
    being merged.
 
+### Code coverage
+
+Considering the importance of tests, it is highly recommended to
+introduce new tests aimed at covering as much code as possible.
+To locally assess the amount of code covered by the tests, you need
+first to install the following:
+
+```
+$ cargo install cargo-llvm-cov
+$ rustup component add llvm-tools-preview
+```
+
+After installation, you can execute `make test COV=1` to obtain
+coverage statistics following the execution of all tests.
+
+Note that if your default toolchain is not installed via rustup, you
+can set `$CARGO_OPTS` to specify your rustup-installed toolchain
+(i.e., use `CARGO_OPTS=+nightly` for the `nightly` version).
+
+To report previously generated coverage statistics, you can issue the
+command `make report-cov`.
+The target behavior can be adjusted using the available options. For
+instance, to enhance readability, you can set `CARGO_CMD_OPTS=--html`
+and generate an HTML report instead.
+For further details on how the target behavior can be customized, run
+`CARGO_CMD_OPTS=--help make report-cov`.
+
 ### Python bindings development
 
 When changing python bindings, it can be useful to quickly build and install the
