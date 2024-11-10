@@ -15,6 +15,8 @@ pub struct upcall_context {
 #[derive(Debug, Copy, Clone)]
 pub struct execute_actions_ctx {
     pub skb: *mut ::std::os::raw::c_void,
+    pub n_mask_hit: *mut u32_,
+    pub n_cache_hit: *mut u32_,
     pub queue_id: u32_,
     pub command: bool_,
 }
