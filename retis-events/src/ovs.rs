@@ -55,6 +55,13 @@ pub enum OvsEvent {
         #[serde(flatten)]
         action_execute: ActionEvent,
     },
+
+    /// Flow lookup event. It indicates the datapath has successfully perfomed a lookup for a key.
+    #[serde(rename = "flow_lookup")]
+    DpLookup {
+        #[serde(flatten)]
+        flow_lookup: LookupEvent,
+    },
 }
 
 impl EventFmt for OvsEvent {
@@ -67,6 +74,7 @@ impl EventFmt for OvsEvent {
             RecvUpcall { recv_upcall } => recv_upcall,
             Operation { flow_operation } => flow_operation,
             Action { action_execute } => action_execute,
+            DpLookup { flow_lookup } => flow_lookup,
         };
 
         disp.event_fmt(f, format)
@@ -107,6 +115,59 @@ impl EventFmt for UpcallEvent {
             fmt_upcall_cmd(self.cmd),
             self.port,
             self.cpu
+        )
+    }
+}
+
+fn fmt_ufid(ufid: &[u32]) -> String {
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:04x}{:08x}",
+        ufid[0],
+        ufid[1] >> 16,
+        ufid[1] & 0xffff,
+        ufid[2] >> 16,
+        ufid[2] & 0xffff,
+        ufid[3]
+    )
+}
+
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
+pub struct Ufid(pub [u32; 4]);
+
+impl fmt::Display for Ufid {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:08x}-{:04x}-{:04x}-{:04x}-{:04x}{:08x}",
+            self.0[0],
+            self.0[1] >> 16,
+            self.0[1] & 0xffff,
+            self.0[2] >> 16,
+            self.0[2] & 0xffff,
+            self.0[3]
+        )
+    }
+}
+
+/// OVS lookup event
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
+pub struct LookupEvent {
+    /// Flow UFID.
+    pub ufid: Ufid,
+    /// n_mask_hit.
+    pub n_mask_hit: u32,
+    /// n_cache_hit.
+    pub n_cache_hit: u32,
+}
+
+impl EventFmt for LookupEvent {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
+        write!(
+            f,
+            "ufid {} hit {} (mask) {} (cache)",
+            self.ufid, self.n_mask_hit, self.n_cache_hit,
         )
     }
 }

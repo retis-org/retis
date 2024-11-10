@@ -20,6 +20,7 @@ enum trace_ovs_data_type {
 	OVS_DP_ACTION_RECIRC = 8,
 	OVS_DP_ACTION_CONNTRACK = 9,
 	OVS_DP_ACTION_DROP = 10,
+	OVS_FLOW_TBL_LOOKUP_RETURN = 11,
 };
 
 /* Used to keep the context of an upcall operation for its upcall enqueue
@@ -52,12 +53,17 @@ struct {
 /* Context saved between the begining and end of ovs_execute_actions calls. */
 struct execute_actions_ctx {
 	BINDING_PTR(struct sk_buff *, skb);
+	u32 *n_mask_hit;
+	u32 *n_cache_hit;
 	u32 queue_id;
 	bool command;
 } __binding;
 
 /* Map used to store context between the begining and end of
- * ovs_execute_actions calls. Indexed by pid_tgid. */
+ * ovs_execute_actions calls. It is also used to extract the ufid
+ * during the lookup in the regular rx path, meaning it is used also
+ * for keeping context between the beginning of ovs_dp_process_packet
+ * and the end of ovs_flow_tbl_lookup_stats. Indexed by pid_tgid. */
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_INFLIGHT_UPCALLS);
