@@ -51,6 +51,10 @@ pub enum OvsEventType {
     /// Action execution event. It indicates the datapath has executed an action on a packet.
     #[serde(rename = "action_execute")]
     Action(ActionEvent),
+
+    /// Flow lookup event. It indicates the datapath has successfully perfomed a lookup for a key.
+    #[serde(rename = "flow_lookup")]
+    DpLookup(LookupEvent),
 }
 
 impl EventFmt for OvsEventType {
@@ -63,6 +67,7 @@ impl EventFmt for OvsEventType {
             RecvUpcall(e) => e,
             Operation(e) => e,
             Action(e) => e,
+            DpLookup(e) => e,
         };
 
         disp.event_fmt(f, format)
@@ -103,6 +108,53 @@ impl EventFmt for UpcallEvent {
             fmt_upcall_cmd(self.cmd),
             self.port,
             self.cpu
+        )
+    }
+}
+
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
+pub struct Ufid(pub u32, pub u32, pub u32, pub u32);
+
+impl From<[u32; 4]> for Ufid {
+    fn from(parts: [u32; 4]) -> Self {
+        Self(parts[0], parts[1], parts[2], parts[3])
+    }
+}
+
+impl fmt::Display for Ufid {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:08x}-{:04x}-{:04x}-{:04x}-{:04x}{:08x}",
+            self.0,
+            self.1 >> 16,
+            self.1 & 0xffff,
+            self.2 >> 16,
+            self.2 & 0xffff,
+            self.3
+        )
+    }
+}
+
+/// OVS lookup event
+#[event_type]
+#[derive(Copy, Default, PartialEq)]
+pub struct LookupEvent {
+    /// Flow UFID.
+    pub ufid: Ufid,
+    /// n_mask_hit.
+    pub n_mask_hit: u32,
+    /// n_cache_hit.
+    pub n_cache_hit: u32,
+}
+
+impl EventFmt for LookupEvent {
+    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
+        write!(
+            f,
+            "ufid {} hit {} (mask) {} (cache)",
+            self.ufid, self.n_mask_hit, self.n_cache_hit,
         )
     }
 }

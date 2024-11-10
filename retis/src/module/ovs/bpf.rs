@@ -10,6 +10,7 @@ use crate::{
     bindings::{
         kernel_enqueue_uapi::upcall_enqueue_event,
         kernel_exec_tp_uapi::{exec_ct, exec_event, exec_output, exec_recirc, exec_track_event},
+        kernel_flow_tbl_lookup_ret_uapi::flow_lookup_ret_event,
         kernel_upcall_ret_uapi::upcall_ret_event,
         kernel_upcall_tp_uapi::upcall_event,
         ovs_operation_uapi::ovs_operation_event,
@@ -46,6 +47,8 @@ pub(crate) enum OvsDataType {
     RecircAction = 8,
     /// Conntrack action.
     ConntrackAction = 9,
+    /// Flow lookup
+    FlowLookup = 10,
 }
 
 impl OvsDataType {
@@ -62,9 +65,21 @@ impl OvsDataType {
             7 => OutputAction,
             8 => RecircAction,
             9 => ConntrackAction,
+            10 => FlowLookup,
             x => bail!("Can't construct a OvsDataType from {}", x),
         })
     }
+}
+
+pub(super) fn unmarshall_flow_lookup(raw_section: &BpfRawSection) -> Result<OvsEvent> {
+    let raw = parse_raw_section::<flow_lookup_ret_event>(raw_section)?;
+    Ok(OvsEvent {
+        event: OvsEventType::DpLookup(LookupEvent {
+            ufid: raw.ufid.into(),
+            n_mask_hit: raw.n_mask_hit,
+            n_cache_hit: raw.n_cache_hit,
+        }),
+    })
 }
 
 pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection) -> Result<OvsEvent> {
@@ -309,6 +324,9 @@ impl RawEventSectionFactory for OvsEventFactory {
                 }
                 OvsDataType::ActionExec => {
                     event = Some(unmarshall_exec(section)?);
+                }
+                OvsDataType::FlowLookup => {
+                    event = Some(unmarshall_flow_lookup(section)?);
                 }
                 OvsDataType::ActionExecTrack => unmarshall_exec_track(
                     section,

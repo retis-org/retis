@@ -27,3 +27,17 @@ impl Default for execute_actions_ctx {
         }
     }
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct processing_ctx {
+    pub skb: *mut ::std::os::raw::c_void,
+}
+impl Default for processing_ctx {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}

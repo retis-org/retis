@@ -12,7 +12,7 @@ use clap::{arg, Parser};
 use super::{bpf::OvsEventFactory, hooks};
 use crate::{
     bindings::{
-        ovs_common_uapi::{execute_actions_ctx, upcall_context},
+        ovs_common_uapi::{execute_actions_ctx, processing_ctx, upcall_context},
         ovs_operation_uapi::upcall_batch,
     },
     cli::{dynamic::DynamicCommand, CliConfig},
@@ -56,6 +56,7 @@ pub(crate) struct OvsModule {
     track: bool,
     inflight_upcalls_map: Option<libbpf_rs::MapHandle>,
     inflight_exec_map: Option<libbpf_rs::MapHandle>,
+    inflight_processing_map: Option<libbpf_rs::MapHandle>,
 
     /* Tracking file descriptors (the maps are owned by the GC) */
     flow_exec_tracking_fd: i32,
@@ -120,6 +121,8 @@ impl Collector for OvsModule {
         self.add_upcall_hooks(probes)?;
         // Exec related hooks
         self.add_exec_hooks(probes)?;
+        // Processing related hooks
+        self.add_processing_hooks(probes)?;
 
         Ok(())
     }
@@ -198,6 +201,23 @@ impl OvsModule {
             Some("inflight_exec"),
             mem::size_of::<u64>() as u32,
             mem::size_of::<execute_actions_ctx>() as u32,
+            50,
+            &opts,
+        )
+        .or_else(|e| bail!("Could not create the inflight_exec map: {}", e))
+    }
+
+    fn create_inflight_processing_map() -> Result<libbpf_rs::MapHandle> {
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+
+        libbpf_rs::MapHandle::create(
+            libbpf_rs::MapType::Hash,
+            Some("inflight_processing"),
+            mem::size_of::<u64>() as u32,
+            mem::size_of::<processing_ctx>() as u32,
             50,
             &opts,
         )
@@ -344,6 +364,35 @@ impl OvsModule {
         probes.register_probe(probe)?;
 
         self.inflight_exec_map = Some(inflight_exec_map);
+        Ok(())
+    }
+
+    /// Add dp processing hooks.
+    fn add_processing_hooks(&mut self, probes: &mut ProbeBuilderManager) -> Result<()> {
+        let inflight_processing_map = Self::create_inflight_processing_map()?;
+        // ovs_dp_process_packet kprobe
+        let mut ovs_dp_process_packet_hook = Hook::from(hooks::kernel_process_packet::DATA);
+        ovs_dp_process_packet_hook.reuse_map(
+            "inflight_processing",
+            inflight_processing_map.as_fd().as_raw_fd(),
+        )?;
+        let mut probe = Probe::kprobe(Symbol::from_name("ovs_dp_process_packet")?)?;
+        probe.set_option(ProbeOption::NoGenericHook)?;
+        probe.add_hook(ovs_dp_process_packet_hook)?;
+        probes.register_probe(probe)?;
+
+        // ovs_flow_tbl_lookup_stats kretprobe
+        let mut ovs_flow_tbl_lookup_stats = Hook::from(hooks::kernel_tbl_lookup_ret::DATA);
+        ovs_flow_tbl_lookup_stats.reuse_map(
+            "inflight_processing",
+            inflight_processing_map.as_fd().as_raw_fd(),
+        )?;
+        let mut probe = Probe::kretprobe(Symbol::from_name("ovs_flow_tbl_lookup_stats")?)?;
+        probe.set_option(ProbeOption::NoGenericHook)?;
+        probe.add_hook(ovs_flow_tbl_lookup_stats)?;
+        probes.register_probe(probe)?;
+
+        self.inflight_processing_map = Some(inflight_processing_map);
         Ok(())
     }
 

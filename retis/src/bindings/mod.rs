@@ -63,6 +63,7 @@ pub(crate) mod kernel_exec_tp_uapi;
 pub(crate) mod kernel_upcall_ret_uapi;
 pub(crate) mod kernel_upcall_tp_uapi;
 
+pub(crate) mod kernel_flow_tbl_lookup_ret_uapi;
 pub(crate) mod ovs_common_uapi;
 pub(crate) mod ovs_operation_uapi;
 pub(crate) mod user_recv_upcall_uapi;
