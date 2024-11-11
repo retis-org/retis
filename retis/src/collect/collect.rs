@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use log::{debug, info, warn};
 use nix::{errno::Errno, mount::*, unistd::Uid};
 
@@ -295,13 +295,12 @@ impl Collectors {
                 }
             }
 
-            if let Err(e) = c.init(
+            c.init(
                 collect,
                 self.probes.builder_mut()?,
                 Arc::clone(&self.events_factory),
-            ) {
-                bail!("Could not initialize collector {name}: {e}");
-            }
+            )
+            .context(format!("Could not initialize the {name} collector"))?;
 
             // If the collector provides known kernel types, meaning we have a
             // dynamic collector, retrieve and store them for later processing.
