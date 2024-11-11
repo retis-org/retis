@@ -154,6 +154,10 @@ impl fmt::Display for Ufid {
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 pub struct LookupEvent {
+    /// flow pointer
+    pub flow: u64,
+    /// actions pointer
+    pub sf_acts: u64,
     /// Flow UFID.
     pub ufid: Ufid,
     /// n_mask_hit.
@@ -166,8 +170,8 @@ impl EventFmt for LookupEvent {
     fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(
             f,
-            "ufid {} hit {} (mask) {} (cache)",
-            self.ufid, self.n_mask_hit, self.n_cache_hit,
+            "ufid {} hit (mask/cache) {}/{} flow {:x} sf_acts {:x}",
+            self.ufid, self.n_mask_hit, self.n_cache_hit, self.flow, self.sf_acts,
         )
     }
 }
