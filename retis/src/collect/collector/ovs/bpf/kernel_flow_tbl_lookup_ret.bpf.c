@@ -4,6 +4,8 @@
 #define MAX_UFID_LENGTH 16
 
 struct flow_lookup_ret_event {
+	BINDING_PTR(struct sw_flow *, flow);
+	BINDING_PTR(struct sw_flow_actions *, sf_acts);
 	u32 ufid[MAX_UFID_LENGTH / 4];
 	u32 n_mask_hit;
 	u32 n_cache_hit;
@@ -46,6 +48,11 @@ DEFINE_HOOK_RAW(
 
 	if (BPF_CORE_READ_INTO(&ret->ufid, flow, id.ufid))
 		log_error("Failed to read the ufid");
+
+	ret->flow = flow;
+
+	if (bpf_core_read(&ret->sf_acts, sizeof(ret->sf_acts), &flow->sf_acts))
+		log_error("Failed to read sf_acts");
 
 	/* Only log in case of failure while retrieving ancillary
 	 * informations.
