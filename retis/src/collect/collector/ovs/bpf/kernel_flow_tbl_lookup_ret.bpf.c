@@ -1,5 +1,6 @@
 #include <common.h>
 #include <ovs_common.h>
+#include <skb_tracking.h>
 
 #define MAX_UFID_LENGTH 16
 
@@ -9,6 +10,9 @@ struct flow_lookup_ret_event {
 	u32 ufid[MAX_UFID_LENGTH / 4];
 	u32 n_mask_hit;
 	u32 n_cache_hit;
+	u64 skb_orig_head;
+	u64 skb_timestamp;
+	u64 skb;
 } __binding;
 
 /* Hook for kretprobe:ovs_flow_tbl_lookup_stats */
@@ -16,6 +20,7 @@ DEFINE_HOOK_RAW(
 	u64 tid = bpf_get_current_pid_tgid();
 	struct flow_lookup_ret_event *ret;
 	struct execute_actions_ctx *ectx;
+	struct tracking_info *track;
 	struct sw_flow *flow;
 	u32 ufid_len = 0;
 
@@ -40,6 +45,10 @@ DEFINE_HOOK_RAW(
 		return 0;
 	}
 
+	track = skb_tracking_info(ectx->skb);
+	if (!track) {
+		return 0;
+	}
 	ret = get_event_section(event, COLLECTOR_OVS,
 				OVS_FLOW_TBL_LOOKUP_RETURN,
 				sizeof(*ret));
@@ -66,6 +75,10 @@ DEFINE_HOOK_RAW(
 				  ectx->n_cache_hit) < 0) {
 		log_error("Failed to retrieve n_cache_hit");
 	}
+
+	ret->skb_orig_head = track->orig_head;
+	ret->skb_timestamp = track->timestamp;
+	ret->skb = (u64) ectx->skb;
 
 	return 0;
 )

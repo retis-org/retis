@@ -311,6 +311,13 @@ impl OvsEventFactory {
                 ufid,
                 n_mask_hit: raw.n_mask_hit,
                 n_cache_hit: raw.n_cache_hit,
+                dpflow: String::default(),
+                ofpflows: Vec::default(),
+                skb_tracking: SkbTrackingEvent {
+                    orig_head: raw.skb_orig_head,
+                    timestamp: raw.skb_timestamp,
+                    skb: raw.skb,
+                },
             },
         })
     }

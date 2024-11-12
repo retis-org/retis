@@ -134,8 +134,11 @@ impl AddTracking {
                     }
                 },
                 DpLookup {
-                    flow_lookup: _lookup,
-                } => todo!(),
+                    flow_lookup: lookup,
+                } => {
+                    let info = self.get_tracking_info(&lookup.skb_tracking)?;
+                    Self::insert_info(event, &info)?;
+                }
             }
         } else {
             // It's not an OVS event, try skb-only tracking.
@@ -158,24 +161,27 @@ impl AddTracking {
         Ok(())
     }
 
+    fn get_tracking_info(&mut self, skb: &SkbTrackingEvent) -> Result<Arc<Mutex<TrackingInfo>>> {
+        let tracking_id = skb.tracking_id();
+        Ok(match self.skb_tracking.get(&tracking_id) {
+            Some(info) => {
+                let mut locked_info = info.lock().unwrap();
+                locked_info.idx += 1;
+                info.clone()
+            }
+            None => {
+                // First time we see this skb. Add it to global table.
+                let info = Arc::new(Mutex::new(TrackingInfo::new(skb)?));
+                self.skb_tracking.insert(tracking_id, info.clone());
+                info
+            }
+        })
+    }
     // Add tracking information to an event based on skb-tracking id if it exists.
     // Returns the TrackingInformation pointer if skb-tracking information was available.
     fn process_skb(&mut self, event: &mut Event) -> Result<Option<Arc<Mutex<TrackingInfo>>>> {
         if let Some(skb) = event.get_section::<SkbTrackingEvent>(SectionId::SkbTracking) {
-            let tracking_id = skb.tracking_id();
-            let info = match self.skb_tracking.get(&tracking_id) {
-                Some(info) => {
-                    let mut locked_info = info.lock().unwrap();
-                    locked_info.idx += 1;
-                    info.clone()
-                }
-                None => {
-                    // First time we see this skb. Add it to global table.
-                    let info = Arc::new(Mutex::new(TrackingInfo::new(skb)?));
-                    self.skb_tracking.insert(tracking_id, info.clone());
-                    info
-                }
-            };
+            let info = self.get_tracking_info(skb)?;
             Self::insert_info(event, &info)?;
             Ok(Some(info))
         } else {

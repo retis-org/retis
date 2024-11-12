@@ -121,7 +121,7 @@ impl EventFmt for UpcallEvent {
 
 /// OVS lookup event
 #[event_type]
-#[derive(Copy, Default, PartialEq)]
+#[derive(Default, PartialEq)]
 pub struct LookupEvent {
     /// flow pointer
     pub flow: u64,
@@ -133,15 +133,37 @@ pub struct LookupEvent {
     pub n_mask_hit: u32,
     /// n_cache_hit.
     pub n_cache_hit: u32,
+    /// datapath flow string
+    pub dpflow: String,
+    /// openflow flows
+    pub ofpflows: Vec<String>,
+    /// skb tracking information
+    pub skb_tracking: SkbTrackingEvent,
 }
 
 impl EventFmt for LookupEvent {
-    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, d: &DisplayFormat) -> fmt::Result {
+        let sep = if d.multiline { "\n" } else { " " };
+
         write!(
             f,
             "ufid {} hit (mask/cache) {}/{} flow {:x} sf_acts {:x}",
             self.ufid, self.n_mask_hit, self.n_cache_hit, self.flow, self.sf_acts,
-        )
+        )?;
+        if !self.dpflow.is_empty() {
+            write!(f, "{sep}odpflow {}", self.dpflow)?;
+        }
+        if !self.ofpflows.is_empty() {
+            write!(f, "{sep}openflow{sep}")?;
+            if d.multiline {
+                f.conf.inc_level(4)
+            }
+            write!(f, "{}", self.ofpflows.join(sep))?;
+            if d.multiline {
+                f.conf.reset_level();
+            }
+        }
+        Ok(())
     }
 }
 
