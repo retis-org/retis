@@ -67,10 +67,6 @@ impl SubCommand for Complete {
 pub(crate) struct CompleteRunner {}
 
 impl SubCommandRunner for CompleteRunner {
-    fn check_prerequisites(&self) -> Result<()> {
-        Ok(())
-    }
-
     fn run(&mut self, cli: FullCli, _modules: Modules) -> Result<()> {
         let mut cmd = cli.get_command();
         let matches = cli.get_command().get_matches();

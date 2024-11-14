@@ -67,7 +67,6 @@ fn main() -> Result<()> {
     }
 
     let mut runner = command.runner()?;
-    runner.check_prerequisites()?;
     runner.run(cli, modules)?;
     Ok(())
 }

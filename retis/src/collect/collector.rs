@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
-use nix::unistd::Uid;
+use nix::{errno::Errno, mount::*, unistd::Uid};
 
 use super::cli::Collect;
 use crate::{
@@ -108,6 +108,8 @@ pub(crate) struct Collectors {
     loaded: Vec<ModuleId>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
+    // Did we mount debugfs ourselves?
+    mounted_debugfs: bool,
 }
 
 impl Collectors {
@@ -125,6 +127,7 @@ impl Collectors {
             tracking_config_map: None,
             loaded: Vec::new(),
             events_factory: Arc::new(RetisEventsFactory::default()),
+            mounted_debugfs: false,
         })
     }
 
@@ -174,8 +177,55 @@ impl Collectors {
         Ok(())
     }
 
+    /// Check prerequisites and cli arguments to ensure we can run.
+    fn check(&mut self, cli: &CliConfig) -> Result<()> {
+        let collect = cli
+            .subcommand
+            .as_any()
+            .downcast_ref::<Collect>()
+            .ok_or_else(|| anyhow!("wrong subcommand"))?
+            .args()?;
+
+        if collect.probe_stack && collect.packet_filter.is_none() && collect.meta_filter.is_none() {
+            bail!("Probe-stack mode requires filtering (--filter-packet and/or --filter-meta)");
+        }
+
+        // --allow-system-changes requires root.
+        if collect.allow_system_changes && !Uid::effective().is_root() {
+            bail!("Retis needs to be run as root when --allow-system-changes is used");
+        }
+
+        // Mount debugfs if not already mounted (and if we can). This is
+        // especially useful when running Retis in namespaces and containers.
+        if collect.allow_system_changes {
+            const DEBUGFS_TARGET: &str = "/sys/kernel/debug";
+
+            let err = mount(
+                None::<&std::path::Path>,
+                std::path::Path::new(DEBUGFS_TARGET),
+                Some("debugfs"),
+                MsFlags::empty(),
+                None::<&str>,
+            );
+
+            match err {
+                Ok(_) => {
+                    debug!("Mounted debugfs to {DEBUGFS_TARGET}");
+                    self.mounted_debugfs = true;
+                }
+                Err(errno) => match errno {
+                    Errno::EBUSY => debug!("Debugfs is already mounted to {DEBUGFS_TARGET}"),
+                    _ => warn!("Could not mount debugfs to {DEBUGFS_TARGET}: {errno}"),
+                },
+            }
+        }
+
+        // Check prerequisites.
+        collection_prerequisites()
+    }
+
     /// Initialize all collectors by calling their `init()` function.
-    pub(crate) fn init(&mut self, cli: &CliConfig) -> Result<()> {
+    fn init(&mut self, cli: &CliConfig) -> Result<()> {
         self.run.register_term_signals()?;
 
         let collect = cli
@@ -184,22 +234,11 @@ impl Collectors {
             .downcast_ref::<Collect>()
             .ok_or_else(|| anyhow!("wrong subcommand"))?;
 
-        if collect.args()?.probe_stack
-            && collect.args()?.packet_filter.is_none()
-            && collect.args()?.meta_filter.is_none()
-        {
-            bail!("Probe-stack mode requires filtering (--filter-packet and/or --filter-meta)");
-        }
-
+        // Check if we need to report stack traces in the events.
         if collect.args()?.stack || collect.args()?.probe_stack {
             self.probes
                 .builder_mut()?
                 .set_probe_opt(probe::ProbeOption::StackTrace)?;
-        }
-
-        // --allow-system-changes requires root.
-        if collect.args()?.allow_system_changes && !Uid::effective().is_root() {
-            bail!("Retis needs to be run as root when --allow-system-changes is used");
         }
 
         // Generate an initial event with the startup section.
@@ -408,6 +447,12 @@ impl Collectors {
         debug!("Stopping events");
         self.factory.stop()?;
 
+        // If we mounted debugfs, unmount it.
+        if self.mounted_debugfs {
+            debug!("Unmounting debugfs");
+            umount("/sys/kernel/debug")?;
+        }
+
         Ok(())
     }
 
@@ -516,17 +561,16 @@ impl Collectors {
 pub(crate) struct CollectRunner {}
 
 impl SubCommandRunner for CollectRunner {
-    fn check_prerequisites(&self) -> Result<()> {
-        collection_prerequisites()
-    }
-
     fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
-        // Initialize collectors.
-        let mut collectors = Collectors::new(modules)?;
         // Collector arguments are arealdy registered when build FullCli
         let cli = cli.run()?;
+
+        // Initialize & start collectors.
+        let mut collectors = Collectors::new(modules)?;
+        collectors.check(&cli)?;
         collectors.init(&cli)?;
         collectors.start()?;
+
         // Starts a loop.
         collectors.process(&cli)?;
         Ok(())
