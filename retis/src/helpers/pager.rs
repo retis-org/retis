@@ -1,5 +1,6 @@
 use std::{env, path::PathBuf};
 
+use log::debug;
 use pager::Pager;
 
 use crate::helpers::logger::Logger;
@@ -25,7 +26,10 @@ pub(crate) fn try_enable_pager(logger: &Logger) {
         // It's OK to do this after enabling the pager as this is done early w/o
         // other threads running.
         if pager.is_on() {
+            debug!("Pager is enabled");
             logger.switch_to_stdout();
+        } else {
+            debug!("Pager is disabled");
         }
     }
 }
