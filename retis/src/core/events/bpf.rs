@@ -14,11 +14,13 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
+use btf_rs::Type;
 use log::{error, log, Level};
 use plain::Plain;
 
 use crate::{
-    bindings::events_uapi::*, event_section_factory, events::*, helpers::signals::Running,
+    bindings::events_uapi::*, core::inspect::inspector, event_section_factory, events::*,
+    helpers::signals::Running,
 };
 
 /// Raw event sections for common.
@@ -415,6 +417,26 @@ pub(crate) fn parse_single_raw_section<'a, T>(raw_sections: &'a [BpfRawSection])
     // We can access the first element safely as we just checked the vector
     // contains 1 element.
     parse_raw_section::<T>(&raw_sections[0])
+}
+
+pub(crate) fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u32, String>> {
+    let mut values = HashMap::new();
+
+    if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(r#enum) {
+        if let Some((btf, Type::Enum(r#enum))) =
+            types.iter().find(|(_, t)| matches!(t, Type::Enum(_)))
+        {
+            for member in r#enum.members.iter() {
+                let mut val = btf.resolve_name(member)?;
+                trim_start
+                    .iter()
+                    .for_each(|p| val = val.trim_start_matches(p).to_string());
+                values.insert(member.val(), val.to_string());
+            }
+        }
+    }
+
+    Ok(values)
 }
 
 #[event_section_factory(FactoryId::Common)]

@@ -2,6 +2,7 @@
 //! Many parts of the OvsEvent (defined in retis-events) are used directly to parse
 //! the bpf raw event. Please keep them in sync.
 
+use std::collections::HashMap;
 use std::net::Ipv6Addr;
 
 use anyhow::{anyhow, bail, Result};
@@ -16,7 +17,8 @@ use crate::{
         user_recv_upcall_uapi::recv_upcall_event,
     },
     core::events::{
-        parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
+        parse_enum, parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+        RawEventSectionFactory,
     },
     event_section_factory,
     events::*,
@@ -74,58 +76,6 @@ pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection) -> Result<OvsEvent>
             cmd: raw.cmd,
             port: raw.port,
             cpu: raw.cpu,
-        },
-    })
-}
-
-pub(super) fn unmarshall_exec(raw_section: &BpfRawSection) -> Result<OvsEvent> {
-    let raw = parse_raw_section::<exec_event>(raw_section)?;
-
-    // When we implement event data types for every action we will be able to create the
-    // specific action variant when unmarshaling its event data type. Until then, we need to
-    // initialize the Action here based on the action_id (which corresponds to ovs_action_attr
-    // defined in uapi/linux/openvswitch.h).
-    Ok(OvsEvent::Action {
-        action_execute: ActionEvent {
-            action: match raw.action {
-                0 => None,
-                1 => Some(OvsAction::Output {
-                    output: OvsActionOutput::default(),
-                }),
-                2 => Some(OvsAction::Userspace(OvsDummyAction)),
-                3 => Some(OvsAction::Set(OvsDummyAction)),
-                4 => Some(OvsAction::PushVlan(OvsDummyAction)),
-                5 => Some(OvsAction::PopVlan(OvsDummyAction)),
-                6 => Some(OvsAction::Sample(OvsDummyAction)),
-                7 => Some(OvsAction::Recirc {
-                    recirc: OvsActionRecirc::default(),
-                }),
-                8 => Some(OvsAction::Hash(OvsDummyAction)),
-                9 => Some(OvsAction::PushMpls(OvsDummyAction)),
-                10 => Some(OvsAction::PopMpls(OvsDummyAction)),
-                11 => Some(OvsAction::SetMasked(OvsDummyAction)),
-                12 => Some(OvsAction::Ct {
-                    ct: OvsActionCt::default(),
-                }),
-                13 => Some(OvsAction::Trunc(OvsDummyAction)),
-                14 => Some(OvsAction::PushEth(OvsDummyAction)),
-                15 => Some(OvsAction::PopEth(OvsDummyAction)),
-                16 => Some(OvsAction::CtClear(OvsDummyAction)),
-                17 => Some(OvsAction::PushNsh(OvsDummyAction)),
-                18 => Some(OvsAction::PopNsh(OvsDummyAction)),
-                19 => Some(OvsAction::Meter(OvsDummyAction)),
-                20 => Some(OvsAction::Clone(OvsDummyAction)),
-                21 => Some(OvsAction::CheckPktLen(OvsDummyAction)),
-                22 => Some(OvsAction::AddMpls(OvsDummyAction)),
-                23 => Some(OvsAction::DecTtl(OvsDummyAction)),
-                // The private OVS_ACTION_ATTR_SET_TO_MASKED action is used
-                // in the same way as OVS_ACTION_ATTR_SET_MASKED. Use only
-                // one action to avoid confusion
-                25 => Some(OvsAction::SetMasked(OvsDummyAction)),
-                val => bail!("Unsupported action id {val}"),
-            },
-            recirc_id: raw.recirc_id,
-            ..ActionEvent::default()
         },
     })
 }
@@ -304,7 +254,72 @@ pub(super) fn unmarshall_upcall_return(raw_section: &BpfRawSection) -> Result<Ov
 
 #[event_section_factory(FactoryId::Ovs)]
 #[derive(Default)]
-pub(crate) struct OvsEventFactory {}
+pub(crate) struct OvsEventFactory {
+    ovs_actions: HashMap<u32, String>,
+}
+
+impl OvsEventFactory {
+    pub fn new() -> Result<Self> {
+        let ovs_actions = parse_enum("ovs_action_attr", &["OVS_ACTION_ATTR_"])?;
+        Ok(OvsEventFactory { ovs_actions })
+    }
+
+    fn unmarshall_exec(&self, raw_section: &BpfRawSection) -> Result<OvsEvent> {
+        let raw = parse_raw_section::<exec_event>(raw_section)?;
+
+        // When we implement event data types for every action we will be able to create the
+        // specific action variant when unmarshaling its event data type. Until then, we need to
+        // initialize the Action here based on the action_id (which corresponds to ovs_action_attr
+        // defined in uapi/linux/openvswitch.h).
+        Ok(OvsEvent::Action {
+            action_execute: ActionEvent {
+                action: match self
+                    .ovs_actions
+                    .get(&(raw.action as u32))
+                    .map(|s| s.as_str())
+                {
+                    Some("NONE") => None,
+                    Some("OUTPUT") => Some(OvsAction::Output {
+                        output: OvsActionOutput::default(),
+                    }),
+                    Some("USERSPACE") => Some(OvsAction::Userspace(OvsDummyAction)),
+                    Some("SET") => Some(OvsAction::Set(OvsDummyAction)),
+                    Some("PUSH_VLAN") => Some(OvsAction::PushVlan(OvsDummyAction)),
+                    Some("POP_VLAN") => Some(OvsAction::PopVlan(OvsDummyAction)),
+                    Some("SAMPLE") => Some(OvsAction::Sample(OvsDummyAction)),
+                    Some("RECIRC") => Some(OvsAction::Recirc {
+                        recirc: OvsActionRecirc::default(),
+                    }),
+                    Some("HASH") => Some(OvsAction::Hash(OvsDummyAction)),
+                    Some("PUSH_MPLS") => Some(OvsAction::PushMpls(OvsDummyAction)),
+                    Some("POP_MPLS") => Some(OvsAction::PopMpls(OvsDummyAction)),
+                    Some("SET_MASKED") => Some(OvsAction::SetMasked(OvsDummyAction)),
+                    Some("CT") => Some(OvsAction::Ct {
+                        ct: OvsActionCt::default(),
+                    }),
+                    Some("TRUNC") => Some(OvsAction::Trunc(OvsDummyAction)),
+                    Some("PUSH_ETH") => Some(OvsAction::PushEth(OvsDummyAction)),
+                    Some("POP_ETH") => Some(OvsAction::PopEth(OvsDummyAction)),
+                    Some("CT_CLEAR") => Some(OvsAction::CtClear(OvsDummyAction)),
+                    Some("PUSH_NSH") => Some(OvsAction::PushNsh(OvsDummyAction)),
+                    Some("POP_NSH") => Some(OvsAction::PopNsh(OvsDummyAction)),
+                    Some("METER") => Some(OvsAction::Meter(OvsDummyAction)),
+                    Some("CLONE") => Some(OvsAction::Clone(OvsDummyAction)),
+                    Some("CHECK_PKT_LEN") => Some(OvsAction::CheckPktLen(OvsDummyAction)),
+                    Some("ADD_MPLS") => Some(OvsAction::AddMpls(OvsDummyAction)),
+                    Some("DEC_TTL") => Some(OvsAction::DecTtl(OvsDummyAction)),
+                    // The private OVS_ACTION_ATTR_SET_TO_MASKED action is used
+                    // in the same way as OVS_ACTION_ATTR_SET_MASKED. Use only
+                    // one action to avoid confusion
+                    Some("SET_TO_MASKED") => Some(OvsAction::SetMasked(OvsDummyAction)),
+                    _ => bail!("Unsupported action id {}", raw.action),
+                },
+                recirc_id: raw.recirc_id,
+                ..ActionEvent::default()
+            },
+        })
+    }
+}
 
 impl RawEventSectionFactory for OvsEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
@@ -328,7 +343,7 @@ impl RawEventSectionFactory for OvsEventFactory {
                     event = Some(unmarshall_operation(section)?);
                 }
                 OvsDataType::ActionExec => {
-                    event = Some(unmarshall_exec(section)?);
+                    event = Some(self.unmarshall_exec(section)?);
                 }
                 OvsDataType::ActionExecTrack => unmarshall_exec_track(
                     section,
