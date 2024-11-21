@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{arg, Parser};
 
-use crate::{cli::*, events::python_embed::shell_execute, module::Modules};
+use crate::{cli::*, collect::collector::Modules, events::python_embed::shell_execute};
 
 /// Runs Python scripts with events imported.
 #[derive(Parser, Debug, Default)]

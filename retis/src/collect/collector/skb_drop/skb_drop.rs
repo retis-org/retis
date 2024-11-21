@@ -6,6 +6,7 @@ use log::warn;
 use super::{bpf::SkbDropEventFactory, skb_drop_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
+    collect::collector::Module,
     collect::Collector,
     core::{
         events::*,
@@ -14,7 +15,6 @@ use crate::{
         probe::{Hook, Probe, ProbeBuilderManager},
     },
     events::SectionId,
-    module::Module,
 };
 
 pub(crate) struct SkbDropModule {

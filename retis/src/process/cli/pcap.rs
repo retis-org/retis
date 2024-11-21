@@ -23,10 +23,10 @@ use pcap_file::{
 
 use crate::{
     cli::*,
+    collect::collector::Modules,
     core::{kernel::Symbol, probe::kernel::utils::*},
     events::{file::FileEventsFactory, CommonEvent, KernelEvent, SkbEvent, *},
     helpers::signals::Running,
-    module::Modules,
 };
 
 /// Statistics of the event parser about events (processed, skipped, etc).

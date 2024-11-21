@@ -21,3 +21,4 @@ pub(crate) mod collect;
 pub(crate) use collect::*;
 
 pub(crate) mod cli;
+pub(crate) mod collector;

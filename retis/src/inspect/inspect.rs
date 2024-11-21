@@ -5,8 +5,8 @@ use clap::{arg, Parser};
 
 use crate::{
     cli::*,
+    collect::collector::Modules,
     core::{kernel::Symbol, probe::kernel::utils::probe_from_cli},
-    module::Modules,
 };
 
 /// Inspect the current machine.

@@ -10,7 +10,7 @@ use crate::{event_section, Formatter};
 
 /// Tracking event section.
 /// For more information of how the tracking logic is designed and how it can be
-/// used, please see `module::skb_tracking` documentation.
+/// used, please see `collect::collector::skb_tracking` documentation.
 ///
 /// Tl;dr; the tracking unique id is `(timestamp, orig_head)` and `skb` can be
 /// used to distinguished between clones.

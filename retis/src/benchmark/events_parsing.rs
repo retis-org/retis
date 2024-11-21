@@ -3,7 +3,7 @@ use std::time::Instant;
 use anyhow::Result;
 
 use super::helpers::build_raw_event;
-use crate::{core::events::*, module::get_modules};
+use crate::{collect::collector::get_modules, core::events::*};
 
 /// Benchmark time to parse a bunch of raw events.
 pub(super) fn bench(ci: bool) -> Result<()> {

@@ -5,6 +5,7 @@ use anyhow::{bail, Result};
 use super::{bpf::CtEventFactory, ct_hook};
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
+    collect::collector::Module,
     collect::Collector,
     core::{
         events::*,
@@ -12,7 +13,6 @@ use crate::{
         probe::{Hook, ProbeBuilderManager},
     },
     events::SectionId,
-    module::Module,
 };
 
 #[derive(Default)]

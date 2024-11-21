@@ -13,13 +13,13 @@ use super::{bpf::*, skb_hook};
 use crate::{
     bindings::skb_hook_uapi::*,
     cli::{dynamic::DynamicCommand, CliConfig},
+    collect::collector::Module,
     collect::Collector,
     core::{
         events::*,
         probe::{Hook, ProbeBuilderManager},
     },
     events::SectionId,
-    module::Module,
 };
 
 #[derive(Parser, Default)]

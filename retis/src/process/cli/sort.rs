@@ -13,9 +13,9 @@ use clap::Parser;
 
 use crate::{
     cli::*,
+    collect::collector::Modules,
     events::{file::FileEventsFactory, *},
     helpers::signals::Running,
-    module::Modules,
     process::{display::*, series::EventSorter, tracking::AddTracking},
 };
 
