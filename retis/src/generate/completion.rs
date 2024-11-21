@@ -11,7 +11,7 @@ use clap::{
 };
 use clap_complete::{generate, Generator, Shell};
 
-use crate::{cli::*, module::Modules};
+use crate::{cli::*, collect::collector::Modules};
 
 /// Generate completion file for a specified shell
 #[derive(Parser, Debug, Default)]

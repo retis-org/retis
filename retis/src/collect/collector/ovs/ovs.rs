@@ -17,6 +17,7 @@ use crate::{
         ovs_operation_uapi::upcall_batch,
     },
     cli::{dynamic::DynamicCommand, CliConfig},
+    collect::collector::Module,
     collect::Collector,
     core::{
         events::*,
@@ -28,7 +29,6 @@ use crate::{
     },
     events::SectionId,
     helpers::signals::Running,
-    module::Module,
 };
 
 // GC runs in a thread every OVS_TRACKING_GC_INTERVAL seconds to collect and

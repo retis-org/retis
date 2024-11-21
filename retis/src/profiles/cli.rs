@@ -9,7 +9,7 @@ use log::warn;
 
 use super::{get_profile_paths, Profile};
 
-use crate::{cli::*, module::Modules};
+use crate::{cli::*, collect::collector::Modules};
 
 #[derive(Debug, Default, Subcommand)]
 enum ProfileSubCommand {

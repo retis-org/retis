@@ -19,10 +19,10 @@ use super::dynamic::DynamicCommand;
 use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
+    collect::collector::Modules,
     events::SectionId,
     generate::Complete,
     inspect::Inspect,
-    module::Modules,
     process::cli::*,
     profiles::{cli::ProfileCmd, Profile},
 };

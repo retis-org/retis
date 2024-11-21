@@ -6,6 +6,7 @@ use super::tracking_hook;
 use crate::{
     bindings::tracking_hook_uapi::skb_tracking_event,
     cli::{dynamic::DynamicCommand, CliConfig},
+    collect::collector::Module,
     collect::Collector,
     core::{
         events::*,
@@ -13,7 +14,6 @@ use crate::{
     },
     event_section_factory,
     events::*,
-    module::Module,
 };
 
 #[derive(Default)]

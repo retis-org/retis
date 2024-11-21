@@ -10,7 +10,6 @@ mod core;
 mod generate;
 mod helpers;
 mod inspect;
-mod module;
 mod process;
 mod profiles;
 
@@ -19,9 +18,9 @@ mod benchmark;
 
 use crate::{
     cli::get_cli,
+    collect::collector::get_modules,
     core::inspect::init_inspector,
     helpers::{logger::Logger, pager::try_enable_pager},
-    module::get_modules,
 };
 
 // Re-export events crate. It's not really an import but a re-export so events appear as module

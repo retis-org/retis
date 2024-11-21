@@ -10,12 +10,12 @@ use clap::Parser;
 
 use crate::{
     cli::*,
+    collect::collector::Modules,
     events::{
         file::{FileEventsFactory, FileType},
         *,
     },
     helpers::signals::Running,
-    module::Modules,
     process::display::*,
 };
 
