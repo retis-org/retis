@@ -4,31 +4,25 @@ use anyhow::{bail, Result};
 
 use super::ct_hook;
 use crate::{
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::collector::Module,
+    cli::CliConfig,
     collect::Collector,
     core::{
         events::*,
         inspect,
         probe::{Hook, ProbeBuilderManager},
     },
-    events::SectionId,
 };
 
 #[derive(Default)]
-pub(crate) struct CtModule {}
+pub(crate) struct CtCollector {}
 
-impl Collector for CtModule {
+impl Collector for CtCollector {
     fn new() -> Result<Self> {
         Ok(Self::default())
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
         Some(vec!["struct sk_buff *"])
-    }
-
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(SectionId::Ct)
     }
 
     fn can_run(&mut self, _cli: &CliConfig) -> Result<()> {
@@ -57,11 +51,5 @@ impl Collector for CtModule {
     ) -> Result<()> {
         // Register our generic conntrack hook.
         probes.register_kernel_hook(Hook::from(ct_hook::DATA))
-    }
-}
-
-impl Module for CtModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
     }
 }

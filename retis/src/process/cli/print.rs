@@ -10,7 +10,6 @@ use clap::Parser;
 
 use crate::{
     cli::*,
-    collect::collector::Modules,
     events::{
         file::{FileEventsFactory, FileType},
         *,
@@ -34,7 +33,7 @@ pub(crate) struct Print {
 }
 
 impl SubCommandParserRunner for Print {
-    fn run(&mut self, _: Modules) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         // Create running instance that will handle signal termination.
         let run = Running::new();
         run.register_term_signals()?;

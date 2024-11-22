@@ -14,8 +14,7 @@ use serde_json::json;
 use super::{bpf::*, nft_hook};
 use crate::{
     bindings::nft_uapi::nft_config,
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::collector::Module,
+    cli::CliConfig,
     collect::{cli::Collect, Collector},
     core::{
         events::*,
@@ -44,20 +43,14 @@ Note that stolen verdicts might not be visible if a filter has been specified us
 }
 
 #[derive(Default)]
-pub(crate) struct NftModule {
+pub(crate) struct NftCollector {
     install_chain: bool,
     // Used to keep a reference to our internal config map.
     #[allow(dead_code)]
     config_map: Option<libbpf_rs::MapHandle>,
 }
 
-impl Module for NftModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
-    }
-}
-
-impl NftModule {
+impl NftCollector {
     fn apply_json(&self, cmd: String) -> Result<()> {
         let status = Command::new(NFT_BIN)
             .arg("-j")
@@ -128,13 +121,9 @@ impl NftModule {
     }
 }
 
-impl Collector for NftModule {
+impl Collector for NftCollector {
     fn new() -> Result<Self> {
         Ok(Self::default())
-    }
-
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<NftCollectorArgs>(SectionId::Nft)
     }
 
     fn can_run(&mut self, cli: &CliConfig) -> Result<()> {

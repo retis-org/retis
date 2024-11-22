@@ -12,8 +12,7 @@ use log::warn;
 use super::skb_hook;
 use crate::{
     bindings::skb_hook_uapi::*,
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::collector::Module,
+    cli::CliConfig,
     collect::Collector,
     core::{
         events::*,
@@ -51,23 +50,19 @@ packet, arp, ip, tcp, udp, icmp."
 }
 
 #[derive(Default)]
-pub(crate) struct SkbModule {
+pub(crate) struct SkbCollector {
     // Used to keep a reference to our internal config map.
     #[allow(dead_code)]
     config_map: Option<libbpf_rs::MapHandle>,
 }
 
-impl Collector for SkbModule {
+impl Collector for SkbCollector {
     fn new() -> Result<Self> {
         Ok(Self::default())
     }
 
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
         Some(vec!["struct sk_buff *"])
-    }
-
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<SkbCollectorArgs>(SectionId::Skb)
     }
 
     fn init(
@@ -124,13 +119,7 @@ impl Collector for SkbModule {
     }
 }
 
-impl Module for SkbModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
-    }
-}
-
-impl SkbModule {
+impl SkbCollector {
     fn config_map() -> Result<libbpf_rs::MapHandle> {
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,

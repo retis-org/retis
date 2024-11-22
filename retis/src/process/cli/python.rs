@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{arg, Parser};
 
-use crate::{cli::*, collect::collector::Modules, events::python_embed::shell_execute};
+use crate::{cli::*, events::python_embed::shell_execute};
 
 /// Runs Python scripts with events imported.
 #[derive(Parser, Debug, Default)]
@@ -21,7 +21,7 @@ pub(crate) struct PythonCli {
 }
 
 impl SubCommandParserRunner for PythonCli {
-    fn run(&mut self, _modules: Modules) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         shell_execute(self.input.clone(), self.script.as_ref())
     }
 }

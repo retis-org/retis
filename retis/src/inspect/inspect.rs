@@ -1,11 +1,9 @@
-use std::collections::HashSet;
-
 use anyhow::Result;
 use clap::{arg, Parser};
 
 use crate::{
     cli::*,
-    collect::collector::Modules,
+    collect::collector::get_known_types,
     core::{kernel::Symbol, probe::kernel::utils::probe_from_cli},
 };
 
@@ -28,15 +26,17 @@ Eg. '-p tp:*'. See `retis collect --help` for more details on the probe format."
 }
 
 impl SubCommandParserRunner for Inspect {
-    fn run(&mut self, mut modules: Modules) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         if let Some(probe) = &self.probe {
+            let known_types = get_known_types()?;
+
             match probe.as_str() {
                 probe if !probe.contains(':') => {
                     ["kprobe", "tp"].iter().try_for_each(|r#type| {
-                        inspect_probe(&format!("{type}:{probe}"), &mut modules)
+                        inspect_probe(&format!("{type}:{probe}"), &known_types)
                     })?
                 }
-                probe => inspect_probe(probe, &mut modules)?,
+                probe => inspect_probe(probe, &known_types)?,
             }
         }
 
@@ -44,17 +44,7 @@ impl SubCommandParserRunner for Inspect {
     }
 }
 
-fn inspect_probe(probe: &str, modules: &mut Modules) -> Result<()> {
-    // Gather known types from collectors.
-    let mut known_types = HashSet::new();
-    modules.collectors().values().for_each(|c| {
-        if let Some(types) = c.known_kernel_types() {
-            types.into_iter().for_each(|t| {
-                known_types.insert(t);
-            });
-        }
-    });
-
+fn inspect_probe(probe: &str, known_types: &[&str]) -> Result<()> {
     // Only display probes compatible with the collectors.
     let filter = |symbol: &Symbol| {
         known_types.iter().any(|t| {

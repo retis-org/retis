@@ -313,10 +313,10 @@ fn event_sections() -> Result<&'static EventSectionMap> {
     })
 }
 
-/// Per-module event section, should map 1:1 with a SectionId. Requiring specific
-/// traits to be implemented helps handling those sections in the core directly
-/// without requiring all modules to serialize and deserialize their events by
-/// hand (except for the special case of BPF section events as there is an n:1
+/// Event section, should map 1:1 with a SectionId. Requiring specific traits to
+/// be implemented helps handling those sections in the core directly without
+/// requiring all section to serialize and deserialize their part by hand
+/// (except for the special case of BPF section events as there is an n:1
 /// mapping there).
 ///
 /// Please use `#[retis_derive::event_section]` to implement the common traits.

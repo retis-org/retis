@@ -13,7 +13,6 @@ use clap::Parser;
 
 use crate::{
     cli::*,
-    collect::collector::Modules,
     events::{file::FileEventsFactory, *},
     helpers::signals::Running,
     process::{display::*, series::EventSorter, tracking::AddTracking},
@@ -63,7 +62,7 @@ pub(crate) struct Sort {
 }
 
 impl SubCommandParserRunner for Sort {
-    fn run(&mut self, _modules: Modules) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         // Create running instance that will handle signal termination.
         let run = Running::new();
         run.register_term_signals()?;
