@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 
-use super::{bpf::CtEventFactory, ct_hook};
+use super::ct_hook;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::collector::Module,
@@ -63,8 +63,5 @@ impl Collector for CtModule {
 impl Module for CtModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
-    }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(CtEventFactory::new()?)))
     }
 }

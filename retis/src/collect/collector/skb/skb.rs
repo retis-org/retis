@@ -9,7 +9,7 @@ use clap::{arg, builder::PossibleValuesParser, Parser};
 use libbpf_rs::MapCore;
 use log::warn;
 
-use super::{bpf::*, skb_hook};
+use super::skb_hook;
 use crate::{
     bindings::skb_hook_uapi::*,
     cli::{dynamic::DynamicCommand, CliConfig},
@@ -47,7 +47,7 @@ Supported values:
 The following values are now always retrieved and their use is deprecated:
 packet, arp, ip, tcp, udp, icmp."
     )]
-    skb_sections: Vec<String>,
+    pub(crate) skb_sections: Vec<String>,
 }
 
 #[derive(Default)]
@@ -55,8 +55,6 @@ pub(crate) struct SkbModule {
     // Used to keep a reference to our internal config map.
     #[allow(dead_code)]
     config_map: Option<libbpf_rs::MapHandle>,
-    // Should we report the Ethernet section?
-    report_eth: bool,
 }
 
 impl Collector for SkbModule {
@@ -87,16 +85,13 @@ impl Collector for SkbModule {
 
         for category in args.skb_sections.iter() {
             match category.as_str() {
-                "all" => {
-                    sections |= !0_u64;
-                    self.report_eth = true;
-                }
+                "all" => sections |= !0_u64,
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
-                "eth" => self.report_eth = true,
+                "eth" => (),
                 "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
                     warn!(
                         "Use of '{}' in --skb-sections is depreacted (is now always set)",
@@ -132,11 +127,6 @@ impl Collector for SkbModule {
 impl Module for SkbModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
-    }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(SkbEventFactory {
-            report_eth: self.report_eth,
-        })))
     }
 }
 

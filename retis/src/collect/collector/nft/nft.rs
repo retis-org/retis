@@ -55,9 +55,6 @@ impl Module for NftModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
     }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(NftEventFactory {})))
-    }
 }
 
 impl NftModule {

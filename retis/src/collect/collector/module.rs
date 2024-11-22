@@ -7,9 +7,9 @@ use super::{
     skb_tracking::SkbTrackingModule,
 };
 use crate::{
-    collect::Collector,
+    collect::{collector::*, Collector},
     core::{
-        events::{CommonEventFactory, EventSectionFactory, FactoryId, SectionFactories},
+        events::{CommonEventFactory, FactoryId, SectionFactories},
         probe::{kernel::KernelEventFactory, user::UserEventFactory},
     },
 };
@@ -69,10 +69,6 @@ impl fmt::Display for ModuleId {
 pub(crate) trait Module {
     /// Return a Collector used for collect command
     fn collector(&mut self) -> &mut dyn Collector;
-    /// Return an EventSectionFactory, if any
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(None)
-    }
 }
 
 /// All modules are registered there. The following is the main API and object
@@ -124,23 +120,6 @@ impl Modules {
     pub(crate) fn get_collector(&mut self, id: &ModuleId) -> Option<&mut dyn Collector> {
         self.modules.get_mut(id).map(|m| m.collector())
     }
-
-    /// Return the registered EventSectionFactories in a HashMap.
-    pub(crate) fn section_factories(&self) -> Result<SectionFactories> {
-        let mut section_factories: SectionFactories = HashMap::new();
-
-        // Register core event sections.
-        section_factories.insert(FactoryId::Common, Box::<CommonEventFactory>::default());
-        section_factories.insert(FactoryId::Kernel, Box::<KernelEventFactory>::default());
-        section_factories.insert(FactoryId::Userspace, Box::<UserEventFactory>::default());
-
-        for (_, module) in self.modules.iter() {
-            if let Some(factory) = module.section_factory()? {
-                section_factories.insert(FactoryId::from_u8(factory.id())?, factory);
-            }
-        }
-        Ok(section_factories)
-    }
 }
 
 pub(crate) fn get_modules() -> Result<Modules> {
@@ -156,6 +135,29 @@ pub(crate) fn get_modules() -> Result<Modules> {
         .register(ModuleId::Ct, Box::new(CtModule::new()?))?;
 
     Ok(group)
+}
+
+/// Return the registered EventSectionFactories in a HashMap.
+pub(crate) fn section_factories() -> Result<SectionFactories> {
+    let mut factories = SectionFactories::new();
+
+    factories.insert(FactoryId::Common, Box::<CommonEventFactory>::default());
+    factories.insert(FactoryId::Kernel, Box::<KernelEventFactory>::default());
+    factories.insert(FactoryId::Userspace, Box::<UserEventFactory>::default());
+    factories.insert(
+        FactoryId::SkbTracking,
+        Box::<skb_tracking::SkbTrackingEventFactory>::default(),
+    );
+    factories.insert(
+        FactoryId::SkbDrop,
+        Box::new(skb_drop::SkbDropEventFactory::new()?),
+    );
+    factories.insert(FactoryId::Skb, Box::<skb::SkbEventFactory>::default());
+    factories.insert(FactoryId::Ovs, Box::new(ovs::OvsEventFactory::new()?));
+    factories.insert(FactoryId::Nft, Box::<nft::NftEventFactory>::default());
+    factories.insert(FactoryId::Ct, Box::new(ct::CtEventFactory::new()?));
+
+    Ok(factories)
 }
 
 #[cfg(test)]

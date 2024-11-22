@@ -46,9 +46,6 @@ impl Module for SkbTrackingModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
     }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(SkbTrackingEventFactory {})))
-    }
 }
 
 #[event_section_factory(FactoryId::SkbTracking)]
