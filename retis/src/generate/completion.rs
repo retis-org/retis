@@ -11,7 +11,7 @@ use clap::{
 };
 use clap_complete::{generate, Generator, Shell};
 
-use crate::{cli::*, collect::collector::Modules};
+use crate::cli::*;
 
 /// Generate completion file for a specified shell
 #[derive(Parser, Debug, Default)]
@@ -67,7 +67,7 @@ impl SubCommand for Complete {
 pub(crate) struct CompleteRunner {}
 
 impl SubCommandRunner for CompleteRunner {
-    fn run(&mut self, cli: FullCli, _modules: Modules) -> Result<()> {
+    fn run(&mut self, cli: FullCli) -> Result<()> {
         let mut cmd = cli.get_command();
         let matches = cli.get_command().get_matches();
 

@@ -2,16 +2,20 @@
 //!
 //! Collect is a dynamic CLI subcommand that allows collectors to register their arguments.
 
-use std::{any::Any, collections::HashSet, path::PathBuf};
+use std::{any::Any, path::PathBuf};
 
 use anyhow::Result;
 use clap::{
     error::Error as ClapError,
-    {builder::PossibleValuesParser, error::ErrorKind, Arg, ArgAction, ArgMatches, Args, Command},
+    {builder::PossibleValuesParser, error::ErrorKind, ArgMatches, Args, Command},
 };
 
 use super::CollectRunner;
-use crate::cli::{dynamic::DynamicCommand, SubCommand, *};
+use crate::{
+    cli::{dynamic::DynamicCommand, SubCommand, *},
+    collect::collector::*,
+    events::SectionId,
+};
 
 #[derive(Args, Debug, Default)]
 pub(crate) struct CollectArgs {
@@ -29,8 +33,18 @@ not released. If exhausted, no stack trace will be included."
     pub(super) cmd: Option<String>,
     // Some of the options that we want for this arg are not available in clap's derive interface
     // so both the argument definition and the field population will be done manually.
-    #[arg(skip)]
-    pub(super) collectors: HashSet<String>,
+    #[arg(
+        short,
+        long,
+        value_parser=PossibleValuesParser::new([
+            "skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct",
+        ]),
+        value_delimiter=',',
+        default_value="skb-tracking,skb,skb-drop,ovs,nft,ct",
+        help = "Comma-separated list of collectors to enable. When not specified default to
+auto-mode (all collectors are enabled unless a prerequisite is missing)."
+    )]
+    pub(super) collectors: Vec<String>,
     // Use the plural in the struct but singular for the cli parameter as we're
     // dealing with a list here.
     #[arg(
@@ -126,7 +140,7 @@ fully operational:
 - Mounting debugfs to /sys/kernel/debug if not already mounted. If Retis mounted debugfs it
   will unmount it when stopped.
 
-- In the case the nft module is used, creating a dummy table called "Retis_Table"
+- In the case the nft collector is used, creating a dummy table called "Retis_Table"
   as the following:
 
     table inet Retis_Table {
@@ -159,14 +173,7 @@ impl SubCommand for Collect {
         Ok(Collect {
             args: CollectArgs::default(),
             collectors: DynamicCommand::new(
-                CollectArgs::augment_args(Command::new("collect")).arg(
-                    Arg::new("collectors")
-                        .long("collectors")
-                        .short('c')
-                        .value_delimiter(',')
-                        .action(ArgAction::Append)
-                        .help("Comma-separated list of collectors to enable. When not specified default to auto-mode (all collectors are enabled unless a prerequisite is missing)."),
-                ),
+                CollectArgs::augment_args(Command::new("collect")),
                 "collector",
             )?,
             default_collectors_list: true,
@@ -186,32 +193,29 @@ impl SubCommand for Collect {
     }
 
     fn full(&mut self) -> Result<Command> {
+        self.collectors
+            .register_module::<skb::SkbCollectorArgs>(SectionId::Skb)?;
+        self.collectors
+            .register_module_noargs(SectionId::SkbTracking)?;
+        self.collectors.register_module_noargs(SectionId::SkbDrop)?;
+        self.collectors
+            .register_module::<ovs::OvsCollectorArgs>(SectionId::Ovs)?;
+        self.collectors
+            .register_module::<nft::NftCollectorArgs>(SectionId::Nft)?;
+        self.collectors.register_module_noargs(SectionId::Ct)?;
+
         let long_about = "Collect events using 'collectors'.\n\n \
             Collectors are modules that extract \
             events from different places of the kernel or userspace daemons \
             using ebpf."
             .to_string();
 
-        // Determine all registerd collectors and specify both the possible values and the default
-        // value of the "collectors" argument
-        let mut modules = crate::get_modules()?;
-        let collectors = modules.collectors();
-        collectors
-            .values()
-            .try_for_each(|c| c.register_cli(&mut self.collectors))?;
-        let possible_collectors: Vec<&'static str> =
-            collectors.keys().map(|m| m.to_str()).collect();
-
         let full_command = self
             .collectors
             .command()
             .to_owned()
             .about("Collect network events")
-            .long_about(long_about)
-            .mut_arg("collectors", |a| {
-                a.value_parser(PossibleValuesParser::new(possible_collectors.clone()))
-                    .default_value(possible_collectors.join(","))
-            });
+            .long_about(long_about);
 
         Ok(full_command)
     }

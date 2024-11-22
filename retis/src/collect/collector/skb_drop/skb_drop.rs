@@ -5,8 +5,7 @@ use log::warn;
 
 use super::skb_drop_hook;
 use crate::{
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::collector::Module,
+    cli::CliConfig,
     collect::Collector,
     core::{
         events::*,
@@ -14,14 +13,13 @@ use crate::{
         kernel::Symbol,
         probe::{Hook, Probe, ProbeBuilderManager},
     },
-    events::SectionId,
 };
 
-pub(crate) struct SkbDropModule {
+pub(crate) struct SkbDropCollector {
     reasons_available: bool,
 }
 
-impl Collector for SkbDropModule {
+impl Collector for SkbDropCollector {
     fn new() -> Result<Self> {
         Ok(Self {
             reasons_available: true,
@@ -34,10 +32,6 @@ impl Collector for SkbDropModule {
             "enum mac80211_drop_reason",
             "enum ovs_drop_reason",
         ])
-    }
-
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(SectionId::SkbDrop)
     }
 
     fn can_run(&mut self, _: &CliConfig) -> Result<()> {
@@ -97,11 +91,5 @@ impl Collector for SkbDropModule {
         }
 
         Ok(())
-    }
-}
-
-impl Module for SkbDropModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
     }
 }

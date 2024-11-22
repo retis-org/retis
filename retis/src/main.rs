@@ -18,7 +18,6 @@ mod benchmark;
 
 use crate::{
     cli::get_cli,
-    collect::collector::get_modules,
     core::inspect::init_inspector,
     helpers::{logger::Logger, pager::try_enable_pager},
 };
@@ -42,10 +41,7 @@ fn main() -> Result<()> {
     // command.
     let kconf_opt = cli.main_config.kconf.clone();
 
-    // Step 3: get the modules.
-    let modules = get_modules()?;
-
-    // Step 4: dispatch the command.
+    // Step 3: dispatch the command.
     let command = cli.get_subcommand_mut()?;
 
     // Per-command early fixups.
@@ -66,7 +62,7 @@ fn main() -> Result<()> {
     }
 
     let mut runner = command.runner()?;
-    runner.run(cli, modules)?;
+    runner.run(cli)?;
     Ok(())
 }
 

@@ -9,7 +9,7 @@ use log::warn;
 
 use super::{get_profile_paths, Profile};
 
-use crate::{cli::*, collect::collector::Modules};
+use crate::cli::*;
 
 #[derive(Debug, Default, Subcommand)]
 enum ProfileSubCommand {
@@ -27,7 +27,7 @@ pub(crate) struct ProfileCmd {
 }
 
 impl SubCommandParserRunner for ProfileCmd {
-    fn run(&mut self, _: Modules) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         match &self.command {
             ProfileSubCommand::List => {
                 for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {

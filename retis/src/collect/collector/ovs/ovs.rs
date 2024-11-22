@@ -16,8 +16,7 @@ use crate::{
         ovs_common_uapi::{execute_actions_ctx, upcall_context},
         ovs_operation_uapi::upcall_batch,
     },
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::collector::Module,
+    cli::CliConfig,
     collect::Collector,
     core::{
         events::*,
@@ -53,7 +52,7 @@ See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions.
 }
 
 #[derive(Default)]
-pub(crate) struct OvsModule {
+pub(crate) struct OvsCollector {
     track: bool,
     inflight_upcalls_map: Option<libbpf_rs::MapHandle>,
     inflight_exec_map: Option<libbpf_rs::MapHandle>,
@@ -68,13 +67,9 @@ pub(crate) struct OvsModule {
     pid_to_batch: Option<libbpf_rs::MapHandle>,
 }
 
-impl Collector for OvsModule {
+impl Collector for OvsCollector {
     fn new() -> Result<Self> {
         Ok(Self::default())
-    }
-
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<OvsCollectorArgs>(SectionId::Ovs)
     }
 
     // Check if the OvS collector can run. Some potential errors are silenced,
@@ -142,13 +137,7 @@ impl Collector for OvsModule {
     }
 }
 
-impl Module for OvsModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
-    }
-}
-
-impl OvsModule {
+impl OvsCollector {
     fn create_flow_exec_tracking_map() -> Result<libbpf_rs::MapHandle> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         let opts = libbpf_sys::bpf_map_create_opts {
