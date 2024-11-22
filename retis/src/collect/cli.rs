@@ -2,23 +2,24 @@
 //!
 //! Collect is a dynamic CLI subcommand that allows collectors to register their arguments.
 
-use std::{any::Any, path::PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::{
-    error::Error as ClapError,
-    {builder::PossibleValuesParser, error::ErrorKind, ArgMatches, Args, Command},
-};
+use clap::{builder::PossibleValuesParser, Parser};
 
-use super::CollectRunner;
-use crate::{
-    cli::{dynamic::DynamicCommand, SubCommand, *},
-    collect::collector::*,
-    events::SectionId,
-};
+use super::Collectors;
+use crate::{cli::*, collect::collector::*};
 
-#[derive(Args, Debug, Default)]
-pub(crate) struct CollectArgs {
+/// Collect events.
+///
+/// The collect sub-command uses "collectors" to retrieve data and emit events.
+/// Collectors extract data from different places of the kernel or userspace
+/// daemons using eBPF. Some install probes automatically. Each collector is
+/// specialized in retrieving specific data. The list of enabled collectors can
+/// be configured using the --collectors argument.
+#[derive(Parser, Debug, Default)]
+#[command(name = "collect")]
+pub(crate) struct Collect {
     #[arg(
         long,
         default_value = "false",
@@ -31,8 +32,6 @@ not released. If exhausted, no stack trace will be included."
         help = "Execute a command and terminate the collection once done."
     )]
     pub(super) cmd: Option<String>,
-    // Some of the options that we want for this arg are not available in clap's derive interface
-    // so both the argument definition and the field population will be done manually.
     #[arg(
         short,
         long,
@@ -40,11 +39,10 @@ not released. If exhausted, no stack trace will be included."
             "skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct",
         ]),
         value_delimiter=',',
-        default_value="skb-tracking,skb,skb-drop,ovs,nft,ct",
         help = "Comma-separated list of collectors to enable. When not specified default to
 auto-mode (all collectors are enabled unless a prerequisite is missing)."
     )]
-    pub(super) collectors: Vec<String>,
+    pub(super) collectors: Option<Vec<String>>,
     // Use the plural in the struct but singular for the cli parameter as we're
     // dealing with a list here.
     #[arg(
@@ -154,110 +152,36 @@ fully operational:
 "#
     )]
     pub(crate) allow_system_changes: bool,
+
+    /// Embed below all the per-collector arguments.
+    #[command(flatten)]
+    pub(crate) collector_args: CollectorsArgs,
 }
 
-#[derive(Debug)]
-pub(crate) struct Collect {
-    args: CollectArgs,
-    collectors: DynamicCommand,
-    /// Was the collector list set from the default value (aka did the user not
-    /// request any specific set of collectors)?
-    pub(super) default_collectors_list: bool,
+#[derive(Parser, Debug, Default)]
+pub(crate) struct CollectorsArgs {
+    #[command(flatten, next_help_heading = "collector 'skb'")]
+    pub(crate) skb: skb::SkbCollectorArgs,
+
+    #[command(flatten, next_help_heading = "collector 'ovs'")]
+    pub(crate) ovs: ovs::OvsCollectorArgs,
+
+    #[command(flatten, next_help_heading = "collector 'nft'")]
+    pub(crate) nft: nft::NftCollectorArgs,
 }
 
-impl SubCommand for Collect {
-    fn new() -> Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Collect {
-            args: CollectArgs::default(),
-            collectors: DynamicCommand::new(
-                CollectArgs::augment_args(Command::new("collect")),
-                "collector",
-            )?,
-            default_collectors_list: true,
-        })
-    }
+impl SubCommandParserRunner for Collect {
+    fn run(&mut self) -> Result<()> {
+        let mut collectors = Collectors::new()?;
 
-    fn name(&self) -> String {
-        "collect".to_string()
-    }
+        collectors.check(self)?;
+        collectors.init(self)?;
 
-    fn dynamic(&self) -> Option<&DynamicCommand> {
-        Some(&self.collectors)
-    }
+        collectors.start(self)?;
 
-    fn dynamic_mut(&mut self) -> Option<&mut DynamicCommand> {
-        Some(&mut self.collectors)
-    }
+        // Starts a loop.
+        collectors.process(self)?;
 
-    fn full(&mut self) -> Result<Command> {
-        self.collectors
-            .register_module::<skb::SkbCollectorArgs>(SectionId::Skb)?;
-        self.collectors
-            .register_module_noargs(SectionId::SkbTracking)?;
-        self.collectors.register_module_noargs(SectionId::SkbDrop)?;
-        self.collectors
-            .register_module::<ovs::OvsCollectorArgs>(SectionId::Ovs)?;
-        self.collectors
-            .register_module::<nft::NftCollectorArgs>(SectionId::Nft)?;
-        self.collectors.register_module_noargs(SectionId::Ct)?;
-
-        let long_about = "Collect events using 'collectors'.\n\n \
-            Collectors are modules that extract \
-            events from different places of the kernel or userspace daemons \
-            using ebpf."
-            .to_string();
-
-        let full_command = self
-            .collectors
-            .command()
-            .to_owned()
-            .about("Collect network events")
-            .long_about(long_about);
-
-        Ok(full_command)
-    }
-
-    fn update_from_arg_matches(&mut self, args: &ArgMatches) -> Result<(), ClapError> {
-        self.collectors
-            .set_matches(args)
-            .map_err(|_| ClapError::new(ErrorKind::InvalidValue))?;
-        self.args = self
-            .collectors
-            .get_main::<CollectArgs>()
-            .map_err(|_| ClapError::new(ErrorKind::InvalidValue))?;
-
-        // Manually set collectors argument.
-        self.default_collectors_list = args
-            .value_source("collectors")
-            .ok_or_else(|| ClapError::new(ErrorKind::MissingRequiredArgument))?
-            == clap::parser::ValueSource::DefaultValue;
-        self.args.collectors = args
-            .get_many("collectors")
-            .ok_or_else(|| ClapError::new(ErrorKind::MissingRequiredArgument))?
-            .map(|x: &String| x.to_owned())
-            .collect();
         Ok(())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn runner(&self) -> Result<Box<dyn SubCommandRunner>> {
-        Ok(Box::new(CollectRunner {}))
-    }
-}
-
-impl Collect {
-    /// Returns the main Collect arguments
-    pub(crate) fn args(&self) -> Result<&CollectArgs> {
-        Ok(&self.args)
     }
 }

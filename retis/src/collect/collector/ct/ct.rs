@@ -4,8 +4,7 @@ use anyhow::{bail, Result};
 
 use super::ct_hook;
 use crate::{
-    cli::CliConfig,
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         inspect,
@@ -25,7 +24,7 @@ impl Collector for CtCollector {
         Some(vec!["struct sk_buff *"])
     }
 
-    fn can_run(&mut self, _cli: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &Collect) -> Result<()> {
         let kernel = &inspect::inspector()?.kernel;
 
         match kernel.get_config_option("CONFIG_NF_CONNTRACK") {
@@ -45,7 +44,7 @@ impl Collector for CtCollector {
 
     fn init(
         &mut self,
-        _cli: &CliConfig,
+        _: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
