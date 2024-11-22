@@ -5,8 +5,7 @@ use log::warn;
 
 use super::skb_drop_hook;
 use crate::{
-    cli::CliConfig,
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         inspect::{inspector, kernel_version::KernelVersionReq},
@@ -34,7 +33,7 @@ impl Collector for SkbDropCollector {
         ])
     }
 
-    fn can_run(&mut self, _: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &Collect) -> Result<()> {
         let inspector = inspector()?;
 
         // It makes no sense to use Retis on a kernel older enough not to have
@@ -70,7 +69,7 @@ impl Collector for SkbDropCollector {
 
     fn init(
         &mut self,
-        _: &CliConfig,
+        _: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {

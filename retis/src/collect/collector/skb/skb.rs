@@ -12,16 +12,14 @@ use log::warn;
 use super::skb_hook;
 use crate::{
     bindings::skb_hook_uapi::*,
-    cli::CliConfig,
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         probe::{Hook, ProbeBuilderManager},
     },
-    events::SectionId,
 };
 
-#[derive(Parser, Default)]
+#[derive(Parser, Debug, Default)]
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
@@ -67,18 +65,15 @@ impl Collector for SkbCollector {
 
     fn init(
         &mut self,
-        cli: &CliConfig,
+        args: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
-        // First, get the cli parameters.
-        let args = cli.get_section::<SkbCollectorArgs>(SectionId::Skb)?;
-
         // Default list of sections. We set SECTION_PACKET even though it's not
         // checked in the BPF hook (raw packet is always reported).
         let mut sections: u64 = 1 << SECTION_PACKET;
 
-        for category in args.skb_sections.iter() {
+        for category in args.collector_args.skb.skb_sections.iter() {
             match category.as_str() {
                 "all" => sections |= !0_u64,
                 "dev" => sections |= 1 << SECTION_DEV,

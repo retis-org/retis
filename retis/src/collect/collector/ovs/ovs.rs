@@ -16,8 +16,7 @@ use crate::{
         ovs_common_uapi::{execute_actions_ctx, upcall_context},
         ovs_operation_uapi::upcall_batch,
     },
-    cli::CliConfig,
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         inspect,
@@ -26,7 +25,6 @@ use crate::{
         tracking::gc::TrackingGC,
         user::proc::{Process, ThreadInfo},
     },
-    events::SectionId,
     helpers::signals::Running,
 };
 
@@ -40,7 +38,7 @@ const OVS_TRACKING_GC_INTERVAL: u64 = 5;
 // shouldn't happen much — or it is a bug.
 const TRACKING_OLD_LIMIT: u64 = 60;
 
-#[derive(Parser, Default)]
+#[derive(Parser, Debug, Default)]
 pub(crate) struct OvsCollectorArgs {
     #[arg(
         long,
@@ -75,7 +73,7 @@ impl Collector for OvsCollector {
     // Check if the OvS collector can run. Some potential errors are silenced,
     // to avoid returning an error if we can't inspect a given area for some
     // reasons.
-    fn can_run(&mut self, _: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &Collect) -> Result<()> {
         let inspector = inspect::inspector()?;
 
         // Check if the OvS kernel module is available. We also check for loaded
@@ -96,14 +94,11 @@ impl Collector for OvsCollector {
 
     fn init(
         &mut self,
-        cli: &CliConfig,
+        cli: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
-        self.track = cli
-            .get_section::<OvsCollectorArgs>(SectionId::Ovs)?
-            .ovs_track;
-
+        self.track = cli.collector_args.ovs.ovs_track;
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
         // Create tracking maps and add USDT hooks.

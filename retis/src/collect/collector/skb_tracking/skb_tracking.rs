@@ -5,8 +5,7 @@ use anyhow::Result;
 use super::tracking_hook;
 use crate::{
     bindings::tracking_hook_uapi::skb_tracking_event,
-    cli::CliConfig,
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         probe::{manager::ProbeBuilderManager, Hook},
@@ -29,7 +28,7 @@ impl Collector for SkbTrackingCollector {
 
     fn init(
         &mut self,
-        _: &CliConfig,
+        _: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {

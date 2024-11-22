@@ -14,7 +14,6 @@ use serde_json::json;
 use super::{bpf::*, nft_hook};
 use crate::{
     bindings::nft_uapi::nft_config,
-    cli::CliConfig,
     collect::{cli::Collect, Collector},
     core::{
         events::*,
@@ -22,14 +21,13 @@ use crate::{
         kernel::Symbol,
         probe::{Hook, Probe, ProbeBuilderManager},
     },
-    events::*,
 };
 
 static NFT_BIN: &str = "nft";
 const NFT_TRACE_TABLE: &str = "Retis_Table";
 const NFT_TRACE_CHAIN: &str = "Retis_Chain";
 
-#[derive(Parser, Default)]
+#[derive(Parser, Debug, Default)]
 pub(crate) struct NftCollectorArgs {
     #[arg(
         long,
@@ -126,7 +124,7 @@ impl Collector for NftCollector {
         Ok(Self::default())
     }
 
-    fn can_run(&mut self, cli: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, cli: &Collect) -> Result<()> {
         let inspector = inspect::inspector()?;
 
         if let Err(e) = Symbol::from_name("__nft_trace_packet") {
@@ -140,13 +138,7 @@ impl Collector for NftCollector {
             bail!("Could not resolve nft kernel symbol: 'nf_tables' kernel module is likely not built-in or loaded ({e})");
         }
 
-        self.install_chain = cli
-            .subcommand
-            .as_any()
-            .downcast_ref::<Collect>()
-            .ok_or_else(|| anyhow!("wrong subcommand"))?
-            .args()?
-            .allow_system_changes;
+        self.install_chain = cli.allow_system_changes;
 
         if self.install_chain {
             Command::new(NFT_BIN)
@@ -164,7 +156,7 @@ impl Collector for NftCollector {
 
     fn init(
         &mut self,
-        cli: &CliConfig,
+        args: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
@@ -174,9 +166,8 @@ impl Collector for NftCollector {
             self.create_table()?;
         }
 
-        let args = cli.get_section::<NftCollectorArgs>(SectionId::Nft)?;
         let mut verdicts: u64 = 0;
-        for verdict in args.nft_verdicts.iter() {
+        for verdict in args.collector_args.nft.nft_verdicts.iter() {
             verdicts |= match verdict.as_str() {
                 "all" => (1 << (VERD_MAX + 1)) - 1,
                 "continue" => 1 << VERD_CONTINUE,
