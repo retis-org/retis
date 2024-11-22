@@ -18,9 +18,13 @@ use super::cli::Collect;
 use crate::{
     bindings::packet_filter_uapi,
     cli::{dynamic::DynamicCommand, CliConfig, CliDisplayFormat, FullCli, SubCommandRunner},
-    collect::collector::{ModuleId, Modules},
+    collect::collector::{
+        section_factories,
+        skb::{SkbCollectorArgs, SkbEventFactory},
+        ModuleId, Modules,
+    },
     core::{
-        events::{BpfEventsFactory, EventResult, RetisEventsFactory},
+        events::{BpfEventsFactory, EventResult, FactoryId, RetisEventsFactory},
         filters::{
             filters::{BpfFilter, Filter},
             meta::filter::FilterMeta,
@@ -40,10 +44,7 @@ use crate::{
 };
 
 #[cfg(not(test))]
-use crate::core::{
-    events::FactoryId,
-    probe::kernel::{config::init_stack_map, kernel::KernelEventFactory},
-};
+use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
 
 /// Generic trait representing a collector. All collectors are required to
 /// implement this, as they'll be manipulated through this trait.
@@ -111,6 +112,7 @@ pub(crate) struct Collectors {
     events_factory: Arc<RetisEventsFactory>,
     // Did we mount debugfs ourselves?
     mounted_debugfs: bool,
+    report_eth: bool,
 }
 
 impl Collectors {
@@ -129,6 +131,7 @@ impl Collectors {
             loaded: Vec::new(),
             events_factory: Arc::new(RetisEventsFactory::default()),
             mounted_debugfs: false,
+            report_eth: false,
         })
     }
 
@@ -354,6 +357,14 @@ impl Collectors {
                 Ok(())
             })?;
 
+        // FIXME
+        if let Ok(skb_args) = cli.get_section::<SkbCollectorArgs>(SectionId::Skb) {
+            self.report_eth = skb_args
+                .skb_sections
+                .iter()
+                .any(|s| s == "all" || s == "eth");
+        }
+
         Ok(())
     }
 
@@ -362,7 +373,16 @@ impl Collectors {
     pub(crate) fn start(&mut self) -> Result<()> {
         // Create factories.
         #[cfg_attr(test, allow(unused_mut))]
-        let mut section_factories = self.modules.section_factories()?;
+        let mut section_factories = section_factories()?;
+
+        // Configure factories based on collectors config.
+        if let Some(skb_factory) = section_factories.get_mut(&FactoryId::Skb) {
+            skb_factory
+                .as_any_mut()
+                .downcast_mut::<SkbEventFactory>()
+                .ok_or_else(|| anyhow!("Failed to downcast SkbEventFactory"))?
+                .report_eth(self.report_eth);
+        }
 
         #[cfg(not(test))]
         {
@@ -587,11 +607,7 @@ impl SubCommandRunner for CollectRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        collect::collector::Module,
-        core::{events::bpf::*, probe::ProbeBuilderManager},
-        event_section_factory,
-    };
+    use crate::{collect::collector::Module, core::probe::ProbeBuilderManager};
 
     struct DummyCollectorA;
     struct DummyCollectorB;
@@ -624,9 +640,6 @@ mod tests {
         fn collector(&mut self) -> &mut dyn Collector {
             self
         }
-        fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-            Ok(Some(Box::new(TestEventFactory::default())))
-        }
     }
 
     impl Collector for DummyCollectorB {
@@ -655,19 +668,6 @@ mod tests {
     impl Module for DummyCollectorB {
         fn collector(&mut self) -> &mut dyn Collector {
             self
-        }
-        fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-            Ok(Some(Box::new(TestEventFactory::default())))
-        }
-    }
-
-    #[event_section_factory(FactoryId::Common)]
-    #[derive(Default)]
-    struct TestEventFactory {}
-
-    impl RawEventSectionFactory for TestEventFactory {
-        fn create(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-            Ok(Box::<TestEvent>::default())
         }
     }
 

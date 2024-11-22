@@ -3,7 +3,7 @@ use std::time::Instant;
 use anyhow::Result;
 
 use super::helpers::build_raw_event;
-use crate::{collect::collector::get_modules, core::events::*};
+use crate::{collect::collector::section_factories, core::events::*};
 
 /// Benchmark time to parse a bunch of raw events.
 pub(super) fn bench(ci: bool) -> Result<()> {
@@ -12,8 +12,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
         true => 1,
     };
 
-    let modules = get_modules()?;
-    let mut factories = modules.section_factories()?;
+    let mut factories = section_factories()?;
 
     // Build a raw event for later consumption by factories.
     let data = build_raw_event()?;

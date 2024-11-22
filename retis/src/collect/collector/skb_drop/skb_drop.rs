@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use log::warn;
 
-use super::{bpf::SkbDropEventFactory, skb_drop_hook};
+use super::skb_drop_hook;
 use crate::{
     cli::{dynamic::DynamicCommand, CliConfig},
     collect::collector::Module,
@@ -103,8 +103,5 @@ impl Collector for SkbDropModule {
 impl Module for SkbDropModule {
     fn collector(&mut self) -> &mut dyn Collector {
         self
-    }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(SkbDropEventFactory::new()?)))
     }
 }
