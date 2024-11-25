@@ -21,18 +21,6 @@ use crate::{cli::*, collect::collector::*};
 #[command(name = "collect")]
 pub(crate) struct Collect {
     #[arg(
-        long,
-        default_value = "false",
-        help = "Include stack traces in the kernel events. The stack entries are limited and
-not released. If exhausted, no stack trace will be included."
-    )]
-    pub(super) stack: bool,
-    #[arg(
-        long,
-        help = "Execute a command and terminate the collection once done."
-    )]
-    pub(super) cmd: Option<String>,
-    #[arg(
         short,
         long,
         value_parser=PossibleValuesParser::new([
@@ -68,26 +56,6 @@ Examples:
     )]
     pub(super) probes: Vec<String>,
     #[arg(
-        short,
-        long,
-        num_args = 0..=1,
-        default_missing_value = "retis.data",
-        help = "Write the events to a file rather than to sdout. If the flag is used without a file name,
-defaults to \"retis.data\"."
-    )]
-    pub(super) out: Option<PathBuf>,
-    #[arg(
-        long,
-        help = "Write the events to stdout even if --out is used.",
-        default_value = "false"
-    )]
-    pub(super) print: bool,
-    #[arg(long, help = "Format used when printing an event.")]
-    #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
-    pub(super) format: CliDisplayFormat,
-    #[arg(long, help = "Print the time as UTC")]
-    pub(super) utc: bool,
-    #[arg(
         id = "filter-packet",
         short,
         long,
@@ -112,6 +80,28 @@ Examples of meta filters:
     )]
     pub(super) meta_filter: Option<String>,
     #[arg(
+        short,
+        long,
+        num_args = 0..=1,
+        default_missing_value = "retis.data",
+        help = "Write the events to a file rather than to sdout. If the flag is used without a file name,
+defaults to \"retis.data\"."
+    )]
+    pub(super) out: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "Write the events to stdout even if --out is used.",
+        default_value = "false"
+    )]
+    pub(super) print: bool,
+    #[arg(
+        long,
+        default_value = "false",
+        help = "Include stack traces in the kernel events. The stack entries are limited and
+not released. If exhausted, no stack trace will be included."
+    )]
+    pub(super) stack: bool,
+    #[arg(
         long,
         default_value = "false",
         help = "When set, evaluates where Retis could add additional probes based on functions reported
@@ -129,6 +119,11 @@ Notes:
   initial set of probes; packet transformation can't be automatically detected."
     )]
     pub(crate) probe_stack: bool,
+    #[arg(
+        long,
+        help = "Execute a command and terminate the collection once done."
+    )]
+    pub(super) cmd: Option<String>,
     #[arg(
         long,
         default_value = "false",
@@ -152,6 +147,11 @@ fully operational:
 "#
     )]
     pub(crate) allow_system_changes: bool,
+    #[arg(long, help = "Print the time as UTC")]
+    pub(super) utc: bool,
+    #[arg(long, help = "Format used when printing an event.")]
+    #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
+    pub(super) format: CliDisplayFormat,
 
     /// Embed below all the per-collector arguments.
     #[command(flatten)]
