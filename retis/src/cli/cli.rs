@@ -14,12 +14,10 @@ use clap::{
 };
 use log::debug;
 
-use super::dynamic::DynamicCommand;
 #[cfg(feature = "benchmark")]
 use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
-    events::SectionId,
     generate::Complete,
     inspect::Inspect,
     process::cli::*,
@@ -91,20 +89,6 @@ pub(crate) trait SubCommand {
 
     /// Updates internal structures with clap's ArgMatches.
     fn update_from_arg_matches(&mut self, matches: &ArgMatches) -> Result<(), ClapError>;
-
-    /// Return the DynamicCommand handler.
-    ///
-    /// Useful for module arguments retrieval.
-    fn dynamic(&self) -> Option<&DynamicCommand> {
-        None
-    }
-
-    /// Return a mutable reference to the DynamicCommand handler.
-    ///
-    /// Useful for module registration.
-    fn dynamic_mut(&mut self) -> Option<&mut DynamicCommand> {
-        None
-    }
 
     /// Return a SubCommandRunner capable of running this command.
     fn runner(&self) -> Result<Box<dyn SubCommandRunner>>;
@@ -386,24 +370,6 @@ impl FullCli {
 pub(crate) struct CliConfig {
     pub(crate) main_config: MainConfig,
     pub(crate) subcommand: Box<dyn SubCommand>,
-}
-
-impl CliConfig {
-    /// Creates and returns a new instance of dynamic module argument type M
-    pub(crate) fn get_section<M>(&self, id: SectionId) -> Result<M>
-    where
-        M: Default + FromArgMatches,
-    {
-        self.subcommand
-            .dynamic()
-            .ok_or_else(|| {
-                anyhow!(format!(
-                    "subcommand {} does not support dynamic arguments",
-                    self.subcommand.name()
-                ))
-            })?
-            .get_section::<M>(id)
-    }
 }
 
 /// Type of the "format" argument.
