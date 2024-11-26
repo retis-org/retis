@@ -10,7 +10,9 @@ use anyhow::{anyhow, bail, Result};
 use crate::{
     bindings::{
         kernel_enqueue_uapi::upcall_enqueue_event,
-        kernel_exec_tp_uapi::{exec_ct, exec_event, exec_output, exec_recirc, exec_track_event},
+        kernel_exec_tp_uapi::{
+            exec_ct, exec_drop, exec_event, exec_output, exec_recirc, exec_track_event,
+        },
         kernel_upcall_ret_uapi::upcall_ret_event,
         kernel_upcall_tp_uapi::upcall_event,
         ovs_operation_uapi::ovs_operation_event,
@@ -48,6 +50,8 @@ pub(crate) enum OvsDataType {
     RecircAction = 8,
     /// Conntrack action.
     ConntrackAction = 9,
+    /// Explicit drop action.
+    DropAction = 10,
 }
 
 impl OvsDataType {
@@ -64,6 +68,7 @@ impl OvsDataType {
             7 => OutputAction,
             8 => RecircAction,
             9 => ConntrackAction,
+            10 => DropAction,
             x => bail!("Can't construct a OvsDataType from {}", x),
         })
     }
@@ -136,6 +141,12 @@ pub(super) fn unmarshall_recirc(raw_section: &BpfRawSection, event: &mut OvsEven
             recirc: OvsActionRecirc { id: raw.id },
         },
     )
+}
+
+pub(super) fn unmarshall_drop(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
+    let raw = parse_raw_section::<exec_drop>(raw_section)?;
+
+    update_action_event(event, OvsAction::Drop { reason: raw.reason })
 }
 
 pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -> Result<()> {
@@ -308,6 +319,7 @@ impl OvsEventFactory {
                     Some("CHECK_PKT_LEN") => Some(OvsAction::CheckPktLen(OvsDummyAction)),
                     Some("ADD_MPLS") => Some(OvsAction::AddMpls(OvsDummyAction)),
                     Some("DEC_TTL") => Some(OvsAction::DecTtl(OvsDummyAction)),
+                    Some("DROP") => Some(OvsAction::Drop { reason: 0 }),
                     // The private OVS_ACTION_ATTR_SET_TO_MASKED action is used
                     // in the same way as OVS_ACTION_ATTR_SET_MASKED. Use only
                     // one action to avoid confusion
@@ -364,6 +376,12 @@ impl RawEventSectionFactory for OvsEventFactory {
                         .ok_or_else(|| anyhow!("received action data without action"))?,
                 )?,
                 OvsDataType::ConntrackAction => unmarshall_ct(
+                    section,
+                    event
+                        .as_mut()
+                        .ok_or_else(|| anyhow!("received action data without action"))?,
+                )?,
+                OvsDataType::DropAction => unmarshall_drop(
                     section,
                     event
                         .as_mut()

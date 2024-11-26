@@ -2,6 +2,9 @@ import json
 import signal
 import subprocess
 import time
+import re
+
+from os import uname
 from os.path import dirname, abspath, join, getsize, exists
 from shutil import rmtree
 from tempfile import mkdtemp
@@ -212,6 +215,14 @@ class OVS:
         ret = run(cmd)
         return ret.stdout.decode("utf8")
 
+    def version(self):
+        """Run ovs-appctl {args}"""
+        verstring = self.vsctl("--version").splitlines()[0]
+        m = re.match(
+            r"ovs-vsctl \(Open vSwitch\) ([0-9]*).([0-9]*).([0-9]*)", verstring
+        )
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
 
 @pytest.fixture
 def ovs():
@@ -351,3 +362,20 @@ def is_subset(superset, subset, aliases):
             if not value == superset[key]:
                 return (False, f"{value} is not equal to {superset[key]}")
     return (True, None)
+
+
+def kernel_version_lt(other):
+    """Check if running kernel version is lower than the provided M.m.z
+    version."""
+    release = re.split(r"[.-]", uname().release)
+    other = other.split(".", maxsplit=3)
+    other = [other[i] if i < len(other) else 0 for i in range(3)]
+
+    print(f"Running kernel: {release}")
+
+    if release[0] != other[0]:
+        return int(release[0]) < int(other[0])
+    if release[1] != other[1]:
+        return int(release[1]) < int(other[1])
+    if release[2] != other[2]:
+        return int(release[2]) < int(other[2])
