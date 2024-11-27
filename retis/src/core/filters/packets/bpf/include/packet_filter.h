@@ -1,24 +1,16 @@
 #ifndef __CORE_FILTERS_PACKETS_PACKET_FILTER__
 #define __CORE_FILTERS_PACKETS_PACKET_FILTER__
 
-#include <bpf/bpf_helpers.h>
-
 #include <common_defs.h>
 
-/* Defines the context passed to the packet filtering
- * facility. Includes both input and output.
- * Keep in sync with its Rust counterpart in
- * core::filters::packets::ebpf.
- */
 struct retis_packet_filter_ctx {
-	/* Input */
-	char *data;		/* points to the beginning of the mac header. */
-	unsigned int len;	/* linear length. */
-	/* Output */
-	unsigned int ret;	/* outcome of the match (zero if miss). */
-} __packed;
+	u32 len;	/* In: linear length. */
+	u32 ret;	/* Out: outcome of the match (zero if miss). */
+	u8 *data;	/* In: points to the beginning of the mac header. */
+} __binding;
 
 #define FILTER_MAX_INSNS 4096
+__binding const u32 filter_max_insns = FILTER_MAX_INSNS;
 
 #define __s(v) #v
 #define s(v) __s(v)
@@ -29,22 +21,24 @@ struct retis_packet_filter_ctx {
 	"goto +0x0;"				\
 	".endr;"
 
-/* Keep in sync with its Rust counterpart in
- * crate::core::filters::packets::ebpf
- */
 #define STACK_RESERVED		8
+__binding const s16 stack_reserved = STACK_RESERVED;
+
 #define SCRATCH_MEM_SIZE	4
+__binding const s16 scratch_mem_size = SCRATCH_MEM_SIZE;
+
 /* 8 bytes for probe_read_kernel() outcome plus 16 * 4 scratch
  * memory locations for cbpf filters. Aligned to u64 boundary.
  */
 #define SCRATCH_MEM_START	16 * SCRATCH_MEM_SIZE + STACK_RESERVED
+__binding const s16 scratch_mem_start = SCRATCH_MEM_START;
 
 #define STACK_SIZE		SCRATCH_MEM_START
 
-enum {
+enum filter_type {
 	FILTER_L2 = 0xdeadbeef,
 	FILTER_L3 = 0xdeadc0de,
-};
+} __binding;
 
 /* The function below defines a placeholder instruction and a
  * nop frame that will be replaced on load with the actual filtering

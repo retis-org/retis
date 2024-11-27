@@ -122,7 +122,7 @@ impl ProbeManager {
         for filter in builder.filters.iter() {
             match filter {
                 Filter::Packet(magic, _) => {
-                    filters::register_filter(*magic as u32, filter)?;
+                    filters::register_filter(*magic, filter)?;
                 }
                 #[allow(unused_variables)]
                 Filter::Meta(ops) =>
@@ -350,7 +350,7 @@ impl ProbeBuilderManager {
         // FilterPacketType
         if self.filters.iter().any(|f| {
             if let Filter::Packet(src_magic, _) = &filter {
-                matches!(f, Filter::Packet(dst_magic, _) if *src_magic as u32 == *dst_magic as u32)
+                matches!(f, Filter::Packet(dst_magic, _) if *src_magic == *dst_magic)
             } else {
                 std::mem::discriminant(f) == std::mem::discriminant(&filter)
             }

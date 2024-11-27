@@ -5,23 +5,26 @@ use anyhow::{bail, Result};
 use log::{debug, error};
 use once_cell::sync::Lazy;
 
-use crate::core::{
-    bpf_sys,
-    filters::packets::{
-        ebpf::{eBpfProg, BpfReg},
-        ebpfinsn::{eBpfInsn, MovInfo},
+use crate::{
+    bindings::packet_filter_uapi,
+    core::{
+        bpf_sys,
+        filters::packets::{
+            ebpf::{eBpfProg, BpfReg},
+            ebpfinsn::{eBpfInsn, MovInfo},
+        },
+        workaround,
     },
-    workaround,
 };
 
-use super::{meta::filter::FilterMeta, packets::filter::FilterPacketType};
+use super::meta::filter::FilterMeta;
 
 #[derive(Clone)]
 pub(crate) struct BpfFilter(pub(crate) Vec<u8>);
 
 #[derive(Clone)]
 pub(crate) enum Filter {
-    Packet(FilterPacketType, BpfFilter),
+    Packet(packet_filter_uapi::filter_type, BpfFilter),
     Meta(FilterMeta),
 }
 
@@ -62,7 +65,7 @@ pub(crate) unsafe extern "C" fn fixup_filter_load_fn(
     _opts: *mut libbpf_sys::bpf_prog_load_opts,
     _cookie: ::std::os::raw::c_long,
 ) -> std::os::raw::c_int {
-    for magic in [FilterPacketType::L2 as u32, FilterPacketType::L3 as u32] {
+    for magic in [packet_filter_uapi::FILTER_L2, packet_filter_uapi::FILTER_L3] {
         let filter = get_filter(magic);
 
         let f = if let Some(f) = filter {
