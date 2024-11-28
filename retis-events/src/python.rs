@@ -8,7 +8,7 @@ use std::{collections::HashMap, path::PathBuf, str::FromStr};
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError},
     prelude::*,
-    types::PyList,
+    types::{PyBool, PyList},
 };
 
 use super::*;
@@ -55,6 +55,11 @@ use super::*;
 /// ```
 #[pyclass(name = "Event")]
 pub struct PyEvent(Event);
+
+// We need this to make it a pyclass.
+//
+// Safety: no mutable references on internal members is ever given.
+unsafe impl Sync for PyEvent {}
 
 impl PyEvent {
     pub(crate) fn new(event: Event) -> Self {
@@ -109,7 +114,7 @@ impl PyEvent {
     /// Returns a list of existing section names.
     pub fn sections(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
         let sections: Vec<&str> = self.0.sections().map(|s| s.to_str()).collect();
-        PyList::new_bound(py, sections).extract()
+        PyList::new(py, sections).unwrap().extract()
     }
 }
 
@@ -366,21 +371,27 @@ pub(crate) fn to_pyobject(val: &serde_json::Value, py: Python<'_>) -> PyObject {
     use serde_json::Value;
     match val {
         Value::Null => py.None(),
-        Value::Bool(b) => b.to_object(py),
+        Value::Bool(b) => <pyo3::Bound<'_, PyBool> as Clone>::clone(&b.into_pyobject(py).unwrap())
+            .into_any()
+            .unbind(),
         Value::Number(n) => n
             .as_i64()
-            .map(|x| x.to_object(py))
-            .or(n.as_u64().map(|x| x.to_object(py)))
-            .or(n.as_f64().map(|x| x.to_object(py)))
+            .map(|x| x.into_pyobject(py).unwrap().into_any().unbind())
+            .or(n
+                .as_u64()
+                .map(|x| x.into_pyobject(py).unwrap().into_any().unbind()))
+            .or(n
+                .as_f64()
+                .map(|x| x.into_pyobject(py).unwrap().into_any().unbind()))
             .expect("Cannot convert number to Python object"),
-        Value::String(s) => s.to_object(py),
+        Value::String(s) => s.into_pyobject(py).unwrap().into_any().unbind(),
         Value::Array(a) => {
             let vec: Vec<_> = a.iter().map(|x| to_pyobject(x, py)).collect();
-            vec.to_object(py)
+            vec.into_pyobject(py).unwrap().into_any().unbind()
         }
         Value::Object(o) => {
             let map: HashMap<_, _> = o.iter().map(|(k, v)| (k, to_pyobject(v, py))).collect();
-            map.to_object(py)
+            map.into_pyobject(py).unwrap().into_any().unbind()
         }
     }
 }
