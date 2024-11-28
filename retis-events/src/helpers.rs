@@ -79,6 +79,7 @@ impl U128 {
 /// We don't use #[event_type] as we're implementing serde::Serialize and
 /// serde::Deserialize manually.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "python", derive(pyo3::IntoPyObject))]
 pub struct RawPacket(pub Vec<u8>);
 
 impl serde::Serialize for RawPacket {
@@ -119,12 +120,5 @@ impl<'de> serde::Deserialize<'de> for RawPacket {
         }
 
         deserializer.deserialize_str(RawPacketVisitor)
-    }
-}
-
-#[cfg(feature = "python")]
-impl pyo3::ToPyObject for RawPacket {
-    fn to_object(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-        pyo3::IntoPy::into_py(self.0.clone(), py)
     }
 }

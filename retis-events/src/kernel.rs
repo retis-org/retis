@@ -58,10 +58,3 @@ impl EventFmt for StackTrace {
         }
     }
 }
-
-#[cfg(feature = "python")]
-impl pyo3::ToPyObject for StackTrace {
-    fn to_object(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-        pyo3::IntoPy::into_py(self.0.clone(), py)
-    }
-}

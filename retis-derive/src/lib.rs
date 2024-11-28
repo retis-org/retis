@@ -44,8 +44,8 @@ pub fn event_section(
 
             #[cfg(feature = "python")]
             fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-                use pyo3::IntoPy;
-                self.clone().into_py(py)
+                use pyo3::IntoPyObject;
+                self.clone().into_pyobject(py).unwrap().into_any().unbind()
             }
         }
 
