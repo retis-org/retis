@@ -1,5 +1,6 @@
 use std::{
-    io::Write,
+    env,
+    io::{stderr, IsTerminal, Stdout, Write},
     sync::{Arc, Mutex},
 };
 
@@ -12,18 +13,28 @@ use time::{macros::format_description, OffsetDateTime};
 pub(crate) struct Logger {
     /// Max level the logger will output.
     max_level: LevelFilter,
+    /// Inner writer, alongside its configuration.
+    inner: Mutex<LoggerWriter>,
+}
+
+struct LoggerWriter {
     /// We're only outputting messages to stderr, as non-log output is printed
     /// on stdout. This allows to not mix the two and even pipe the non-log
     /// output to other tools. `switch_to_stdout()` can be used to disable this
     /// behavior for specific cases.
-    stderr: Mutex<BufferedStandardStream>,
+    stderr: BufferedStandardStream,
+    /// Should colors be used in the output?
+    use_colors: bool,
 }
 
 impl Logger {
     pub(crate) fn init(max_level: LevelFilter) -> Result<Arc<Self>> {
         let logger = Arc::new(Logger {
             max_level,
-            stderr: Mutex::new(BufferedStandardStream::stderr(ColorChoice::Auto)),
+            inner: Mutex::new(LoggerWriter {
+                stderr: BufferedStandardStream::stderr(ColorChoice::Auto),
+                use_colors: Self::check_color_use(Some(stderr())),
+            }),
         });
 
         log::set_max_level(max_level);
@@ -41,12 +52,12 @@ impl Logger {
             Some(Color::Cyan),   // Debug.
             Some(Color::White),  // Trace.
         ];
-        let mut stderr: &mut BufferedStandardStream = &mut self.stderr.lock().unwrap();
+        let inner: &mut LoggerWriter = &mut self.inner.lock().unwrap();
 
         // If the log level allows debug! and/or trace!, show the time.
         if self.max_level >= LevelFilter::Debug {
             OffsetDateTime::now_utc().format_into(
-                &mut stderr,
+                &mut inner.stderr,
                 format_description!("[hour]:[minute]:[second].[subsecond digits:6] "),
             )?;
         }
@@ -54,22 +65,50 @@ impl Logger {
         // Show the level for error! and warn!, or if the max level includes
         // debug!.
         if record.level() <= LevelFilter::Warn || self.max_level >= LevelFilter::Debug {
-            stderr.set_color(ColorSpec::new().set_fg(LEVEL_COLORS[record.level() as usize]))?;
-            write!(stderr, "{:5} ", record.level(),)?;
-            stderr.reset()?;
+            if inner.use_colors {
+                inner
+                    .stderr
+                    .set_color(ColorSpec::new().set_fg(LEVEL_COLORS[record.level() as usize]))?;
+            }
+            write!(inner.stderr, "{:5} ", record.level(),)?;
+            if inner.use_colors {
+                inner.stderr.reset()?;
+            }
         }
 
-        writeln!(stderr, "{}", record.args())?;
+        writeln!(inner.stderr, "{}", record.args())?;
 
-        stderr.flush()?;
+        inner.stderr.flush()?;
         Ok(())
     }
 
     /// Switch the output from stderr to stdout. Used in some specific cases,
     /// like when a pager is used.
     pub(crate) fn switch_to_stdout(&self) {
-        let mut stderr = self.stderr.lock().unwrap();
-        *stderr = BufferedStandardStream::stdout(ColorChoice::Auto);
+        let mut inner = self.inner.lock().unwrap();
+
+        // We know a pager is used, do not check the descriptor. This ensure
+        // we'll force color output in the pager (if the underlying terminal
+        // supports it).
+        inner.use_colors = Self::check_color_use::<Stdout>(None);
+        inner.stderr = BufferedStandardStream::stdout(if inner.use_colors {
+            ColorChoice::Always
+        } else {
+            ColorChoice::Never
+        });
+    }
+
+    /// Check if colors can be used in the output.
+    fn check_color_use<T: IsTerminal>(t: Option<T>) -> bool {
+        if let Some(t) = t {
+            if !t.is_terminal() {
+                return false;
+            }
+        }
+        if !matches!(env::var("TERM"), Ok(x) if x != "dumb") {
+            return false;
+        }
+        true
     }
 }
 
@@ -89,6 +128,6 @@ impl log::Log for Logger {
 
     fn flush(&self) {
         // Not much we can do to report the error...
-        let _ = self.stderr.lock().unwrap().flush();
+        let _ = self.inner.lock().unwrap().stderr.flush();
     }
 }
