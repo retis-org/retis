@@ -271,7 +271,12 @@ pub(crate) struct OvsEventFactory {
 
 impl OvsEventFactory {
     pub fn new() -> Result<Self> {
-        let ovs_actions = parse_enum("ovs_action_attr", &["OVS_ACTION_ATTR_"])?;
+        let ovs_actions = if cfg!(feature = "benchmark") {
+            // Add a few dummy actions for benchmarking
+            HashMap::from([(1, "OUTPUT".to_string()), (2, "USERSPACE".to_string())])
+        } else {
+            parse_enum("ovs_action_attr", &["OVS_ACTION_ATTR_"])?
+        };
         Ok(OvsEventFactory { ovs_actions })
     }
 
