@@ -38,16 +38,21 @@ not released. If exhausted, no stack trace will be included."
         short,
         long,
         help = "Add a probe on the given target. Can be used multiple times. Probes should
-follow the [TYPE:]TARGET pattern. When TYPE is not set 'kprobe' is used.
+follow the [TYPE:]TARGET pattern.
+
+When TYPE is not specified it is set to 'kprobe', except if a single ':' is found in TARGET
+in which case 'raw_tracepoint' is set instead. Those default types might evolve over time.
 
 Valid TYPEs:
-- kprobe: kernel probes.
-- kretprobe: kernel return probes.
-- tp: kernel tracepoints.
+- kprobe | k: kernel probes.
+- kretprobe | kr: kernel return probes.
+- raw_tracepoint | tp: kernel tracepoints.
 
 Wildcards (*) can be used, eg. \"kprobe:tcp_*\" or \"tp:skb:*\".
 
-Example: --probe tp:skb:kfree_skb --probe kprobe:consume_skb"
+Examples:
+  --probe tp:skb:kfree_skb --probe kprobe:consume_skb
+  --probe skb:kfree_skb --probe consume_skb"
     )]
     pub(super) probes: Vec<String>,
     #[arg(

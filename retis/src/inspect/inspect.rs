@@ -5,7 +5,7 @@ use clap::{arg, Parser};
 
 use crate::{
     cli::*,
-    core::{kernel::Symbol, probe::kernel::utils::parse_probe},
+    core::{kernel::Symbol, probe::kernel::utils::probe_from_cli},
     module::Modules,
 };
 
@@ -65,7 +65,7 @@ fn inspect_probe(probe: &str, modules: &mut Modules) -> Result<()> {
     };
 
     // Get & list probes.
-    let mut probes: Vec<String> = parse_probe(probe, filter)?
+    let mut probes: Vec<String> = probe_from_cli(probe, filter)?
         .iter()
         .map(|p| format!("{p}"))
         .collect();

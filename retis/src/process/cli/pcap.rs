@@ -23,7 +23,7 @@ use pcap_file::{
 
 use crate::{
     cli::*,
-    core::kernel::Symbol,
+    core::{kernel::Symbol, probe::kernel::utils::*},
     events::{file::FileEventsFactory, CommonEvent, KernelEvent, SkbEvent, *},
     helpers::signals::Running,
     module::Modules,
@@ -220,21 +220,8 @@ See `retis collect --help` for more details on the probe format."
 
 impl SubCommandParserRunner for Pcap {
     fn run(&mut self, _: Modules) -> Result<()> {
-        let (probe_type, target) = match self.probe.split_once(':') {
-            Some((r#type, target)) => (r#type, target),
-            None => ("kprobe", self.probe.as_str()),
-        };
+        let (probe_type, target) = parse_cli_probe(&self.probe)?;
         let symbol = Symbol::from_name_no_inspect(target);
-
-        // Convert the user-given probe type to the event ones, so both are
-        // supported. This helps users to either use the collect format or what
-        // is reported in the event itself.
-        //
-        // E.g. --probe tp:skb:kfree_skb == --probe raw_tracepoint:skb:kfree_skb
-        let probe_type = match probe_type {
-            "tp" => "raw_tracepoint",
-            x => x,
-        };
 
         // Create a PCAP writer to push our events / metadata.
         let mut writer = PcapNgWriter::new(match &self.out {
@@ -252,7 +239,7 @@ impl SubCommandParserRunner for Pcap {
 
         // Filtering logic.
         let filter = |r#type: &str, name: &str| -> bool {
-            if name == symbol.name() && r#type == probe_type {
+            if name == symbol.name() && r#type == probe_type.to_str() {
                 return true;
             }
             false

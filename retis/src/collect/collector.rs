@@ -28,7 +28,7 @@ use crate::{
         inspect::check::collection_prerequisites,
         kernel::Symbol,
         probe::{
-            kernel::{probe_stack::ProbeStack, utils::parse_probe},
+            kernel::{probe_stack::ProbeStack, utils::probe_from_cli},
             *,
         },
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
@@ -348,7 +348,7 @@ impl Collectors {
             .probes
             .iter()
             .try_for_each(|p| -> Result<()> {
-                parse_probe(p, filter)?
+                probe_from_cli(p, filter)?
                     .drain(..)
                     .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
                 Ok(())
