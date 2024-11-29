@@ -16,13 +16,14 @@ use nix::{errno::Errno, mount::*, unistd::Uid};
 
 use super::cli::Collect;
 use crate::{
+    bindings::packet_filter_uapi,
     cli::{dynamic::DynamicCommand, CliConfig, CliDisplayFormat, FullCli, SubCommandRunner},
     core::{
         events::{BpfEventsFactory, EventResult, RetisEventsFactory},
         filters::{
             filters::{BpfFilter, Filter},
             meta::filter::FilterMeta,
-            packets::filter::{FilterPacket, FilterPacketType},
+            packets::filter::FilterPacket,
         },
         inspect::check::collection_prerequisites,
         kernel::Symbol,
@@ -135,10 +136,10 @@ impl Collectors {
     fn setup_filters(probes: &mut ProbeBuilderManager, collect: &Collect) -> Result<()> {
         if let Some(f) = &collect.args()?.packet_filter {
             // L2 filter MUST always succeed. Any failure means we need to bail.
-            let fb = FilterPacket::from_string_opt(f.to_string(), FilterPacketType::L2)?;
+            let fb = FilterPacket::from_string_opt(f.to_string(), packet_filter_uapi::FILTER_L2)?;
 
             probes.register_filter(Filter::Packet(
-                FilterPacketType::L2,
+                packet_filter_uapi::FILTER_L2,
                 BpfFilter(fb.to_bytes()?),
             ))?;
 
@@ -148,7 +149,7 @@ impl Collectors {
                 debug!("Skipping L3 filter generation (ether[n:m] not allowed)");
                 FilterPacket::reject_filter()
             } else {
-                match FilterPacket::from_string_opt(f.to_string(), FilterPacketType::L3) {
+                match FilterPacket::from_string_opt(f.to_string(), packet_filter_uapi::FILTER_L3) {
                     Err(e) => {
                         debug!("Skipping L3 filter generation ({e}).");
                         FilterPacket::reject_filter()
@@ -161,7 +162,7 @@ impl Collectors {
             };
 
             probes.register_filter(Filter::Packet(
-                FilterPacketType::L3,
+                packet_filter_uapi::FILTER_L3,
                 BpfFilter(fb.to_bytes()?),
             ))?;
 

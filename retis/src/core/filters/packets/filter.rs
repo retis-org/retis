@@ -13,30 +13,26 @@ use pcap::{Capture, Linktype};
 
 use super::ebpfinsn::{eBpfInsn, MovInfo};
 
-use crate::core::filters::packets::{
-    cbpf::BpfProg,
-    ebpf::{eBpfProg, BpfReg},
+use crate::{
+    bindings::packet_filter_uapi,
+    core::filters::packets::{
+        cbpf::BpfProg,
+        ebpf::{eBpfProg, BpfReg},
+    },
 };
-
-// please keep in sync with FILTER_MAX_INSNS in
-// src/core/probe/kernel/bpf/include/common.h
-const FILTER_MAX_INSNS: usize = 4096;
-
-#[derive(Clone, Copy)]
-#[repr(u32)]
-pub(crate) enum FilterPacketType {
-    L2 = 0xdeadbeef,
-    L3 = 0xdeadc0de,
-}
 
 #[derive(Clone)]
 pub(crate) struct FilterPacket(eBpfProg);
 
 impl FilterPacket {
-    pub(crate) fn from_string_opt(fstring: String, layer_type: FilterPacketType) -> Result<Self> {
+    pub(crate) fn from_string_opt(
+        fstring: String,
+        layer_type: packet_filter_uapi::filter_type,
+    ) -> Result<Self> {
         let link_type = match layer_type {
-            FilterPacketType::L3 => Linktype(12), // DLT_RAW
-            FilterPacketType::L2 => Linktype::ETHERNET,
+            packet_filter_uapi::FILTER_L3 => Linktype(12), // DLT_RAW
+            packet_filter_uapi::FILTER_L2 => Linktype::ETHERNET,
+            _ => bail!("Unsupported filter type"),
         };
 
         let bpf_capture = Capture::dead(link_type)?;
@@ -49,7 +45,7 @@ impl FilterPacket {
             BpfProg::try_from(unsafe { mem::transmute::<&[pcap::BpfInstruction], &[u8]>(insns) })?;
 
         let ebpf_filter = eBpfProg::try_from(filter)?;
-        if ebpf_filter.len() > FILTER_MAX_INSNS {
+        if ebpf_filter.len() > packet_filter_uapi::filter_max_insns as usize {
             bail!("Filter exceeds the maximum allowed size.");
         }
 

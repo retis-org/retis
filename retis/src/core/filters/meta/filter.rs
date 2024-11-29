@@ -4,6 +4,8 @@
 //! under the form struct_name.member1.member2.[...].leafmember
 //! generating a sequence of actions.
 
+use std::fmt;
+
 use anyhow::{anyhow, bail, Result};
 use btf_rs::*;
 use plain::Plain;
@@ -46,6 +48,19 @@ impl MetaCmp {
         };
 
         Ok(op)
+    }
+}
+
+impl fmt::Display for MetaCmp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MetaCmp::Eq => write!(f, "=="),
+            MetaCmp::Gt => write!(f, ">"),
+            MetaCmp::Lt => write!(f, "<"),
+            MetaCmp::Ge => write!(f, ">="),
+            MetaCmp::Le => write!(f, "<="),
+            MetaCmp::Ne => write!(f, "!="),
+        }
     }
 }
 
@@ -166,6 +181,15 @@ impl MetaOp {
         Ok(())
     }
 
+    fn emit_load_ptr(offt: u32, mask: u64) -> Result<MetaOp> {
+        let mut op: MetaOp = MetaOp::new();
+        op.l.offt = u16::try_from(offt / 8)?;
+        op.l.r#type = PTR_BIT;
+        op.l.mask = mask;
+
+        Ok(op)
+    }
+
     fn emit_load(btf: &Btf, r#type: &Type, offt: u32, bfs: u32, mask: u64) -> Result<MetaOp> {
         let mut op: MetaOp = MetaOp::new();
         let lop = op.load_ref_mut();
@@ -268,7 +292,11 @@ impl MetaOp {
 
         if lmo.is_ptr() || lmo.nmemb > 0 {
             if cmp_op != MetaCmp::Eq && cmp_op != MetaCmp::Ne {
-                bail!("wrong comparison operator. Only '==' and '!=' are supported for strings.");
+                bail!(
+                    "wrong comparison operator. Only '{}' and '{}' are supported for strings.",
+                    MetaCmp::Eq,
+                    MetaCmp::Ne
+                );
             }
 
             if let Rval::Str(val) = rval {
@@ -575,11 +603,7 @@ impl FilterMeta {
                             std::cmp::Ordering::Equal => {
                                 offt = 0;
                                 // Emit load Ptr
-                                let mut op: MetaOp = MetaOp::new();
-                                op.l.offt = u16::try_from(offset / 8)?;
-                                op.l.r#type = PTR_BIT;
-                                op.l.mask = field.mask;
-                                ops.push(op);
+                                ops.push(MetaOp::emit_load_ptr(offset, field.mask)?);
                             }
                             std::cmp::Ordering::Greater => {
                                 bail!("pointers of pointers are not supported")
