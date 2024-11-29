@@ -153,9 +153,7 @@ impl Module for OvsModule {
     }
     fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
         Ok(Some(Box::new(OvsEventFactory::new(
-            self.ovs_actions
-                .clone()
-                .ok_or_else(|| anyhow!("failed to inspect ovs actions"))?,
+            self.ovs_actions.clone().unwrap_or_default(),
         )?)))
     }
 }

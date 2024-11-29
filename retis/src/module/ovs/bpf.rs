@@ -256,6 +256,14 @@ pub(crate) struct OvsEventFactory {
 
 impl OvsEventFactory {
     pub fn new(ovs_actions: HashMap<u32, String>) -> Result<Self> {
+        #[cfg(feature = "benchmark")]
+        if ovs_actions.is_empty() {
+            // Add a few dummy actions for benchmarking
+            let ovs_actions =
+                HashMap::from([(1, "OUTPUT".to_string()), (2, "USERSPACE".to_string())]);
+            return Ok(OvsEventFactory { ovs_actions });
+        }
+
         Ok(OvsEventFactory { ovs_actions })
     }
 
