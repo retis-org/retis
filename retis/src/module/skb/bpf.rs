@@ -55,12 +55,14 @@ pub(super) fn unmarshal_ipv4(ip: &Ipv4Packet) -> Result<SkbIpEvent> {
     Ok(SkbIpEvent {
         saddr: helpers::net::parse_ipv4_addr(u32::from(ip.get_source()))?,
         daddr: helpers::net::parse_ipv4_addr(u32::from(ip.get_destination()))?,
-        version: SkbIpVersion::V4(SkbIpv4Event {
-            tos: ip.get_dscp(),
-            flags: ip.get_flags(),
-            id: ip.get_identification(),
-            offset: ip.get_fragment_offset(),
-        }),
+        version: SkbIpVersion::V4 {
+            v4: SkbIpv4Event {
+                tos: ip.get_dscp(),
+                flags: ip.get_flags(),
+                id: ip.get_identification(),
+                offset: ip.get_fragment_offset(),
+            },
+        },
         protocol: ip.get_next_level_protocol().0,
         len: ip.get_total_length(),
         ttl: ip.get_ttl(),
@@ -72,9 +74,11 @@ pub(super) fn unmarshal_ipv6(ip: &Ipv6Packet) -> Result<SkbIpEvent> {
     Ok(SkbIpEvent {
         saddr: ip.get_source().to_string(),
         daddr: ip.get_destination().to_string(),
-        version: SkbIpVersion::V6(SkbIpv6Event {
-            flow_label: ip.get_flow_label(),
-        }),
+        version: SkbIpVersion::V6 {
+            v6: SkbIpv6Event {
+                flow_label: ip.get_flow_label(),
+            },
+        },
         protocol: ip.get_next_header().0,
         len: ip.get_payload_length(),
         ttl: ip.get_hop_limit(),
