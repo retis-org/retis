@@ -32,6 +32,7 @@ base64 = "0.22"
 btf-rs = "1.1"
 byteorder = "1.5"
 caps = "0.5"
+cargo-platform = "=0.1.8" # 0.1.9 requires rustc >= 1.78 but c8s only has 1.75.0
 clap = { version = "4.0", features = ["derive", "string"] }
 clap_complete = "4.4"
 elf = "0.7"
