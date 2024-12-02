@@ -15,11 +15,11 @@ done
 tmpdir=$(mktemp -d)
 
 # Generate vmlinux header.
-bpftool btf dump file $btf_dir/vmlinux format c > $tmpdir/vmlinux.h
+bpftool btf dump file $btf_dir/vmlinux format c unsorted > $tmpdir/vmlinux.h
 
 # Generate module headers and remove duplicate information from vmlinux one.
 for mod in $modules; do
-	bpftool btf dump file $btf_dir/$mod format c > $tmpdir/$mod.h
+	bpftool btf dump file $btf_dir/$mod format c unsorted > $tmpdir/$mod.h
 
 	(diff --changed-group-format='%>' --unchanged-group-format='' \
 		$tmpdir/vmlinux.h $tmpdir/$mod.h || true) > $tmpdir/${mod}_dedup.h
