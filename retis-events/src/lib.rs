@@ -13,7 +13,7 @@ pub mod display;
 pub use display::*;
 
 pub mod file;
-pub mod net;
+pub mod helpers;
 #[cfg(feature = "python")]
 pub mod python;
 #[cfg(feature = "python-embed")]

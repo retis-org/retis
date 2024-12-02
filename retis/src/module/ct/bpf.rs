@@ -16,13 +16,15 @@ use crate::{
         inspect::inspector,
     },
     event_section_factory,
-    events::*,
+    events::{helpers::U128, *},
     helpers,
 };
 
 #[event_section_factory(FactoryId::Ct)]
 #[derive(Default)]
 pub(crate) struct CtEventFactory {
+    mark_available: bool,
+    labels_available: bool,
     tcp_states: HashMap<i32, String>,
 }
 
@@ -72,7 +74,24 @@ impl RawEventSectionFactory for CtEventFactory {
 
 impl CtEventFactory {
     pub(super) fn new() -> Result<Self> {
-        let mut me = Self::default();
+        let inspector = inspector()?;
+
+        let mut me = Self {
+            mark_available: matches!(
+                inspector
+                    .kernel
+                    .get_config_option("CONFIG_NF_CONNTRACK_MARK"),
+                Ok(Some("y")) | Err(_)
+            ),
+            labels_available: matches!(
+                inspector
+                    .kernel
+                    .get_config_option("CONFIG_NF_CONNTRACK_LABELS"),
+                Ok(Some("y")) | Err(_)
+            ),
+            ..Default::default()
+        };
+
         me.parse_tcp_states()?;
         Ok(me)
     }
@@ -202,6 +221,8 @@ impl CtEventFactory {
             None
         };
 
+        let labels = U128::from_u128(u128::from_ne_bytes(raw.labels));
+
         Ok(CtConnEvent {
             zone_id: raw.zone_id,
             zone_dir,
@@ -214,6 +235,16 @@ impl CtEventFactory {
                 proto: reply_proto,
             },
             tcp_state,
+            mark: if self.mark_available {
+                Some(raw.mark)
+            } else {
+                None
+            },
+            labels: if self.labels_available && labels.bits() != 0 {
+                Some(labels)
+            } else {
+                None
+            },
         })
     }
 }

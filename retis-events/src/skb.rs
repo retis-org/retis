@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::{
-    net::{etype_str, protocol_str, RawPacket},
+    helpers::{etype_str, protocol_str, RawPacket},
     *,
 };
 use crate::{event_section, event_type, Formatter};
