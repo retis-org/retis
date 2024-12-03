@@ -2,6 +2,8 @@
 
 ## Presentations
 
+- [Tracing packets in OVS: an update on Retis](https://www.youtube.com/watch?v=K0ldVsWkLJw)
+  at Open vSwitch and OVN 2024 Fall Conference.
 - [Tracing packets in the kernel OVS datapath with Retis](https://www.youtube.com/watch?v=1PmkNuJx4w4)
   at Open vSwitch and OVN 2023 Fall Conference.
   [Slides](https://www.openvswitch.org/support/ovscon2023/slides/Tracing_packets_in_the_kernel_OVS_datapath_with_Retis.pdf).
