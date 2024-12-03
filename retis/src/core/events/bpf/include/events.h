@@ -13,12 +13,7 @@
 /* Please keep the below in sync with its Rust counterpart. */
 #define LOG_MAX			127
 
-/* Defining a global variable is needed to export the binding to
- * user-space as defines cannot be annotated.
- * This MUST NOT be modified by the loader.
- */
-#define LOG_EVENTS_MAX		128
-__binding const int log_events_max = LOG_EVENTS_MAX;
+BINDING_DEF(LOG_EVENTS_MAX, 128)
 
 struct retis_log_event {
 	u8 level;

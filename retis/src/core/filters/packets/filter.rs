@@ -45,7 +45,7 @@ impl FilterPacket {
             BpfProg::try_from(unsafe { mem::transmute::<&[pcap::BpfInstruction], &[u8]>(insns) })?;
 
         let ebpf_filter = eBpfProg::try_from(filter)?;
-        if ebpf_filter.len() > packet_filter_uapi::filter_max_insns as usize {
+        if ebpf_filter.len() > packet_filter_uapi::FILTER_MAX_INSNS as usize {
             bail!("Filter exceeds the maximum allowed size.");
         }
 
