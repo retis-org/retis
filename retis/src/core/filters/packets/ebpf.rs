@@ -166,7 +166,7 @@ impl eBpfProg {
             BpfAluOp::Add,
             AluInfo::Imm {
                 dst: BpfReg::ARG1,
-                imm: -packet_filter_uapi::stack_reserved as i32,
+                imm: -(packet_filter_uapi::STACK_RESERVED as i32),
             },
         ));
         // mov size, %arg2
@@ -209,7 +209,7 @@ impl eBpfProg {
             LdInfo::Reg {
                 src: BpfReg::INLINE_FP,
                 dst: BpfReg::A,
-                off: -packet_filter_uapi::stack_reserved,
+                off: -(packet_filter_uapi::STACK_RESERVED as i16),
             },
             size,
         ));
@@ -376,8 +376,8 @@ impl TryFrom<BpfProg> for eBpfProg {
                         } else {
                             BpfReg::X
                         },
-                        off: -packet_filter_uapi::scratch_mem_start
-                            + (cbpf_insn.k as i16 * packet_filter_uapi::scratch_mem_size),
+                        off: -(packet_filter_uapi::SCRATCH_MEM_START as i16)
+                            + (cbpf_insn.k * packet_filter_uapi::SCRATCH_MEM_SIZE) as i16,
                     },
                     BpfSize::Word,
                 )),
@@ -469,8 +469,8 @@ impl TryFrom<BpfProg> for eBpfProg {
                     StInfo::Reg {
                         src: BpfReg::A,
                         dst: BpfReg::INLINE_FP,
-                        off: -packet_filter_uapi::scratch_mem_start
-                            + (cbpf_insn.k as i16 * packet_filter_uapi::scratch_mem_size),
+                        off: -(packet_filter_uapi::SCRATCH_MEM_START as i16)
+                            + (cbpf_insn.k * packet_filter_uapi::SCRATCH_MEM_SIZE) as i16,
                     },
                     BpfSize::Word,
                 )),
@@ -478,8 +478,8 @@ impl TryFrom<BpfProg> for eBpfProg {
                     StInfo::Reg {
                         src: BpfReg::X,
                         dst: BpfReg::INLINE_FP,
-                        off: -packet_filter_uapi::scratch_mem_start
-                            + (cbpf_insn.k as i16 * packet_filter_uapi::scratch_mem_size),
+                        off: -(packet_filter_uapi::SCRATCH_MEM_START as i16)
+                            + (cbpf_insn.k * packet_filter_uapi::SCRATCH_MEM_SIZE) as i16,
                     },
                     BpfSize::Word,
                 )),

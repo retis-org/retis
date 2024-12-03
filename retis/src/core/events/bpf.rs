@@ -121,7 +121,7 @@ impl BpfEventsFactory {
             Some("log_map"),
             0,
             0,
-            mem::size_of::<retis_log_event>() as u32 * log_events_max as u32,
+            mem::size_of::<retis_log_event>() as u32 * LOG_EVENTS_MAX,
             &opts,
         )
         .or_else(|e| bail!("Failed to create log map: {}", e))?;
