@@ -23,11 +23,11 @@ output the events to the console.
 
 ```none
 $ retis collect
-00:42:00 [INFO] Collector(s) started: skb-tracking, skb, skb-drop, ovs, nft, ct
-00:42:01 [INFO] 5 probe(s) loaded
+Collector(s) started: skb-tracking, skb, skb-drop, ovs, nft, ct
+5 probe(s) loaded
 ...
 $ retis collect -c skb,skb-drop
-00:42:00 [INFO] 4 probe(s) loaded
+4 probe(s) loaded
 ...
 ```
 
@@ -37,10 +37,10 @@ to the console in parallel, one can use `--print`.
 
 ```none
 $ retis collect -c skb,skb-drop,skb-tracking -o
-00:42:00 [INFO] 4 probe(s) loaded
+4 probe(s) loaded
 ...
 $ retis collect -c skb,skb-drop,skb-tracking -o --print
-00:42:00 [INFO] 4 probe(s) loaded
+4 probe(s) loaded
 ...
 ```
 
