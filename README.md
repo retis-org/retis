@@ -28,7 +28,7 @@ $ retis <command> --help
 Listing packets being dropped by the kernel with an associated stack trace and drop reason
 ```
 $ retis -p dropmon collect
-00:42:00 [INFO] 4 probe(s) loaded
+4 probe(s) loaded
 
 3392678938917 [nc] 2311 [tp] skb:kfree_skb drop (NO_SOCKET)
     bpf_prog_3a0ef5414c2f6fca_sd_devices+0xa0ad
@@ -68,7 +68,7 @@ The exact nft rule can be retrieved using `nft -a list table ...`.
 
 ```
 $ retis -p nft-dropmon collect --allow-system-changes
-00:42:00 [INFO] 4 probe(s) loaded
+4 probe(s) loaded
 
 3443313082998 [swapper/0] 0 [k] __nft_trace_packet
     __nft_trace_packet+0x1
@@ -148,27 +148,6 @@ $ curl -O https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_
 $ chmod +x retis_in_container.sh
 $ ./retis_in_container.sh --help
 ```
-
-The Retis container can also be run manually,
-
-```
-$ podman run --privileged --rm -it --pid=host \
-      --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
-      -v /sys/kernel/btf:/sys/kernel/btf:ro \
-      -v /sys/kernel/debug:/sys/kernel/debug:ro \
-      -v /boot/config-$(uname -r):/kconfig:ro \
-      -v $(pwd):/data:rw \
-      quay.io/retis/retis:latest --help
-```
-
-- Or using `docker` in place of `podman` in the above.
-
-- When running on CoreOS, Fedora Silverblue and friends replace `-v
-  /boot/config-$(uname -r):/kconfig:ro` with `-v /lib/modules/$(uname
-  -r)/config:/kconfig:ro` in the above.
-
-The `/data` container mount point is used to allow storing persistent data for
-future use (e.g. logged events using the `-o` cli option).
 
 ### From sources
 For details on how to build retis, visit the
