@@ -18,7 +18,8 @@ pub type skb_sections = ::std::os::raw::c_uint;
 pub struct skb_config {
     pub sections: u64_,
 }
-pub const ifnamesz: u8_ = 16;
+pub const IFNAMSIZ: enum_IFNAMSIZ = 16;
+pub type enum_IFNAMSIZ = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct skb_netdev_event {
