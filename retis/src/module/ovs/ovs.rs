@@ -12,7 +12,7 @@ use clap::{arg, Parser};
 use super::{bpf::OvsEventFactory, hooks};
 use crate::{
     bindings::{
-        ovs_common_uapi::{execute_actions_ctx, upcall_context},
+        ovs_common_uapi::{execute_actions_ctx, ovs_config, upcall_context},
         ovs_operation_uapi::upcall_batch,
     },
     cli::{dynamic::DynamicCommand, CliConfig},
@@ -53,6 +53,8 @@ See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions.
 
 #[derive(Default)]
 pub(crate) struct OvsModule {
+    // Global module map
+    config_map: Option<libbpf_rs::MapHandle>,
     track: bool,
     inflight_upcalls_map: Option<libbpf_rs::MapHandle>,
     inflight_exec_map: Option<libbpf_rs::MapHandle>,
@@ -65,6 +67,8 @@ pub(crate) struct OvsModule {
     /* Batch tracking maps. */
     upcall_batches: Option<libbpf_rs::MapHandle>,
     pid_to_batch: Option<libbpf_rs::MapHandle>,
+
+    ovs_actions: Option<HashMap<u32, String>>,
 }
 
 impl Collector for OvsModule {
@@ -108,6 +112,8 @@ impl Collector for OvsModule {
             .get_section::<OvsCollectorArgs>(SectionId::Ovs)?
             .ovs_track;
 
+        self.create_config_map()?;
+
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
         // Create tracking maps and add USDT hooks.
@@ -146,11 +152,60 @@ impl Module for OvsModule {
         self
     }
     fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(OvsEventFactory {})))
+        Ok(Some(Box::new(OvsEventFactory::new(
+            self.ovs_actions.clone().unwrap_or_default(),
+        )?)))
     }
 }
 
 impl OvsModule {
+    fn create_config_map(&mut self) -> Result<()> {
+        self.ovs_actions = Some(parse_enum("ovs_action_attr", &["OVS_ACTION_ATTR_"])?);
+        let action_max = self
+            .ovs_actions
+            .as_ref()
+            .unwrap()
+            .iter()
+            .find_map(|(k, v)| {
+                if v == "__OVS_ACTION_ATTR_MAX" {
+                    Some(k)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow!("cannot find __OVS_ACTION_ATTR_MAX value"))?;
+
+        let config = ovs_config {
+            action_max: *action_max,
+        };
+        let config = unsafe { plain::as_bytes(&config) };
+
+        let opts = libbpf_sys::bpf_map_create_opts {
+            sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+            ..Default::default()
+        };
+        // Please keep in sync with its C counterpart in bpf/include/ovs_common.h
+        self.config_map = Some(
+            libbpf_rs::MapHandle::create(
+                libbpf_rs::MapType::Array,
+                Some("ovs_config_map"),
+                mem::size_of::<u32>() as u32,
+                mem::size_of::<ovs_config>() as u32,
+                1,
+                &opts,
+            )
+            .or_else(|e| bail!("Could not create the ovs config map: {}", e))?,
+        );
+
+        self.config_map.as_mut().unwrap().update(
+            &0_u32.to_ne_bytes(),
+            config,
+            libbpf_rs::MapFlags::empty(),
+        )?;
+
+        Ok(())
+    }
+
     fn create_flow_exec_tracking_map() -> Result<libbpf_rs::MapHandle> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         let opts = libbpf_sys::bpf_map_create_opts {
@@ -338,6 +393,10 @@ impl OvsModule {
         // ovs_do_execute_action tracepoint
         let mut exec_action_hook = Hook::from(hooks::kernel_exec_tp::DATA);
         exec_action_hook.reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        exec_action_hook.reuse_map(
+            "ovs_config_map",
+            self.config_map.as_ref().unwrap().as_fd().as_raw_fd(),
+        )?;
         let mut probe =
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?;
         probe.add_hook(exec_action_hook)?;

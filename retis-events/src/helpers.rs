@@ -97,7 +97,7 @@ impl<'de> serde::Deserialize<'de> for RawPacket {
     {
         struct RawPacketVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for RawPacketVisitor {
+        impl serde::de::Visitor<'_> for RawPacketVisitor {
             type Value = RawPacket;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
