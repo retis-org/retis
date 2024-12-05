@@ -69,13 +69,11 @@ impl OvsDataType {
 
 pub(super) fn unmarshall_upcall(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let raw = parse_raw_section::<upcall_event>(raw_section)?;
-    Ok(OvsEvent {
-        event: OvsEventType::Upcall {
-            upcall: UpcallEvent {
-                cmd: raw.cmd,
-                port: raw.port,
-                cpu: raw.cpu,
-            },
+    Ok(OvsEvent::Upcall {
+        upcall: UpcallEvent {
+            cmd: raw.cmd,
+            port: raw.port,
+            cpu: raw.cpu,
         },
     })
 }
@@ -87,49 +85,47 @@ pub(super) fn unmarshall_exec(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     // specific action variant when unmarshaling its event data type. Until then, we need to
     // initialize the Action here based on the action_id (which corresponds to ovs_action_attr
     // defined in uapi/linux/openvswitch.h).
-    Ok(OvsEvent {
-        event: OvsEventType::Action {
-            action_execute: ActionEvent {
-                action: match raw.action {
-                    0 => None,
-                    1 => Some(OvsAction::Output {
-                        output: OvsActionOutput::default(),
-                    }),
-                    2 => Some(OvsAction::Userspace(OvsDummyAction)),
-                    3 => Some(OvsAction::Set(OvsDummyAction)),
-                    4 => Some(OvsAction::PushVlan(OvsDummyAction)),
-                    5 => Some(OvsAction::PopVlan(OvsDummyAction)),
-                    6 => Some(OvsAction::Sample(OvsDummyAction)),
-                    7 => Some(OvsAction::Recirc {
-                        recirc: OvsActionRecirc::default(),
-                    }),
-                    8 => Some(OvsAction::Hash(OvsDummyAction)),
-                    9 => Some(OvsAction::PushMpls(OvsDummyAction)),
-                    10 => Some(OvsAction::PopMpls(OvsDummyAction)),
-                    11 => Some(OvsAction::SetMasked(OvsDummyAction)),
-                    12 => Some(OvsAction::Ct {
-                        ct: OvsActionCt::default(),
-                    }),
-                    13 => Some(OvsAction::Trunc(OvsDummyAction)),
-                    14 => Some(OvsAction::PushEth(OvsDummyAction)),
-                    15 => Some(OvsAction::PopEth(OvsDummyAction)),
-                    16 => Some(OvsAction::CtClear(OvsDummyAction)),
-                    17 => Some(OvsAction::PushNsh(OvsDummyAction)),
-                    18 => Some(OvsAction::PopNsh(OvsDummyAction)),
-                    19 => Some(OvsAction::Meter(OvsDummyAction)),
-                    20 => Some(OvsAction::Clone(OvsDummyAction)),
-                    21 => Some(OvsAction::CheckPktLen(OvsDummyAction)),
-                    22 => Some(OvsAction::AddMpls(OvsDummyAction)),
-                    23 => Some(OvsAction::DecTtl(OvsDummyAction)),
-                    // The private OVS_ACTION_ATTR_SET_TO_MASKED action is used
-                    // in the same way as OVS_ACTION_ATTR_SET_MASKED. Use only
-                    // one action to avoid confusion
-                    25 => Some(OvsAction::SetMasked(OvsDummyAction)),
-                    val => bail!("Unsupported action id {val}"),
-                },
-                recirc_id: raw.recirc_id,
-                ..ActionEvent::default()
+    Ok(OvsEvent::Action {
+        action_execute: ActionEvent {
+            action: match raw.action {
+                0 => None,
+                1 => Some(OvsAction::Output {
+                    output: OvsActionOutput::default(),
+                }),
+                2 => Some(OvsAction::Userspace(OvsDummyAction)),
+                3 => Some(OvsAction::Set(OvsDummyAction)),
+                4 => Some(OvsAction::PushVlan(OvsDummyAction)),
+                5 => Some(OvsAction::PopVlan(OvsDummyAction)),
+                6 => Some(OvsAction::Sample(OvsDummyAction)),
+                7 => Some(OvsAction::Recirc {
+                    recirc: OvsActionRecirc::default(),
+                }),
+                8 => Some(OvsAction::Hash(OvsDummyAction)),
+                9 => Some(OvsAction::PushMpls(OvsDummyAction)),
+                10 => Some(OvsAction::PopMpls(OvsDummyAction)),
+                11 => Some(OvsAction::SetMasked(OvsDummyAction)),
+                12 => Some(OvsAction::Ct {
+                    ct: OvsActionCt::default(),
+                }),
+                13 => Some(OvsAction::Trunc(OvsDummyAction)),
+                14 => Some(OvsAction::PushEth(OvsDummyAction)),
+                15 => Some(OvsAction::PopEth(OvsDummyAction)),
+                16 => Some(OvsAction::CtClear(OvsDummyAction)),
+                17 => Some(OvsAction::PushNsh(OvsDummyAction)),
+                18 => Some(OvsAction::PopNsh(OvsDummyAction)),
+                19 => Some(OvsAction::Meter(OvsDummyAction)),
+                20 => Some(OvsAction::Clone(OvsDummyAction)),
+                21 => Some(OvsAction::CheckPktLen(OvsDummyAction)),
+                22 => Some(OvsAction::AddMpls(OvsDummyAction)),
+                23 => Some(OvsAction::DecTtl(OvsDummyAction)),
+                // The private OVS_ACTION_ATTR_SET_TO_MASKED action is used
+                // in the same way as OVS_ACTION_ATTR_SET_MASKED. Use only
+                // one action to avoid confusion
+                25 => Some(OvsAction::SetMasked(OvsDummyAction)),
+                val => bail!("Unsupported action id {val}"),
             },
+            recirc_id: raw.recirc_id,
+            ..ActionEvent::default()
         },
     })
 }
@@ -140,8 +136,8 @@ pub(super) fn unmarshall_exec_track(
 ) -> Result<()> {
     let raw = parse_raw_section::<exec_track_event>(raw_section)?;
 
-    match &mut event.event {
-        OvsEventType::Action {
+    match event {
+        OvsEvent::Action {
             ref mut action_execute,
         } => action_execute.queue_id = Some(raw.queue_id),
         other => {
@@ -156,8 +152,8 @@ pub(super) fn unmarshall_exec_track(
 }
 
 fn update_action_event(event: &mut OvsEvent, action: OvsAction) -> Result<()> {
-    match &mut event.event {
-        OvsEventType::Action {
+    match event {
+        OvsEvent::Action {
             ref mut action_execute,
         } => action_execute.action = Some(action),
         other => {
@@ -254,16 +250,14 @@ pub(super) fn unmarshall_ct(raw_section: &BpfRawSection, event: &mut OvsEvent) -
 pub(super) fn unmarshall_recv(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let raw = parse_raw_section::<recv_upcall_event>(raw_section)?;
 
-    Ok(OvsEvent {
-        event: OvsEventType::RecvUpcall {
-            recv_upcall: RecvUpcallEvent {
-                key_size: raw.key_size,
-                batch_ts: raw.batch_ts,
-                pkt_size: raw.pkt_size,
-                queue_id: raw.queue_id,
-                r#type: raw.type_,
-                batch_idx: raw.batch_idx,
-            },
+    Ok(OvsEvent::RecvUpcall {
+        recv_upcall: RecvUpcallEvent {
+            key_size: raw.key_size,
+            batch_ts: raw.batch_ts,
+            pkt_size: raw.pkt_size,
+            queue_id: raw.queue_id,
+            r#type: raw.type_,
+            batch_idx: raw.batch_idx,
         },
     })
 }
@@ -271,14 +265,12 @@ pub(super) fn unmarshall_recv(raw_section: &BpfRawSection) -> Result<OvsEvent> {
 pub(super) fn unmarshall_operation(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let raw = parse_raw_section::<ovs_operation_event>(raw_section)?;
 
-    Ok(OvsEvent {
-        event: OvsEventType::Operation {
-            flow_operation: OperationEvent {
-                batch_ts: raw.batch_ts,
-                queue_id: raw.queue_id,
-                batch_idx: raw.batch_idx,
-                op_type: raw.type_,
-            },
+    Ok(OvsEvent::Operation {
+        flow_operation: OperationEvent {
+            batch_ts: raw.batch_ts,
+            queue_id: raw.queue_id,
+            batch_idx: raw.batch_idx,
+            op_type: raw.type_,
         },
     })
 }
@@ -286,16 +278,14 @@ pub(super) fn unmarshall_operation(raw_section: &BpfRawSection) -> Result<OvsEve
 pub(super) fn unmarshall_upcall_enqueue(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let raw = parse_raw_section::<upcall_enqueue_event>(raw_section)?;
 
-    Ok(OvsEvent {
-        event: OvsEventType::UpcallEnqueue {
-            upcall_enqueue: UpcallEnqueueEvent {
-                ret: raw.ret,
-                cmd: raw.cmd,
-                port: raw.port,
-                upcall_ts: raw.upcall_ts,
-                upcall_cpu: raw.upcall_cpu,
-                queue_id: raw.queue_id,
-            },
+    Ok(OvsEvent::UpcallEnqueue {
+        upcall_enqueue: UpcallEnqueueEvent {
+            ret: raw.ret,
+            cmd: raw.cmd,
+            port: raw.port,
+            upcall_ts: raw.upcall_ts,
+            upcall_cpu: raw.upcall_cpu,
+            queue_id: raw.queue_id,
         },
     })
 }
@@ -303,13 +293,11 @@ pub(super) fn unmarshall_upcall_enqueue(raw_section: &BpfRawSection) -> Result<O
 pub(super) fn unmarshall_upcall_return(raw_section: &BpfRawSection) -> Result<OvsEvent> {
     let raw = parse_raw_section::<upcall_ret_event>(raw_section)?;
 
-    Ok(OvsEvent {
-        event: OvsEventType::UpcallReturn {
-            upcall_return: UpcallReturnEvent {
-                upcall_ts: raw.upcall_ts,
-                upcall_cpu: raw.upcall_cpu,
-                ret: raw.ret,
-            },
+    Ok(OvsEvent::UpcallReturn {
+        upcall_return: UpcallReturnEvent {
+            upcall_ts: raw.upcall_ts,
+            upcall_cpu: raw.upcall_cpu,
+            ret: raw.ret,
         },
     })
 }
