@@ -53,8 +53,8 @@ impl AddTracking {
     /// Process one event adding TrackingInfo section.
     pub(crate) fn process_one(&mut self, event: &mut Event) -> Result<()> {
         if let Some(ovs) = event.get_section::<OvsEvent>(SectionId::Ovs) {
-            use OvsEventType::*;
-            match &ovs.event {
+            use OvsEvent::*;
+            match ovs {
                 Upcall { upcall } => {
                     let cpu = upcall.cpu;
                     // Lookup the skb-based tracking information.
