@@ -1,4 +1,8 @@
-use std::{fs, path::PathBuf};
+use std::{
+    ffi::{CStr, CString},
+    fs,
+    path::PathBuf,
+};
 
 use anyhow::Result;
 use pyo3::{prelude::*, types::PyDict};
@@ -12,7 +16,8 @@ pub fn shell_execute(file: PathBuf, script: Option<&PathBuf>) -> Result<()> {
     Python::with_gil(|py| -> PyResult<()> {
         let shell = PyShell::new(py, event_file)?;
         if let Some(script) = script {
-            shell.run(&fs::read_to_string(script)?)
+            let script = fs::read_to_string(script)?;
+            shell.run(&CString::new(script)?)
         } else {
             shell.interact()
         }
@@ -27,18 +32,17 @@ struct PyShell<'a> {
 }
 
 impl<'a> PyShell<'a> {
-    const INTERACTIVE_SHELL: &'static str = "import code; code.interact(local=locals())";
+    const INTERACTIVE_SHELL: &'static CStr = c"import code; code.interact(local=locals())";
 
     fn new(py: Python<'a>, file: PyEventFile) -> PyResult<Self> {
-        let globals = PyDict::new_bound(py);
+        let globals = PyDict::new(py);
         globals.set_item("reader", Py::new(py, file)?.into_bound(py))?;
 
         Ok(Self { py, globals })
     }
 
-    fn run(&self, script: &str) -> PyResult<()> {
-        self.py
-            .run_bound(script, Some(&self.globals.as_borrowed()), None)
+    fn run(&self, script: &CStr) -> PyResult<()> {
+        self.py.run(script, Some(&self.globals.as_borrowed()), None)
     }
 
     fn interact(&self) -> PyResult<()> {

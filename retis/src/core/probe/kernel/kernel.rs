@@ -3,6 +3,8 @@
 use std::{collections::HashMap, fmt};
 
 use anyhow::{bail, Result};
+#[cfg(not(test))]
+use libbpf_rs::MapCore;
 
 use super::inspect::inspect_symbol;
 use crate::{

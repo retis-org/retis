@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
+use libbpf_rs::MapCore;
 
 use super::{bpf::OvsEventFactory, hooks};
 use crate::{

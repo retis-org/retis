@@ -175,38 +175,50 @@ impl CtEventFactory {
 
         let (orig_proto, reply_proto) = if flags & RETIS_CT_PROTO_TCP != 0 {
             (
-                CtProto::Tcp(CtTcp {
-                    sport: u16::from_be(raw.orig.src.data),
-                    dport: u16::from_be(raw.orig.dst.data),
-                }),
-                CtProto::Tcp(CtTcp {
-                    sport: u16::from_be(raw.reply.src.data),
-                    dport: u16::from_be(raw.reply.dst.data),
-                }),
+                CtProto::Tcp {
+                    tcp: CtTcp {
+                        sport: u16::from_be(raw.orig.src.data),
+                        dport: u16::from_be(raw.orig.dst.data),
+                    },
+                },
+                CtProto::Tcp {
+                    tcp: CtTcp {
+                        sport: u16::from_be(raw.reply.src.data),
+                        dport: u16::from_be(raw.reply.dst.data),
+                    },
+                },
             )
         } else if flags & RETIS_CT_PROTO_UDP != 0 {
             (
-                CtProto::Udp(CtUdp {
-                    sport: u16::from_be(raw.orig.src.data),
-                    dport: u16::from_be(raw.orig.dst.data),
-                }),
-                CtProto::Udp(CtUdp {
-                    sport: u16::from_be(raw.reply.src.data),
-                    dport: u16::from_be(raw.reply.dst.data),
-                }),
+                CtProto::Udp {
+                    udp: CtUdp {
+                        sport: u16::from_be(raw.orig.src.data),
+                        dport: u16::from_be(raw.orig.dst.data),
+                    },
+                },
+                CtProto::Udp {
+                    udp: CtUdp {
+                        sport: u16::from_be(raw.reply.src.data),
+                        dport: u16::from_be(raw.reply.dst.data),
+                    },
+                },
             )
         } else if flags & RETIS_CT_PROTO_ICMP != 0 {
             (
-                CtProto::Icmp(CtIcmp {
-                    code: raw.orig.dst.data as u8,
-                    r#type: (raw.orig.dst.data >> 8) as u8,
-                    id: u16::from_be(raw.orig.src.data),
-                }),
-                CtProto::Icmp(CtIcmp {
-                    code: raw.reply.dst.data as u8,
-                    r#type: (raw.reply.dst.data >> 8) as u8,
-                    id: u16::from_be(raw.reply.src.data),
-                }),
+                CtProto::Icmp {
+                    icmp: CtIcmp {
+                        code: raw.orig.dst.data as u8,
+                        r#type: (raw.orig.dst.data >> 8) as u8,
+                        id: u16::from_be(raw.orig.src.data),
+                    },
+                },
+                CtProto::Icmp {
+                    icmp: CtIcmp {
+                        code: raw.reply.dst.data as u8,
+                        r#type: (raw.reply.dst.data >> 8) as u8,
+                        id: u16::from_be(raw.reply.src.data),
+                    },
+                },
             )
         } else {
             bail!("ct: invalid protocol tuple information");

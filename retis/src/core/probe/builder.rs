@@ -2,7 +2,10 @@
 //!
 //! ProbeBuilder defines the ProbeBuider trait and some useful utility functions
 //!
-use std::os::fd::RawFd;
+use std::{
+    ffi::OsStr,
+    os::fd::{BorrowedFd, RawFd},
+};
 
 use anyhow::{anyhow, Result};
 
@@ -33,12 +36,18 @@ pub(super) trait ProbeBuilder {
 }
 
 pub(super) fn reuse_map_fds(
-    open_obj: &libbpf_rs::OpenObject,
+    open_obj: &mut libbpf_rs::OpenObject,
     map_fds: &[(String, RawFd)],
 ) -> Result<()> {
     for map in map_fds.iter() {
-        if let Some(open_map) = open_obj.map(map.0.clone()) {
-            open_map.reuse_fd(map.1)?;
+        if let Some(mut open_map) = open_obj
+            .maps_mut()
+            .find(|m| m.name() == <String as AsRef<OsStr>>::as_ref(&map.0))
+        {
+            // Map fds are always valid (they come from libbpf-rs itself) and
+            // the map objects are not destroyed until the object is dropped so
+            // the fd remains valid here.
+            open_map.reuse_fd(unsafe { BorrowedFd::borrow_raw(map.1) })?;
         } else {
             // This object does not have this particular map.
             continue;
@@ -58,18 +67,20 @@ pub(super) fn replace_hooks(fd: RawFd, hooks: &[Hook]) -> Result<Vec<libbpf_rs::
         // We have to explicitly use a Vec below to avoid having an unknown size
         // at build time.
         let map_fds: Vec<(String, RawFd)> = hook.maps.clone().into_iter().collect();
-        reuse_map_fds(&open_obj, &map_fds)?;
+        reuse_map_fds(&mut open_obj, &map_fds)?;
 
-        let open_prog = open_obj
-            .prog_mut("hook")
+        let mut open_prog = open_obj
+            .progs_mut()
+            .find(|p| p.name() == "hook")
             .ok_or_else(|| anyhow!("Couldn't get hook program"))?;
 
         open_prog.set_prog_type(libbpf_rs::ProgramType::Ext);
         open_prog.set_attach_target(fd, Some(target))?;
 
-        let mut obj = open_obj.load()?;
+        let obj = open_obj.load()?;
         links.push(
-            obj.prog_mut("hook")
+            obj.progs_mut()
+                .find(|p| p.name() == "hook")
                 .ok_or_else(|| anyhow!("Couldn't get hook program"))?
                 .attach_trace()?,
         );

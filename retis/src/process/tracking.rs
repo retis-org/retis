@@ -53,9 +53,9 @@ impl AddTracking {
     /// Process one event adding TrackingInfo section.
     pub(crate) fn process_one(&mut self, event: &mut Event) -> Result<()> {
         if let Some(ovs) = event.get_section::<OvsEvent>(SectionId::Ovs) {
-            use OvsEventType::*;
-            match &ovs.event {
-                Upcall(upcall) => {
+            use OvsEvent::*;
+            match ovs {
+                Upcall { upcall } => {
                     let cpu = upcall.cpu;
                     // Lookup the skb-based tracking information.
                     let info = self.process_skb(event)?;
@@ -72,7 +72,7 @@ impl AddTracking {
                         self.ovs_upcalls_tracking.insert(key, info);
                     }
                 }
-                UpcallReturn(ret) => {
+                UpcallReturn { upcall_return: ret } => {
                     // The upcall has finished. Remove the entry from the upcalls tracking table.
                     let key = UpcallKey {
                         ts: ret.upcall_ts,
@@ -84,11 +84,11 @@ impl AddTracking {
 
                     self.ovs_upcalls_tracking.remove(&key);
                 }
-                UpcallEnqueue(enqueue) => {
+                UpcallEnqueue { upcall_enqueue } => {
                     // Get the tracking id from the in upcalls tracking table.
                     let upcall = UpcallKey {
-                        ts: enqueue.upcall_ts,
-                        cpu: enqueue.upcall_cpu,
+                        ts: upcall_enqueue.upcall_ts,
+                        cpu: upcall_enqueue.upcall_cpu,
                     };
                     let info = self
                         .ovs_upcalls_tracking
@@ -98,21 +98,21 @@ impl AddTracking {
 
                     // Store a reference to the TrackingInfo in the ovs_queue tracking table.
                     self.ovs_queue_tracking
-                        .insert(enqueue.queue_id, info.clone());
+                        .insert(upcall_enqueue.queue_id, info.clone());
 
                     Self::insert_info(event, info)?;
                 }
-                RecvUpcall(recv) => {
-                    let info = self.lookup_ovs_queue(recv.queue_id)?;
+                RecvUpcall { recv_upcall } => {
+                    let info = self.lookup_ovs_queue(recv_upcall.queue_id)?;
                     info.lock().unwrap().idx += 1;
                     Self::insert_info(event, &info)?;
                 }
-                Operation(op) => {
-                    let info = self.lookup_ovs_queue(op.queue_id)?;
+                Operation { flow_operation } => {
+                    let info = self.lookup_ovs_queue(flow_operation.queue_id)?;
                     info.lock().unwrap().idx += 1;
                     Self::insert_info(event, &info)?;
                 }
-                Action(act) => match act.queue_id {
+                Action { action_execute } => match action_execute.queue_id {
                     Some(queue_id) => {
                         // This action event came from an upcall. Restore the tracking id of the
                         // original packet.

@@ -6,8 +6,12 @@ pub fn event_section(
     args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-    let input: ItemStruct = parse_macro_input!(item);
-    let ident = &input.ident;
+    let input: Item = parse_macro_input!(item);
+    let ident = match input {
+        Item::Struct(ref item) => item.ident.clone(),
+        Item::Enum(ref item) => item.ident.clone(),
+        _ => panic!("event types must be enums or structs"),
+    };
 
     let id: syn::Expr = syn::parse(args).expect("Invalid event id");
 
@@ -44,8 +48,8 @@ pub fn event_section(
 
             #[cfg(feature = "python")]
             fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-                use pyo3::IntoPy;
-                self.clone().into_py(py)
+                use pyo3::IntoPyObject;
+                self.clone().into_pyobject(py).unwrap().into_any().unbind()
             }
         }
 
