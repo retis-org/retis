@@ -101,7 +101,7 @@ impl<'de> Deserialize<'de> for ApiVersion {
     {
         struct VerVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for VerVisitor {
+        impl serde::de::Visitor<'_> for VerVisitor {
             type Value = ApiVersion;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

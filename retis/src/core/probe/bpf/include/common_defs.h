@@ -16,6 +16,11 @@
 #define __packed __attribute__((packed))
 #define __binding __attribute__((annotate("uapi")))
 
+/* Use single-variant enums in place of defines for values shared between eBPF
+ * and Rust.
+ */
+#define BINDING_DEF(def, val) enum enum_ ## def { def = (val) } __binding;
+
 /* Keep in sync with its Rust counterpart in crate::core::probe */
 #define PROBE_MAX	1024
 

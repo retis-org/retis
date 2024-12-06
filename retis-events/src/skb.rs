@@ -97,7 +97,7 @@ impl EventFmt for SkbEvent {
             // - IPv4: we use the fixed 20 bytes size as options are rarely used.
             // - IPv6: we do not support extension headers.
             len = match ip.version {
-                SkbIpVersion::V4(_) => ip.len.saturating_sub(20),
+                SkbIpVersion::V4 { .. } => ip.len.saturating_sub(20),
                 _ => ip.len,
             };
 
@@ -123,7 +123,7 @@ impl EventFmt for SkbEvent {
             write!(f, " ttl {}", ip.ttl)?;
 
             match &ip.version {
-                SkbIpVersion::V4(v4) => {
+                SkbIpVersion::V4 { v4 } => {
                     write!(f, " tos {:#x} id {} off {}", v4.tos, v4.id, v4.offset * 8)?;
 
                     let mut flags = Vec::new();
@@ -142,7 +142,7 @@ impl EventFmt for SkbEvent {
                         write!(f, " [{}]", flags.join(","))?;
                     }
                 }
-                SkbIpVersion::V6(v6) => {
+                SkbIpVersion::V6 { v6 } => {
                     if v6.flow_label != 0 {
                         write!(f, " label {:#x}", v6.flow_label)?;
                     }
@@ -352,11 +352,16 @@ pub struct SkbIpEvent {
 
 /// IP version and specific fields.
 #[event_type]
+#[serde(rename_all = "snake_case")]
 pub enum SkbIpVersion {
-    #[serde(rename = "v4")]
-    V4(SkbIpv4Event),
-    #[serde(rename = "v6")]
-    V6(SkbIpv6Event),
+    V4 {
+        #[serde(flatten)]
+        v4: SkbIpv4Event,
+    },
+    V6 {
+        #[serde(flatten)]
+        v6: SkbIpv6Event,
+    },
 }
 
 /// IPv4 specific fields.

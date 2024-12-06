@@ -9,29 +9,28 @@ struct retis_packet_filter_ctx {
 	u8 *data;	/* In: points to the beginning of the mac header. */
 } __binding;
 
-#define FILTER_MAX_INSNS 4096
-__binding const u32 filter_max_insns = FILTER_MAX_INSNS;
+/* We need an actual define here because __FILTER_MAX_INSNS is used by the
+ * pre-processor who doesn't know about enums yet.
+ */
+#define __FILTER_MAX_INSNS	4096
+BINDING_DEF(FILTER_MAX_INSNS, __FILTER_MAX_INSNS)
 
 #define __s(v) #v
 #define s(v) __s(v)
 
 /* Reserve FILTER_MAX_INSNS - (instruction placeholder) */
 #define RESERVE_NOP				\
-	".rept " s(FILTER_MAX_INSNS) " - 1;"	\
+	".rept " s(__FILTER_MAX_INSNS) " - 1;"	\
 	"goto +0x0;"				\
 	".endr;"
 
-#define STACK_RESERVED		8
-__binding const s16 stack_reserved = STACK_RESERVED;
-
-#define SCRATCH_MEM_SIZE	4
-__binding const s16 scratch_mem_size = SCRATCH_MEM_SIZE;
+BINDING_DEF(STACK_RESERVED, 8)
+BINDING_DEF(SCRATCH_MEM_SIZE, 4)
 
 /* 8 bytes for probe_read_kernel() outcome plus 16 * 4 scratch
  * memory locations for cbpf filters. Aligned to u64 boundary.
  */
-#define SCRATCH_MEM_START	16 * SCRATCH_MEM_SIZE + STACK_RESERVED
-__binding const s16 scratch_mem_start = SCRATCH_MEM_START;
+BINDING_DEF(SCRATCH_MEM_START, 16 * SCRATCH_MEM_SIZE + STACK_RESERVED)
 
 #define STACK_SIZE		SCRATCH_MEM_START
 
