@@ -18,7 +18,20 @@ enum trace_ovs_data_type {
 	OVS_DP_ACTION_OUTPUT = 7,
 	OVS_DP_ACTION_RECIRC = 8,
 	OVS_DP_ACTION_CONNTRACK = 9,
+	OVS_DP_ACTION_DROP = 10,
 };
+
+struct ovs_config {
+	u32 action_max;	// Runtime value of __OVS_ACTION_ATTR_MAX.
+} __binding;
+
+/* Used to keep global hook configuration. */
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, u32);
+	__type(value, struct ovs_config);
+} ovs_config_map SEC(".maps");
 
 /* Used to keep the context of an upcall operation for its upcall enqueue
  * events. It should uniquely identify a specific upcall. */
