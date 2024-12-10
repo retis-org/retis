@@ -9,6 +9,7 @@
 use std::{collections::HashMap, ops::Fn, sync::Arc, thread, time::Duration};
 
 use anyhow::{anyhow, Result};
+use libbpf_rs::MapCore;
 use log::{error, warn};
 use nix::time;
 

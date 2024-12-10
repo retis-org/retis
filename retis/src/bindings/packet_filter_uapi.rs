@@ -4,8 +4,6 @@ pub type __u8 = ::std::os::raw::c_uchar;
 pub type __u32 = ::std::os::raw::c_uint;
 pub type u8_ = __u8;
 pub type u32_ = __u32;
-pub type __s16 = ::std::os::raw::c_short;
-pub type s16 = __s16;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct retis_packet_filter_ctx {
@@ -22,10 +20,14 @@ impl Default for retis_packet_filter_ctx {
         }
     }
 }
-pub const filter_max_insns: u32_ = 4096;
-pub const stack_reserved: s16 = 8;
-pub const scratch_mem_size: s16 = 4;
-pub const scratch_mem_start: s16 = 72;
+pub const FILTER_MAX_INSNS: enum_FILTER_MAX_INSNS = 4096;
+pub type enum_FILTER_MAX_INSNS = ::std::os::raw::c_uint;
+pub const STACK_RESERVED: enum_STACK_RESERVED = 8;
+pub type enum_STACK_RESERVED = ::std::os::raw::c_uint;
+pub const SCRATCH_MEM_SIZE: enum_SCRATCH_MEM_SIZE = 4;
+pub type enum_SCRATCH_MEM_SIZE = ::std::os::raw::c_uint;
+pub const SCRATCH_MEM_START: enum_SCRATCH_MEM_START = 72;
+pub type enum_SCRATCH_MEM_START = ::std::os::raw::c_uint;
 pub const FILTER_L2: filter_type = 3735928559;
 pub const FILTER_L3: filter_type = 3735929054;
 pub type filter_type = ::std::os::raw::c_uint;

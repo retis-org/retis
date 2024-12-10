@@ -7,23 +7,23 @@
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::SkelBuilder;
+use libbpf_rs::skel::{OpenSkel, Skel};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*};
+use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
 
 mod kprobe_bpf {
     include!("bpf/.out/kprobe.skel.rs");
 }
-use kprobe_bpf::KprobeSkelBuilder;
+use kprobe_bpf::*;
 
 #[derive(Default)]
-pub(crate) struct KprobeBuilder {
+pub(crate) struct KprobeBuilder<'a> {
     links: Vec<libbpf_rs::Link>,
-    obj: Option<libbpf_rs::Object>,
+    skel: Option<SkelStorage<KprobeSkel<'a>>>,
 }
 
-impl ProbeBuilder for KprobeBuilder {
-    fn new() -> KprobeBuilder {
+impl<'a> ProbeBuilder for KprobeBuilder<'a> {
+    fn new() -> KprobeBuilder<'a> {
         KprobeBuilder::default()
     }
 
@@ -33,39 +33,41 @@ impl ProbeBuilder for KprobeBuilder {
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
     ) -> Result<()> {
-        if self.obj.is_some() {
+        if self.skel.is_some() {
             bail!("Kprobe builder already initialized");
         }
 
-        let mut skel = KprobeSkelBuilder::default().open()?;
-        skel.rodata_mut().nhooks = hooks.len() as u32;
-        skel.rodata_mut().log_level = log::max_level() as u8;
+        let mut skel = OpenSkelStorage::new::<KprobeSkelBuilder>()?;
+
+        skel.maps.rodata_data.nhooks = hooks.len() as u32;
+        skel.maps.rodata_data.log_level = log::max_level() as u8;
 
         filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {
-                skel.rodata_mut().nmeta = m.0.len() as u32
+                skel.maps.rodata_data.nmeta = m.0.len() as u32
             }
         });
 
-        let open_obj = skel.obj;
-        reuse_map_fds(&open_obj, &map_fds)?;
+        reuse_map_fds(skel.open_object_mut(), &map_fds)?;
 
-        let obj = open_obj.load()?;
-        let fd = obj
-            .prog("probe_kprobe")
+        let skel = SkelStorage::load(skel)?;
+        let fd = skel
+            .object()
+            .progs()
+            .find(|p| p.name() == "probe_kprobe")
             .ok_or_else(|| anyhow!("Couldn't get program"))?
             .as_fd()
             .as_raw_fd();
         let mut links = replace_hooks(fd, &hooks)?;
         self.links.append(&mut links);
 
-        self.obj = Some(obj);
+        self.skel = Some(skel);
         Ok(())
     }
 
     fn attach(&mut self, probe: &Probe) -> Result<()> {
-        let obj = match &mut self.obj {
-            Some(obj) => obj,
+        let obj = match &mut self.skel {
+            Some(skel) => skel.object(),
             _ => bail!("Kprobe builder is uninitialized"),
         };
         let probe = match probe.r#type() {
@@ -74,7 +76,8 @@ impl ProbeBuilder for KprobeBuilder {
         };
 
         self.links.push(
-            obj.prog_mut("probe_kprobe")
+            obj.progs_mut()
+                .find(|p| p.name() == "probe_kprobe")
                 .ok_or_else(|| anyhow!("Couldn't get program"))?
                 .attach_kprobe(false, probe.symbol.attach_name())?,
         );
