@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from testlib import Retis, assert_events_present
+from testlib import Retis, assert_events_present, kernel_version_lt
 
 
 def test_ovs_sanity(two_port_ovs):
@@ -450,3 +450,64 @@ def test_ovs_filtered_userspace(two_port_ovs):
     # Ensure we didn't pick up userspace events, i.e: all got filtered out.
     userspace = filter(lambda e: "userspace" in e, events)
     assert len(list(userspace)) == 0
+
+
+@pytest.mark.skipif(
+    kernel_version_lt("6.6"), reason="Kernel does not support OVS drop action"
+)
+def test_ovs_drop(two_port_ovs):
+    ovs, ns = two_port_ovs
+
+    ovs_ver = ovs.version()
+    if ovs_ver[0] < 3 or (ovs_ver[0] == 3 and ovs_ver[1] < 4):
+        pytest.skip(
+            "OVS version does not support explicit drop actions (introduced in 3.4)"
+        )
+
+    ovs.ofctl("del-flows", "test")
+    # Allow ARP
+    ovs.ofctl("add-flow", "test", "table=0,arp actions=NORMAL")
+    # Drop IP
+    ovs.ofctl("add-flow", "test", "table=0,ip actions=drop")
+
+    retis = Retis()
+
+    retis.collect("-c", "ovs,skb", "-f", "icmp")
+    ns.run_fail("ns0", "ping", "-w", "1", "-4", "-c", "1", "192.168.1.2")
+    retis.stop()
+
+    events = retis.events()
+    print(events)
+
+    def is_drops(reason):
+        def is_drops_reason(e):
+            return (
+                e.get("kernel", {}).get("symbol") == "openvswitch:ovs_do_execute_action"
+                and e.get("ovs", {}).get("action") == "drop"
+                and e.get("ovs", {}).get("reason") == reason
+            )
+
+        return is_drops_reason
+
+    drops = list(filter(is_drops(0), events))
+    assert len(drops) == 1
+
+    ovs.ofctl("del-flows", "test")
+    # Allow ARP
+    ovs.ofctl("add-flow", "test", "table=0,arp actions=NORMAL")
+    # Create loop
+    ovs.ofctl("add-flow", "test", "table=0,ip actions=resubmit(,1)")
+    ovs.ofctl("add-flow", "test", "table=1,ip actions=resubmit(,0)")
+
+    retis = Retis()
+
+    retis.collect("-c", "ovs,skb", "-f", "icmp")
+    ns.run_fail("ns0", "ping", "-w", "1", "-4", "-c", "1", "192.168.1.2")
+    retis.stop()
+
+    events = retis.events()
+    print(events)
+
+    # Should report XLATE_RECURSION_TOO_DEEP (2)
+    drops = list(filter(is_drops(2), events))
+    assert len(drops) == 1
