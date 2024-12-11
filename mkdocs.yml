@@ -13,6 +13,7 @@ nav:
   - Filtering: filtering.md
   - Installation: install.md
   - Requirements: requirements.md
+  - Limitations: limitations.md
   - Contributing: CONTRIBUTING.md
   - External resources: resources.md
   - Event sections: event_sections.md
