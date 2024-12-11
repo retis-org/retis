@@ -10,6 +10,21 @@ places and enables the `skb`, `skb-drop` and `skb-tracking` collectors.
 $ retis -p generic collect
 ```
 
+## Ifdump
+
+Collect packets just after the device driver in ingress and right before the
+device driver in egress. This is similar to many well known packet capture
+utilities (they use `AF_PACKET`).
+
+```none
+$ retis -p ifdump collect
+7129250251406 (5) [ping] 23561 [tp] net:net_dev_start_xmit #67be86dc28effff8f67ed249b80 (skb ffff8f67919c2b00)
+  if 4 (wlp82s0) [redacted] > 2606:4700:4700::1111 ttl 64 label 0xbf87b len 64 proto ICMPv6 (58) type 128 code 0
+
+7129262331018 (0) [irq/185-iwlwifi] 1259 [tp] net:netif_receive_skb #67be926148affff8f6546b13700 (skb ffff8f6851bffd00)
+  if 4 (wlp82s0) 2606:4700:4700::1111 > [redacted] ttl 54 label 0x55519 len 64 proto ICMPv6 (58) type 129 code 0
+```
+
 ## Dropmon
 
 Drop monitor profile, reporting packets being dropped including a stack trace to
