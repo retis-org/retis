@@ -5,8 +5,9 @@
    1. Make sure the README is up-to-date (collectors, build instructions, etc).
    1. Add new authors to the authors file if needed, by running
       `./tools/authors.sh` and committing the changes.
-   1. Update the version in `Cargo.toml`, retis-events/Cargo.toml and
+   1. Update the version in `retis/Cargo.toml`, retis-events/Cargo.toml and
       retis-derive/Cargo.toml.
+   1. Update the release name in `retis/Cargo.toml`.
    1. Open a PR and get it merged. This must have runtime tests enabled!
    1. Tag the right commit in the `vx.y.z` form and push it.
 1. Release binaries.
