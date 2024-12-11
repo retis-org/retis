@@ -26,7 +26,7 @@ impl<'a, K: Ord, V> Iterator for KeyRange<'a, K, V> {
     }
 }
 
-impl<'a, K: Ord, V> DoubleEndedIterator for KeyRange<'a, K, V> {
+impl<K: Ord, V> DoubleEndedIterator for KeyRange<'_, K, V> {
     fn next_back(&mut self) -> Option<Self::Item> {
         self.inner
             .next_back()

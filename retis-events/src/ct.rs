@@ -45,13 +45,24 @@ pub struct CtIcmp {
 #[event_type]
 #[serde(rename_all = "snake_case")]
 pub enum CtProto {
-    Tcp(CtTcp),
-    Udp(CtUdp),
-    Icmp(CtIcmp),
+    Tcp {
+        #[serde(flatten)]
+        tcp: CtTcp,
+    },
+    Udp {
+        #[serde(flatten)]
+        udp: CtUdp,
+    },
+    Icmp {
+        #[serde(flatten)]
+        icmp: CtIcmp,
+    },
 }
 impl Default for CtProto {
     fn default() -> Self {
-        CtProto::Tcp(CtTcp::default())
+        CtProto::Tcp {
+            tcp: CtTcp::default(),
+        }
     }
 }
 
@@ -158,7 +169,7 @@ impl EventFmt for CtEvent {
 impl CtEvent {
     fn format_conn(conn: &CtConnEvent, f: &mut Formatter) -> fmt::Result {
         match (&conn.orig.proto, &conn.reply.proto) {
-            (CtProto::Tcp(tcp_orig), CtProto::Tcp(tcp_reply)) => {
+            (CtProto::Tcp { tcp: tcp_orig }, CtProto::Tcp { tcp: tcp_reply }) => {
                 write!(
                     f,
                     "tcp ({}) orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
@@ -173,7 +184,7 @@ impl CtEvent {
                     tcp_reply.dport,
                 )?;
             }
-            (CtProto::Udp(udp_orig), CtProto::Udp(udp_reply)) => {
+            (CtProto::Udp { udp: udp_orig }, CtProto::Udp { udp: udp_reply }) => {
                 write!(
                     f,
                     "udp orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
@@ -187,7 +198,7 @@ impl CtEvent {
                     udp_reply.dport,
                 )?;
             }
-            (CtProto::Icmp(icmp_orig), CtProto::Icmp(icmp_reply)) => {
+            (CtProto::Icmp { icmp: icmp_orig }, CtProto::Icmp { icmp: icmp_reply }) => {
                 write!(f, "icmp orig [{} > {} type {} code {} id {}] reply [{} > {} type {} code {} id {}] ",
                            conn.orig.ip.src,
                            conn.orig.ip.dst,

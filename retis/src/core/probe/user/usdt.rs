@@ -1,11 +1,15 @@
-use std::os::fd::{AsFd, AsRawFd, RawFd};
+use std::{
+    mem::MaybeUninit,
+    os::fd::{AsFd, AsRawFd, RawFd},
+};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::SkelBuilder;
+use libbpf_rs::skel::{OpenSkel, Skel, SkelBuilder};
 
-use crate::core::filters::Filter;
-use crate::core::probe::builder::*;
-use crate::core::probe::{Hook, Probe, ProbeType};
+use crate::core::{
+    filters::Filter,
+    probe::{builder::*, Hook, Probe, ProbeType},
+};
 
 mod usdt_bpf {
     include!("bpf/.out/usdt.skel.rs");
@@ -15,7 +19,6 @@ use usdt_bpf::UsdtSkelBuilder;
 #[derive(Default)]
 pub(crate) struct UsdtBuilder {
     links: Vec<libbpf_rs::Link>,
-    obj: Option<libbpf_rs::Object>,
     map_fds: Vec<(String, RawFd)>,
     hooks: Vec<Hook>,
 }
@@ -45,21 +48,23 @@ impl ProbeBuilder for UsdtBuilder {
             _ => bail!("Wrong probe type"),
         };
 
-        let mut skel = UsdtSkelBuilder::default().open()?;
-        skel.rodata_mut().log_level = log::max_level() as u8;
-        let open_obj = skel.obj;
-        reuse_map_fds(&open_obj, &self.map_fds)?;
+        let mut open_object = MaybeUninit::uninit();
+        let mut skel = UsdtSkelBuilder::default().open(&mut open_object)?;
+        skel.maps.rodata_data.log_level = log::max_level() as u8;
 
-        let mut obj = open_obj.load()?;
-        let prog = obj
-            .prog_mut("probe_usdt")
+        reuse_map_fds(skel.open_object_mut(), &self.map_fds)?;
+
+        let skel = skel.load()?;
+        let prog = skel
+            .object()
+            .progs_mut()
+            .find(|p| p.name() == "probe_usdt")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
         let mut links = replace_hooks(prog.as_fd().as_raw_fd(), &self.hooks)?;
         self.links.append(&mut links);
 
         self.links
             .push(prog.attach_usdt(probe.pid, &probe.path, &probe.provider, &probe.name)?);
-        self.obj = Some(obj);
 
         Ok(())
     }

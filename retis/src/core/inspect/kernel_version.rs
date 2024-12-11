@@ -128,7 +128,7 @@ impl<'de> serde::Deserialize<'de> for KernelVersionReq {
     {
         struct ReqVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for ReqVisitor {
+        impl serde::de::Visitor<'_> for ReqVisitor {
             type Value = KernelVersionReq;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

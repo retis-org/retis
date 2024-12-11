@@ -33,12 +33,7 @@ struct {
 	__type(value, struct skb_config);
 } skb_config_map SEC(".maps");
 
-#define IFNAMSIZ	16
-/* Defining a global variable is needed to export the binding to
- * user-space as defines cannot be annotated.
- * This MUST NOT be modified by the loader.
- */
-const u8 __binding ifnamesz = IFNAMSIZ;
+BINDING_DEF(IFNAMSIZ, 16)
 
 struct skb_netdev_event {
 	u8 dev_name[IFNAMSIZ];
