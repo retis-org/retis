@@ -1,6 +1,6 @@
 # Limitations
 
-Known and current limitations:
+## Known limitations
 
 - By default Retis does not modify the system (e.g. load kernel modules, change
   the configuration, add a firewalling rule). This is done on purpose but might
@@ -11,14 +11,13 @@ Known and current limitations:
   running the `collect` command. See `retis collect --help` for further details
   about changes applied to the system.
 
-- Retis operates mainly on `struct sk_buff` objects meaning a good part of
-  locally generated traffic can't be traced at the moment. E.g. locally
-  generated traffic from a container can be traced when it exits the container.
+- Retis operates mainly on `struct sk_buff` objects meaning some part of the path
+  for locally generated traffic can't be traced at the moment.
 
 - Profiles combination might fail if flags are used multiple times or if some
   arguments are incompatible. Use with care.
 
-Additional notes (not strictly limitations):
+## Additional notes
 
 - Filtering & tracking packets being modified can only work if the packet is at
   least seen once in a form where it can be matched against the filter. E.g.
