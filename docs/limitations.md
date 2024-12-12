@@ -2,14 +2,18 @@
 
 ## Known limitations
 
-- By default Retis does not modify the system (e.g. load kernel modules, change
-  the configuration, add a firewalling rule). This is done on purpose but might
-  mean some prerequisites will be missing if not added manually. The only
-  example for now is the `nft` module that requires a specific nft rule to be
-  inserted. If that rule is not there, no nft event will be reported. To allow
-  Retis to modify the system, use the `--allow-system-changes` option when
-  running the `collect` command. See `retis collect --help` for further details
-  about changes applied to the system.
+- By default Retis does not modify the system (e.g. load kernel modules, mount
+  filesystems, change the configuration, add a firewalling rule). This is done
+  on purpose but might mean some prerequisites will be missing if not added
+  manually. The only notable examples are the `nft` module and the `debugfs`.
+  The former requires a specific nft rule to be inserted. If that rule is not
+  there, no nft event will be reported. The latter, `debugfs`, although not
+  mandatory, is preferable to have it mounted as it is accessed by Retis to
+  better determine traceable events and functions.
+  To allow Retis to modify the system, use the `--allow-system-changes` option
+  when running the `collect` command.
+  See `retis collect --help` for further details about changes applied to the
+  system.
 
 - Retis operates mainly on `struct sk_buff` objects meaning some part of the path
   for locally generated traffic can't be traced at the moment.
