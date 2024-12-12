@@ -26,6 +26,9 @@ nav:
       - ct: modules/ct.md
       - nft: modules/nft.md
 
+markdown_extensions:
+  - footnotes
+
 theme: readthedocs
 plugins:
   - search
