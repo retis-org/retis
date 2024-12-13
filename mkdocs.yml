@@ -12,7 +12,7 @@ nav:
         - Overview: index.md
         - Requirements: requirements.md
         - Installation: install.md
-    - Collectors:
+    - Collectors and events:
         - Event sections: collectors/event_sections.md
         - skb: collectors/skb.md
         - skb-drop: collectors/skb_drop.md
