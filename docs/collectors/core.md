@@ -1,20 +1,8 @@
-# Event sections
+# Core events
 
-When an event is printed the exact form can vary depending on what data was
-retrieved and collected. This depends on the data itself (which kind of packet
-or metadata was retrieved) but also on the collection configuration (which
-collectors are enabled, which options are set).
-
-An event is always composed of a common section (containing a timestamp) and a
-set of optional other sections. Those sections data can come from the eBPF
-probes or from Retis directly. Sections are grouped in an event if they share a
-common property (eg. they are all linked to a given packet + probe).
-
-```none
-<common> <kernel or userspace> <tracking> <drop> <stack trace> <...>
-```
-
-The `collector` sections are described in the collector specific pages.
+Some data is collected or generated directly by the core logic in Retis and not
+by optional collectors. Those sections are quite generic and can't be enabled
+nor disabled.
 
 ## Common section
 
