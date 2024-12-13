@@ -147,7 +147,7 @@ impl Module for OvsModule {
         self
     }
     fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(OvsEventFactory {})))
+        Ok(Some(Box::new(OvsEventFactory::new()?)))
     }
 }
 

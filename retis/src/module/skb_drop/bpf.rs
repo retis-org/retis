@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use btf_rs::Type;
 use log::warn;
 
 use crate::bindings::skb_drop_hook_uapi::skb_drop_event;
@@ -11,36 +10,13 @@ use crate::bindings::skb_drop_hook_uapi::skb_drop_event;
 const SKB_DROP_REASON_SUBSYS_SHIFT: u32 = 16;
 
 use crate::{
-    core::{
-        events::{
-            parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
-            RawEventSectionFactory,
-        },
-        inspect::inspector,
+    core::events::{
+        parse_enum, parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+        RawEventSectionFactory,
     },
     event_section_factory,
     events::*,
 };
-
-fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u32, String>> {
-    let mut values = HashMap::new();
-
-    if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(r#enum) {
-        if let Some((btf, Type::Enum(r#enum))) =
-            types.iter().find(|(_, t)| matches!(t, Type::Enum(_)))
-        {
-            for member in r#enum.members.iter() {
-                let mut val = btf.resolve_name(member)?;
-                trim_start
-                    .iter()
-                    .for_each(|p| val = val.trim_start_matches(p).to_string());
-                values.insert(member.val(), val.to_string());
-            }
-        }
-    }
-
-    Ok(values)
-}
 
 /// Per-subsystem drop reason definitions.
 pub(crate) struct DropReasons {

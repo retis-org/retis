@@ -28,6 +28,11 @@ pub struct exec_recirc {
     pub id: u32_,
 }
 #[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct exec_drop {
+    pub reason: u32_,
+}
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub union exec_ip {
     pub addr4: u32_,

@@ -23,6 +23,10 @@ struct exec_recirc {
 	u32 id;
 } __binding;
 
+struct exec_drop {
+	u32 reason;
+} __binding;
+
 /* Please keep in sync with its Rust counterpart in retis-events::ovs. */
 #define R_OVS_CT_COMMIT				(1 << 0)
 #define R_OVS_CT_FORCE				(1 << 1)
@@ -137,9 +141,7 @@ DEFINE_HOOK_RAW(
 	}
 
 	// Add action-specific data for some actions.
-	switch (exec->action) {
-	case OVS_ACTION_ATTR_OUTPUT:
-		{
+	if (exec->action == OVS_ACTION_ATTR_OUTPUT) {
 		struct exec_output *output =
 			get_event_section(event, COLLECTOR_OVS,
 					  OVS_DP_ACTION_OUTPUT,
@@ -149,10 +151,7 @@ DEFINE_HOOK_RAW(
 
 		bpf_probe_read_kernel(&output->port, sizeof(output->port),
 				      nla_data(attr));
-		break;
-		}
-	case OVS_ACTION_ATTR_RECIRC:
-		{
+	} else if (exec->action == OVS_ACTION_ATTR_RECIRC) {
 		struct exec_recirc *recirc =
 			get_event_section(event, COLLECTOR_OVS,
 					  OVS_DP_ACTION_RECIRC,
@@ -162,10 +161,7 @@ DEFINE_HOOK_RAW(
 
 		bpf_probe_read_kernel(&recirc->id, sizeof(recirc->id),
 				      nla_data(attr));
-		break;
-		}
-	case OVS_ACTION_ATTR_CT:
-		{
+	} else if (exec->action == OVS_ACTION_ATTR_CT) {
 		struct ovs_conntrack_info info;
 		bpf_probe_read_kernel(&info, sizeof(info), nla_data(attr));
 
@@ -193,8 +189,19 @@ DEFINE_HOOK_RAW(
 			ct->flags |= R_OVS_CT_NAT;
 			fill_nat(&info, ct);
 		}
-		break;
-		}
+	} else if (bpf_core_enum_value_exists(enum ovs_action_attr,
+					      OVS_ACTION_ATTR_DROP) &&
+		   exec->action == bpf_core_enum_value(enum ovs_action_attr,
+						       OVS_ACTION_ATTR_DROP)) {
+		struct exec_drop *drop=
+			get_event_section(event, COLLECTOR_OVS,
+					  OVS_DP_ACTION_DROP,
+					  sizeof(*drop));
+		if (!drop)
+			return 0;
+
+		bpf_probe_read_kernel(&drop->reason, sizeof(drop->reason),
+				      nla_data(attr));
 	}
 
 	return 0;

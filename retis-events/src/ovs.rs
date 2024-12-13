@@ -363,6 +363,7 @@ impl EventFmt for ActionEvent {
             Some(OvsAction::CheckPktLen(_)) => write!(f, " check_pkt_len")?,
             Some(OvsAction::AddMpls(_)) => write!(f, " add_mpls")?,
             Some(OvsAction::DecTtl(_)) => write!(f, " dec_ttl")?,
+            Some(OvsAction::Drop { reason }) => write!(f, " drop {}", reason)?,
             None => write!(f, " unspec")?,
         }
 
@@ -439,6 +440,8 @@ pub enum OvsAction {
     AddMpls(OvsDummyAction),
     #[serde(rename = "dec_ttl")]
     DecTtl(OvsDummyAction),
+    #[serde(rename = "drop")]
+    Drop { reason: u32 },
 }
 
 /// OVS output action data.
@@ -543,7 +546,7 @@ mod tests {
 
     #[test]
     fn test_event_to_from_json() -> Result<()> {
-        let events: [(&'static str, OvsEvent); 7] = [
+        let events: [(&'static str, OvsEvent); 8] = [
             // Upcall event
             (
                 r#"{"cmd":1,"cpu":0,"event_type":"upcall","port":4195744766}"#,
@@ -636,6 +639,17 @@ mod tests {
                             },
                         }),
                         recirc_id: 34,
+                        queue_id: None,
+                    },
+                },
+            ),
+            // Drop action event
+            (
+                r#"{"action":"drop","event_type":"action_execute","reason":0,"recirc_id":32}"#,
+                OvsEvent::Action {
+                    action_execute: ActionEvent {
+                        action: Some(OvsAction::Drop { reason: 0 }),
+                        recirc_id: 32,
                         queue_id: None,
                     },
                 },
