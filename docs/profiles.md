@@ -1,5 +1,9 @@
 # Profiles
 
+Profiles are configuration files containing pre-defined sets of command line
+arguments. They are meant to define reusable set of arguments to ease working
+with common cases.
+
 ## Generic
 
 The `generic` profile aims to provide a starting point for investigating
