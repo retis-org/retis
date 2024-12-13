@@ -53,6 +53,7 @@ $ RETIS_TAG=next ./retis_in_container.sh --help
 ### From sources
 
 Retis depends on the following (in addition to Git and Cargo):
+
 - rust >= 2021
 - clang
 - jq
