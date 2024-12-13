@@ -68,6 +68,14 @@ $ retis -p dropmon collect
   if 1 (lo) rxif 1 ::1.36986 > ::1.8080 ttl 64 label 0x975b1 len 40 proto TCP (6) flags [S] seq 2899194670 win 65476
 ```
 
+The same profile can be used with the `pcap` command to generate a pcap output
+from the above (if events were stored).
+
+```none
+$ retis -p dropmon collect -o
+$ retis -p dropmon pcap -o retis.pcap
+```
+
 ## Nft dropmon
 
 Similar to the above `dropmon` profile, but for netfilter drops.
@@ -118,6 +126,14 @@ $ nft -a list table inet firewalld
 		reject with icmpx admin-prohibited # handle 215         <- This one
 	}
 ...
+```
+
+The same profile can be used with the `pcap` command to generate a pcap output
+from the above (if events were stored).
+
+```none
+$ retis -p nft-dropmon collect -o
+$ retis -p nft-dropmon pcap -o retis.pcap
 ```
 
 ## Pcap
