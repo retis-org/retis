@@ -13,13 +13,13 @@ nav:
         - Requirements: requirements.md
         - Installation: install.md
     - Collectors:
-        - Event sections: modules/event_sections.md
-        - skb: modules/skb.md
-        - skb-drop: modules/skb_drop.md
-        - skb-tracking: modules/skb_tracking.md
-        - ovs: modules/ovs.md
-        - ct: modules/ct.md
-        - nft: modules/nft.md
+        - Event sections: collectors/event_sections.md
+        - skb: collectors/skb.md
+        - skb-drop: collectors/skb_drop.md
+        - skb-tracking: collectors/skb_tracking.md
+        - ovs: collectors/ovs.md
+        - ct: collectors/ct.md
+        - nft: collectors/nft.md
     - Learn more:
         - Filtering: filtering.md
         - Profiles: profiles.md
