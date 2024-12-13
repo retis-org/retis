@@ -13,7 +13,7 @@ nav:
         - Requirements: requirements.md
         - Installation: install.md
     - Collectors:
-        - Event sections: event_sections.md
+        - Event sections: modules/event_sections.md
         - skb: modules/skb.md
         - skb-drop: modules/skb_drop.md
         - skb-tracking: modules/skb_tracking.md
