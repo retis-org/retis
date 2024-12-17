@@ -177,6 +177,33 @@ endef
 
 $(foreach tgt,check clippy,$(eval $(call analyzer_tmpl,$(tgt))))
 
+define completion_tmpl
+
+ifeq ($(1),bash)
+  $$(1)_dst = share/bash-completion/completions/retis
+else
+ ifeq ($(1),fish)
+   $$(1)_dst = share/fish/vendor_completions.d/retis.fish
+ else
+   $$(1)_dst = share/zsh/site-functions/_retis
+ endif
+endif
+
+  retis.$(1): release
+	$$(call build,run sh-complete --shell $(1) > $$@, generating $$@)
+
+  complete-$(1): retis.$(1)
+
+  install-$(1): complete-$(1)
+	$(call out_console,INSTALL,installing $(1) completion into $$(PREFIX)/$$($(1)_dst) ...)
+	install -Dpm 644 retis.$(1) $$(PREFIX)/$$($(1)_dst)
+endef
+
+$(foreach sh,bash fish zsh,$(eval $(call completion_tmpl,$(sh))))
+
+PREFIX ?= $(HOME)/.local
+install-complete: install-bash install-fish install-zsh
+
 report-cov:
 	$(CARGO) llvm-cov report $(CARGO_CMD_OPTS)
 
