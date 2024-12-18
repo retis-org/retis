@@ -8,22 +8,30 @@ repo_url: https://github.com/retis-org/retis
 edit_uri: edit/main/docs/
 
 nav:
-  - Overview: index.md
-  - Profiles: profiles.md
-  - Filtering: filtering.md
-  - Installation: install.md
-  - Requirements: requirements.md
-  - Contributing: CONTRIBUTING.md
-  - External resources: resources.md
-  - Event sections: event_sections.md
-  - Python bindings: python.md
-  - Collectors:
-      - skb: modules/skb.md
-      - skb-drop: modules/skb_drop.md
-      - skb-tracking: modules/skb_tracking.md
-      - ovs: modules/ovs.md
-      - ct: modules/ct.md
-      - nft: modules/nft.md
+    - Getting started:
+        - Overview: index.md
+        - Requirements: requirements.md
+        - Installation: install.md
+    - Collectors and events:
+        - Introduction: collectors/intro.md
+        - Core sections: collectors/core.md
+        - skb: collectors/skb.md
+        - skb-drop: collectors/skb_drop.md
+        - skb-tracking: collectors/skb_tracking.md
+        - ovs: collectors/ovs.md
+        - ct: collectors/ct.md
+        - nft: collectors/nft.md
+    - Learn more:
+        - Filtering: filtering.md
+        - Profiles: profiles.md
+        - Python bindings: python.md
+        - Limitations: limitations.md
+    - Resourses:
+        - External: resources.md
+        - Contributing: CONTRIBUTING.md
+
+markdown_extensions:
+  - footnotes
 
 theme: readthedocs
 plugins:

@@ -1,0 +1,8 @@
+version: 1.0
+name: ifdump
+about: Dumps packet after the device in ingress and before the device in egress; like AF_PACKET utilities
+collect:
+  - args:
+      probe:
+        - tp:net:netif_receive_skb
+        - tp:net:net_dev_start_xmit

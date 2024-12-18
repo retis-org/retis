@@ -10,4 +10,5 @@ In alphabetical order:
 - Hangbin Liu
 - Paolo Valerio
 - Sundaram Krishnan
+- Timothy Redaelli
 - Viktor Oreshkin

@@ -64,6 +64,89 @@ line arguments.
 
 [^1]: Probes for tracking packets are always installed by the core.
 
+## Filtering
+
+Tracing packets can generate a lot of events, some of which are not
+interesting.  Retis implements a filtering logic to only report
+packets matching the filter or being tracked (see [tracking](#tracking)).
+Retis has two ways of filtering and both can coexist.
+One is based on the [packet content](filtering.md#packet), e.g.:
+
+```none
+$ retis collect -f 'arp or tcp port 443'
+...
+```
+
+and the other is based on [metadata](filtering.md#metadata), e.g.:
+
+```none
+$ retis collect -m 'sk_buff.dev.nd_net.net.ns.inum == 4026531840'
+...
+```
+
+The [filtering](filtering.md) page provides a more detailed
+explanation of their respective features, covering aspects such as how
+to use different filter types, the specific syntax rules, and examples
+of filters.
+
+## Tracking
+
+Retis does its best to track packets in the networking stack, and does it in
+different ways. Note that tracking packets is not a built-in feature of the
+Linux kernel and doing so is complex and cannot be 100% foolproof (but of course
+bugs should be reported and fixed).
+
+1. A Retis core built-in feature generates unique identifiers by tracking the
+   data part of [socket buffers](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/skbuff.h?h=v6.3#n737).
+   The socket buffer is also included in the identifier so we can track clones
+   and friends. This core skb tracking logic is used by the filtering part for
+   Retis to track packets after they were modified (e.g. NAT). Full details on
+   the implementation can be found
+   [in the sources](https://github.com/retis-org/retis/blob/main/retis/src/core/tracking/skb_tracking.rs).
+
+2. A collector, `skb-tracking`, retrieves the core tracking information (unique
+   identifier and socket buffer address) and reports it in the event. Without
+   enabling this collector, skb tracking information won't be reported and can't
+   be used at post-processing time.
+
+3. The `ovs` collector tracks packets in upcalls so we can follow a packet
+   being sent to the OpenVSwitch user-space daemon, even if it is re-injected
+   later on.
+
+## Profiles and customization
+
+Retis has the concept of profiles, which are a predefined set of cli arguments
+(e.g. collectors for the `collect` command). Profiles are meant to improve user
+experience to provide a comprehensive and consistent configuration to Retis
+aimed at operating on pre-defined topics.
+
+```none
+$ retis -p generic collect
+...
+```
+
+Available profiles can be listed using the `profile` command.
+
+```none
+$ retis profile list
+...
+```
+
+Profiles can be extended by using cli arguments. Cli arguments can also be used
+without a profile. One example is adding probes while collecting events.
+
+```none
+$ retis -p dropmon collect -p skb:consume_skb
+...
+$ retis collect -p skb:kfree_skb -p ovs_ct_clear
+...
+```
+
+New profiles can be written and used if stored in `/etc/retis/profiles` or
+`$HOME/.config/profiles`. Here is an
+[example profile](https://github.com/retis-org/retis/blob/main/retis/test_data/profiles/example.yaml)
+with inlined comments. If a profile is generic enough, consider contributing it!
+
 ## Post-processing
 
 Events stored in a file can be formatted and displayed to the console using the
@@ -124,86 +207,3 @@ $ NOPAGER=1 retis sort
 In addition to built-in post-processing commands, it is possible to use the
 python bindings to implement custom processing. See the
 [python bindings documentation](python.md).
-
-## Profiles and customization
-
-Retis has the concept of profiles, which are a predefined set of cli arguments
-(e.g. collectors for the `collect` command). Profiles are meant to improve user
-experience to provide a comprehensive and consistent configuration to Retis
-aimed at operating on pre-defined topics.
-
-```none
-$ retis -p generic collect
-...
-```
-
-Available profiles can be listed using the `profile` command.
-
-```none
-$ retis profile list
-...
-```
-
-Profiles can be extended by using cli arguments. Cli arguments can also be used
-without a profile. One example is adding probes while collecting events.
-
-```none
-$ retis -p dropmon collect -p skb:consume_skb
-...
-$ retis collect -p skb:kfree_skb -p ovs_ct_clear
-...
-```
-
-New profiles can be written and used if stored in `/etc/retis/profiles` or
-`$HOME/.config/profiles`. Here is an
-[example profile](https://github.com/retis-org/retis/blob/main/retis/test_data/profiles/example.yaml)
-with inlined comments. If a profile is generic enough, consider contributing it!
-
-## Filtering
-
-Tracing packets can generate a lot of events, some of which are not
-interesting.  Retis implements a filtering logic to only report
-packets matching the filter or being tracked (see [tracking](#tracking)).
-Retis has two ways of filtering and both can coexist.
-One is based on the [packet content](filtering.md#packet), e.g.:
-
-```none
-$ retis collect -f 'arp or tcp port 443'
-...
-```
-
-and the other is based on [metadata](filtering.md#metadata), e.g.:
-
-```none
-$ retis collect -m 'sk_buff.dev.nd_net.net.ns.inum == 4026531840'
-...
-```
-
-The [filtering](filtering.md) page provides a more detailed
-explanation of their respective features, covering aspects such as how
-to use different filter types, the specific syntax rules, and examples
-of filters.
-
-## Tracking
-
-Retis does its best to track packets in the networking stack, and does it in
-different ways. Note that tracking packets is not a built-in feature of the
-Linux kernel and doing so is complex and cannot be 100% foolproof (but of course
-bugs should be reported and fixed).
-
-1. A Retis core built-in feature generates unique identifiers by tracking the
-   data part of [socket buffers](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/skbuff.h?h=v6.3#n737).
-   The socket buffer is also included in the identifier so we can track clones
-   and friends. This core skb tracking logic is used by the filtering part for
-   Retis to track packets after they were modified (e.g. NAT). Full details on
-   the implementation can be found
-   [in the sources](https://github.com/retis-org/retis/blob/main/retis/src/core/tracking/skb_tracking.rs).
-
-2. A collector, `skb-tracking`, retrieves the core tracking information (unique
-   identifier and socket buffer address) and reports it in the event. Without
-   enabling this collector, skb tracking information won't be reported and can't
-   be used at post-processing time.
-
-3. The `ovs` collector tracks packets in upcalls so we can follow a packet
-   being sent to the OpenVSwitch user-space daemon, even if it is re-injected
-   later on.
