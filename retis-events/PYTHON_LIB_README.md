@@ -7,10 +7,10 @@ This python library can be used to read and post-process retis events.
 Example:
 
 ```python
-from retis import EventReader, Event
+from retis import EventFile
 
-reader = EventReader("retis.data")
+reader = EventFile("retis.data")
 
-for event in reader:
+for e in reader.events():
     print(e.show())
 ```
