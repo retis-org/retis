@@ -2,23 +2,20 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 
-use super::{bpf::CtEventFactory, ct_hook};
+use super::ct_hook;
 use crate::{
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         inspect,
         probe::{Hook, ProbeBuilderManager},
     },
-    events::SectionId,
-    module::Module,
 };
 
 #[derive(Default)]
-pub(crate) struct CtModule {}
+pub(crate) struct CtCollector {}
 
-impl Collector for CtModule {
+impl Collector for CtCollector {
     fn new() -> Result<Self> {
         Ok(Self::default())
     }
@@ -27,11 +24,7 @@ impl Collector for CtModule {
         Some(vec!["struct sk_buff *"])
     }
 
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(SectionId::Ct)
-    }
-
-    fn can_run(&mut self, _cli: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &Collect) -> Result<()> {
         let kernel = &inspect::inspector()?.kernel;
 
         match kernel.get_config_option("CONFIG_NF_CONNTRACK") {
@@ -51,20 +44,11 @@ impl Collector for CtModule {
 
     fn init(
         &mut self,
-        _cli: &CliConfig,
+        _: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
         // Register our generic conntrack hook.
         probes.register_kernel_hook(Hook::from(ct_hook::DATA))
-    }
-}
-
-impl Module for CtModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
-    }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(CtEventFactory::new()?)))
     }
 }

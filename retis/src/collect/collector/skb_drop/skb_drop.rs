@@ -3,25 +3,22 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use log::warn;
 
-use super::{bpf::SkbDropEventFactory, skb_drop_hook};
+use super::skb_drop_hook;
 use crate::{
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         inspect::{inspector, kernel_version::KernelVersionReq},
         kernel::Symbol,
         probe::{Hook, Probe, ProbeBuilderManager},
     },
-    events::SectionId,
-    module::Module,
 };
 
-pub(crate) struct SkbDropModule {
+pub(crate) struct SkbDropCollector {
     reasons_available: bool,
 }
 
-impl Collector for SkbDropModule {
+impl Collector for SkbDropCollector {
     fn new() -> Result<Self> {
         Ok(Self {
             reasons_available: true,
@@ -36,11 +33,7 @@ impl Collector for SkbDropModule {
         ])
     }
 
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(SectionId::SkbDrop)
-    }
-
-    fn can_run(&mut self, _: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &Collect) -> Result<()> {
         let inspector = inspector()?;
 
         // It makes no sense to use Retis on a kernel older enough not to have
@@ -76,7 +69,7 @@ impl Collector for SkbDropModule {
 
     fn init(
         &mut self,
-        _: &CliConfig,
+        _: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
@@ -97,14 +90,5 @@ impl Collector for SkbDropModule {
         }
 
         Ok(())
-    }
-}
-
-impl Module for SkbDropModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
-    }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(SkbDropEventFactory::new()?)))
     }
 }

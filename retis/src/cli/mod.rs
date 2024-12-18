@@ -13,9 +13,7 @@
 //! subcommand was run and register arguments to it before the final argument parsing and
 //! validation, called "full" is performed.
 
+// Re-export cli.rs
 #[allow(clippy::module_inception)]
 pub(crate) mod cli;
-pub(crate) mod dynamic;
-
-// Re-export cli.rs
 pub(crate) use cli::*;

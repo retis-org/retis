@@ -291,6 +291,12 @@ pub(crate) struct SkbEventFactory {
     pub(super) report_eth: bool,
 }
 
+impl SkbEventFactory {
+    pub(crate) fn report_eth(&mut self, on: bool) {
+        self.report_eth = on;
+    }
+}
+
 impl RawEventSectionFactory for SkbEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
         let mut event = SkbEvent::default();
