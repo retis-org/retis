@@ -96,8 +96,8 @@ Got 149 series
 
 For more sophisticated programs that require more control over the python
 environment (interpreter, dependencies, etc), a python library is available in
-[pypi](https://pypi.org/retis). Unlike the builtin command, in this case the
-`EventReader` or `SeriesReader` has to be be created manually.
+[pypi](https://pypi.org/project/retis). Unlike the builtin command, in this case
+the `EventReader` or `SeriesReader` has to be be created manually.
 
 ```python
 from retis import SeriesReader
