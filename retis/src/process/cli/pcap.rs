@@ -26,7 +26,6 @@ use crate::{
     core::{kernel::Symbol, probe::kernel::utils::*},
     events::{file::FileEventsFactory, CommonEvent, KernelEvent, SkbEvent, *},
     helpers::signals::Running,
-    module::Modules,
 };
 
 /// Statistics of the event parser about events (processed, skipped, etc).
@@ -219,7 +218,7 @@ See `retis collect --help` for more details on the probe format."
 }
 
 impl SubCommandParserRunner for Pcap {
-    fn run(&mut self, _: Modules) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         let (probe_type, target) = parse_cli_probe(&self.probe)?;
         let symbol = Symbol::from_name_no_inspect(target);
 

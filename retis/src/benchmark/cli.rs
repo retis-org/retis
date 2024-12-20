@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use clap::{arg, builder::PossibleValuesParser, Parser};
 
-use crate::{benchmark::*, cli::*, module::Modules};
+use crate::{benchmark::*, cli::*};
 
 /// Benchmark parts of Retis
 #[derive(Parser, Debug, Default)]
@@ -21,7 +21,7 @@ pub(crate) struct Benchmark {
 }
 
 impl SubCommandParserRunner for Benchmark {
-    fn run(&mut self, _: Modules) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         match self.r#type.as_str() {
             "events_parsing" => events_parsing::bench(self.ci)?,
             "events_output" => events_output::bench(self.ci)?,

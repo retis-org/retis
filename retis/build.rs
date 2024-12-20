@@ -112,5 +112,5 @@ fn main() {
     gen_bindings();
 
     walk_gen_skels("src/core/probe/", &gen_probe_skel);
-    walk_gen_skels("src/module/", &gen_hook_skel);
+    walk_gen_skels("src/collect/collector/", &gen_hook_skel);
 }

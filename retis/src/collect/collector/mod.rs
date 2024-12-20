@@ -3,10 +3,10 @@
 //! Modules are per-data/target implementations of data retrieval from kernel or
 //! userspace events, specific helpers and post-processing logic.
 
-// Re-export module.rs
+// Re-export collector.rs
 #[allow(clippy::module_inception)]
-pub(crate) mod module;
-pub(crate) use module::*;
+pub(crate) mod collector;
+pub(crate) use collector::*;
 
 pub(crate) mod ct;
 pub(crate) mod nft;

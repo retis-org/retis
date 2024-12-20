@@ -85,7 +85,7 @@ INCLUDES := $(addprefix -I, $(INCLUDES_ALL))
 
 EBPF_PROBES := $(abspath $(wildcard retis/src/core/probe/*/bpf))
 
-EBPF_HOOKS := $(abspath $(wildcard retis/src/module/*/bpf))
+EBPF_HOOKS := $(abspath $(wildcard retis/src/collect/collector/*/bpf))
 
 all: debug
 

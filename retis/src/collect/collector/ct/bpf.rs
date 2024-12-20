@@ -73,7 +73,7 @@ impl RawEventSectionFactory for CtEventFactory {
 }
 
 impl CtEventFactory {
-    pub(super) fn new() -> Result<Self> {
+    pub(crate) fn new() -> Result<Self> {
         let inspector = inspector()?;
 
         let mut me = Self {
