@@ -3,6 +3,7 @@
 #include <bpf/bpf_endian.h>
 
 #include <common.h>
+#include <if_vlan.h>
 
 #define BIT(x) (1 << (x))
 
@@ -13,6 +14,7 @@
 /* Skb raw event sections. */
 enum skb_sections {
 	SECTION_PACKET = 1,
+	SECTION_VLAN,
 	SECTION_DEV,
 	SECTION_NS,
 	SECTION_META,
@@ -299,6 +301,29 @@ skip_netns:
 
 		si = (struct skb_shared_info *)(BPF_CORE_READ(skb, end) + head);
 		e->dataref = (u8)BPF_CORE_READ(si, dataref.counter);
+	}
+
+	if (cfg->sections & BIT(SECTION_VLAN)) {
+		bool is_vlan = false;
+		bool is_accel = false;
+		u16 vlan_tci;
+
+		if (!__vlan_hwaccel_get_tag(skb, &vlan_tci)) {
+			is_vlan = true;
+			is_accel = true;
+		} else if (!__vlan_get_tag(skb, &vlan_tci)) {
+			is_vlan = true;
+		}
+
+		if(is_vlan) {
+			struct skb_vlan_event *e =
+				get_event_section(event, COLLECTOR_SKB,
+						  SECTION_VLAN, sizeof(*e));
+			if (!e)
+				return 0;
+
+			set_skb_vlan_event(e, vlan_tci, is_accel);
+		}
 	}
 
 	if (cfg->sections & BIT(SECTION_GSO)) {

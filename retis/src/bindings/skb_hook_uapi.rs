@@ -7,11 +7,12 @@ pub type u8_ = __u8;
 pub type u32_ = __u32;
 pub type u64_ = __u64;
 pub const SECTION_PACKET: skb_sections = 1;
-pub const SECTION_DEV: skb_sections = 2;
-pub const SECTION_NS: skb_sections = 3;
-pub const SECTION_META: skb_sections = 4;
-pub const SECTION_DATA_REF: skb_sections = 5;
-pub const SECTION_GSO: skb_sections = 6;
+pub const SECTION_VLAN: skb_sections = 2;
+pub const SECTION_DEV: skb_sections = 3;
+pub const SECTION_NS: skb_sections = 4;
+pub const SECTION_META: skb_sections = 5;
+pub const SECTION_DATA_REF: skb_sections = 6;
+pub const SECTION_GSO: skb_sections = 7;
 pub type skb_sections = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]

@@ -45,6 +45,12 @@ if {interface index} ({interface name}) rxif {rx interface index}
 {src mac} > {dst mac} ethertype {etype name} ({etype hex})
 ```
 
+### VLAN section
+
+```none
+vlan (id {id} prio {prio} [drop] [accel])
+```
+
 ### ARP section
 
 ```none

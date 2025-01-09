@@ -74,7 +74,7 @@ static __always_inline bool is_network_valid(u16 network)
 }
 #define is_transport_valid is_network_valid
 
-static __always_inline bool is_mac_data_valid(struct sk_buff *skb)
+static __always_inline bool is_mac_data_valid(const struct sk_buff *skb)
 {
 	u16 mac, network;
 
@@ -86,7 +86,7 @@ static __always_inline bool is_mac_data_valid(struct sk_buff *skb)
 		 BPF_CORE_READ(skb, mac_len) == 0);
 }
 
-static __always_inline bool is_network_data_valid(struct sk_buff *skb)
+static __always_inline bool is_network_data_valid(const struct sk_buff *skb)
 {
 	u16 mac, network;
 

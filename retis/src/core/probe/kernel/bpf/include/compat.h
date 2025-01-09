@@ -20,4 +20,8 @@ struct nft_rule_dp_last___6_4_0 {
 	const struct nft_chain *chain;
 } __attribute__((preserve_access_index));
 
+struct sk_buff___6_1_0 {
+       u8 vlan_present:1;
+} __attribute__((preserve_access_index));
+
 #endif /* __CORE_PROBE_KERNEL_BPF_COMPAT__ */

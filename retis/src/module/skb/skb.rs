@@ -27,7 +27,7 @@ pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
         value_parser=PossibleValuesParser::new([
-            "all", "eth", "dev", "ns", "meta", "dataref", "gso",
+            "all", "eth", "vlan", "dev", "ns", "meta", "dataref", "gso",
             // Below values are deprecated.
             "arp", "ip", "tcp", "udp", "icmp", "packet",
         ]),
@@ -37,6 +37,7 @@ pub(crate) struct SkbCollectorArgs {
 
 Supported values:
 - eth:     include Ethernet information (src, dst, etype).
+- vlan:    include 802.1Q VLAN information (id, pcp, dei, acceleration)
 - dev:     include network device information.
 - ns:      include network namespace information.
 - meta:    include skb metadata information (len, data_len, hash, etc).
@@ -91,6 +92,7 @@ impl Collector for SkbModule {
                     sections |= !0_u64;
                     self.report_eth = true;
                 }
+                "vlan" => sections |= 1 << SECTION_VLAN,
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
