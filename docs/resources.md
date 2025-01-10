@@ -13,5 +13,8 @@
 
 ## Blog articles
 
+- [Dumping packets from anywhere in the networking stack](https://developers.redhat.com/articles/2025/01/09/dumping-packets-anywhere-networking-stack)
+  shows how to use the pcap sub-command to inspect packets at post-processing
+  time with external tools, such as tcpdump and wireshark.
 - [An update on packet drop reasons in Linux](https://developers.redhat.com/articles/2024/01/04/update-packet-drop-reasons-linux)
   describes how to use Retis for packet drops inspection.
