@@ -523,6 +523,7 @@ impl Collectors {
             });
         }
 
+        let (mut iccount, mut eccount) = (0, 0);
         let mut probe_stack = ProbeStack::new(
             collect.stack,
             self.probes.runtime_mut()?.attached_probes(),
@@ -537,6 +538,7 @@ impl Collectors {
                 printers
                     .iter_mut()
                     .try_for_each(|p| p.process_one(&event))?;
+                iccount += 1;
             }
 
             // Then get raw events, if any.
@@ -549,12 +551,16 @@ impl Collectors {
                     printers
                         .iter_mut()
                         .try_for_each(|p| p.process_one(&event))?;
+                    eccount += 1;
                 }
                 Timeout => continue,
             }
         }
 
         printers.iter_mut().try_for_each(|p| p.flush())?;
+        info!("{} event(s) processed", eccount);
+        debug!("{} internal event(s) processed", iccount);
+
         self.stop()
     }
 }
