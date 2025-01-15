@@ -50,6 +50,13 @@ fully functional.
 $ RETIS_TAG=next ./retis_in_container.sh --help
 ```
 
+For those operating in a disconnected environment, an environment variable `RETIS_IMAGE` can be
+used to point to an alternate image location.
+
+```none
+$ RETIS_IMAGE=my-registry.example.com/retis ./retis_in_container.sh --help
+```
+
 ### From sources
 
 Retis depends on the following (in addition to Git and Cargo):
