@@ -50,7 +50,7 @@ impl SubCommand for Complete {
         self
     }
 
-    fn full(&mut self) -> Result<Command> {
+    fn command(&mut self) -> Result<Command> {
         Ok(<Self as clap::CommandFactory>::command())
     }
 
@@ -67,9 +67,9 @@ impl SubCommand for Complete {
 pub(crate) struct CompleteRunner {}
 
 impl SubCommandRunner for CompleteRunner {
-    fn run(&mut self, cli: FullCli) -> Result<()> {
-        let mut cmd = cli.get_command();
-        let matches = cli.get_command().get_matches();
+    fn run(&mut self, cli: CliConfig) -> Result<()> {
+        let mut cmd = cli.command.clone();
+        let matches = cli.command.clone().get_matches();
 
         if let Some(sub_m) = matches.subcommand_matches("sh-complete") {
             if let Some(generator) = sub_m.get_one::<Shell>("shell") {
