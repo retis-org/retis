@@ -5,11 +5,12 @@ use std::{
 };
 
 use anyhow::Result;
-use log::{LevelFilter, Metadata, Record};
+use log::{info, trace, warn, LevelFilter, Metadata, Record};
 use termcolor::{BufferedStandardStream, Color, ColorChoice, ColorSpec, WriteColor};
 use time::{macros::format_description, OffsetDateTime};
 
 /// Our own logger implementation, to handle log:: messages.
+#[derive(Debug)]
 pub(crate) struct Logger {
     /// Max level the logger will output.
     max_level: LevelFilter,
@@ -17,6 +18,7 @@ pub(crate) struct Logger {
     inner: Mutex<LoggerWriter>,
 }
 
+#[derive(Debug)]
 struct LoggerWriter {
     /// We're only outputting messages to stderr, as non-log output is printed
     /// on stdout. This allows to not mix the two and even pipe the non-log
@@ -130,4 +132,24 @@ impl log::Log for Logger {
         // Not much we can do to report the error...
         let _ = self.inner.lock().unwrap().stderr.flush();
     }
+}
+
+pub(crate) fn set_libbpf_rs_print_callback(level: LevelFilter) {
+    let libbpf_rs_print = |level, msg: String| {
+        let msg = msg.trim_end_matches('\n');
+        match level {
+            libbpf_rs::PrintLevel::Debug => trace!("{msg}"),
+            libbpf_rs::PrintLevel::Info => info!("{msg}"),
+            libbpf_rs::PrintLevel::Warn => warn!("{msg}"),
+        }
+    };
+
+    libbpf_rs::set_print(match level {
+        LevelFilter::Error | LevelFilter::Off => None,
+        LevelFilter::Warn => Some((libbpf_rs::PrintLevel::Warn, libbpf_rs_print)),
+        LevelFilter::Info | LevelFilter::Debug => {
+            Some((libbpf_rs::PrintLevel::Info, libbpf_rs_print))
+        }
+        LevelFilter::Trace => Some((libbpf_rs::PrintLevel::Debug, libbpf_rs_print)),
+    });
 }

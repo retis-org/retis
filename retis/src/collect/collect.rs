@@ -428,9 +428,6 @@ impl Collectors {
             gc.start(self.run.clone())?;
         }
 
-        // Start factory
-        self.factory.start(section_factories)?;
-
         // Attach probes and start collectors. We're using an open coded take &
         // replace combination. We could use a Cell<> instead but that would
         // complicate the use of self.probes (additional .get() calls) while
@@ -444,6 +441,9 @@ impl Collectors {
                 warn!("Could not start collector {name}");
             }
         }
+
+        // Start factory
+        self.factory.start(section_factories)?;
 
         Ok(())
     }
