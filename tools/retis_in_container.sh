@@ -1,7 +1,9 @@
 #!/bin/bash
 
 set -e
+RETIS_IMAGE=${RETIS_IMAGE:-quay.io/retis/retis}
 RETIS_TAG=${RETIS_TAG:-latest}
+
 
 # Auto-detect the available runtime.
 if command -v podman >/dev/null; then
@@ -60,4 +62,4 @@ exec $runtime run $extra_args $term_opts --privileged --rm --pid=host \
       -v $(pwd):/data:rw \
       $local_conf \
       $ovs_binary_mount \
-      quay.io/retis/retis:$RETIS_TAG "$@"
+      $RETIS_IMAGE:$RETIS_TAG "$@"
