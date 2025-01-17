@@ -87,6 +87,12 @@ impl EventFmt for SkbEvent {
                 ArpOperation::Reply => {
                     write!(f, "reply {} is-at {}", arp.spa, arp.sha)?;
                 }
+                ArpOperation::ReverseRequest => {
+                    write!(f, "reverse request who-is {} tell {}", arp.tha, arp.sha)?;
+                }
+                ArpOperation::ReverseReply => {
+                    write!(f, "reverse reply {} at {}", arp.tha, arp.tpa)?;
+                }
             }
         }
 
@@ -328,6 +334,8 @@ pub struct SkbArpEvent {
 pub enum ArpOperation {
     Request,
     Reply,
+    ReverseRequest,
+    ReverseReply,
 }
 
 /// IPv4/IPv6 fields.

@@ -38,6 +38,8 @@ pub(super) fn unmarshal_arp(arp: &ArpPacket) -> Result<Option<SkbArpEvent>> {
     let operation = match arp.get_operation().0 {
         1 => ArpOperation::Request,
         2 => ArpOperation::Reply,
+        3 => ArpOperation::ReverseRequest,
+        4 => ArpOperation::ReverseReply,
         // We only support ARP for IPv4 over Ethernet; request & reply */
         _ => return Ok(None),
     };
