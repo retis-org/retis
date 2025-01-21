@@ -1,6 +1,7 @@
 use std::{
+    collections::HashSet,
     mem::MaybeUninit,
-    os::fd::{AsFd, AsRawFd, RawFd},
+    os::fd::RawFd,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -20,7 +21,7 @@ use usdt_bpf::UsdtSkelBuilder;
 pub(crate) struct UsdtBuilder {
     links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, RawFd)>,
-    hooks: Vec<Hook>,
+    hooks: HashSet<Hook>,
 }
 
 impl ProbeBuilder for UsdtBuilder {
@@ -31,7 +32,7 @@ impl ProbeBuilder for UsdtBuilder {
     fn init(
         &mut self,
         map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
+        hooks: HashSet<Hook>,
         _filters: Vec<Filter>,
     ) -> Result<()> {
         self.map_fds = map_fds;
@@ -60,8 +61,6 @@ impl ProbeBuilder for UsdtBuilder {
             .progs_mut()
             .find(|p| p.name() == "probe_usdt")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
-        let mut links = replace_hooks(prog.as_fd().as_raw_fd(), &self.hooks)?;
-        self.links.append(&mut links);
 
         self.links
             .push(prog.attach_usdt(probe.pid, &probe.path, &probe.provider, &probe.name)?);

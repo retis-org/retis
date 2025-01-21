@@ -79,13 +79,13 @@ endif
 # TODO: Remove when we fix proper header dependencies.
 INCLUDES_ALL := $(abspath $(wildcard $(shell find retis/src -type d -path '*/bpf/include') \
                                      /usr/include/x86_64-linux-gnu))
+INCLUDES_ALL += $(abspath $(wildcard $(shell find retis/src -type d -path '*/collector/*/bpf') \
+                                     /usr/include/x86_64-linux-gnu))
 INCLUDES_ALL += $(LIBBPF_INCLUDES)
 
 INCLUDES := $(addprefix -I, $(INCLUDES_ALL))
 
 EBPF_PROBES := $(abspath $(wildcard retis/src/core/probe/*/bpf))
-
-EBPF_HOOKS := $(abspath $(wildcard retis/src/collect/collector/*/bpf))
 
 all: debug
 
@@ -146,11 +146,10 @@ $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
 	cp $^ $(LIBBPF_INCLUDES)/bpf/
 endif
 
-ebpf: $(EBPF_PROBES) $(EBPF_HOOKS)
+ebpf: $(EBPF_PROBES)
 
 $(EBPF_PROBES): OUT_NAME := PROBE
-$(EBPF_HOOKS):  OUT_NAME := HOOK
-$(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
+$(EBPF_PROBES): $(LIBBPF_INCLUDES)
 	$(call out_console,$(OUT_NAME),building $@ ...)
 	BPF_ARCH="$(BPF_ARCH)" \
 	BPF_CFLAGS="$(BPF_CFLAGS)" \
@@ -189,7 +188,7 @@ clean-cov:
 
 clean-ebpf:
 	$(call out_console,CLEAN,cleaning ebpf progs ...)
-	for i in $(EBPF_PROBES) $(EBPF_HOOKS); do \
+	for i in $(EBPF_PROBES); do \
 	    $(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $$i clean; \
 	done
 	-if [ -n "$(LIBBPF_INCLUDES)" ]; then \
@@ -237,6 +236,6 @@ help:
 	$(call help_once,COV                 --  Enable code coverage for testing. Applies only to the target "test".)
 	$(call help_once,                        Requires llvm-cov and preferably rustup toolchain.)
 
-.PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov
+.PHONY: all bench ebpf $(EBPF_PROBES) gen-bindings help install release pylib report-cov
 .PHONY: test pytest-deps pytest
 .PHONY: clean clean-bindings clean-cov clean-ebpf

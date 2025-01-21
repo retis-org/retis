@@ -9,7 +9,3 @@ pub(crate) use skb_drop::*;
 
 pub(crate) mod bpf;
 pub(crate) use bpf::SkbDropEventFactory;
-
-mod skb_drop_hook {
-    include!("bpf/.out/skb_drop_hook.rs");
-}

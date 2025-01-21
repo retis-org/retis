@@ -1,7 +1,6 @@
-use std::{env, fs::File, io, io::ErrorKind, io::Write, path::Path};
+use std::{env, io::{self, ErrorKind}, path::Path};
 
 use libbpf_cargo::SkeletonBuilder;
-use memmap2::Mmap;
 
 const BINDGEN_HEADER: &str = "src/core/bpf_sys/include/bpf-sys.h";
 
@@ -15,30 +14,6 @@ fn get_paths(fpath: &str) -> (String, String) {
     } else {
         panic!("Failed to find base name for {}", fpath);
     }
-}
-
-fn gen_hook_skel(source: &str) {
-    let (dir, base) = get_paths(source);
-    let skel = format!("{}/{}.rs", dir.as_str(), base);
-    let obj_f = File::open(source).unwrap_or_else(|error| {
-        if error.kind() == ErrorKind::NotFound {
-            panic!("Unable to find {source}, please try 'make ebpf' first\n");
-        } else {
-            panic!("Error opening file: {:?}", error);
-        }
-    });
-    let obj_f: &[u8] = &unsafe { Mmap::map(&obj_f).unwrap() };
-
-    let mut rs = File::create(skel).unwrap();
-    write!(
-        rs,
-        r#"
-           pub(crate) const DATA: &[u8] = &{obj_f:?};
-           "#
-    )
-    .unwrap();
-
-    println!("cargo:rerun-if-changed={source}");
 }
 
 fn gen_probe_skel(source: &str) {
@@ -112,5 +87,4 @@ fn main() {
     gen_bindings();
 
     walk_gen_skels("src/core/probe/", &gen_probe_skel);
-    walk_gen_skels("src/collect/collector/", &gen_hook_skel);
 }

@@ -12,12 +12,12 @@
 
 /* Skb raw event sections. */
 enum skb_sections {
-	SECTION_PACKET = 1,
-	SECTION_DEV,
-	SECTION_NS,
-	SECTION_META,
-	SECTION_DATA_REF,
-	SECTION_GSO,
+	SKB_SECTION_PACKET = 1,
+	SKB_SECTION_DEV,
+	SKB_SECTION_NS,
+	SKB_SECTION_META,
+	SKB_SECTION_DATA_REF,
+	SKB_SECTION_GSO,
 } __binding;
 
 /* Skb hook configuration. A map is used to set the config from
@@ -155,7 +155,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		if (size <= 0)
 			return 0;
 
-		e = get_event_section(event, COLLECTOR_SKB, SECTION_PACKET,
+		e = get_event_section(event, COLLECTOR_SKB, SKB_SECTION_PACKET,
 				      sizeof(*e));
 		if (!e)
 			return 0;
@@ -184,7 +184,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		if (size <= 0)
 			return 0;
 
-		e = get_event_section(event, COLLECTOR_SKB, SECTION_PACKET,
+		e = get_event_section(event, COLLECTOR_SKB, SKB_SECTION_PACKET,
 				      sizeof(*e));
 		if (!e)
 			return 0;
@@ -225,13 +225,13 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 	/* Always retrieve the raw packet */
 	process_packet(event, skb);
 
-	if (cfg->sections & BIT(SECTION_DEV) && dev) {
+	if (cfg->sections & BIT(SKB_SECTION_DEV) && dev) {
 		int ifindex = BPF_CORE_READ(dev, ifindex);
 
 		if (ifindex > 0) {
 			struct skb_netdev_event *e =
 				get_event_section(event, COLLECTOR_SKB,
-						  SECTION_DEV, sizeof(*e));
+						  SKB_SECTION_DEV, sizeof(*e));
 			if (!e)
 				return 0;
 
@@ -241,7 +241,7 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 		}
 	}
 
-	if (cfg->sections & BIT(SECTION_NS)) {
+	if (cfg->sections & BIT(SKB_SECTION_NS)) {
 		struct skb_netns_event *e;
 		u32 netns;
 
@@ -260,7 +260,7 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 			netns = BPF_CORE_READ(sk, __sk_common.skc_net.net, ns.inum);
 		}
 
-		e = get_event_section(event, COLLECTOR_SKB, SECTION_NS, sizeof(*e));
+		e = get_event_section(event, COLLECTOR_SKB, SKB_SECTION_NS, sizeof(*e));
 		if (!e)
 			return 0;
 
@@ -268,10 +268,10 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 	}
 
 skip_netns:
-	if (cfg->sections & BIT(SECTION_META)) {
+	if (cfg->sections & BIT(SKB_SECTION_META)) {
 		struct skb_meta_event *e =
 			get_event_section(event, COLLECTOR_SKB,
-					  SECTION_META, sizeof(*e));
+					  SKB_SECTION_META, sizeof(*e));
 		if (!e)
 			return 0;
 
@@ -284,11 +284,11 @@ skip_netns:
 		e->priority = BPF_CORE_READ(skb, priority);
 	}
 
-	if (cfg->sections & BIT(SECTION_DATA_REF)) {
+	if (cfg->sections & BIT(SKB_SECTION_DATA_REF)) {
 		unsigned char *head = BPF_CORE_READ(skb, head);
 		struct skb_data_ref_event *e =
 			get_event_section(event, COLLECTOR_SKB,
-					  SECTION_DATA_REF, sizeof(*e));
+					  SKB_SECTION_DATA_REF, sizeof(*e));
 		if (!e)
 			return 0;
 
@@ -301,7 +301,7 @@ skip_netns:
 		e->dataref = (u8)BPF_CORE_READ(si, dataref.counter);
 	}
 
-	if (cfg->sections & BIT(SECTION_GSO)) {
+	if (cfg->sections & BIT(SKB_SECTION_GSO)) {
 		struct skb_shared_info *shinfo;
 		struct skb_gso_event *e;
 
@@ -311,7 +311,7 @@ skip_netns:
 		if (!BPF_CORE_READ(shinfo, gso_size))
 			goto skip_gso;
 
-		e = get_event_section(event, COLLECTOR_SKB, SECTION_GSO,
+		e = get_event_section(event, COLLECTOR_SKB, SKB_SECTION_GSO,
 				      sizeof(*e));
 		if (!e)
 			return 0;
@@ -328,7 +328,7 @@ skip_gso:
 	return 0;
 }
 
-DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
+DEFINE_HOOK(skb, F_AND, RETIS_ALL_FILTERS,
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);
@@ -337,5 +337,3 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 
 	return 0;
 )
-
-char __license[] SEC("license") = "GPL";

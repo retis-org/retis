@@ -6,14 +6,15 @@
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
 
 use std::{
+    collections::HashSet,
     mem::MaybeUninit,
-    os::fd::{AsFd, AsRawFd, RawFd},
+    os::fd::RawFd,
 };
 
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::{OpenSkel, Skel, SkelBuilder};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*};
+use crate::{enable_hooks, core::{filters::Filter, probe::builder::*, probe::*}};
 
 mod raw_tracepoint_bpf {
     include!("bpf/.out/raw_tracepoint.skel.rs");
@@ -22,7 +23,7 @@ use raw_tracepoint_bpf::RawTracepointSkelBuilder;
 
 #[derive(Default)]
 pub(crate) struct RawTracepointBuilder {
-    hooks: Vec<Hook>,
+    hooks: HashSet<Hook>,
     filters: Vec<Filter>,
     links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, RawFd)>,
@@ -36,7 +37,7 @@ impl ProbeBuilder for RawTracepointBuilder {
     fn init(
         &mut self,
         map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
+        hooks: HashSet<Hook>,
         filters: Vec<Filter>,
     ) -> Result<()> {
         self.map_fds = map_fds;
@@ -57,8 +58,8 @@ impl ProbeBuilder for RawTracepointBuilder {
 
         skel.maps.rodata_data.ksym = probe.symbol.addr()?;
         skel.maps.rodata_data.nargs = probe.symbol.nargs()?;
-        skel.maps.rodata_data.nhooks = self.hooks.len() as u32;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
+        enable_hooks!(skel.maps.rodata_data.hooks, self.hooks);
 
         self.filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {
@@ -74,9 +75,6 @@ impl ProbeBuilder for RawTracepointBuilder {
             .progs_mut()
             .find(|p| p.name() == "probe_raw_tracepoint")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
-
-        let mut links = replace_hooks(prog.as_fd().as_raw_fd(), &self.hooks)?;
-        self.links.append(&mut links);
 
         self.links
             .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);

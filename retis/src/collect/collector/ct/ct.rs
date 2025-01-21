@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use anyhow::{bail, Result};
 
-use super::ct_hook;
 use crate::{
     collect::{cli::Collect, Collector},
     core::{
@@ -48,7 +47,7 @@ impl Collector for CtCollector {
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
-        // Register our generic conntrack hook.
-        probes.register_kernel_hook(Hook::from(ct_hook::DATA))
+        probes.enable_kernel_hook(Hook::Ct);
+        Ok(())
     }
 }

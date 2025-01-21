@@ -1,7 +1,6 @@
 #![allow(dead_code)] // FIXME
 #![cfg_attr(test, allow(unused_imports))]
 use std::{
-    cmp,
     collections::{HashMap, HashSet},
     os::fd::{AsFd, AsRawFd, RawFd},
 };
@@ -29,7 +28,6 @@ use crate::core::{
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
 pub(crate) const PROBE_MAX: usize = 1024;
-pub(super) const HOOK_MAX: usize = 10;
 
 /// ProbeManager is the main object providing an API for consumers to register
 /// probes, hooks, maps, etc. It has two main states: builder and runtime.
@@ -104,10 +102,6 @@ impl ProbeManager {
         // Prepare all hooks:
         // - Reuse global maps.
         // - Set global options.
-        builder
-            .generic_hooks
-            .iter_mut()
-            .for_each(|h| h.maps.extend(builder.maps.clone()));
         builder.probes.values_mut().try_for_each(|p| {
             builder
                 .maps
@@ -165,7 +159,7 @@ impl ProbeManager {
             #[cfg(not(test))]
             counters_map: builder.counters_map,
             map_fds: builder.maps.into_iter().collect(),
-            hooks: builder.generic_hooks.into_iter().collect(),
+            hooks: builder.generic_hooks,
             generic_builders: HashMap::new(),
             targeted_builders: Vec::new(),
             probes: HashSet::new(),
@@ -205,13 +199,13 @@ pub(crate) struct ProbeBuilderManager {
     /// Generic probes (with no hook attached) & targeted probes (with hooks
     /// attached).
     probes: HashMap<String, Probe>,
-    /// Generic hooks, meant to be attached to all probes supporting it..
-    generic_hooks: Vec<Hook>,
+    /// Generic hooks, meant to be attached to all probes supporting it.
+    generic_hooks: HashSet<Hook>,
     /// Filters, meant to be attached to all probes.
     filters: Vec<Filter>,
     /// List of global probe options to enable/disable additional probes behavior at a high level.
     global_probes_options: Vec<ProbeOption>,
-    /// HashMap of map names and file descriptors, to be reused in all hooks.
+    /// HashMap of map names and file descriptors, to be reused in all probes.
     maps: HashMap<String, RawFd>,
     /// Common configuration for all probes.
     #[cfg(not(test))]
@@ -234,7 +228,7 @@ impl ProbeBuilderManager {
         #[allow(unused_mut)]
         let mut mgr = Self {
             probes: HashMap::new(),
-            generic_hooks: Vec::new(),
+            generic_hooks: HashSet::new(),
             filters: Vec::new(),
             global_probes_options: Vec::new(),
             maps: HashMap::new(),
@@ -301,17 +295,8 @@ impl ProbeBuilderManager {
     pub(crate) fn register_probe(&mut self, mut probe: Probe) -> Result<()> {
         let key = probe.key();
 
-        let len = probe.hooks_len();
-        if len + self.generic_hooks.len() > HOOK_MAX {
-            bail!("Hook list is already full");
-        }
-
         // Check if it is already in the probe list.
         if let Some(prev) = self.probes.get_mut(&key) {
-            if prev.hooks_len() + len + self.generic_hooks.len() > HOOK_MAX {
-                bail!("Hook list is already full");
-            }
-
             prev.merge(&mut probe)?;
             return Ok(());
         }
@@ -374,18 +359,21 @@ impl ProbeBuilderManager {
     ///
     /// mgr.register_kernel_hook(Hook::from(hook::DATA))?;
     /// ```
-    pub(crate) fn register_kernel_hook(&mut self, hook: Hook) -> Result<()> {
-        let mut max: usize = 0;
-        self.probes.iter().for_each(|(_, p)| {
-            max = cmp::max(max, p.hooks_len());
-        });
+    //pub(crate) fn register_kernel_hook(&mut self, hook: Hook) -> Result<()> {
+    //    let mut max: usize = 0;
+    //    self.probes.iter().for_each(|(_, p)| {
+    //        max = cmp::max(max, p.hooks_len());
+    //    });
 
-        if self.generic_hooks.len() + max >= HOOK_MAX {
-            bail!("Hook list is already full");
-        }
+    //    if self.generic_hooks.len() + max >= HOOK_MAX {
+    //        bail!("Hook list is already full");
+    //    }
 
-        self.generic_hooks.push(hook);
-        Ok(())
+    //    self.generic_hooks.push(hook);
+    //    Ok(())
+    //}
+    pub(crate) fn enable_kernel_hook(&mut self, hook: Hook) {
+        self.generic_hooks.insert(hook);
     }
 
     fn check_probe_max(&self) -> Result<()> {
@@ -410,7 +398,7 @@ pub(crate) struct ProbeRuntimeManager {
     generic_builders: HashMap<usize, Box<dyn ProbeBuilder>>,
     targeted_builders: Vec<Box<dyn ProbeBuilder>>,
     map_fds: Vec<(String, RawFd)>,
-    hooks: Vec<Hook>,
+    hooks: HashSet<Hook>,
     probes: HashSet<String>,
     filters: Vec<Filter>,
 }
@@ -487,7 +475,7 @@ impl ProbeRuntimeManager {
                 if p.supports_generic_hooks() {
                     self.hooks.clone()
                 } else {
-                    Vec::new()
+                    HashSet::new()
                 },
                 self.filters.clone(),
             )?;
@@ -514,7 +502,11 @@ impl ProbeRuntimeManager {
             hooks.extend(self.hooks.clone());
         }
 
-        builder.init(self.map_fds.clone(), hooks, self.filters.clone())?;
+        // Add probe-specific maps to the list of global ones.
+        let mut fds = self.map_fds.clone();
+        fds.extend(probe.maps.clone());
+
+        builder.init(fds, hooks, self.filters.clone())?;
 
         Self::attach_probe(
             &mut builder,

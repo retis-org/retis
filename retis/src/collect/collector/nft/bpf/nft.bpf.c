@@ -223,7 +223,7 @@ const struct nft_verdict *nft_get_verdict(struct retis_context *ctx,
 }
 
 
-DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
+DEFINE_HOOK(nft, F_AND, RETIS_ALL_FILTERS,
 	const struct nft_verdict *verdict;
 	const struct nft_chain *chain;
 	struct nft_traceinfo *info;
@@ -250,5 +250,3 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	return nft_trace(cfg, event, info, chain, verdict, rule,
 			 retis_get_nft_type(ctx, cfg));
 )
-
-char __license[] SEC("license") = "GPL";

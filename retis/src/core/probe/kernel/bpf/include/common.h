@@ -9,6 +9,7 @@
 #include <retis_context.h>
 #include <events.h>
 #include <helpers.h>
+#include <hooks.h>
 #include <packet_filter.h>
 #include <meta_filter.h>
 #include <skb_tracking.h>
@@ -43,106 +44,6 @@ struct {
 	/* PERF_MAX_STACK_DEPTH times u64 for value size. */
 	__uint(value_size, 127 * sizeof(u64));
 } stack_map SEC(".maps");
-
-#define RETIS_F_PASS(f, v)			\
-	RETIS_F_##f##_PASS_SH = v,		\
-	RETIS_F_##f##_PASS = 1 << v
-
-/* Defines the bit position for each filter */
-enum {
-	RETIS_F_PASS(PACKET, 0),
-	RETIS_F_PASS(META, 1),
-};
-
-/* Filters chain is an and */
-#define F_AND		0
-/* Filters chain is an or */
-#define F_OR		1
-
-#define RETIS_ALL_FILTERS	(RETIS_F_PACKET_PASS | RETIS_F_META_PASS)
-
-#define RETIS_TRACKABLE(mask)	(!(mask ^ RETIS_ALL_FILTERS))
-
-/* Helper to define a hook (mostly in collectors) while not having to duplicate
- * the common part everywhere. This also ensure hooks are doing the right thing
- * and should help with maintenance.
- *
- * To define a hook in a collector hook, say hook.bpf.c,
- * ```
- * #include <common.h>
- *
- * DEFINE_HOOK(AND_OR_SEL, FILTER_FLAG1 | FILTER_FLAG2 | ...,
- *	do_something(ctx);
- *	return 0;
- * )
- *
- * char __license[] SEC("license") = "GPL";
- * ```
- *
- * Do not forget to add the hook to build.rs
- */
-#define DEFINE_HOOK(fmode, fflags, statements)					\
-	SEC("ext/hook")								\
-	int hook(struct retis_context *ctx, struct retis_raw_event *event)	\
-	{									\
-		/* Let the verifier be happy */					\
-		if (!ctx || !event)						\
-			return 0;						\
-		if (!((fmode == F_OR) ?						\
-		      (ctx->filters_ret & (fflags)) :				\
-		      ((ctx->filters_ret & (fflags)) == (fflags))))		\
-			return 0;						\
-		statements							\
-	}
-
-/* Helper that defines a hook that doesn't depend on any filtering
- * result and runs regardless.  Filtering outcome is still available
- * through ctx->filters_ret for actions that need special handling not
- * covered by DEFINE_HOOK([F_AND|F_OR], flags, ...).
- *
- * To define a hook in a collector hook, say hook.bpf.c,
- * ```
- * #include <common.h>
- *
- * DEFINE_HOOK_RAW(
- *	do_something(ctx);
- *	return 0;
- * )
- *
- * char __license[] SEC("license") = "GPL";
- * ```
- *
- * Do not forget to add the hook to build.rs
- */
-#define DEFINE_HOOK_RAW(statements) DEFINE_HOOK(F_AND, 0, statements)
-
-/* Number of hooks installed, used to micro-optimize the call chain */
-const volatile u32 nhooks = 0;
-
-/* Hook definition, aimed at being replaced before the program is attached. The
- * temporary retval is volatile to not let the compiler think he can optimize
- * it. Credits to the XDP dispatcher.
- */
-#define HOOK(x)									\
-	__attribute__ ((noinline))						\
-	int hook##x(struct retis_context *ctx, struct retis_raw_event *event) {	\
-		volatile int ret = 0;						\
-		if (!ctx || !event)						\
-			return 0;						\
-		return ret;							\
-	}
-HOOK(0)
-HOOK(1)
-HOOK(2)
-HOOK(3)
-HOOK(4)
-HOOK(5)
-HOOK(6)
-HOOK(7)
-HOOK(8)
-HOOK(9)
-/* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
-#define HOOK_MAX 10
 
 static __always_inline void filter(struct retis_context *ctx)
 {
@@ -243,7 +144,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
 	 * to allocate and fill an event to drop it later on.
 	 */
-	if (nhooks == 0)
+	if (hooks.len == 0)
 		goto exit;
 
 	event = get_event();
@@ -280,31 +181,8 @@ static __always_inline int chain(struct retis_context *ctx)
 	pass_threshold = get_event_size(event);
 	barrier_var(pass_threshold);
 
-/* Defines the logic to call hooks one by one.
- *
- * As a temporary quirk we do handle -ENOMSG and drop the event in this case.
- * This should not be used too much and a proper long term solution should be
- * found. The use case is to let hooks do some filtering otherwise we can end up
- * being flooded with events in some cases as w/o this hooks can only filter
- * themselves.
- */
-#define ENOMSG	42
-#define CALL_HOOK(x)				\
-	if (x < nhooks) {			\
-		int ret = hook##x(ctx, event);	\
-		if (ret == -ENOMSG)		\
-			goto discard_event;	\
-	}
-	CALL_HOOK(0)
-	CALL_HOOK(1)
-	CALL_HOOK(2)
-	CALL_HOOK(3)
-	CALL_HOOK(4)
-	CALL_HOOK(5)
-	CALL_HOOK(6)
-	CALL_HOOK(7)
-	CALL_HOOK(8)
-	CALL_HOOK(9)
+	if (call_hooks(ctx, event) == -ENOMSG)
+		goto discard_event;
 
 	if (get_event_size(event) > pass_threshold)
 		send_event(event);

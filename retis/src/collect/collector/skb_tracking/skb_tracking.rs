@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 
-use super::tracking_hook;
 use crate::{
     bindings::tracking_hook_uapi::skb_tracking_event,
     collect::{cli::Collect, Collector},
@@ -32,7 +31,8 @@ impl Collector for SkbTrackingCollector {
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
-        probes.register_kernel_hook(Hook::from(tracking_hook::DATA))
+        probes.enable_kernel_hook(Hook::SkbTracking);
+        Ok(())
     }
 }
 

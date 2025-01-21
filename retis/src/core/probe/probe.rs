@@ -36,16 +36,19 @@ pub(crate) enum ProbeOption {
 #[derive(Clone)]
 pub(crate) struct Probe {
     r#type: ProbeType,
-    pub(super) hooks: Vec<Hook>,
+    pub(super) hooks: HashSet<Hook>,
     pub(super) options: HashSet<ProbeOption>,
+    // TODO: generic probe with maps ???
+    pub(super) maps: HashMap<String, RawFd>,
 }
 
 impl Probe {
     pub(super) fn from(r#type: ProbeType) -> Probe {
         Probe {
             r#type,
-            hooks: Vec::new(),
+            hooks: HashSet::new(),
             options: HashSet::new(),
+            maps: HashMap::new(),
         }
     }
 
@@ -111,20 +114,15 @@ impl Probe {
     }
 
     /// Append a new targeted hook to the probe.
-    pub(crate) fn add_hook(&mut self, hook: Hook) -> Result<()> {
+    pub(crate) fn enable_hook(&mut self, hook: Hook) -> Result<()> {
         if let ProbeType::Usdt(_) = self.r#type() {
             if !self.hooks.is_empty() {
                 bail!("USDT probes only support a single hook");
             }
         }
 
-        self.hooks.push(hook);
+        self.hooks.insert(hook);
         Ok(())
-    }
-
-    /// Returns the number of hooks installed on the probe.
-    pub(crate) fn hooks_len(&self) -> usize {
-        self.hooks.len()
     }
 
     /// Is this probe generic (aimed at hosting generic hooks only)?
@@ -153,9 +151,14 @@ impl Probe {
 
     /// Reuse a map in all the probe's hooks.
     pub(crate) fn reuse_map(&mut self, name: &str, fd: RawFd) -> Result<()> {
-        self.hooks
-            .iter_mut()
-            .try_for_each(|h| h.reuse_map(name, fd).map(|_| ()))
+        let name = name.to_string();
+
+        if self.maps.contains_key(&name) {
+            bail!("Map {} already reused, or name is conflicting", name);
+        }
+
+        self.maps.insert(name, fd);
+        Ok(())
     }
 
     /// Merge two probes into the current one. The second probe can't be used
@@ -178,7 +181,7 @@ impl Probe {
         }
 
         // Merge hooks.
-        self.hooks.append(&mut other.hooks);
+        self.hooks.extend(other.hooks.clone());
         Ok(())
     }
 }
@@ -196,33 +199,12 @@ impl fmt::Display for Probe {
 }
 
 /// Hook provided by modules for registering them on kernel probes.
-#[derive(Clone)]
-pub(crate) struct Hook {
-    /// Hook BPF binary data.
-    pub(super) bpf_prog: &'static [u8],
-    /// HashMap of maps names and their fd, for reuse by the hook.
-    pub(super) maps: HashMap<String, RawFd>,
-}
-
-impl Hook {
-    /// Create a new hook given a BPF binary data.
-    pub(crate) fn from(bpf_prog: &'static [u8]) -> Hook {
-        Hook {
-            bpf_prog,
-            maps: HashMap::new(),
-        }
-    }
-
-    /// Request to reuse a map specifically in the hook. For maps being globally
-    /// reused please use Kernel::reuse_map() instead.
-    pub(crate) fn reuse_map(&mut self, name: &str, fd: RawFd) -> Result<&mut Self> {
-        let name = name.to_string();
-
-        if self.maps.contains_key(&name) {
-            bail!("Map {} already reused, or name is conflicting", name);
-        }
-
-        self.maps.insert(name, fd);
-        Ok(self)
-    }
+/// TODO: derive from BPF.
+#[derive(Clone, Hash, Eq, PartialEq)]
+pub(crate) enum Hook {
+    SkbTracking,
+    SkbDrop,
+    Skb,
+    Ct,
+    Nft,
 }

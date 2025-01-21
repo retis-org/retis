@@ -9,7 +9,6 @@ use clap::{arg, builder::PossibleValuesParser, Parser};
 use libbpf_rs::MapCore;
 use log::warn;
 
-use super::skb_hook;
 use crate::{
     bindings::skb_hook_uapi::*,
     collect::{cli::Collect, Collector},
@@ -103,11 +102,8 @@ impl Collector for SkbCollector {
         config_map.update(&key, cfg, libbpf_rs::MapFlags::empty())?;
 
         // Register our generic skb hook.
-        probes.register_kernel_hook(
-            Hook::from(skb_hook::DATA)
-                .reuse_map("skb_config_map", config_map.as_fd().as_raw_fd())?
-                .to_owned(),
-        )?;
+        probes.reuse_map("skb_config_map", config_map.as_fd().as_raw_fd())?;
+        probes.enable_kernel_hook(Hook::Skb);
 
         self.config_map = Some(config_map);
         Ok(())

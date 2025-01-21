@@ -3,11 +3,12 @@
 //! ProbeBuilder defines the ProbeBuider trait and some useful utility functions
 //!
 use std::{
+    collections::HashSet,
     ffi::OsStr,
     os::fd::{BorrowedFd, RawFd},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::core::{filters::Filter, probe::*};
 
@@ -25,7 +26,7 @@ pub(super) trait ProbeBuilder {
     fn init(
         &mut self,
         map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
+        hooks: HashSet<Hook>,
         filters: Vec<Filter>,
     ) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
@@ -56,34 +57,17 @@ pub(super) fn reuse_map_fds(
     Ok(())
 }
 
-pub(super) fn replace_hooks(fd: RawFd, hooks: &[Hook]) -> Result<Vec<libbpf_rs::Link>> {
-    let mut links = Vec::new();
-
-    for (i, hook) in hooks.iter().enumerate() {
-        let target = format!("hook{i}");
-
-        let mut open_obj = libbpf_rs::ObjectBuilder::default().open_memory(hook.bpf_prog)?;
-
-        // We have to explicitly use a Vec below to avoid having an unknown size
-        // at build time.
-        let map_fds: Vec<(String, RawFd)> = hook.maps.clone().into_iter().collect();
-        reuse_map_fds(&mut open_obj, &map_fds)?;
-
-        let mut open_prog = open_obj
-            .progs_mut()
-            .find(|p| p.name() == "hook")
-            .ok_or_else(|| anyhow!("Couldn't get hook program"))?;
-
-        open_prog.set_prog_type(libbpf_rs::ProgramType::Ext);
-        open_prog.set_attach_target(fd, Some(target))?;
-
-        let obj = open_obj.load()?;
-        links.push(
-            obj.progs_mut()
-                .find(|p| p.name() == "hook")
-                .ok_or_else(|| anyhow!("Couldn't get hook program"))?
-                .attach_trace()?,
-        );
-    }
-    Ok(links)
+#[macro_export]
+macro_rules! enable_hooks {
+    ($cfg: expr, $hooks: expr) => {{
+        use Hook::*;
+        $hooks.iter().for_each(|h| match h {
+            SkbTracking => $cfg.skb_tracking = 1,
+            SkbDrop => $cfg.skb_drop = 1,
+            Skb => $cfg.skb = 1,
+            Ct => $cfg.ct = 1,
+            Nft => $cfg.nft = 1,
+        });
+        $cfg.len = $hooks.len() as u32;
+    }}
 }

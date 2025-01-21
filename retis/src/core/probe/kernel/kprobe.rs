@@ -4,12 +4,15 @@
 //! in two parts, the Rust code (here) and the eBPF one (bpf/kprobe.bpf.c and
 //! its auto-generated part in bpf/.out/).
 
-use std::os::fd::{AsFd, AsRawFd, RawFd};
+use std::{collections::HashSet, os::fd::RawFd};
 
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::{OpenSkel, Skel};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
+use crate::{
+    enable_hooks,
+    core::{filters::Filter, probe::builder::*, probe::*, workaround::*},
+};
 
 mod kprobe_bpf {
     include!("bpf/.out/kprobe.skel.rs");
@@ -30,7 +33,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
     fn init(
         &mut self,
         map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
+        hooks: HashSet<Hook>,
         filters: Vec<Filter>,
     ) -> Result<()> {
         if self.skel.is_some() {
@@ -39,8 +42,8 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
 
         let mut skel = OpenSkelStorage::new::<KprobeSkelBuilder>()?;
 
-        skel.maps.rodata_data.nhooks = hooks.len() as u32;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
+        enable_hooks!(skel.maps.rodata_data.hooks, hooks);
 
         filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {
@@ -50,18 +53,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
 
         reuse_map_fds(skel.open_object_mut(), &map_fds)?;
 
-        let skel = SkelStorage::load(skel)?;
-        let fd = skel
-            .object()
-            .progs()
-            .find(|p| p.name() == "probe_kprobe")
-            .ok_or_else(|| anyhow!("Couldn't get program"))?
-            .as_fd()
-            .as_raw_fd();
-        let mut links = replace_hooks(fd, &hooks)?;
-        self.links.append(&mut links);
-
-        self.skel = Some(skel);
+        self.skel = Some(SkelStorage::load(skel)?);
         Ok(())
     }
 

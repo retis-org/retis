@@ -18,9 +18,9 @@
 #define REPLY tuplehash[IP_CT_DIR_REPLY].tuple
 
 enum ct_sections {
-	SECTION_META = 0,
-	SECTION_BASE_CONN,
-	SECTION_PARENT_CONN,
+	CT_SECTION_META = 0,
+	CT_SECTION_BASE_CONN,
+	CT_SECTION_PARENT_CONN,
 } __binding;
 
 /* Retis-specific flags */
@@ -217,7 +217,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 	return 0;
 }
 
-DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
+DEFINE_HOOK(ct, F_AND, RETIS_ALL_FILTERS,
 	struct nf_conn *nf_conn;
 	struct ct_meta_event *m;
 	struct sk_buff *skb;
@@ -247,7 +247,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	if (!ct_protocol_is_supported(l3num, protonum))
 		return 0;
 
-	e = get_event_zsection(event, COLLECTOR_CT, SECTION_BASE_CONN,
+	e = get_event_zsection(event, COLLECTOR_CT, CT_SECTION_BASE_CONN,
 			       sizeof(*e));
 	if (!e)
 		return 0;
@@ -255,7 +255,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 
 	nf_conn = BPF_CORE_READ(nf_conn, master);
 	if (nf_conn) {
-		e = get_event_zsection(event, COLLECTOR_CT, SECTION_PARENT_CONN,
+		e = get_event_zsection(event, COLLECTOR_CT, CT_SECTION_PARENT_CONN,
 				       sizeof(*e));
 		if (!e)
 			return 0;
@@ -265,12 +265,10 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 
 	}
 
-	m = get_event_section(event, COLLECTOR_CT, SECTION_META, sizeof(*m));
+	m = get_event_section(event, COLLECTOR_CT, CT_SECTION_META, sizeof(*m));
 	if (!m)
 		return 0;
 	m->state = (u8)(nfct & NFCT_INFOMASK);
 
 	return 0;
 )
-
-char __license[] SEC("license") = "GPL";

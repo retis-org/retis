@@ -8,12 +8,15 @@
 //! program into the associated kprobe that safes the context into a map which is
 //! then retrieved by the kretprobe program..
 
-use std::os::fd::{AsFd, AsRawFd, RawFd};
+use std::{collections::HashSet, os::fd::RawFd};
 
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::{OpenSkel, Skel};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
+use crate::{
+    enable_hooks,
+    core::{filters::Filter, probe::builder::*, probe::*, workaround::*},
+};
 
 mod kretprobe_bpf {
     include!("bpf/.out/kretprobe.skel.rs");
@@ -34,7 +37,7 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
     fn init(
         &mut self,
         map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
+        hooks: HashSet<Hook>,
         filters: Vec<Filter>,
     ) -> Result<()> {
         if self.skel.is_some() {
@@ -43,8 +46,8 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
 
         let mut skel = OpenSkelStorage::new::<KretprobeSkelBuilder>()?;
 
-        skel.maps.rodata_data.nhooks = hooks.len() as u32;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
+        enable_hooks!(skel.maps.rodata_data.hooks, hooks);
 
         filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {
@@ -54,18 +57,7 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
 
         reuse_map_fds(skel.open_object_mut(), &map_fds)?;
 
-        let skel = SkelStorage::load(skel)?;
-        let fd = skel
-            .object()
-            .progs()
-            .find(|p| p.name() == "probe_kretprobe_kretprobe")
-            .ok_or_else(|| anyhow!("Couldn't get program"))?
-            .as_fd()
-            .as_raw_fd();
-        let mut links = replace_hooks(fd, &hooks)?;
-        self.links.append(&mut links);
-
-        self.skel = Some(skel);
+        self.skel = Some(SkelStorage::load(skel)?);
         Ok(())
     }
 

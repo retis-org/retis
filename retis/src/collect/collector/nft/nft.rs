@@ -11,7 +11,7 @@ use libbpf_rs::MapCore;
 use log::info;
 use serde_json::json;
 
-use super::{bpf::*, nft_hook};
+use super::bpf::*;
 use crate::{
     bindings::nft_uapi::nft_config,
     collect::{cli::Collect, Collector},
@@ -210,11 +210,8 @@ impl Collector for NftCollector {
         config_map.update(&key, cfg, libbpf_rs::MapFlags::empty())?;
 
         let mut nft_probe = Probe::kprobe(sym)?;
-        nft_probe.add_hook(
-            Hook::from(nft_hook::DATA)
-                .reuse_map("nft_config_map", config_map.as_fd().as_raw_fd())?
-                .to_owned(),
-        )?;
+        nft_probe.enable_hook(Hook::Nft)?;
+        nft_probe.reuse_map("nft_config_map", config_map.as_fd().as_raw_fd())?;
         probes.register_probe(nft_probe)?;
 
         self.config_map = Some(config_map);

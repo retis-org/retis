@@ -3,7 +3,6 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use log::warn;
 
-use super::skb_drop_hook;
 use crate::{
     collect::{cli::Collect, Collector},
     core::{
@@ -74,15 +73,13 @@ impl Collector for SkbDropCollector {
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
         let mut probe = Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?;
-        let hook = Hook::from(skb_drop_hook::DATA);
-
         if self.reasons_available {
-            probes.register_kernel_hook(hook)?;
+            probes.enable_kernel_hook(Hook::SkbDrop);
         } else {
             // If the kernel doesn't support drop reasons, only attach the hook
             // to the skb:kfree_skb tracepoint (otherwise we would have a fake
             // reason attached to all events).
-            probe.add_hook(hook)?;
+            probe.enable_hook(Hook::SkbDrop)?;
         }
 
         if let Err(e) = probes.register_probe(probe) {
