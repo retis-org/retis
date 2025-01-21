@@ -5,31 +5,29 @@
 //! in two parts, the Rust code (here) and the eBPF one
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
 
-use std::{
-    mem::MaybeUninit,
-    os::fd::{AsFd, AsRawFd, RawFd},
-};
+use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::{OpenSkel, Skel, SkelBuilder};
+use libbpf_rs::skel::{OpenSkel, Skel};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*};
+use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
 
 mod raw_tracepoint_bpf {
     include!("bpf/.out/raw_tracepoint.skel.rs");
 }
-use raw_tracepoint_bpf::RawTracepointSkelBuilder;
+use raw_tracepoint_bpf::*;
 
 #[derive(Default)]
-pub(crate) struct RawTracepointBuilder {
+pub(crate) struct RawTracepointBuilder<'a> {
     hooks: Vec<Hook>,
     filters: Vec<Filter>,
     links: Vec<libbpf_rs::Link>,
+    skel: Option<SkelStorage<RawTracepointSkel<'a>>>,
     map_fds: Vec<(String, RawFd)>,
 }
 
-impl ProbeBuilder for RawTracepointBuilder {
-    fn new() -> RawTracepointBuilder {
+impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
+    fn new() -> RawTracepointBuilder<'a> {
         RawTracepointBuilder::default()
     }
 
@@ -47,8 +45,7 @@ impl ProbeBuilder for RawTracepointBuilder {
     }
 
     fn attach(&mut self, probe: &Probe) -> Result<()> {
-        let mut open_object = MaybeUninit::uninit();
-        let mut skel = RawTracepointSkelBuilder::default().open(&mut open_object)?;
+        let mut skel = OpenSkelStorage::new::<RawTracepointSkelBuilder>()?;
 
         let probe = match probe.r#type() {
             ProbeType::RawTracepoint(probe) => probe,
@@ -68,7 +65,7 @@ impl ProbeBuilder for RawTracepointBuilder {
 
         reuse_map_fds(skel.open_object_mut(), &self.map_fds)?;
 
-        let skel = skel.load()?;
+        let skel = SkelStorage::load(skel)?;
         let prog = skel
             .object()
             .progs_mut()
@@ -80,6 +77,7 @@ impl ProbeBuilder for RawTracepointBuilder {
 
         self.links
             .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
+        self.skel = Some(skel);
         Ok(())
     }
 
