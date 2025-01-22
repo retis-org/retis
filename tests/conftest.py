@@ -84,6 +84,94 @@ def two_ns_simple(netns):
 
 
 @pytest.fixture
+def two_ns_vlan(two_ns_simple):
+    """Fixture that creates two netns connected through VLAN interfaces on top of a
+    veth pair."""
+    netns = two_ns_simple
+
+    # Get netns which was previously created
+    ns0 = netns.get("ns0")
+    ns1 = netns.get("ns1")
+
+    # Create VLANs
+    ns0.link(
+        "add",
+        ifname="veth01.123",
+        link=ns0.link_lookup(ifname="veth01")[0],
+        kind="vlan",
+        vlan_id=123,
+    )
+    ns1.link(
+        "add",
+        ifname="veth10.123",
+        link=ns1.link_lookup(ifname="veth10")[0],
+        kind="vlan",
+        vlan_id=123,
+    )
+
+    # Set VLANs up
+    ns0.link("set", ifname="veth01.123", state="up")
+    ns1.link("set", ifname="veth10.123", state="up")
+
+    # Assign IP addresses to VLANs
+    ns0.addr(
+        "add",
+        index=ns0.link_lookup(ifname="veth01.123")[0],
+        address="10.0.43.1",
+        prefixlen=24,
+    )
+    ns1.addr(
+        "add",
+        index=ns1.link_lookup(ifname="veth10.123")[0],
+        address="10.0.43.2",
+        prefixlen=24,
+    )
+
+    netns.run(
+        "ns0",
+        "ip",
+        "link",
+        "set",
+        "veth01.123",
+        "type",
+        "vlan",
+        "egress",
+        "0:0",
+        "1:1",
+        "2:2",
+        "3:3",
+        "4:4",
+        "5:5",
+        "6:6",
+        "7:7",
+    )
+    netns.run(
+        "ns0",
+        "iptables",
+        "-t",
+        "mangle",
+        "-I",
+        "OUTPUT",
+        "-o",
+        "veth01.123",
+        "-j",
+        "CLASSIFY",
+        "--set-class",
+        "0:6",
+    )
+    netns.run(
+        "ns1",
+        "ethtool",
+        "-K",
+        "veth10",
+        "tx-vlan-offload",
+        "off",
+    )
+
+    yield netns
+
+
+@pytest.fixture
 def three_ns_nat(netns):
     """Fixture that creates three netns connected through veth pairs, a VIP and DNATing
     packets in the middle"""
