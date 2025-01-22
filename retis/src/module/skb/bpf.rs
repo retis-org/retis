@@ -14,6 +14,7 @@ use pnet_packet::{
 };
 
 use crate::{
+    bindings::if_vlan_uapi::*,
     bindings::skb_hook_uapi::*,
     core::events::{
         parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
@@ -169,6 +170,17 @@ pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent
     })
 }
 
+pub(super) fn unmarshal_vlan(raw_section: &BpfRawSection) -> Result<SkbVlanEvent> {
+    let raw = parse_raw_section::<skb_vlan_event>(raw_section)?;
+
+    Ok(SkbVlanEvent {
+        pcp: raw.pcp,
+        dei: raw.dei == 1,
+        vid: raw.vid,
+        acceleration: raw.acceleration == 1,
+    })
+}
+
 pub(super) fn unmarshal_data_ref(raw_section: &BpfRawSection) -> Result<SkbDataRefEvent> {
     let raw = parse_raw_section::<skb_data_ref_event>(raw_section)?;
 
@@ -299,6 +311,7 @@ impl RawEventSectionFactory for SkbEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u32 {
+                SECTION_VLAN => event.vlan = Some(unmarshal_vlan(section)?),
                 SECTION_DEV => event.dev = unmarshal_dev(section)?,
                 SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
                 SECTION_META => event.meta = Some(unmarshal_meta(section)?),

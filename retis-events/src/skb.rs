@@ -12,6 +12,8 @@ use crate::{event_section, event_type, Formatter};
 pub struct SkbEvent {
     /// Ethernet fields, if any.
     pub eth: Option<SkbEthEvent>,
+    /// VLAN tag fields, if any.
+    pub vlan: Option<SkbVlanEvent>,
     /// ARP fields, if any.
     pub arp: Option<SkbArpEvent>,
     /// IPv4 or IPv6 fields, if any.
@@ -71,6 +73,18 @@ impl EventFmt for SkbEvent {
                 write!(f, " {etype}")?;
             }
             write!(f, " ({:#06x})", eth.etype)?;
+        }
+
+        if let Some(vlan) = &self.vlan {
+            space.write(f)?;
+
+            let drop = if vlan.dei { " drop" } else { "" };
+            let accel = if vlan.acceleration { " accel" } else { "" };
+            write!(
+                f,
+                "vlan (id {} prio {}{}{})",
+                vlan.vid, vlan.pcp, drop, accel
+            )?;
         }
 
         if let Some(arp) = &self.arp {
@@ -312,6 +326,19 @@ pub struct SkbEthEvent {
     pub src: String,
     /// Destination MAC address.
     pub dst: String,
+}
+
+/// VLAN fields.
+#[event_type]
+pub struct SkbVlanEvent {
+    /// Priority Code Point, also called CoS.
+    pub pcp: u8,
+    /// Drop eligible indicator.
+    pub dei: bool,
+    /// VLAN ID.
+    pub vid: u16,
+    /// VLAN acceleration field.
+    pub acceleration: bool,
 }
 
 /// ARP fields.
