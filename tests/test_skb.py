@@ -304,3 +304,163 @@ def test_skb_tcp_cc(two_ns_simple):
     ]
     events = retis.events()
     assert_events_present(events, expected_events)
+
+
+def test_skb_vlan(two_ns_vlan):
+    ns = two_ns_vlan
+    retis = Retis()
+
+    retis.collect(
+        "-c",
+        "skb",
+        "--skb-sections",
+        "arp,dev,eth,vlan",
+        "-f",
+        "tcp port 80 or arp",
+        "-p",
+        "tp:net:netif_rx",
+    )
+    print(ns.run_bg("ns1", "socat", "TCP-LISTEN:80", "STDOUT"))
+    print(ns.run("ns0", "socat", "-T", "1", "-", "TCP:10.0.42.2:80"))
+    retis.stop()
+
+    expected_events = [
+        # ARP req
+        {
+            "common": {
+                "task": {
+                    "comm": "socat",
+                },
+            },
+            "kernel": {
+                "probe_type": "raw_tracepoint",
+                "symbol": "net:netif_rx",
+            },
+            "skb": {
+                "arp": {
+                    "operation": "Request",
+                    "spa": "10.0.42.1",
+                    "tpa": "10.0.42.2",
+                },
+                "dev": {
+                    "name": "veth10",
+                },
+                "eth": {
+                    "etype": 2054,
+                },
+                "vlan": {
+                    "acceleration": True,
+                    "dei": False,
+                    "pcp": 0,
+                    "vid": 123,
+                },
+            },
+        },
+        # ARP rep
+        {
+            "common": {
+                "task": {
+                    "comm": "socat",
+                },
+            },
+            "kernel": {
+                "probe_type": "raw_tracepoint",
+                "symbol": "net:netif_rx",
+            },
+            "skb": {
+                "arp": {
+                    "operation": "Reply",
+                    "spa": "10.0.42.2",
+                    "tpa": "10.0.42.1",
+                },
+                "dev": {
+                    "name": "veth01",
+                },
+                "eth": {
+                    "etype": 2054,
+                },
+                "vlan": {
+                    "acceleration": True,
+                    "dei": False,
+                    "pcp": 0,
+                    "vid": 123,
+                },
+            },
+        },
+        # SYN
+        {
+            "common": {
+                "task": {
+                    "comm": "socat",
+                },
+            },
+            "kernel": {
+                "probe_type": "raw_tracepoint",
+                "symbol": "net:netif_rx",
+            },
+            "skb": {
+                "dev": {
+                    "name": "veth10",
+                },
+                "eth": {
+                    "etype": 2048,
+                },
+                "vlan": {
+                    "acceleration": True,
+                    "dei": False,
+                    "pcp": 6,
+                    "vid": 123,
+                },
+                "ip": {
+                    "daddr": "10.0.42.2",
+                    "ecn": 0,
+                    "protocol": 6,
+                    "saddr": "10.0.42.1",
+                    "ttl": 64,
+                },
+                "tcp": {
+                    "dport": 80,
+                    "flags": 2,
+                },
+            },
+        },
+        # SYN,ACK
+        {
+            "common": {
+                "task": {
+                    "comm": "socat",
+                },
+            },
+            "kernel": {
+                "probe_type": "raw_tracepoint",
+                "symbol": "net:netif_rx",
+            },
+            "skb": {
+                "dev": {
+                    "name": "veth01",
+                },
+                "eth": {
+                    "etype": 2048,
+                },
+                "vlan": {
+                    "acceleration": True,
+                    "dei": False,
+                    "pcp": 0,
+                    "vid": 123,
+                },
+                "ip": {
+                    "daddr": "10.0.42.1",
+                    "ecn": 0,
+                    "protocol": 6,
+                    "saddr": "10.0.42.2",
+                    "ttl": 64,
+                },
+                "tcp": {
+                    "flags": 18,
+                    "sport": 80,
+                },
+            },
+        },
+    ]
+    events = retis.events()
+    assert_events_present(events, expected_events)
