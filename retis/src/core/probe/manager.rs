@@ -14,7 +14,7 @@ use super::common::{Counters, CountersKey};
 use super::*;
 use super::{
     builder::ProbeBuilder,
-    kernel::{kprobe, kretprobe, raw_tracepoint},
+    kernel::{fentry, kprobe, kretprobe, raw_tracepoint},
     user::usdt,
 };
 
@@ -148,6 +148,11 @@ impl ProbeManager {
         register_filter_handler(
             "raw_tracepoint/probe",
             libbpf_rs::ProgramType::RawTracepoint,
+            Some(fixup_filter_load_fn),
+        )?;
+        register_filter_handler(
+            "fentry/probe",
+            libbpf_rs::ProgramType::Tracing,
             Some(fixup_filter_load_fn),
         )?;
 
@@ -419,7 +424,9 @@ impl ProbeRuntimeManager {
         match probe.type_mut() {
             ProbeType::Kprobe(ref mut kp)
             | ProbeType::Kretprobe(ref mut kp)
-            | ProbeType::RawTracepoint(ref mut kp) => {
+            | ProbeType::RawTracepoint(ref mut kp)
+            | ProbeType::Fentry(ref mut kp)
+            | ProbeType::Fexit(ref mut kp) => {
                 let addr = kp.symbol.addr()?.to_ne_bytes();
                 let config = kp.gen_config(&options)?;
                 let config = unsafe { plain::as_bytes(&config) };
@@ -448,6 +455,7 @@ impl ProbeRuntimeManager {
             ProbeType::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
             ProbeType::Kretprobe(_) => Box::new(kretprobe::KretprobeBuilder::new()),
             ProbeType::RawTracepoint(_) => Box::new(raw_tracepoint::RawTracepointBuilder::new()),
+            ProbeType::Fentry(_) | ProbeType::Fexit(_) => Box::new(fentry::FentryBuilder::new()),
             ProbeType::Usdt(_) => Box::new(usdt::UsdtBuilder::new()),
         }
     }
@@ -463,6 +471,7 @@ impl ProbeRuntimeManager {
             Probe::kprobe(Symbol::from_name_no_inspect("dummy"))?,
             Probe::kretprobe(Symbol::from_name_no_inspect("dummy"))?,
             Probe::raw_tracepoint(Symbol::from_name_no_inspect("dummy:dummy"))?,
+            Probe::fentry(Symbol::from_name_no_inspect("dummy"))?,
             Probe::usdt(UsdtProbe::dummy())?,
         ];
 

@@ -1,4 +1,8 @@
-use std::{env, io::{self, ErrorKind}, path::Path};
+use std::{
+    env,
+    io::{self, ErrorKind},
+    path::Path,
+};
 
 use libbpf_cargo::SkeletonBuilder;
 

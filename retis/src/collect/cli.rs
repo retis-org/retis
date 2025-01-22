@@ -47,6 +47,8 @@ Valid TYPEs:
 - kprobe | k: kernel probes.
 - kretprobe | kr: kernel return probes.
 - raw_tracepoint | tp: kernel tracepoints.
+- fentry | f: kernel fentry.
+- fexit | fe: kernel fexit.
 
 Wildcards (*) can be used, eg. \"kprobe:tcp_*\" or \"tp:skb:*\".
 

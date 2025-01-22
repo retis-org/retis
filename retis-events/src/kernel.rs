@@ -9,7 +9,8 @@ pub struct KernelEvent {
     /// Kernel symbol name associated with the event (i.e. which probe generated
     /// the event).
     pub symbol: String,
-    /// Probe type: one of "kprobe", "kretprobe" or "raw_tracepoint".
+    /// Probe type: one of "kprobe", "kretprobe", "raw_tracepoint", "fentry" or
+    /// "fexit".
     pub probe_type: String,
     pub stack_trace: Option<StackTrace>,
 }
@@ -23,6 +24,8 @@ impl EventFmt for KernelEvent {
                 "raw_tracepoint" => "tp",
                 "kprobe" => "k",
                 "kretprobe" => "kr",
+                "fentry" => "f",
+                "fexit" => "fe",
                 _ => "invalid",
             },
             self.symbol,

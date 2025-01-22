@@ -69,5 +69,5 @@ macro_rules! enable_hooks {
             Nft => $cfg.nft = 1,
         });
         $cfg.len = $hooks.len() as u32;
-    }}
+    }};
 }

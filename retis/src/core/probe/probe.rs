@@ -19,6 +19,8 @@ pub(crate) enum ProbeType {
     #[allow(dead_code)]
     Kretprobe(KernelProbe),
     RawTracepoint(KernelProbe),
+    Fentry(KernelProbe),
+    Fexit(KernelProbe),
     #[allow(dead_code)]
     Usdt(UsdtProbe),
 }
@@ -70,6 +72,24 @@ impl Probe {
         Ok(Probe::from(r#type))
     }
 
+    /// Create a new fentry.
+    pub(crate) fn fentry(symbol: kernel::Symbol) -> Result<Probe> {
+        let r#type = match symbol {
+            kernel::Symbol::Func(_) => ProbeType::Fentry(KernelProbe::new(symbol)?),
+            kernel::Symbol::Event(_) => bail!("Symbol cannot be probed with an fentry"),
+        };
+        Ok(Probe::from(r#type))
+    }
+
+    /// Create a new fexit.
+    pub(crate) fn fexit(symbol: kernel::Symbol) -> Result<Probe> {
+        let r#type = match symbol {
+            kernel::Symbol::Func(_) => ProbeType::Fexit(KernelProbe::new(symbol)?),
+            kernel::Symbol::Event(_) => bail!("Symbol cannot be probed with an fentry"),
+        };
+        Ok(Probe::from(r#type))
+    }
+
     /// Create a new raw tracepoint.
     pub(crate) fn raw_tracepoint(symbol: kernel::Symbol) -> Result<Probe> {
         let r#type = match symbol {
@@ -109,7 +129,9 @@ impl Probe {
             ProbeType::Kprobe(_) => 0,
             ProbeType::Kretprobe(_) => 1,
             ProbeType::RawTracepoint(_) => 2,
-            ProbeType::Usdt(_) => 3,
+            ProbeType::Fentry(_) => 3,
+            ProbeType::Fexit(_) => 3,
+            ProbeType::Usdt(_) => 4,
         }
     }
 
@@ -193,6 +215,8 @@ impl fmt::Display for Probe {
             ProbeType::Kprobe(symbol) => write!(f, "kprobe:{symbol}"),
             ProbeType::Kretprobe(symbol) => write!(f, "kretprobe:{symbol}"),
             ProbeType::RawTracepoint(symbol) => write!(f, "tp:{symbol}"),
+            ProbeType::Fentry(symbol) => write!(f, "fentry:{symbol}"),
+            ProbeType::Fexit(symbol) => write!(f, "fexit:{symbol}"),
             ProbeType::Usdt(symbol) => write!(f, "usdt {symbol}"),
         }
     }

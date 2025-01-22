@@ -10,8 +10,8 @@ use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::{OpenSkel, Skel};
 
 use crate::{
-    enable_hooks,
     core::{filters::Filter, probe::builder::*, probe::*, workaround::*},
+    enable_hooks,
 };
 
 mod kprobe_bpf {

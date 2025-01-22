@@ -27,6 +27,7 @@ pub(crate) mod probe_stack;
 
 mod inspect;
 
+pub(in crate::core::probe) mod fentry;
 pub(in crate::core::probe) mod kprobe;
 pub(in crate::core::probe) mod kretprobe;
 pub(in crate::core::probe) mod raw_tracepoint;

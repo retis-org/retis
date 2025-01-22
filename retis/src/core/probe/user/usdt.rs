@@ -1,8 +1,4 @@
-use std::{
-    collections::HashSet,
-    mem::MaybeUninit,
-    os::fd::RawFd,
-};
+use std::{collections::HashSet, mem::MaybeUninit, os::fd::RawFd};
 
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::{OpenSkel, Skel, SkelBuilder};

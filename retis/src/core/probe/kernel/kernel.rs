@@ -138,6 +138,8 @@ impl RawEventSectionFactory for KernelEventFactory {
             0 => "kprobe",
             1 => "kretprobe",
             2 => "raw_tracepoint",
+            3 => "fentry",
+            4 => "fexit",
             x => bail!("Unknown probe type {x}"),
         }
         .to_string();

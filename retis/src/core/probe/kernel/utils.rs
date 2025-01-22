@@ -10,6 +10,8 @@ pub(crate) enum CliProbeType {
     Kprobe,
     Kretprobe,
     RawTracepoint,
+    Fentry,
+    Fexit,
 }
 
 impl CliProbeType {
@@ -19,6 +21,8 @@ impl CliProbeType {
             Kprobe => "kprobe",
             Kretprobe => "kretprobe",
             RawTracepoint => "raw_tracepoint",
+            Fentry => "fentry",
+            Fexit => "fexit",
         }
     }
 }
@@ -33,6 +37,8 @@ pub(crate) fn parse_cli_probe(input: &str) -> Result<(CliProbeType, &str)> {
             "kprobe" | "k" => (Kprobe, target),
             "kretprobe" | "kr" => (Kretprobe, target),
             "raw_tracepoint" | "tp" => (RawTracepoint, target),
+            "fentry" | "f" => (Fentry, target),
+            "fexit" | "fe" => (Fexit, target),
             // If a single ':' was found in the probe name but we didn't match
             // any known type, defaults to trying using it as a raw tracepoint.
             _ if input.chars().filter(|c| *c == ':').count() == 1 => (RawTracepoint, input),
@@ -56,7 +62,7 @@ where
     // Convert the target to a list of matching ones for probe types
     // supporting it.
     let mut symbols = match r#type {
-        Kprobe | Kretprobe => matching_functions_to_symbols(target)?,
+        Kprobe | Kretprobe | Fentry | Fexit => matching_functions_to_symbols(target)?,
         RawTracepoint => matching_events_to_symbols(target)?,
     };
 
@@ -71,6 +77,8 @@ where
             Kprobe => Probe::kprobe(symbol)?,
             Kretprobe => Probe::kretprobe(symbol)?,
             RawTracepoint => Probe::raw_tracepoint(symbol)?,
+            Fentry => Probe::fentry(symbol)?,
+            Fexit => Probe::fexit(symbol)?,
         })
     }
 

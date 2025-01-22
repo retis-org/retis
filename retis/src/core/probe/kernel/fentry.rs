@@ -1,9 +1,9 @@
-//! # RawTracepoint
+//! # Fentry
 //!
 //! Module to handle attaching programs to kernel raw tracepoints. We use raw
 //! tracepoints over tracepoints to access their arguments. The module is split
 //! in two parts, the Rust code (here) and the eBPF one
-//! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
+//! (bpf/fentry.bpf.c and its auto-generated part in bpf/.out/).
 
 use std::{collections::HashSet, mem::MaybeUninit, os::fd::RawFd};
 
@@ -15,22 +15,22 @@ use crate::{
     enable_hooks,
 };
 
-mod raw_tracepoint_bpf {
-    include!("bpf/.out/raw_tracepoint.skel.rs");
+mod fentry_bpf {
+    include!("bpf/.out/fentry.skel.rs");
 }
-use raw_tracepoint_bpf::RawTracepointSkelBuilder;
+use fentry_bpf::{types::kernel_probe_type, FentrySkelBuilder};
 
 #[derive(Default)]
-pub(crate) struct RawTracepointBuilder {
+pub(crate) struct FentryBuilder {
     hooks: HashSet<Hook>,
     filters: Vec<Filter>,
     links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, RawFd)>,
 }
 
-impl ProbeBuilder for RawTracepointBuilder {
-    fn new() -> RawTracepointBuilder {
-        RawTracepointBuilder::default()
+impl ProbeBuilder for FentryBuilder {
+    fn new() -> FentryBuilder {
+        FentryBuilder::default()
     }
 
     fn init(
@@ -48,13 +48,19 @@ impl ProbeBuilder for RawTracepointBuilder {
 
     fn attach(&mut self, probe: &Probe) -> Result<()> {
         let mut open_object = MaybeUninit::uninit();
-        let mut skel = RawTracepointSkelBuilder::default().open(&mut open_object)?;
+        let mut skel = FentrySkelBuilder::default().open(&mut open_object)?;
 
-        let probe = match probe.r#type() {
-            ProbeType::RawTracepoint(probe) => probe,
+        let (fentry, probe) = match probe.r#type() {
+            ProbeType::Fentry(probe) => (true, probe),
+            ProbeType::Fexit(probe) => (false, probe),
             _ => bail!("Wrong probe type {}", probe),
         };
 
+        skel.maps.rodata_data.probe_type = if fentry {
+            kernel_probe_type::KERNEL_PROBE_FENTRY
+        } else {
+            kernel_probe_type::KERNEL_PROBE_FEXIT
+        };
         skel.maps.rodata_data.ksym = probe.symbol.addr()?;
         skel.maps.rodata_data.nargs = probe.symbol.nargs()?;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
@@ -68,15 +74,26 @@ impl ProbeBuilder for RawTracepointBuilder {
 
         reuse_map_fds(skel.open_object_mut(), &self.map_fds)?;
 
+        let mut prog = skel
+            .open_object_mut()
+            .progs_mut()
+            .find(|p| p.name() == "probe_fentry")
+            .ok_or_else(|| anyhow!("Couldn't get open program"))?;
+        prog.set_attach_type(if fentry {
+            libbpf_rs::ProgramAttachType::TraceFentry
+        } else {
+            libbpf_rs::ProgramAttachType::TraceFexit
+        });
+        prog.set_attach_target(0, Some(probe.symbol.attach_name()))?;
+
         let skel = skel.load()?;
         let prog = skel
             .object()
             .progs_mut()
-            .find(|p| p.name() == "probe_raw_tracepoint")
+            .find(|p| p.name() == "probe_fentry")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
 
-        self.links
-            .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
+        self.links.push(prog.attach_trace()?);
         Ok(())
     }
 
@@ -102,20 +119,20 @@ mod tests {
     #[cfg_attr(not(feature = "test_cap_bpf"), ignore)]
     fn init_and_attach() {
         let _ = register_filter_handler(
-            "raw_tracepoint/probe",
-            libbpf_rs::ProgramType::RawTracepoint,
+            "fentry/probe",
+            libbpf_rs::ProgramType::Fentry,
             Some(fixup_filter_load_fn),
         );
 
-        let mut builder = RawTracepointBuilder::new();
+        let mut builder = FentryBuilder::new();
 
         // It's for now, the probes below won't do much.
         assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
         assert!(builder
-            .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
+            .attach(&Probe::fentry(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
             .is_ok());
         assert!(builder
-            .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:consume_skb").unwrap()).unwrap())
+            .attach(&Probe::fentry(Symbol::from_name("skb:consume_skb").unwrap()).unwrap())
             .is_ok());
     }
 }
