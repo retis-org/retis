@@ -317,17 +317,37 @@ impl Collectors {
         }
         Self::setup_filters(self.probes.builder_mut()?, collect)?;
 
-        // If probe_stack is on and user hasn't provided a starting point, use
-        // skb:consume_skb & skb:kfree_skb.
-        if collect.probe_stack && collect.probes.is_empty() {
-            self.probes
-                .builder_mut()?
-                .register_probe(Probe::raw_tracepoint(Symbol::from_name(
-                    "skb:consume_skb",
-                )?)?)?;
-            self.probes
-                .builder_mut()?
-                .register_probe(Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?)?;
+        // If auto_mode is on and no probe is given, find the right set
+        // automagically.
+        if self.auto_mode && collect.probes.is_empty() {
+            let mut probes = if collect.probe_stack {
+                // If --probe-stack is used, use skb:consume_skb & skb:kfree_skb
+                // as a starting point (these should capture most if not all of
+                // the packets and help moving up the stack).
+                vec![
+                    Probe::raw_tracepoint(Symbol::from_name("skb:consume_skb")?)?,
+                    Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?,
+                ]
+            } else {
+                // By default dump packets after the device in ingress and
+                // before the device in egress; like AF_PACKET utilities.
+                vec![
+                    Probe::raw_tracepoint(Symbol::from_name("net:netif_receive_skb")?)?,
+                    Probe::raw_tracepoint(Symbol::from_name("net:net_dev_start_xmit")?)?,
+                ]
+            };
+
+            info!(
+                "No probe(s) given: using {}",
+                probes
+                    .iter()
+                    .map(|p| format!("{p}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            probes
+                .drain(..)
+                .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
         }
 
         // Setup user defined probes.

@@ -27,8 +27,10 @@ pub(crate) struct Collect {
             "skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct",
         ]),
         value_delimiter=',',
-        help = "Comma-separated list of collectors to enable. When not specified default to
-auto-mode (all collectors are enabled unless a prerequisite is missing)."
+        help = "Comma-separated list of collectors to enable.
+
+If this is not set and no profile is used (\"--profile\") all collectors are
+enabled unless a prerequisite is missing."
     )]
     pub(super) collectors: Option<Vec<String>>,
     // Use the plural in the struct but singular for the cli parameter as we're
@@ -49,6 +51,11 @@ Valid TYPEs:
 - raw_tracepoint | tp: kernel tracepoints.
 
 Wildcards (*) can be used, eg. \"kprobe:tcp_*\" or \"tp:skb:*\".
+
+If this is not set, no profile is used (\"--profile\") and no collector is
+explicitly enabled (\"--collector\"); \"net:netif_receive_skb\" and
+\"net:net_dev_start_xmit\" are automatically used. Also note the
+\"--probe-stack\" logic takes precedence over this.
 
 Examples:
   --probe tp:skb:kfree_skb --probe kprobe:consume_skb
