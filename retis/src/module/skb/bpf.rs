@@ -10,7 +10,7 @@ use std::str;
 use anyhow::{anyhow, Result};
 use pnet_packet::{
     arp::ArpPacket, ethernet::*, icmp::IcmpPacket, icmpv6::Icmpv6Packet, ip::*, ipv4::*, ipv6::*,
-    tcp::TcpPacket, udp::UdpPacket, Packet,
+    tcp::TcpPacket, udp::UdpPacket, vlan::VlanPacket, Packet,
 };
 
 use crate::{
@@ -235,20 +235,37 @@ pub(super) fn unmarshal_packet(
         event.eth = Some(unmarshal_eth(&eth)?);
     }
 
-    match eth.get_ethertype() {
+    // Handle VLANs.
+    fn get_payload(etype: EtherType, payload: &[u8]) -> Result<(EtherType, &[u8])> {
+        match etype {
+            EtherTypes::Vlan | EtherTypes::PBridge => match VlanPacket::new(payload) {
+                Some(vlan) => {
+                    if payload.len() < 4 {
+                        bail!("Cannot parse packet: VLAN header is too small");
+                    }
+                    get_payload(vlan.get_ethertype(), &payload[4..])
+                }
+                None => bail!("Cannot parse VLAN header"),
+            },
+            _ => Ok((etype, payload)),
+        }
+    }
+    let (etype, payload) = get_payload(eth.get_ethertype(), eth.payload())?;
+
+    match etype {
         EtherTypes::Arp => {
-            if let Some(eth) = ArpPacket::new(eth.payload()) {
+            if let Some(eth) = ArpPacket::new(payload) {
                 event.arp = unmarshal_arp(&eth)?;
             };
         }
         EtherTypes::Ipv4 => {
-            if let Some(ip) = Ipv4Packet::new(eth.payload()) {
+            if let Some(ip) = Ipv4Packet::new(payload) {
                 event.ip = Some(unmarshal_ipv4(&ip)?);
                 unmarshal_l4(event, ip.get_next_level_protocol(), ip.payload())?;
             };
         }
         EtherTypes::Ipv6 => {
-            if let Some(ip) = Ipv6Packet::new(eth.payload()) {
+            if let Some(ip) = Ipv6Packet::new(payload) {
                 event.ip = Some(unmarshal_ipv6(&ip)?);
                 unmarshal_l4(event, ip.get_next_header(), ip.payload())?;
             };
