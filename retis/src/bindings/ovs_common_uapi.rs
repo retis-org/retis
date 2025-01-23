@@ -7,11 +7,6 @@ pub type u64_ = __u64;
 pub type bool_ = bool;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
-pub struct ovs_config {
-    pub action_max: u32_,
-}
-#[repr(C)]
-#[derive(Debug, Default, Copy, Clone)]
 pub struct upcall_context {
     pub ts: u64_,
     pub cpu: u32_,

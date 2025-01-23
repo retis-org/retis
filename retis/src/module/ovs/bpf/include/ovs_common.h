@@ -1,6 +1,7 @@
 #ifndef __MODULE_OVS_COMMON__
 #define __MODULE_OVS_COMMON__
 
+#include <vmlinux.h>
 #include <bpf/bpf_core_read.h>
 
 #include <common_defs.h>
