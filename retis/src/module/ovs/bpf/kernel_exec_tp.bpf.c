@@ -7,7 +7,9 @@
 #include <netlink.h>
 
 struct exec_event {
+	u64 action_addr;
 	u32 recirc_id;
+	u16 mru;
 	u8 action;
 } __binding;
 
@@ -108,7 +110,10 @@ DEFINE_HOOK_RAW(
 	struct exec_event *exec;
 	struct execute_actions_ctx *ectx;
 	u64 tid = bpf_get_current_pid_tgid();
+	struct ovs_skb_cb *ovs_cb;
+	struct sk_buff *skb;
 
+	skb = retis_get_sk_buff(ctx);
 	key = (struct sw_flow_key *) ctx->regs.reg[2];
 	if (!key)
 		return 0;
@@ -128,7 +133,10 @@ DEFINE_HOOK_RAW(
 		return 0;
 
 	exec->action = nla_type(attr);
+	ovs_cb = (struct ovs_skb_cb *)BPF_CORE_READ(skb, cb);
+	exec->mru = BPF_CORE_READ(ovs_cb, mru);
 	exec->recirc_id = BPF_CORE_READ(key, recirc_id);
+	exec->action_addr = (u64)(void *)attr;
 	/* Do not emit tracking information if it's not a flow_exec action. */
 	if (ectx->command) {
 		struct exec_track_event *track =

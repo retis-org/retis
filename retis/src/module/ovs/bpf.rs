@@ -332,6 +332,8 @@ impl OvsEventFactory {
                     _ => bail!("Unsupported action id {}", raw.action),
                 },
                 recirc_id: raw.recirc_id,
+                mru: raw.mru,
+                action_address: raw.action_addr,
                 ..ActionEvent::default()
             },
         })
@@ -412,6 +414,8 @@ pub(crate) mod benchmark {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {
             let data = Self {
                 action: 1,
+                action_addr: 0,
+                mru: 0,
                 recirc_id: 3,
             };
             build_raw_section(

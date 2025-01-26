@@ -264,6 +264,10 @@ pub struct ActionEvent {
     pub action: Option<OvsAction>,
     /// Recirculation id.
     pub recirc_id: u32,
+    /// MRU
+    pub mru: u16,
+    /// action address attr + offset
+    pub action_address: u64,
     /// Queue id used for tracking. None if not tracking or if the output event did not come from
     /// an upcall.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -366,6 +370,9 @@ impl EventFmt for ActionEvent {
             Some(OvsAction::Drop { reason }) => write!(f, " drop {}", reason)?,
             None => write!(f, " unspec")?,
         }
+
+        write!(f, " mru: {} ", self.mru)?;
+        write!(f, " a: {:x} ", self.action_address)?;
 
         if let Some(p) = self.queue_id {
             write!(f, " q {}", p)?;
@@ -560,7 +567,7 @@ mod tests {
             ),
             // Action event
             (
-                r#"{"action":"output","event_type":"action_execute","port":2,"queue_id":1361394472,"recirc_id":0}"#,
+                r#"{"action":"output","action_address":0,"event_type":"action_execute","port":2,"mru":0,"queue_id":1361394472,"recirc_id":0}"#,
                 OvsEvent::Action {
                     action_execute: ActionEvent {
                         action: Some(OvsAction::Output {
@@ -568,6 +575,8 @@ mod tests {
                         }),
                         recirc_id: 0,
                         queue_id: Some(1361394472),
+                        mru: 0,
+                        action_address: 0,
                     },
                 },
             ),
@@ -622,7 +631,7 @@ mod tests {
             ),
             // Conntrack action event
             (
-                r#"{"action":"ct","event_type":"action_execute","flags":485,"nat":{"dir":"dst","max_addr":"10.244.1.30","max_port":36900,"min_addr":"10.244.1.3","min_port":36895},"recirc_id":34,"zone_id":20}"#,
+                r#"{"action":"ct","action_address":0,"event_type":"action_execute","flags":485,"mru":0,"nat":{"dir":"dst","max_addr":"10.244.1.30","max_port":36900,"min_addr":"10.244.1.3","min_port":36895},"recirc_id":34,"zone_id":20}"#,
                 OvsEvent::Action {
                     action_execute: ActionEvent {
                         action: Some(OvsAction::Ct {
@@ -638,6 +647,8 @@ mod tests {
                                 }),
                             },
                         }),
+                        action_address: 0,
+                        mru: 0,
                         recirc_id: 34,
                         queue_id: None,
                     },
@@ -645,11 +656,13 @@ mod tests {
             ),
             // Drop action event
             (
-                r#"{"action":"drop","event_type":"action_execute","reason":0,"recirc_id":32}"#,
+                r#"{"action":"drop","action_address":0,"event_type":"action_execute","mru":0,"reason":0,"recirc_id":32}"#,
                 OvsEvent::Action {
                     action_execute: ActionEvent {
                         action: Some(OvsAction::Drop { reason: 0 }),
+                        action_address: 0,
                         recirc_id: 32,
+                        mru: 0,
                         queue_id: None,
                     },
                 },
@@ -659,6 +672,7 @@ mod tests {
         for (event_json, event) in events.iter() {
             let json = serde_json::to_string(event)
                 .map_err(|e| anyhow!("Failed to convert event {event:?} to json: {e}"))?;
+            println!("{}", serde_json::from_str::<Value>(json.as_str()).unwrap());
             // Comparing json strings is error prone. Convert them to Values and compare those.
             assert_eq!(
                 serde_json::from_str::<Value>(json.as_str()).unwrap(),
