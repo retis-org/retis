@@ -78,6 +78,9 @@ Vagrant.configure("2") do |config|
     centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "shell", inline: <<-SHELL
        dnf install -y centos-release-nfv-openvswitch
+       sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/CentOS-NFV-OpenvSwitch.repo
+       sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/CentOS-NFV-OpenvSwitch.repo
+       sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/CentOS-NFV-OpenvSwitch.repo
        dnf install -y openvswitch3.1
     SHELL
 
