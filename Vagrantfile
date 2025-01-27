@@ -24,6 +24,14 @@ dnf install -y \
     python3 -m pip install pytest pyroute2
 SCRIPT
 
+# CentOS mirror URL changed but the c8s image is no longer being built. We
+# have to fix them manually in order to install packages later.
+$fix_centos_repositories = <<SCRIPT
+sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
+sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
+sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
+SCRIPT
+
 def get_box(url, pattern)
   require 'open-uri'
   require 'nokogiri'
@@ -64,20 +72,14 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-8-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/8-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
-    # CentOS mirror URL changed but the c8s image is no longer being built. We
-    # have to fix them manually in order to install packages later.
-    centos.vm.provision "repos-fixup", type: "shell", inline: <<-SHELL
-       sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo
-       sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
-       sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
-    SHELL
-
     centos.vm.provision "shell", inline: <<-SHELL
+       #{$fix_centos_repositories}!
        dnf config-manager --set-enabled powertools
     SHELL
     centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "shell", inline: <<-SHELL
        dnf install -y centos-release-nfv-openvswitch
+       #{$fix_centos_repositories}!
        dnf install -y openvswitch3.1
     SHELL
 
