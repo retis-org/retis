@@ -140,6 +140,8 @@ pub struct CtConnEvent {
     pub mark: Option<u32>,
     /// Connection tracking labels.
     pub labels: Option<U128>,
+    /// nf_conn status (ct->status).
+    pub ct_status: u64,
 }
 
 impl EventFmt for CtEvent {
@@ -168,6 +170,8 @@ impl EventFmt for CtEvent {
 
 impl CtEvent {
     fn format_conn(conn: &CtConnEvent, f: &mut Formatter) -> fmt::Result {
+        write!(f, "status {:#x} ", conn.ct_status)?;
+
         match (&conn.orig.proto, &conn.reply.proto) {
             (CtProto::Tcp { tcp: tcp_orig }, CtProto::Tcp { tcp: tcp_reply }) => {
                 write!(

@@ -22,6 +22,17 @@ ct_state {state}
 `state` is one of `ESTABLISHED`, `RELATED`, `NEW`, `REPLY`, `RELATED_REPLY` and
 `UNTRACKED.`
 
+Status information,
+
+```none
+status {status}
+```
+
+with `status` representing the bits set in `ct->status` in hex format.
+See `enum ip_conntrack_status` in the kernel
+[uapi headers](https://github.com/torvalds/linux/blob/master/include/uapi/linux/netfilter/nf_conntrack_common.h)
+for the bitset representing the corresponding values.
+
 ### Connection information
 
 This starts by a protocol specific part. For TCP and UDP,
