@@ -236,6 +236,7 @@ impl CtEventFactory {
         let labels = U128::from_u128(u128::from_ne_bytes(raw.labels));
 
         Ok(CtConnEvent {
+            ct_status: raw.status,
             zone_id: raw.zone_id,
             zone_dir,
             orig: CtTuple {

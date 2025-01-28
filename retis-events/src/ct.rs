@@ -126,6 +126,8 @@ pub struct CtEvent {
 #[event_type]
 #[derive(Default)]
 pub struct CtConnEvent {
+    /// Conntrack status
+    pub ct_status: u64,
     /// Zone ID
     pub zone_id: u16,
     /// Zone direction
@@ -168,11 +170,13 @@ impl EventFmt for CtEvent {
 
 impl CtEvent {
     fn format_conn(conn: &CtConnEvent, f: &mut Formatter) -> fmt::Result {
+        write!(f, "status {:x}", conn.ct_status)?;
+
         match (&conn.orig.proto, &conn.reply.proto) {
             (CtProto::Tcp { tcp: tcp_orig }, CtProto::Tcp { tcp: tcp_reply }) => {
                 write!(
                     f,
-                    "tcp ({}) orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
+                    " tcp ({}) orig [{}.{} > {}.{}] reply [{}.{} > {}.{}]",
                     conn.tcp_state.as_ref().unwrap_or(&"UNKNOWN".to_string()),
                     conn.orig.ip.src,
                     tcp_orig.sport,
@@ -187,7 +191,7 @@ impl CtEvent {
             (CtProto::Udp { udp: udp_orig }, CtProto::Udp { udp: udp_reply }) => {
                 write!(
                     f,
-                    "udp orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
+                    " udp orig [{}.{} > {}.{}] reply [{}.{} > {}.{}]",
                     conn.orig.ip.src,
                     udp_orig.sport,
                     conn.orig.ip.dst,
@@ -199,7 +203,7 @@ impl CtEvent {
                 )?;
             }
             (CtProto::Icmp { icmp: icmp_orig }, CtProto::Icmp { icmp: icmp_reply }) => {
-                write!(f, "icmp orig [{} > {} type {} code {} id {}] reply [{} > {} type {} code {} id {}] ",
+                write!(f, " icmp orig [{} > {} type {} code {} id {}] reply [{} > {} type {} code {} id {}]",
                            conn.orig.ip.src,
                            conn.orig.ip.dst,
                            icmp_orig.r#type,
@@ -215,9 +219,9 @@ impl CtEvent {
             _ => (),
         }
         match conn.zone_dir {
-            ZoneDir::Original => write!(f, "orig-zone {}", conn.zone_id)?,
-            ZoneDir::Reply => write!(f, "reply-zone {}", conn.zone_id)?,
-            ZoneDir::Default => write!(f, "zone {}", conn.zone_id)?,
+            ZoneDir::Original => write!(f, " orig-zone {}", conn.zone_id)?,
+            ZoneDir::Reply => write!(f, " reply-zone {}", conn.zone_id)?,
+            ZoneDir::Default => write!(f, " zone {}", conn.zone_id)?,
             ZoneDir::None => (),
         }
 

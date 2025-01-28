@@ -58,6 +58,7 @@ struct nf_conn_tuple {
 struct ct_event {
 	struct nf_conn_tuple orig;
 	struct nf_conn_tuple reply;
+	u64 status;
 	u32 flags;
 	u32 mark;
 	u8 labels[16];
@@ -134,6 +135,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 	if (bpf_core_field_exists(ct->mark))
 		e->mark = BPF_CORE_READ(ct, mark);
 
+	e->status = BPF_CORE_READ(ct, status);
 	switch (l3num) {
 	case NFPROTO_IPV4:
 		e->flags |= RETIS_CT_IPV4;
