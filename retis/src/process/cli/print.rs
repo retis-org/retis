@@ -30,6 +30,8 @@ pub(crate) struct Print {
     pub(super) format: CliDisplayFormat,
     #[arg(long, help = "Print the time as UTC")]
     pub(super) utc: bool,
+    #[arg(short = 'e', help = "Print link-layer information from the packet")]
+    pub(super) print_ll: bool,
 }
 
 impl SubCommandParserRunner for Print {
@@ -48,7 +50,8 @@ impl SubCommandParserRunner for Print {
                 TimeFormat::UtcDate
             } else {
                 TimeFormat::MonotonicTimestamp
-            });
+            })
+            .print_ll(self.print_ll);
 
         match factory.file_type() {
             FileType::Event => {

@@ -24,9 +24,9 @@ pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
         value_parser=PossibleValuesParser::new([
-            "all", "eth", "vlan", "dev", "ns", "meta", "dataref", "gso",
+            "all", "eth", "dev", "ns", "meta", "dataref", "gso",
             // Below values are deprecated.
-            "arp", "ip", "tcp", "udp", "icmp", "packet",
+            "arp", "ip", "tcp", "udp", "icmp", "packet", "vlan",
         ]),
         value_delimiter=',',
         default_value="dev",
@@ -34,7 +34,6 @@ pub(crate) struct SkbCollectorArgs {
 
 Supported values:
 - eth:     include Ethernet information (src, dst, etype).
-- vlan:    include 802.1Q VLAN information (id, pcp, dei, acceleration)
 - dev:     include network device information.
 - ns:      include network namespace information.
 - meta:    include skb metadata information (len, data_len, hash, etc).
@@ -72,8 +71,10 @@ impl Collector for SkbCollector {
         section_factories: &mut SectionFactories,
     ) -> Result<()> {
         // Default list of sections. We set SECTION_PACKET even though it's not
-        // checked in the BPF hook (raw packet is always reported).
-        let mut sections: u64 = 1 << SECTION_PACKET;
+        // checked in the BPF hook (raw packet is always reported) and
+        // SECTION_VLAN (that's the offloaded VLAN data) as when non-offloaded
+        // we'll get VLAN info from the packet and that would be inconsistent.
+        let mut sections: u64 = 1 << SECTION_PACKET | 1 << SECTION_VLAN;
         let skb_factory: &mut SkbEventFactory = section_factories.get_mut(&FactoryId::Skb)?;
 
         for category in args.collector_args.skb.skb_sections.iter() {
@@ -82,7 +83,6 @@ impl Collector for SkbCollector {
                     sections |= !0_u64;
                     skb_factory.report_eth(true);
                 }
-                "vlan" => sections |= 1 << SECTION_VLAN,
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
