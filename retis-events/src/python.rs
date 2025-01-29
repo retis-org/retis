@@ -114,7 +114,7 @@ impl PyEvent {
 
     /// Returns a string representation of the event
     fn show(&self, py: Python<'_>) -> String {
-        let format = crate::DisplayFormat::new().multiline(true);
+        let format = crate::DisplayFormat::new().multiline(true).print_ll(true);
         format!(
             "{}",
             self.0
