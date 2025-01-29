@@ -304,25 +304,16 @@ skip_netns:
 	}
 
 	if (cfg->sections & BIT(SECTION_VLAN)) {
-		bool is_vlan = false;
-		bool is_accel = false;
 		u16 vlan_tci;
 
 		if (!__vlan_hwaccel_get_tag(skb, &vlan_tci)) {
-			is_vlan = true;
-			is_accel = true;
-		} else if (!__vlan_get_tag(skb, &vlan_tci)) {
-			is_vlan = true;
-		}
-
-		if(is_vlan) {
 			struct skb_vlan_event *e =
 				get_event_section(event, COLLECTOR_SKB,
 						  SECTION_VLAN, sizeof(*e));
 			if (!e)
 				return 0;
 
-			set_skb_vlan_event(e, vlan_tci, is_accel);
+			set_skb_vlan_event(e, vlan_tci);
 		}
 	}
 
