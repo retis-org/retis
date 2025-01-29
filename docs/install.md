@@ -69,6 +69,7 @@ Retis depends on the following (in addition to Git and Cargo):
 - llvm
 - make
 - pkg-config
+- tcpdump
 
 If the `python` feature is used (which is by default), the Python3 shared
 libraries and headers must be available.
@@ -77,7 +78,7 @@ On Fedora, one can run:
 
 ```none
 $ dnf -y install git cargo clang elfutils-libelf-devel python3-devel \
-        jq libpcap-devel llvm make pkgconf-pkg-config
+        jq libpcap-devel llvm make pkgconf-pkg-config tcpdump
 ```
 
 On Ubuntu:
@@ -85,7 +86,7 @@ On Ubuntu:
 ```none
 $ apt update
 $ apt -y install git cargo clang jq libelf-dev libpcap-dev python3-dev \
-        llvm make pkg-config
+        llvm make pkg-config tcpdump
 ```
 
 Then, to download and build Retis:
