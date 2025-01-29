@@ -1369,7 +1369,6 @@ dependencies = [
  "pest",
  "pest_derive",
  "plain",
- "pnet_packet",
  "probe",
  "rbpf",
  "regex",
