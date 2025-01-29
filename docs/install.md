@@ -57,6 +57,14 @@ used to point to an alternate image location.
 $ RETIS_IMAGE=my-registry.example.com/retis ./retis_in_container.sh --help
 ```
 
+In addition to the `-o` option working (saving the event data in the current directory),
+it may still be useful to dump Retis' stdout into a file, or maybe change the way it is paged.
+For that purpose, the `PAGER` and `NOPAGER` environment variables can be used:
+
+```none
+$ NOPAGER ./retis_in_container.sh sort > sorted.txt
+```
+
 ### From sources
 
 Retis depends on the following (in addition to Git and Cargo):
