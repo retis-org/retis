@@ -5,21 +5,19 @@ use anyhow::Result;
 use super::tracking_hook;
 use crate::{
     bindings::tracking_hook_uapi::skb_tracking_event,
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         probe::{manager::ProbeBuilderManager, Hook},
     },
     event_section_factory,
     events::*,
-    module::Module,
 };
 
 #[derive(Default)]
-pub(crate) struct SkbTrackingModule {}
+pub(crate) struct SkbTrackingCollector {}
 
-impl Collector for SkbTrackingModule {
+impl Collector for SkbTrackingCollector {
     fn new() -> Result<Self> {
         Ok(Self::default())
     }
@@ -28,26 +26,13 @@ impl Collector for SkbTrackingModule {
         Some(vec!["struct sk_buff *"])
     }
 
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module_noargs(SectionId::SkbTracking)
-    }
-
     fn init(
         &mut self,
-        _: &CliConfig,
+        _: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
         probes.register_kernel_hook(Hook::from(tracking_hook::DATA))
-    }
-}
-
-impl Module for SkbTrackingModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
-    }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(SkbTrackingEventFactory {})))
     }
 }
 

@@ -1,11 +1,10 @@
 #[cfg(not(test))]
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::OpenOptions,
     io::{self, BufWriter},
     process::{Command, Stdio},
-    str::FromStr,
     sync::Arc,
     time::Duration,
 };
@@ -14,12 +13,19 @@ use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
 use nix::{errno::Errno, mount::*, unistd::Uid};
 
-use super::cli::Collect;
+use super::{
+    cli::Collect,
+    collector::{
+        ct::CtCollector, nft::NftCollector, ovs::OvsCollector, skb::SkbCollector,
+        skb_drop::SkbDropCollector, skb_tracking::SkbTrackingCollector,
+    },
+};
 use crate::{
     bindings::packet_filter_uapi,
-    cli::{dynamic::DynamicCommand, CliConfig, CliDisplayFormat, FullCli, SubCommandRunner},
+    cli::CliDisplayFormat,
+    collect::collector::{section_factories, skb::SkbEventFactory},
     core::{
-        events::{BpfEventsFactory, EventResult, RetisEventsFactory},
+        events::{BpfEventsFactory, EventResult, FactoryId, RetisEventsFactory},
         filters::{
             filters::{BpfFilter, Filter},
             meta::filter::FilterMeta,
@@ -35,15 +41,11 @@ use crate::{
     },
     events::*,
     helpers::{signals::Running, time::*},
-    module::{ModuleId, Modules},
     process::display::*,
 };
 
 #[cfg(not(test))]
-use crate::core::{
-    events::FactoryId,
-    probe::kernel::{config::init_stack_map, kernel::KernelEventFactory},
-};
+use crate::core::probe::kernel::{config::init_stack_map, kernel::KernelEventFactory};
 
 /// Generic trait representing a collector. All collectors are required to
 /// implement this, as they'll be manipulated through this trait.
@@ -59,14 +61,12 @@ pub(crate) trait Collector {
     fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
         None
     }
-    /// Register command line arguments on the provided DynamicCommand object
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()>;
     /// Check if the collector can run (eg. all prerequisites are matched). This
     /// is a separate step from init to allow skipping collectors when they are
     /// not explicitly selected by the user.
     ///
     /// The function should return an explanation when a collector can't run.
-    fn can_run(&mut self, _: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &Collect) -> Result<()> {
         Ok(())
     }
     /// Initialize the collector, likely to be used to pass configuration data
@@ -82,7 +82,7 @@ pub(crate) trait Collector {
     /// documentation for more information.
     fn init(
         &mut self,
-        cli: &CliConfig,
+        collect: &Collect,
         probes: &mut ProbeBuilderManager,
         events_factory: Arc<RetisEventsFactory>,
     ) -> Result<()>;
@@ -98,7 +98,7 @@ pub(crate) trait Collector {
 
 /// Main collectors object and API.
 pub(crate) struct Collectors {
-    modules: Modules,
+    collectors: HashMap<String, Box<dyn Collector>>,
     probes: ProbeManager,
     factory: BpfEventsFactory,
     known_kernel_types: HashSet<String>,
@@ -106,7 +106,6 @@ pub(crate) struct Collectors {
     tracking_gc: Option<TrackingGC>,
     // Keep a reference on the tracking configuration map.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
-    loaded: Vec<ModuleId>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
     // Did we mount debugfs ourselves?
@@ -114,19 +113,18 @@ pub(crate) struct Collectors {
 }
 
 impl Collectors {
-    fn new(modules: Modules) -> Result<Self> {
+    pub(super) fn new() -> Result<Self> {
         let factory = BpfEventsFactory::new()?;
         let probes = ProbeManager::new()?;
 
         Ok(Collectors {
-            modules,
+            collectors: HashMap::new(),
             probes,
             factory,
             known_kernel_types: HashSet::new(),
             run: Running::new(),
             tracking_gc: None,
             tracking_config_map: None,
-            loaded: Vec::new(),
             events_factory: Arc::new(RetisEventsFactory::default()),
             mounted_debugfs: false,
         })
@@ -134,7 +132,7 @@ impl Collectors {
 
     /// Setup user defined input filter.
     fn setup_filters(probes: &mut ProbeBuilderManager, collect: &Collect) -> Result<()> {
-        if let Some(f) = &collect.args()?.packet_filter {
+        if let Some(f) = &collect.packet_filter {
             // L2 filter MUST always succeed. Any failure means we need to bail.
             let fb = FilterPacket::from_string_opt(f.to_string(), packet_filter_uapi::FILTER_L2)?;
 
@@ -169,7 +167,7 @@ impl Collectors {
             info!("{} packet filter(s) loaded", loaded_info);
         }
 
-        if let Some(f) = &collect.args()?.meta_filter {
+        if let Some(f) = &collect.meta_filter {
             let fb =
                 FilterMeta::from_string(f.to_string()).map_err(|e| anyhow!("meta filter: {e}"))?;
             probes.register_filter(Filter::Meta(fb))?;
@@ -179,14 +177,7 @@ impl Collectors {
     }
 
     /// Check prerequisites and cli arguments to ensure we can run.
-    fn check(&mut self, cli: &CliConfig) -> Result<()> {
-        let collect = cli
-            .subcommand
-            .as_any()
-            .downcast_ref::<Collect>()
-            .ok_or_else(|| anyhow!("wrong subcommand"))?
-            .args()?;
-
+    pub(super) fn check(&mut self, collect: &Collect) -> Result<()> {
         if collect.probe_stack && collect.packet_filter.is_none() && collect.meta_filter.is_none() {
             bail!("Probe-stack mode requires filtering (--filter-packet and/or --filter-meta)");
         }
@@ -226,17 +217,11 @@ impl Collectors {
     }
 
     /// Initialize all collectors by calling their `init()` function.
-    fn init(&mut self, cli: &CliConfig) -> Result<()> {
+    pub(super) fn init(&mut self, collect: &Collect) -> Result<()> {
         self.run.register_term_signals()?;
 
-        let collect = cli
-            .subcommand
-            .as_any()
-            .downcast_ref::<Collect>()
-            .ok_or_else(|| anyhow!("wrong subcommand"))?;
-
         // Check if we need to report stack traces in the events.
-        if collect.args()?.stack || collect.args()?.probe_stack {
+        if collect.stack || collect.probe_stack {
             self.probes
                 .builder_mut()?
                 .set_probe_opt(probe::ProbeOption::StackTrace)?;
@@ -255,35 +240,48 @@ impl Collectors {
             )
         })?;
 
+        let (auto_mode, collectors) = match &collect.collectors {
+            Some(collectors) => (
+                false,
+                collectors.iter().map(|c| c.as_ref()).collect::<Vec<&str>>(),
+            ),
+            None => (
+                true,
+                vec!["skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct"],
+            ),
+        };
+
         // Try initializing all collectors.
-        for name in &collect.args()?.collectors {
-            let id = ModuleId::from_str(name)?;
-            let c = self
-                .modules
-                .get_collector(&id)
-                .ok_or_else(|| anyhow!("unknown collector {}", name))?;
+        for name in collectors {
+            let mut c: Box<dyn Collector> = match name {
+                "skb-tracking" => Box::new(SkbTrackingCollector::new()?),
+                "skb" => Box::new(SkbCollector::new()?),
+                "skb-drop" => Box::new(SkbDropCollector::new()?),
+                "ovs" => Box::new(OvsCollector::new()?),
+                "nft" => Box::new(NftCollector::new()?),
+                "ct" => Box::new(CtCollector::new()?),
+                _ => bail!("Unknown collector {name}"),
+            };
 
             // Check if the collector can run (prerequisites are met).
-            if let Err(e) = c.can_run(cli) {
+            if let Err(e) = c.can_run(collect) {
                 // Do not issue an error if the list of collectors was set by
                 // default, aka. auto-detect mode.
-                if collect.default_collectors_list {
-                    debug!("Can't run collector {id}: {e}");
+                if auto_mode {
+                    debug!("Cannot run collector {name}: {e}");
                     continue;
                 } else {
-                    bail!("Can't run collector {id}: {e}");
+                    bail!("Cannot run collector {name}: {e}");
                 }
             }
 
             if let Err(e) = c.init(
-                cli,
+                collect,
                 self.probes.builder_mut()?,
                 Arc::clone(&self.events_factory),
             ) {
-                bail!("Could not initialize the {} collector: {}", id, e);
+                bail!("Could not initialize collector {name}: {e}");
             }
-
-            self.loaded.push(id);
 
             // If the collector provides known kernel types, meaning we have a
             // dynamic collector, retrieve and store them for later processing.
@@ -292,16 +290,18 @@ impl Collectors {
                     self.known_kernel_types.insert(x.to_string());
                 });
             }
+
+            self.collectors.insert(name.to_string(), c);
         }
 
-        //  If auto-mode is used, print the list of module that were started.
-        if collect.default_collectors_list {
+        //  If auto-mode is used, print the list of collectors that were started.
+        if auto_mode {
             info!(
                 "Collector(s) started: {}",
-                self.loaded
-                    .iter()
-                    .map(|id| id.to_str())
-                    .collect::<Vec<&str>>()
+                self.collectors
+                    .keys()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<_>>()
                     .join(", ")
             );
         }
@@ -316,7 +316,7 @@ impl Collectors {
 
         // If probe_stack is on and user hasn't provided a starting point, use
         // skb:consume_skb & skb:kfree_skb.
-        if collect.args()?.probe_stack && collect.args()?.probes.is_empty() {
+        if collect.probe_stack && collect.probes.is_empty() {
             self.probes
                 .builder_mut()?
                 .register_probe(Probe::raw_tracepoint(Symbol::from_name(
@@ -329,7 +329,7 @@ impl Collectors {
 
         // Setup user defined probes.
         let filter = |symbol: &Symbol| {
-            // Skip probes not being compatible with the loaded modules.
+            // Skip probes not being compatible with the loaded collectors.
             let ok = self.known_kernel_types.iter().any(|t| {
                 symbol
                     .parameter_offset(t)
@@ -343,26 +343,38 @@ impl Collectors {
             }
             ok
         };
-        collect
-            .args()?
-            .probes
-            .iter()
-            .try_for_each(|p| -> Result<()> {
-                probe_from_cli(p, filter)?
-                    .drain(..)
-                    .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
-                Ok(())
-            })?;
+        collect.probes.iter().try_for_each(|p| -> Result<()> {
+            probe_from_cli(p, filter)?
+                .drain(..)
+                .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
+            Ok(())
+        })?;
 
         Ok(())
     }
 
     /// Start the event retrieval for all collectors by calling
     /// their `start()` function.
-    pub(crate) fn start(&mut self) -> Result<()> {
+    pub(super) fn start(&mut self, collect: &Collect) -> Result<()> {
         // Create factories.
         #[cfg_attr(test, allow(unused_mut))]
-        let mut section_factories = self.modules.section_factories()?;
+        let mut section_factories = section_factories()?;
+
+        // Configure factories based on collectors config.
+        if let Some(skb_factory) = section_factories.get_mut(&FactoryId::Skb) {
+            skb_factory
+                .as_any_mut()
+                .downcast_mut::<SkbEventFactory>()
+                .ok_or_else(|| anyhow!("Failed to downcast SkbEventFactory"))?
+                .report_eth(
+                    collect
+                        .collector_args
+                        .skb
+                        .skb_sections
+                        .iter()
+                        .any(|s| s == "all" || s == "eth"),
+                );
+        }
 
         #[cfg(not(test))]
         {
@@ -403,15 +415,10 @@ impl Collectors {
         let probes = std::mem::take(&mut self.probes);
         let _ = std::mem::replace(&mut self.probes, probes.into_runtime()?);
 
-        for id in &self.loaded {
-            let c = self
-                .modules
-                .get_collector(id)
-                .ok_or_else(|| anyhow!("unknown collector {}", id.to_str()))?;
-
-            debug!("Starting collector {id}");
+        for (name, c) in &mut self.collectors {
+            debug!("Starting collector {name}");
             if c.start().is_err() {
-                warn!("Could not start collector {id}");
+                warn!("Could not start collector {name}");
             }
         }
 
@@ -425,15 +432,10 @@ impl Collectors {
         self.probes.runtime_mut()?.detach()?;
         self.probes.runtime_mut()?.report_counters()?;
 
-        for id in &self.loaded {
-            let c = self
-                .modules
-                .get_collector(id)
-                .ok_or_else(|| anyhow!("unknown collector {}", id.to_str()))?;
-
-            debug!("Stopping collector {id}");
+        for (name, c) in &mut self.collectors {
+            debug!("Stopping collector {name}");
             if c.stop().is_err() {
-                warn!("Could not stop collector {id}");
+                warn!("Could not stop collector {name}");
             }
         }
 
@@ -460,14 +462,7 @@ impl Collectors {
     /// Starts the processing loop and block until we get a single SIGINT
     /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
     /// collector cmd loop.
-    pub(crate) fn process(&mut self, cli: &CliConfig) -> Result<()> {
-        let collect = cli
-            .subcommand
-            .as_any()
-            .downcast_ref::<Collect>()
-            .ok_or_else(|| anyhow!("wrong subcommand"))?
-            .args()?;
-
+    pub(super) fn process(&mut self, collect: &Collect) -> Result<()> {
         let mut printers = Vec::new();
 
         // Write events to stdout if we don't write to a file (--out) or if
@@ -562,182 +557,5 @@ impl Collectors {
         debug!("{} internal event(s) processed", iccount);
 
         self.stop()
-    }
-}
-
-pub(crate) struct CollectRunner {}
-
-impl SubCommandRunner for CollectRunner {
-    fn run(&mut self, cli: FullCli, modules: Modules) -> Result<()> {
-        // Collector arguments are arealdy registered when build FullCli
-        let cli = cli.run()?;
-
-        // Initialize & start collectors.
-        let mut collectors = Collectors::new(modules)?;
-        collectors.check(&cli)?;
-        collectors.init(&cli)?;
-        collectors.start()?;
-
-        // Starts a loop.
-        collectors.process(&cli)?;
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        core::{events::bpf::*, probe::ProbeBuilderManager},
-        event_section_factory,
-        module::Module,
-    };
-
-    struct DummyCollectorA;
-    struct DummyCollectorB;
-
-    impl Collector for DummyCollectorA {
-        fn new() -> Result<DummyCollectorA> {
-            Ok(DummyCollectorA)
-        }
-        fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
-            Some(vec!["struct sk_buff *", "struct net_device *"])
-        }
-        fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
-            cli.register_module_noargs(SectionId::Skb)
-        }
-        fn init(
-            &mut self,
-            _: &CliConfig,
-            _: &mut ProbeBuilderManager,
-            factory: Arc<RetisEventsFactory>,
-        ) -> Result<()> {
-            factory.add_event(|_| Ok(()))?;
-            Ok(())
-        }
-        fn start(&mut self) -> Result<()> {
-            Ok(())
-        }
-    }
-
-    impl Module for DummyCollectorA {
-        fn collector(&mut self) -> &mut dyn Collector {
-            self
-        }
-        fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-            Ok(Some(Box::new(TestEventFactory::default())))
-        }
-    }
-
-    impl Collector for DummyCollectorB {
-        fn new() -> Result<DummyCollectorB> {
-            Ok(DummyCollectorB)
-        }
-        fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
-            None
-        }
-        fn register_cli(&self, cli: &mut DynamicCommand) -> Result<()> {
-            cli.register_module_noargs(SectionId::Ovs)
-        }
-        fn init(
-            &mut self,
-            _: &CliConfig,
-            _: &mut ProbeBuilderManager,
-            _: Arc<RetisEventsFactory>,
-        ) -> Result<()> {
-            bail!("Could not initialize")
-        }
-        fn start(&mut self) -> Result<()> {
-            bail!("Could not start");
-        }
-    }
-
-    impl Module for DummyCollectorB {
-        fn collector(&mut self) -> &mut dyn Collector {
-            self
-        }
-        fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-            Ok(Some(Box::new(TestEventFactory::default())))
-        }
-    }
-
-    #[event_section_factory(FactoryId::Common)]
-    #[derive(Default)]
-    struct TestEventFactory {}
-
-    impl RawEventSectionFactory for TestEventFactory {
-        fn create(&mut self, _: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-            Ok(Box::<TestEvent>::default())
-        }
-    }
-
-    fn get_cli(modules: &str) -> Result<FullCli> {
-        Ok(crate::cli::get_cli()?.build_from(vec!["retis", "collect", "-c", modules])?)
-    }
-
-    #[test]
-    fn register_collectors() -> Result<()> {
-        let mut group = Modules::new()?;
-        assert!(group
-            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
-            .is_ok());
-        assert!(group
-            .register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?),)
-            .is_ok());
-        Ok(())
-    }
-
-    #[test]
-    fn register_uniqueness() -> Result<()> {
-        let mut group = Modules::new()?;
-        assert!(group
-            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
-            .is_ok());
-        assert!(group
-            .register(ModuleId::Skb, Box::new(DummyCollectorA::new()?),)
-            .is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn init_collectors() -> Result<()> {
-        let mut group = Modules::new()?;
-        let mut dummy_a = Box::new(DummyCollectorA::new()?);
-        let mut dummy_b = Box::new(DummyCollectorB::new()?);
-
-        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
-        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
-
-        let mut collectors = Collectors::new(group)?;
-        let mut mgr = ProbeBuilderManager::new()?;
-        let factory = Arc::new(RetisEventsFactory::default());
-        let config = get_cli("skb,ovs")?.run()?;
-
-        assert!(dummy_a
-            .init(&config, &mut mgr, Arc::clone(&factory))
-            .is_ok());
-        assert!(dummy_b
-            .init(&config, &mut mgr, Arc::clone(&factory))
-            .is_err());
-
-        assert!(collectors.init(&config).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn start_collectors() -> Result<()> {
-        let mut group = Modules::new()?;
-        let mut dummy_a = Box::new(DummyCollectorA::new()?);
-        let mut dummy_b = Box::new(DummyCollectorB::new()?);
-
-        group.register(ModuleId::Skb, Box::new(DummyCollectorA::new()?))?;
-        group.register(ModuleId::Ovs, Box::new(DummyCollectorB::new()?))?;
-
-        let mut collectors = Collectors::new(group)?;
-
-        assert!(dummy_a.start().is_ok());
-        assert!(dummy_b.start().is_err());
-        assert!(collectors.start().is_ok());
-        Ok(())
     }
 }

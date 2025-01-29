@@ -10,14 +10,13 @@ use anyhow::{anyhow, bail, Result};
 use clap::{arg, Parser};
 use libbpf_rs::MapCore;
 
-use super::{bpf::OvsEventFactory, hooks};
+use super::hooks;
 use crate::{
     bindings::{
         ovs_common_uapi::{execute_actions_ctx, upcall_context},
         ovs_operation_uapi::upcall_batch,
     },
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         inspect,
@@ -26,9 +25,7 @@ use crate::{
         tracking::gc::TrackingGC,
         user::proc::{Process, ThreadInfo},
     },
-    events::SectionId,
     helpers::signals::Running,
-    module::Module,
 };
 
 // GC runs in a thread every OVS_TRACKING_GC_INTERVAL seconds to collect and
@@ -41,7 +38,7 @@ const OVS_TRACKING_GC_INTERVAL: u64 = 5;
 // shouldn't happen much — or it is a bug.
 const TRACKING_OLD_LIMIT: u64 = 60;
 
-#[derive(Parser, Default)]
+#[derive(Parser, Debug, Default)]
 pub(crate) struct OvsCollectorArgs {
     #[arg(
         long,
@@ -53,7 +50,7 @@ See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions.
 }
 
 #[derive(Default)]
-pub(crate) struct OvsModule {
+pub(crate) struct OvsCollector {
     track: bool,
     inflight_upcalls_map: Option<libbpf_rs::MapHandle>,
     inflight_exec_map: Option<libbpf_rs::MapHandle>,
@@ -68,19 +65,15 @@ pub(crate) struct OvsModule {
     pid_to_batch: Option<libbpf_rs::MapHandle>,
 }
 
-impl Collector for OvsModule {
+impl Collector for OvsCollector {
     fn new() -> Result<Self> {
         Ok(Self::default())
-    }
-
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<OvsCollectorArgs>(SectionId::Ovs)
     }
 
     // Check if the OvS collector can run. Some potential errors are silenced,
     // to avoid returning an error if we can't inspect a given area for some
     // reasons.
-    fn can_run(&mut self, _: &CliConfig) -> Result<()> {
+    fn can_run(&mut self, _: &Collect) -> Result<()> {
         let inspector = inspect::inspector()?;
 
         // Check if the OvS kernel module is available. We also check for loaded
@@ -101,14 +94,11 @@ impl Collector for OvsModule {
 
     fn init(
         &mut self,
-        cli: &CliConfig,
+        cli: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
-        self.track = cli
-            .get_section::<OvsCollectorArgs>(SectionId::Ovs)?
-            .ovs_track;
-
+        self.track = cli.collector_args.ovs.ovs_track;
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
         // Create tracking maps and add USDT hooks.
@@ -142,16 +132,7 @@ impl Collector for OvsModule {
     }
 }
 
-impl Module for OvsModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
-    }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(OvsEventFactory::new()?)))
-    }
-}
-
-impl OvsModule {
+impl OvsCollector {
     fn create_flow_exec_tracking_map() -> Result<libbpf_rs::MapHandle> {
         // Please keep in sync with its C counterpart in bpf/ovs_common.h
         let opts = libbpf_sys::bpf_map_create_opts {

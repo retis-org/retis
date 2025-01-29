@@ -9,20 +9,17 @@ use clap::{arg, builder::PossibleValuesParser, Parser};
 use libbpf_rs::MapCore;
 use log::warn;
 
-use super::{bpf::*, skb_hook};
+use super::skb_hook;
 use crate::{
     bindings::skb_hook_uapi::*,
-    cli::{dynamic::DynamicCommand, CliConfig},
-    collect::Collector,
+    collect::{cli::Collect, Collector},
     core::{
         events::*,
         probe::{Hook, ProbeBuilderManager},
     },
-    events::SectionId,
-    module::Module,
 };
 
-#[derive(Parser, Default)]
+#[derive(Parser, Debug, Default)]
 pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
@@ -48,19 +45,17 @@ Supported values:
 The following values are now always retrieved and their use is deprecated:
 packet, arp, ip, tcp, udp, icmp."
     )]
-    skb_sections: Vec<String>,
+    pub(crate) skb_sections: Vec<String>,
 }
 
 #[derive(Default)]
-pub(crate) struct SkbModule {
+pub(crate) struct SkbCollector {
     // Used to keep a reference to our internal config map.
     #[allow(dead_code)]
     config_map: Option<libbpf_rs::MapHandle>,
-    // Should we report the Ethernet section?
-    report_eth: bool,
 }
 
-impl Collector for SkbModule {
+impl Collector for SkbCollector {
     fn new() -> Result<Self> {
         Ok(Self::default())
     }
@@ -69,36 +64,26 @@ impl Collector for SkbModule {
         Some(vec!["struct sk_buff *"])
     }
 
-    fn register_cli(&self, cmd: &mut DynamicCommand) -> Result<()> {
-        cmd.register_module::<SkbCollectorArgs>(SectionId::Skb)
-    }
-
     fn init(
         &mut self,
-        cli: &CliConfig,
+        args: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
     ) -> Result<()> {
-        // First, get the cli parameters.
-        let args = cli.get_section::<SkbCollectorArgs>(SectionId::Skb)?;
-
         // Default list of sections. We set SECTION_PACKET even though it's not
         // checked in the BPF hook (raw packet is always reported).
         let mut sections: u64 = 1 << SECTION_PACKET;
 
-        for category in args.skb_sections.iter() {
+        for category in args.collector_args.skb.skb_sections.iter() {
             match category.as_str() {
-                "all" => {
-                    sections |= !0_u64;
-                    self.report_eth = true;
-                }
+                "all" => sections |= !0_u64,
                 "vlan" => sections |= 1 << SECTION_VLAN,
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
-                "eth" => self.report_eth = true,
+                "eth" => (),
                 "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
                     warn!(
                         "Use of '{}' in --skb-sections is depreacted (is now always set)",
@@ -131,18 +116,7 @@ impl Collector for SkbModule {
     }
 }
 
-impl Module for SkbModule {
-    fn collector(&mut self) -> &mut dyn Collector {
-        self
-    }
-    fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(SkbEventFactory {
-            report_eth: self.report_eth,
-        })))
-    }
-}
-
-impl SkbModule {
+impl SkbCollector {
     fn config_map() -> Result<libbpf_rs::MapHandle> {
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
