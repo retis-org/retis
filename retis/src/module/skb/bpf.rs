@@ -66,14 +66,13 @@ pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent
     })
 }
 
-pub(super) fn unmarshal_vlan(raw_section: &BpfRawSection) -> Result<SkbVlanEvent> {
+pub(super) fn unmarshal_vlan(raw_section: &BpfRawSection) -> Result<SkbVlanAccelEvent> {
     let raw = parse_raw_section::<skb_vlan_event>(raw_section)?;
 
-    Ok(SkbVlanEvent {
+    Ok(SkbVlanAccelEvent {
         pcp: raw.pcp,
         dei: raw.dei == 1,
         vid: raw.vid,
-        acceleration: raw.acceleration == 1,
     })
 }
 
@@ -121,7 +120,7 @@ impl RawEventSectionFactory for SkbEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u32 {
-                SECTION_VLAN => event.vlan = Some(unmarshal_vlan(section)?),
+                SECTION_VLAN => event.vlan_accel = Some(unmarshal_vlan(section)?),
                 SECTION_DEV => event.dev = unmarshal_dev(section)?,
                 SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
                 SECTION_META => event.meta = Some(unmarshal_meta(section)?),

@@ -118,8 +118,8 @@ impl Tcpdump {
 #[event_section(SectionId::Skb)]
 #[derive(Default)]
 pub struct SkbEvent {
-    /// VLAN tag fields, if any.
-    pub vlan: Option<SkbVlanEvent>,
+    /// VLAN acceleration tag fields, if any.
+    pub vlan_accel: Option<SkbVlanAccelEvent>,
     /// Net device data, if any.
     pub dev: Option<SkbDevEvent>,
     /// Net namespace data, if any.
@@ -171,15 +171,15 @@ impl EventFmt for SkbEvent {
         // otherwise we would print this one but not the VLAN data in the
         // payload. This would be quite confusing.
         if format.print_ll {
-            if let Some(vlan) = &self.vlan {
+            if let Some(vlan) = &self.vlan_accel {
                 space.write(f)?;
 
-                let drop = if vlan.dei { " drop" } else { "" };
-                let accel = if vlan.acceleration { " accel" } else { "" };
                 write!(
                     f,
-                    "vlan (id {} prio {}{}{})",
-                    vlan.vid, vlan.pcp, drop, accel
+                    "vlan_accel (id {} prio {}{})",
+                    vlan.vid,
+                    vlan.pcp,
+                    if vlan.dei { " drop" } else { "" }
                 )?;
             }
         }
@@ -292,17 +292,15 @@ pub struct SkbEthEvent {
     pub dst: String,
 }
 
-/// VLAN fields.
+/// VLAN acceleration fields.
 #[event_type]
-pub struct SkbVlanEvent {
+pub struct SkbVlanAccelEvent {
     /// Priority Code Point, also called CoS.
     pub pcp: u8,
     /// Drop eligible indicator.
     pub dei: bool,
     /// VLAN ID.
     pub vid: u16,
-    /// VLAN acceleration field.
-    pub acceleration: bool,
 }
 
 /// ARP fields.
