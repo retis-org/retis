@@ -140,6 +140,12 @@ fully operational:
 "#
     )]
     pub(crate) allow_system_changes: bool,
+    #[arg(
+        short = 'e',
+        default_value = "false",
+        help = "Print link-layer information from the packet"
+    )]
+    pub(crate) print_ll: bool,
 }
 
 #[derive(Debug)]

@@ -171,16 +171,21 @@ impl EventFmt for SkbEvent {
             }
         }
 
-        if let Some(vlan) = &self.vlan {
-            space.write(f)?;
+        // Only print VLAN accel information if we print the LL one, as
+        // otherwise we would print this one but not the VLAN data in the
+        // payload. This would be quite confusing.
+        if format.print_ll {
+            if let Some(vlan) = &self.vlan {
+                space.write(f)?;
 
-            let drop = if vlan.dei { " drop" } else { "" };
-            let accel = if vlan.acceleration { " accel" } else { "" };
-            write!(
-                f,
-                "vlan (id {} prio {}{}{})",
-                vlan.vid, vlan.pcp, drop, accel
-            )?;
+                let drop = if vlan.dei { " drop" } else { "" };
+                let accel = if vlan.acceleration { " accel" } else { "" };
+                write!(
+                    f,
+                    "vlan (id {} prio {}{}{})",
+                    vlan.vid, vlan.pcp, drop, accel
+                )?;
+            }
         }
 
         if self.meta.is_some() || self.data_ref.is_some() {
