@@ -23,7 +23,7 @@ use super::{
 use crate::{
     bindings::packet_filter_uapi,
     cli::{CliDisplayFormat, MainConfig},
-    collect::collector::{section_factories, skb::SkbEventFactory},
+    collect::collector::section_factories,
     core::{
         events::{BpfEventsFactory, EventResult, FactoryId, RetisEventsFactory},
         filters::{
@@ -378,26 +378,10 @@ impl Collectors {
 
     /// Start the event retrieval for all collectors by calling
     /// their `start()` function.
-    pub(super) fn start(&mut self, collect: &Collect) -> Result<()> {
+    pub(super) fn start(&mut self, _collect: &Collect) -> Result<()> {
         // Create factories.
         #[cfg_attr(test, allow(unused_mut))]
         let mut section_factories = section_factories()?;
-
-        // Configure factories based on collectors config.
-        if let Some(skb_factory) = section_factories.get_mut(&FactoryId::Skb) {
-            skb_factory
-                .as_any_mut()
-                .downcast_mut::<SkbEventFactory>()
-                .ok_or_else(|| anyhow!("Failed to downcast SkbEventFactory"))?
-                .report_eth(
-                    collect
-                        .collector_args
-                        .skb
-                        .skb_sections
-                        .iter()
-                        .any(|s| s == "all" || s == "eth"),
-                );
-        }
 
         #[cfg(not(test))]
         {

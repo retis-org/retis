@@ -33,7 +33,6 @@ pub(crate) struct SkbCollectorArgs {
         help = "Comma separated list of extra information to collect from skbs.
 
 Supported values:
-- eth:     include Ethernet information (src, dst, etype).
 - dev:     include network device information.
 - ns:      include network namespace information.
 - meta:    include skb metadata information (len, data_len, hash, etc).
@@ -41,8 +40,10 @@ Supported values:
 - gso:     include generic segmentation offload (GSO) information.
 - all:     all of the above.
 
-The following values are now always retrieved and their use is deprecated:
-packet, arp, ip, tcp, udp, icmp."
+The packet section and VLAN offloading metadata are always retrieved.
+
+The following values are ignored and no event section will be generated as the
+corresponding data is part of the raw packet: eth, arp, ip, tcp, udp, icmp."
     )]
     pub(crate) skb_sections: Vec<String>,
 }
@@ -84,7 +85,7 @@ impl Collector for SkbCollector {
                 "eth" => (),
                 "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
                     warn!(
-                        "Use of '{}' in --skb-sections is depreacted (is now always set)",
+                        "Use of '{}' in --skb-sections is depreacted",
                         category.as_str(),
                     );
                 }
