@@ -57,6 +57,8 @@ used to point to an alternate image location.
 $ RETIS_IMAGE=my-registry.example.com/retis ./retis_in_container.sh --help
 ```
 
+`PAGER` and `NOPAGER` environment variables work the same way as with the Retis binary.
+
 ### From sources
 
 Retis depends on the following (in addition to Git and Cargo):
