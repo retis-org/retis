@@ -41,7 +41,7 @@ pub struct SkbEvent {
 }
 
 impl EventFmt for SkbEvent {
-    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         let mut len = 0;
 
         let mut space = DelimWriter::new(' ');
@@ -65,26 +65,28 @@ impl EventFmt for SkbEvent {
             }
         }
 
-        if let Some(eth) = &self.eth {
-            space.write(f)?;
+        if format.print_ll {
+            if let Some(eth) = &self.eth {
+                space.write(f)?;
 
-            write!(f, "{} > {} ethertype", eth.src, eth.dst)?;
-            if let Some(etype) = etype_str(eth.etype) {
-                write!(f, " {etype}")?;
+                write!(f, "{} > {} ethertype", eth.src, eth.dst)?;
+                if let Some(etype) = etype_str(eth.etype) {
+                    write!(f, " {etype}")?;
+                }
+                write!(f, " ({:#06x})", eth.etype)?;
             }
-            write!(f, " ({:#06x})", eth.etype)?;
-        }
 
-        if let Some(vlan) = &self.vlan {
-            space.write(f)?;
+            if let Some(vlan) = &self.vlan {
+                space.write(f)?;
 
-            let drop = if vlan.dei { " drop" } else { "" };
-            let accel = if vlan.acceleration { " accel" } else { "" };
-            write!(
-                f,
-                "vlan (id {} prio {}{}{})",
-                vlan.vid, vlan.pcp, drop, accel
-            )?;
+                let drop = if vlan.dei { " drop" } else { "" };
+                let accel = if vlan.acceleration { " accel" } else { "" };
+                write!(
+                    f,
+                    "vlan (id {} prio {}{}{})",
+                    vlan.vid, vlan.pcp, drop, accel
+                )?;
+            }
         }
 
         if let Some(arp) = &self.arp {
