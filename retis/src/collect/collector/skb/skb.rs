@@ -9,7 +9,7 @@ use clap::{arg, builder::PossibleValuesParser, Parser};
 use libbpf_rs::MapCore;
 use log::warn;
 
-use super::{bpf::SkbEventFactory, skb_hook};
+use super::skb_hook;
 use crate::{
     bindings::skb_hook_uapi::*,
     collect::{cli::Collect, Collector},
@@ -33,7 +33,6 @@ pub(crate) struct SkbCollectorArgs {
         help = "Comma separated list of extra information to collect from skbs.
 
 Supported values:
-- eth:     include Ethernet information (src, dst, etype).
 - dev:     include network device information.
 - ns:      include network namespace information.
 - meta:    include skb metadata information (len, data_len, hash, etc).
@@ -41,8 +40,10 @@ Supported values:
 - gso:     include generic segmentation offload (GSO) information.
 - all:     all of the above.
 
-The following values are now always retrieved and their use is deprecated:
-packet, arp, ip, tcp, udp, icmp."
+The packet section and VLAN offloading metadata are always retrieved.
+
+The following values are ignored and no event section will be generated as the
+corresponding data is part of the raw packet: eth, arp, ip, tcp, udp, icmp."
     )]
     pub(crate) skb_sections: Vec<String>,
 }
@@ -68,30 +69,26 @@ impl Collector for SkbCollector {
         args: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
-        section_factories: &mut SectionFactories,
+        _: &mut SectionFactories,
     ) -> Result<()> {
         // Default list of sections. We set SECTION_PACKET even though it's not
         // checked in the BPF hook (raw packet is always reported) and
         // SECTION_VLAN (that's the offloaded VLAN data) as when non-offloaded
         // we'll get VLAN info from the packet and that would be inconsistent.
         let mut sections: u64 = 1 << SECTION_PACKET | 1 << SECTION_VLAN;
-        let skb_factory: &mut SkbEventFactory = section_factories.get_mut(&FactoryId::Skb)?;
 
         for category in args.collector_args.skb.skb_sections.iter() {
             match category.as_str() {
-                "all" => {
-                    sections |= !0_u64;
-                    skb_factory.report_eth(true);
-                }
+                "all" => sections |= !0_u64,
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
-                "eth" => skb_factory.report_eth(true),
+                "eth" => (),
                 "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
                     warn!(
-                        "Use of '{}' in --skb-sections is depreacted (is now always set)",
+                        "Use of '{}' in --skb-sections is depreacted",
                         category.as_str(),
                     );
                 }
