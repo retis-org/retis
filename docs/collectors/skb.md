@@ -14,10 +14,9 @@ argument to the `kfree_skb_reason` function.
 ## Arguments
 
 The `skb` collector has a single specific argument, `--skb-sections`. This is
-used to choose which parts of the `skb` metadata and/or data to retrieve and
-export in the events. The raw start of the packet (headers), ARP, IPv4/6, TCP,
-UDP and ICMPv4/v6 information are always included. See the `retis collect
---help` for a detailed description.
+used to choose which parts of the `skb` metadata to retrieve and export in the
+events. The raw start of the packet (headers) is always included. See the `retis
+collect --help` for a detailed description.
 
 When collecting event for later `pcap-ng` file generation (see `retis pcap
 --help`), it's best to collect the `dev` and `ns` sections too.
@@ -39,69 +38,10 @@ ns {namespace id}
 if {interface index} ({interface name}) rxif {rx interface index}
 ```
 
-### Ethernet section
-
-```none
-{src mac} > {dst mac} ethertype {etype name} ({etype hex})
-```
-
 ### VLAN acceleration section
 
 ```none
 vlan_accel (id {id} prio {prio} [drop])
-```
-
-### ARP section
-
-```none
-request who-has {ip} tell {ip}
-```
-
-or,
-
-```none
-reply {ip} is at {mac}
-```
-
-### IP section
-
-For IPv4:
-
-```none
-{src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} tos {tos} id {id}
-    off {frag offset} [{flags}] len {packet len} proto {protocol name}
-```
-
-- `ECN info` can be one of `CE`, `ECT(0)` or `ECT(1)`.
-- `flags` are constructed with a combination of `+`, `DF` and `rsvd`.
-
-For IPv6:
-
-```none
-{src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} label {flow label}
-    len {packet len} proto {protocol name}
-```
-
-### TCP section
-
-```none
-flags [{flags}] seq {sequence} ack {acked sequence} win {window}
-```
-
-- `flags` are constructed using a combination of `F` (fin), `S` (syn), `R`
-  (reset), `P` (push), `.` (ack), `U` (urgent).
-- `sequence` can be a range (`{start}:{end}`) or a single number (`{sequence}`).
-
-### UDP section
-
-```none
-len {UDP data len}
-```
-
-### ICMP & ICMPv6 sections
-
-```none
-type {type number} code {code number}
 ```
 
 ### Metadata & dataref sections
@@ -130,3 +70,8 @@ gso [type {GSO type} flags {GSO flags} frags {nr of GSO frags}
 
 - `GSO type`, see `SKBFL_*` in the Linux kernel `include/linux/skbuff.h`.
 - `GSO flags`, see `SKB_GSO_*` in the Linux kernel `include/linux/skbuff.h`.
+
+### Packet section
+
+The packet itself (payload) is printed on a dedicated line when using the
+multi-line format and the output is coming from `tcpdump`.
