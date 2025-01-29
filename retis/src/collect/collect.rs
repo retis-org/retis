@@ -520,7 +520,8 @@ impl Collectors {
                 } else {
                     TimeFormat::MonotonicTimestamp
                 })
-                .monotonic_offset(monotonic_clock_offset()?);
+                .monotonic_offset(monotonic_clock_offset()?)
+                .print_ll(collect.print_ll);
 
             printers.push(PrintEvent::new(
                 Box::new(io::stdout()),

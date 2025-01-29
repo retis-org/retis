@@ -19,6 +19,9 @@ export in the events. The raw start of the packet (headers), ARP, IPv4/6, TCP,
 UDP and ICMPv4/v6 information are always included. See the `retis collect
 --help` for a detailed description.
 
+Display of link layer information is controlled by the `--print-ll` argument of
+the `collect`, `print` and `sort` subcommands.
+
 When collecting event for later `pcap-ng` file generation (see `retis pcap
 --help`), it's best to collect the `dev` and `ns` sections too.
 
