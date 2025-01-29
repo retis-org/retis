@@ -52,7 +52,6 @@ pcap-file = "2.0"
 pest = "2.7"
 pest_derive = "2.7"
 plain = "0.2"
-pnet_packet = "0.35"
 rbpf = {version = "0.3", optional = true}
 regex = "1.7"
 retis-derive = {version = "1.5", path = "../retis-derive"}
