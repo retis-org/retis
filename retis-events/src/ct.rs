@@ -143,7 +143,7 @@ pub struct CtConnEvent {
 }
 
 impl EventFmt for CtEvent {
-    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         use CtState::*;
         match self.state {
             Established => write!(f, "ct_state ESTABLISHED ")?,
@@ -157,7 +157,11 @@ impl EventFmt for CtEvent {
         Self::format_conn(&self.base, f)?;
 
         if let Some(parent) = &self.parent {
-            write!(f, "\n\\ parent [")?;
+            if format.multiline {
+                write!(f, "\n\\")?;
+            }
+
+            write!(f, " parent [")?;
             Self::format_conn(parent, f)?;
             write!(f, "]")?;
         }
