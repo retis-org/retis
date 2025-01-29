@@ -1,10 +1,118 @@
-use std::fmt;
-
-use super::{
-    helpers::{etype_str, protocol_str, RawPacket},
-    *,
+use std::{
+    cell::RefCell,
+    fmt,
+    io::{Read, Write},
+    process::*,
+    str,
+    sync::Mutex,
 };
+
+use anyhow::{anyhow, bail, Result};
+use log::error;
+use once_cell::sync::OnceCell;
+
+use super::{helpers::RawPacket, *};
 use crate::{event_section, event_type, Formatter};
+
+static TCPDUMP: OnceCell<Tcpdump> = OnceCell::new();
+
+fn tcpdump(format: &DisplayFormat) -> Result<&'static Tcpdump> {
+    TCPDUMP.get_or_try_init(|| Tcpdump::new(format))
+}
+
+struct Tcpdump {
+    command: Mutex<RefCell<InnerCommand>>,
+}
+
+struct InnerCommand {
+    cmd: Child,
+    stdin: ChildStdin,
+    stdout: ChildStdout,
+}
+
+impl Tcpdump {
+    fn new(format: &DisplayFormat) -> Result<Self> {
+        let mut cmd = Command::new("tcpdump");
+        cmd.args([
+            "-l",
+            "--absolute-tcp-sequence-number",
+            "--dont-verify-checksums",
+            "-nn",
+            "-t",
+            "-r",
+            "-",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+
+        if format.print_ll {
+            cmd.arg("-e");
+        }
+
+        let mut cmd = match cmd.spawn() {
+            Ok(cmd) => cmd,
+            Err(e) => bail!("Cannot execute tcpdump: {e}"),
+        };
+
+        let mut stdin = cmd
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow!("Could not take stdin"))?;
+        let stdout = cmd
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow!("Could not take stdout"))?;
+
+        // Write pcap file header.
+        #[rustfmt::skip]
+        stdin.write_all(&[
+            0xd4, 0xc3, 0xb2, 0xa1,
+            0x02, 0x00, 0x04, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x04, 0x00,
+            0x01, 0x00, 0x00, 0x00,
+        ])?;
+
+        Ok(Self {
+            command: Mutex::new(RefCell::new(InnerCommand { cmd, stdin, stdout })),
+        })
+    }
+
+    fn display_event(&self, f: &mut Formatter, event: &SkbPacketEvent) -> Result<()> {
+        let mut buf = Vec::new();
+        buf.write_all(&0_u32.to_ne_bytes())?;
+        buf.write_all(&0_u32.to_ne_bytes())?;
+        buf.write_all(&event.capture_len.to_ne_bytes())?;
+        buf.write_all(&event.len.to_ne_bytes())?;
+        buf.write_all(&event.packet.0)?;
+
+        let cmd = self.command.lock().unwrap();
+        let mut cmd = cmd.borrow_mut();
+
+        cmd.stdin.write_all(&buf)?;
+
+        // We're making a blocking read below. This should be fine:
+        // - tcpdump is configured to write the packet output at once.
+        // - tcpdump will issue an output whatever the packet data and capture
+        //   length given above; as long as the pcap header is transmitted and
+        //   valid.
+        loop {
+            let mut buf = [0; 250];
+            let read = cmd.stdout.read(&mut buf).unwrap();
+
+            if read < 250 {
+                // Skip the newline at EOL.
+                write!(f, "{}", str::from_utf8(&buf[..read - 1])?)?;
+                break;
+            }
+            write!(f, "{}", str::from_utf8(&buf[..read])?)?;
+        }
+
+        Ok(())
+    }
+}
 
 /// Skb event section.
 #[event_section(SectionId::Skb)]
@@ -41,9 +149,7 @@ pub struct SkbEvent {
 }
 
 impl EventFmt for SkbEvent {
-    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
-        let mut len = 0;
-
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         let mut space = DelimWriter::new(' ');
 
         if let Some(ns) = &self.ns {
@@ -65,16 +171,6 @@ impl EventFmt for SkbEvent {
             }
         }
 
-        if let Some(eth) = &self.eth {
-            space.write(f)?;
-
-            write!(f, "{} > {} ethertype", eth.src, eth.dst)?;
-            if let Some(etype) = etype_str(eth.etype) {
-                write!(f, " {etype}")?;
-            }
-            write!(f, " ({:#06x})", eth.etype)?;
-        }
-
         if let Some(vlan) = &self.vlan {
             space.write(f)?;
 
@@ -87,156 +183,24 @@ impl EventFmt for SkbEvent {
             )?;
         }
 
-        if let Some(arp) = &self.arp {
+        if let Some(packet) = &self.packet {
             space.write(f)?;
 
-            match arp.operation {
-                ArpOperation::Request => {
-                    write!(f, "request who-has {}", arp.tpa)?;
-                    if arp.tha != "00:00:00:00:00:00" {
-                        write!(f, " ({})", arp.tha)?;
+            match tcpdump(format) {
+                Ok(tcpdump) => {
+                    if let Err(e) = tcpdump.display_event(f, packet) {
+                        write!(f, "unknown packet")?;
+                        error!("Cannot format packet: {e}");
                     }
-                    write!(f, " tell {}", arp.spa)?;
                 }
-                ArpOperation::Reply => {
-                    write!(f, "reply {} is-at {}", arp.spa, arp.sha)?;
-                }
-                ArpOperation::ReverseRequest => {
-                    write!(f, "reverse request who-is {} tell {}", arp.tha, arp.sha)?;
-                }
-                ArpOperation::ReverseReply => {
-                    write!(f, "reverse reply {} at {}", arp.tha, arp.tpa)?;
+                Err(e) => {
+                    write!(f, "unknown packet")?;
+                    error!("{e}");
                 }
             }
-        }
-
-        if let Some(ip) = &self.ip {
+        } else {
             space.write(f)?;
-
-            // The below is not 100% correct:
-            // - IPv4: we use the fixed 20 bytes size as options are rarely used.
-            // - IPv6: we do not support extension headers.
-            len = match ip.version {
-                SkbIpVersion::V4 { .. } => ip.len.saturating_sub(20),
-                _ => ip.len,
-            };
-
-            if let Some(tcp) = &self.tcp {
-                write!(f, "{}.{} > {}.{}", ip.saddr, tcp.sport, ip.daddr, tcp.dport)?;
-            } else if let Some(udp) = &self.udp {
-                write!(f, "{}.{} > {}.{}", ip.saddr, udp.sport, ip.daddr, udp.dport)?;
-            } else {
-                write!(f, "{} > {}", ip.saddr, ip.daddr)?;
-            }
-
-            write!(
-                f,
-                "{}",
-                match ip.ecn {
-                    1 => " ECT(1)",
-                    2 => " ECT(0)",
-                    3 => " CE",
-                    _ => "",
-                }
-            )?;
-
-            write!(f, " ttl {}", ip.ttl)?;
-
-            match &ip.version {
-                SkbIpVersion::V4 { v4 } => {
-                    write!(f, " tos {:#x} id {} off {}", v4.tos, v4.id, v4.offset * 8)?;
-
-                    let mut flags = Vec::new();
-                    // Same order as tcpdump.
-                    if v4.flags & 1 << 2 != 0 {
-                        flags.push("+");
-                    }
-                    if v4.flags & 1 << 1 != 0 {
-                        flags.push("DF");
-                    }
-                    if v4.flags & 1 << 0 != 0 {
-                        flags.push("rsvd");
-                    }
-
-                    if !flags.is_empty() {
-                        write!(f, " [{}]", flags.join(","))?;
-                    }
-                }
-                SkbIpVersion::V6 { v6 } => {
-                    if v6.flow_label != 0 {
-                        write!(f, " label {:#x}", v6.flow_label)?;
-                    }
-                }
-            }
-
-            // In some rare cases the IP header might not be fully filled yet,
-            // length might be unset.
-            if ip.len != 0 {
-                write!(f, " len {}", ip.len)?;
-            }
-
-            if let Some(proto) = protocol_str(ip.protocol) {
-                write!(f, " proto {}", proto)?;
-            }
-
-            write!(f, " ({})", ip.protocol)?;
-        }
-
-        if let Some(tcp) = &self.tcp {
-            space.write(f)?;
-
-            let mut flags = Vec::new();
-            if tcp.flags & 1 << 0 != 0 {
-                flags.push('F');
-            }
-            if tcp.flags & 1 << 1 != 0 {
-                flags.push('S');
-            }
-            if tcp.flags & 1 << 2 != 0 {
-                flags.push('R');
-            }
-            if tcp.flags & 1 << 3 != 0 {
-                flags.push('P');
-            }
-            if tcp.flags & 1 << 4 != 0 {
-                flags.push('.');
-            }
-            if tcp.flags & 1 << 5 != 0 {
-                flags.push('U');
-            }
-            write!(f, "flags [{}]", flags.into_iter().collect::<String>())?;
-
-            let len = len.saturating_sub(tcp.doff as u16 * 4);
-            if len > 0 {
-                write!(f, " seq {}:{}", tcp.seq, tcp.seq as u64 + len as u64)?;
-            } else {
-                write!(f, " seq {}", tcp.seq)?;
-            }
-
-            if tcp.flags & 1 << 4 != 0 {
-                write!(f, " ack {}", tcp.ack_seq)?;
-            }
-
-            write!(f, " win {}", tcp.window)?;
-        }
-
-        if let Some(udp) = &self.udp {
-            space.write(f)?;
-            let len = udp.len;
-            // Substract the UDP header size when reporting the length.
-            write!(f, "len {}", len.saturating_sub(8))?;
-        }
-
-        if let Some(icmp) = &self.icmp {
-            space.write(f)?;
-            // TODO: text version
-            write!(f, "type {} code {}", icmp.r#type, icmp.code)?;
-        }
-
-        if let Some(icmpv6) = &self.icmpv6 {
-            space.write(f)?;
-            // TODO: text version
-            write!(f, "type {} code {}", icmpv6.r#type, icmpv6.code)?;
+            write!(f, "unknown packet")?;
         }
 
         if self.meta.is_some() || self.data_ref.is_some() {
@@ -304,13 +268,6 @@ impl EventFmt for SkbEvent {
             }
 
             write!(f, "size {}]", gso.size)?;
-        }
-
-        // If we didn't print any section, it means the section has raw packet
-        // data but we were unable to decode it. Print something.
-        if !space.used() {
-            space.write(f)?;
-            write!(f, "unknown packet (see raw data)")?;
         }
 
         Ok(())
