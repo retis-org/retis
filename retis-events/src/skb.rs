@@ -183,26 +183,6 @@ impl EventFmt for SkbEvent {
             )?;
         }
 
-        if let Some(packet) = &self.packet {
-            space.write(f)?;
-
-            match tcpdump(format) {
-                Ok(tcpdump) => {
-                    if let Err(e) = tcpdump.display_event(f, packet) {
-                        write!(f, "unknown packet")?;
-                        error!("Cannot format packet: {e}");
-                    }
-                }
-                Err(e) => {
-                    write!(f, "unknown packet")?;
-                    error!("{e}");
-                }
-            }
-        } else {
-            space.write(f)?;
-            write!(f, "unknown packet")?;
-        }
-
         if self.meta.is_some() || self.data_ref.is_some() {
             space.write(f)?;
             write!(f, "skb [")?;
@@ -268,6 +248,32 @@ impl EventFmt for SkbEvent {
             }
 
             write!(f, "size {}]", gso.size)?;
+        }
+
+        // Do not add any other section than the raw packet one after this.
+        if format.multiline && space.used() {
+            writeln!(f)?;
+            space.reset();
+        }
+
+        if let Some(packet) = &self.packet {
+            space.write(f)?;
+
+            match tcpdump(format) {
+                Ok(tcpdump) => {
+                    if let Err(e) = tcpdump.display_event(f, packet) {
+                        write!(f, "unknown packet")?;
+                        error!("Cannot format packet: {e}");
+                    }
+                }
+                Err(e) => {
+                    write!(f, "unknown packet")?;
+                    error!("{e}");
+                }
+            }
+        } else {
+            space.write(f)?;
+            write!(f, "unknown packet")?;
         }
 
         Ok(())
