@@ -43,8 +43,10 @@ Supported values:
 - gso:     include generic segmentation offload (GSO) information.
 - all:     all of the above.
 
-The following values are now always retrieved and their use is deprecated:
-packet, eth, arp, ip, tcp, udp, icmp."
+The packet section is always retrieved.
+
+The following values are ignored and no event section will be generated as the
+corresponding data is part of the raw packet: eth, arp, ip, tcp, udp, icmp."
     )]
     skb_sections: Vec<String>,
 }
@@ -93,7 +95,7 @@ impl Collector for SkbModule {
                 "gso" => sections |= 1 << SECTION_GSO,
                 "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" | "eth" => {
                     warn!(
-                        "Use of '{}' in --skb-sections is depreacted (is now always set)",
+                        "Use of '{}' in --skb-sections is depreacted",
                         category.as_str(),
                     );
                 }
@@ -128,9 +130,7 @@ impl Module for SkbModule {
         self
     }
     fn section_factory(&self) -> Result<Option<Box<dyn EventSectionFactory>>> {
-        Ok(Some(Box::new(SkbEventFactory {
-            report_eth: self.report_eth,
-        })))
+        Ok(Some(Box::new(SkbEventFactory {})))
     }
 }
 
