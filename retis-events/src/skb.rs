@@ -7,22 +7,8 @@ use crate::{event_section, event_type, Formatter};
 #[event_section]
 #[derive(Default)]
 pub struct SkbEvent {
-    /// Ethernet fields, if any.
-    pub eth: Option<SkbEthEvent>,
     /// VLAN acceleration tag fields, if any.
     pub vlan_accel: Option<SkbVlanAccelEvent>,
-    /// ARP fields, if any.
-    pub arp: Option<SkbArpEvent>,
-    /// IPv4 or IPv6 fields, if any.
-    pub ip: Option<SkbIpEvent>,
-    /// TCP fields, if any.
-    pub tcp: Option<SkbTcpEvent>,
-    /// UDP fields, if any.
-    pub udp: Option<SkbUdpEvent>,
-    /// ICMP fields, if any.
-    pub icmp: Option<SkbIcmpEvent>,
-    /// ICMPv6 fields, if any.
-    pub icmpv6: Option<SkbIcmpV6Event>,
     /// Net device data, if any.
     pub dev: Option<SkbDevEvent>,
     /// Net namespace data, if any.
@@ -35,6 +21,16 @@ pub struct SkbEvent {
     pub gso: Option<SkbGsoEvent>,
     /// Raw packet and related metadata.
     pub packet: Option<SkbPacketEvent>,
+
+    // Sections below are kept for backward compatibility but aren't used
+    // anymore. Use the `SkbPacketEvent` event section instead.
+    pub eth: Option<SkbEthEvent>,
+    pub arp: Option<SkbArpEvent>,
+    pub ip: Option<SkbIpEvent>,
+    pub tcp: Option<SkbTcpEvent>,
+    pub udp: Option<SkbUdpEvent>,
+    pub icmp: Option<SkbIcmpEvent>,
+    pub icmpv6: Option<SkbIcmpV6Event>,
 }
 
 impl EventFmt for SkbEvent {

@@ -1275,7 +1275,6 @@ dependencies = [
  "pcap",
  "pcap-file",
  "plain",
- "pnet_packet",
  "probe",
  "rbpf",
  "regex",

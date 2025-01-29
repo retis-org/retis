@@ -50,7 +50,6 @@ pager = "0.16"
 pcap = "2.2"
 pcap-file = "2.0"
 plain = "0.2"
-pnet_packet = "0.35"
 rbpf = {version = "0.3", optional = true}
 regex = "1.7"
 retis-derive = {version = "1.5", path = "../retis-derive"}
