@@ -38,12 +38,14 @@ def test_ovs_conntrack(two_port_ovs):
     # Allow ARP
     ovs.ofctl("add-flow", "test", "table=0,arp actions=NORMAL")
     # Send untracked traffic through ct
-    ovs.ofctl("add-flow", "test", "table=0,ct_state=-trk,ip actions=ct(table=1)")
+    ovs.ofctl(
+        "add-flow", "test", "table=0,ct_state=-trk,ip actions=ct(table=1,zone=43210)"
+    )
     # Commit new connections
     ovs.ofctl(
         "add-flow",
         "test",
-        "table=1,ct_state=+trk+new,ip actions=ct(commit),NORMAL",
+        "table=1,ct_state=+trk+new,ip actions=ct(zone=43210,commit),NORMAL",
     )
     # Accept established connection
     ovs.ofctl("add-flow", "test", "table=1,ct_state=+trk+est,ip actions=NORMAL")
@@ -117,7 +119,7 @@ def test_ovs_conntrack(two_port_ovs):
         {
             "kernel": ovs_exec,
             "skb": syn,
-            "ovs": {"action": "ct", "flags": 4},
+            "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
@@ -125,7 +127,7 @@ def test_ovs_conntrack(two_port_ovs):
             "ovs": {
                 "action": "recirc",
             },
-            "ct": {"state": "new"},
+            "ct": {"state": "new", "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
@@ -133,19 +135,20 @@ def test_ovs_conntrack(two_port_ovs):
             "ovs": {
                 "action": "ct",
                 "flags": 5,
+                "zone_id": 43210,
             },
         },
         {
             "kernel": ovs_exec,
             "skb": syn,
             "ovs": {"action": "output"},
-            "ct": {"state": "new"},
+            "ct": {"state": "new", "zone_id": 43210},
         },
         # SYN+ACK actions: ct, recirc, output
         {
             "kernel": ovs_exec,
             "skb": syn_ack,
-            "ovs": {"action": "ct", "flags": 4},
+            "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
@@ -153,7 +156,7 @@ def test_ovs_conntrack(two_port_ovs):
             "ovs": {
                 "action": "recirc",
             },
-            "ct": {"state": "reply"},
+            "ct": {"state": "reply", "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
@@ -163,14 +166,18 @@ def test_ovs_conntrack(two_port_ovs):
             },
         },
         # ACK actions: ct, recirc, output
-        {"kernel": ovs_exec, "skb": ack, "ovs": {"action": "ct", "flags": 4}},
+        {
+            "kernel": ovs_exec,
+            "skb": ack,
+            "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
+        },
         {
             "kernel": ovs_exec,
             "skb": ack,
             "ovs": {
                 "action": "recirc",
             },
-            "ct": {"state": "established"},
+            "ct": {"state": "established", "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
@@ -180,7 +187,11 @@ def test_ovs_conntrack(two_port_ovs):
             },
         },
         # FIN actions: ct, recirc, output
-        {"kernel": ovs_exec, "skb": fin, "ovs": {"action": "ct", "flags": 4}},
+        {
+            "kernel": ovs_exec,
+            "skb": fin,
+            "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
+        },
         {
             "kernel": ovs_exec,
             "skb": fin,
@@ -188,7 +199,7 @@ def test_ovs_conntrack(two_port_ovs):
                 "action": "recirc",
                 "id": "&recirc_id_orig",  # Store orig recirc_id
             },
-            "ct": {"state": "established"},
+            "ct": {"state": "established", "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
@@ -197,10 +208,14 @@ def test_ovs_conntrack(two_port_ovs):
                 "action": "output",
                 "recirc_id": "*recirc_id_orig",  # Check orig recirc_id
             },
-            "ct": {"state": "established"},
+            "ct": {"state": "established", "zone_id": 43210},
         },
         # ACK actions: ct, recirc, output
-        {"kernel": ovs_exec, "skb": ack, "ovs": {"action": "ct", "flags": 4}},
+        {
+            "kernel": ovs_exec,
+            "skb": ack,
+            "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
+        },
         {
             "kernel": ovs_exec,
             "skb": ack,
@@ -208,7 +223,7 @@ def test_ovs_conntrack(two_port_ovs):
                 "action": "recirc",
                 "id": "&recirc_id_reply",  # Store reply recirc_id
             },
-            "ct": {"state": "established"},
+            "ct": {"state": "established", "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
@@ -217,7 +232,7 @@ def test_ovs_conntrack(two_port_ovs):
                 "action": "output",
                 "recirc_id": "*recirc_id_reply",  # Check reply recirc_id
             },
-            "ct": {"state": "established"},
+            "ct": {"state": "established", "zone_id": 43210},
         },
     ]
 
