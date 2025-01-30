@@ -128,7 +128,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 		if (zone_dir & NF_CT_ZONE_DIR_REPL)
 			e->flags |= RETIS_CT_DIR_REPLY;
 
-		e->zone_id = (u8) BPF_CORE_READ(ct, zone.id);
+		e->zone_id = (u16) BPF_CORE_READ(ct, zone.id);
 	}
 
 	if (bpf_core_field_exists(ct->mark))
