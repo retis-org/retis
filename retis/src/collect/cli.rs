@@ -90,6 +90,12 @@ defaults to \"retis.data\"."
     pub(super) out: Option<PathBuf>,
     #[arg(
         long,
+        help = "Compress output as a gzip file.",
+        default_value = "false"
+    )]
+    pub(super) gzip: bool,
+    #[arg(
+        long,
         help = "Write the events to stdout even if --out is used.",
         default_value = "false"
     )]

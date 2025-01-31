@@ -2,12 +2,15 @@
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::{HashMap, HashSet},
-    fs::OpenOptions,
+    fs::File,
     io::{self, BufWriter},
     process::{Command, Stdio},
     sync::Arc,
     time::Duration,
 };
+
+use flate2::write::GzEncoder;
+use flate2::Compression;
 
 use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
@@ -485,17 +488,19 @@ impl Collectors {
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            printers.push(PrintEvent::new(
-                Box::new(BufWriter::new(
-                    OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(out)
-                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-                )),
-                PrintEventFormat::Json,
-            ));
+            let file = File::create(out)
+                .or_else(|_| bail!("Could not create or open '{}'", out.display()))?;
+            if collect.gzip {
+                printers.push(PrintEvent::new(
+                    Box::new(BufWriter::new(GzEncoder::new(file, Compression::default()))),
+                    PrintEventFormat::Json,
+                ));
+            } else {
+                printers.push(PrintEvent::new(
+                    Box::new(BufWriter::new(file)),
+                    PrintEventFormat::Json,
+                ));
+            }
         }
 
         if let Some(cmd) = collect.cmd.to_owned() {
