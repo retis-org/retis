@@ -3,10 +3,13 @@
 //! Sort rearranges the events so they are grouped by skb tracking id (or OVS queue_id if present)
 
 use std::{
-    fs::OpenOptions,
+    fs::File,
     io::{stdout, BufWriter},
     path::PathBuf,
 };
+
+use flate2::write::GzEncoder;
+use flate2::Compression;
 
 use anyhow::{bail, Result};
 use clap::Parser;
@@ -51,6 +54,10 @@ pub(crate) struct Sort {
     #[arg(long, default_value = "false")]
     pub(super) print: bool,
 
+    /// Write events to stdout even if --out is used.
+    #[arg(long, default_value = "false")]
+    pub(super) gzip: bool,
+
     /// Format used when printing an event.
     #[arg(long)]
     #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
@@ -93,17 +100,19 @@ impl SubCommandParserRunner for Sort {
                 bail!("Cannot sort a file in-place. Please specify an output file that's different to the input one.");
             }
 
-            printers.push(PrintSeries::new(
-                Box::new(BufWriter::new(
-                    OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(&out)
-                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-                )),
-                PrintEventFormat::Json,
-            ));
+            let file = File::create(&out)
+                .or_else(|_| bail!("Could not create or open '{}'", out.display()))?;
+            if self.gzip {
+                printers.push(PrintSeries::new(
+                    Box::new(BufWriter::new(GzEncoder::new(file, Compression::default()))),
+                    PrintEventFormat::Json,
+                ));
+            } else {
+                printers.push(PrintSeries::new(
+                    Box::new(BufWriter::new(file)),
+                    PrintEventFormat::Json,
+                ));
+            }
         }
 
         if self.out.is_none() || self.print {

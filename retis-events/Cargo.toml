@@ -23,3 +23,4 @@ pyo3 = {version = "0.23", features = ["multiple-pymethods"], optional = true}
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"
 serde_with = "3.0"
+flate2 = "1.0.35"

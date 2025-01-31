@@ -2,9 +2,11 @@
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Seek},
+    io::{BufRead, BufReader, Read},
     path::Path,
 };
+
+use flate2::read::GzDecoder;
 
 use anyhow::{anyhow, bail, Result};
 
@@ -22,7 +24,7 @@ pub enum FileType {
 /// File events factory retrieving and unmarshaling events
 /// parts.
 pub struct FileEventsFactory {
-    reader: BufReader<File>,
+    reader: BufReader<Box<dyn Read + Send + Sync>>,
     filetype: FileType,
 }
 
@@ -31,13 +33,28 @@ impl FileEventsFactory {
     where
         P: AsRef<Path>,
     {
-        let mut reader = BufReader::new(
-            File::open(&file)
-                .map_err(|e| anyhow!("Could not open {}: {e}", file.as_ref().display()))?,
-        );
-        let filetype = Self::detect_type(&mut reader)?;
+        let mut rdr = Self::open(&file)?;
+        let filetype = Self::detect_type(&mut rdr)?;
+        let reader = Self::open(&file)?;
 
         Ok(FileEventsFactory { reader, filetype })
+    }
+
+    fn open<P>(file: P) -> Result<BufReader<Box<dyn Read + Send + Sync>>>
+    where
+        P: AsRef<Path>,
+    {
+        let fh = File::open(&file)
+            .map_err(|e| anyhow!("Could not open {}: {e}", file.as_ref().display()))?;
+
+        let rdr = BufReader::new(fh);
+
+        let decoder = GzDecoder::new(rdr);
+        let reader: BufReader<Box<dyn Read + Send + Sync>> = match decoder.header() {
+            None => BufReader::new(Box::new(File::open(&file)?)),
+            _ => BufReader::new(Box::new(GzDecoder::new(BufReader::new(File::open(&file)?)))),
+        };
+        Ok(reader)
     }
 }
 
@@ -76,7 +93,7 @@ impl FileEventsFactory {
 
     fn detect_type<T>(reader: &mut T) -> Result<FileType>
     where
-        T: BufRead + Seek,
+        T: BufRead,
     {
         let mut line = String::new();
 
@@ -85,7 +102,6 @@ impl FileEventsFactory {
             Ok(0) => return Err(anyhow!("File is empty")),
             Ok(_) => (),
         }
-        reader.rewind()?;
 
         let first: serde_json::Value = serde_json::from_str(line.as_str())
             .map_err(|e| anyhow!("Failed to parse event file: {:?}", e))?;
@@ -105,6 +121,8 @@ impl FileEventsFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::remove_file;
+    use std::process::Command;
     #[test]
     fn read_from_file() {
         let mut fact = FileEventsFactory::new("test_data/test_events.json").unwrap();
@@ -115,5 +133,25 @@ mod tests {
             events.push(event)
         }
         assert!(events.len() == 4);
+    }
+    #[test]
+    fn read_from_gz() {
+        let status = Command::new("gzip")
+            .arg("-fqk")
+            .arg("test_data/test_events.json")
+            .status()
+            .unwrap();
+        assert!(status.success(), "Could not run gzip");
+
+        let mut fact = FileEventsFactory::new("test_data/test_events.json.gz").unwrap();
+
+        let mut events = Vec::new();
+        while let Some(event) = fact.next_event().unwrap() {
+            println!("event: {:#?}", event.to_json());
+            events.push(event)
+        }
+        assert!(events.len() == 4);
+
+        remove_file("test_data/test_events.json.gz").unwrap();
     }
 }
