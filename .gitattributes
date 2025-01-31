@@ -1,3 +1,6 @@
 vmlinux.h linguist-vendored
 **/bpf_sys/include/linux/*.h linguist-vendored
 *_uapi.rs linguist-vendored
+tools/checkpatch.pl linguist-vendored
+tools/spelling.txt linguist-vendored
+tools/const_structs.checkpatch linguist-vendored
