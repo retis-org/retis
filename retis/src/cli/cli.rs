@@ -2,8 +2,7 @@
 //!
 //! Cli module, providing tools for registering and accessing command line interface arguments
 //! as well as defining the subcommands that the tool supports.
-#![allow(dead_code)] // FIXME
-use std::{any::Any, convert::From, env, ffi::OsString, fmt::Debug, str::FromStr, sync::Arc};
+use std::{any::Any, convert::From, env, ffi::OsString, fmt::Debug, str::FromStr};
 
 use anyhow::{anyhow, bail, Result};
 use clap::{
@@ -72,12 +71,6 @@ pub(crate) trait SubCommand {
     /// Returns the unique name of the subcommand.
     fn name(&self) -> String;
 
-    /// Returns self as a std::any::Any trait.
-    ///
-    /// This is useful for dynamically downcast the SubCommand into it's specific type to access
-    /// subcommand-specific functionality.
-    fn as_any(&self) -> &dyn Any;
-
     /// Returns self as a mutable std::any::Any trait.
     ///
     /// This is useful for dynamically downcast the SubCommand into it's specific type to access
@@ -122,10 +115,6 @@ where
         <Self as clap::CommandFactory>::command()
             .get_name()
             .to_string()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
@@ -347,7 +336,6 @@ impl RetisCli {
             command,
             main_config,
             subcommand,
-            logger,
         })
     }
 }
@@ -361,8 +349,6 @@ pub(crate) struct CliConfig {
     pub(crate) main_config: MainConfig,
     /// Subcommand that was run
     pub(crate) subcommand: Box<dyn SubCommand>,
-    /// The global logger already initialized with the right level
-    pub(crate) logger: Arc<Logger>,
 }
 
 /// Type of the "format" argument.
