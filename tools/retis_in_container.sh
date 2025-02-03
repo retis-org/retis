@@ -28,19 +28,18 @@ fi
 # EOL char is added (see commit 9f3361ac39c3).
 [[ ! $@ =~ "pcap" ]] && term_opts="-it"
 
-# Look for a kernel configuration file.
-if [ ! -z $RETIS_KCONF ]; then
-	kconfig=$RETIS_KCONF
-elif [ -f /proc/config.gz ]; then
-	kconfig=/proc/config.gz
-elif [ -f /boot/config-$(uname -r) ]; then
-	kconfig=/boot/config-$(uname -r)
-elif [ -f /lib/modules/$(uname -r)/config ]; then
-	kconfig=/lib/modules/$(uname -r)/config
-else
-	echo "Could not auto-detect kernel configuration location:"
-	echo "You can set the RETIS_KCONF environment variable to manually set it."
-	exit -1
+# Map well-known kernel configuration files.
+kconfig_map=""
+for kconfig in /proc/config.gz \
+               /boot/config-$(uname -r) \
+               /lib/modules/$(uname -r)/config; do
+    if [ -f $kconfig ]; then
+        kconfig_map="$kconfig_map -v ${kconfig}:${kconfig}:ro"
+    fi
+done
+if [ $kconfig_map == "" ]; then
+	echo "WARN: Could not auto-detect kernel configuration location. "
+	echo "You can place your configuration file in the current directory and use the '--kconf' option"
 fi
 
 # Map local config if exist.
@@ -58,8 +57,8 @@ exec $runtime run $extra_args $term_opts --privileged --rm --pid=host \
       --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
-      -v $kconfig:/kconfig:ro \
       -v $(pwd):/data:rw \
+      $kconfig_map \
       $local_conf \
       $ovs_binary_mount \
       $RETIS_IMAGE:$RETIS_TAG "$@"

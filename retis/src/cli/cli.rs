@@ -3,9 +3,7 @@
 //! Cli module, providing tools for registering and accessing command line interface arguments
 //! as well as defining the subcommands that the tool supports.
 #![allow(dead_code)] // FIXME
-use std::{
-    any::Any, convert::From, env, ffi::OsString, fmt::Debug, path::PathBuf, str::FromStr, sync::Arc,
-};
+use std::{any::Any, convert::From, env, ffi::OsString, fmt::Debug, str::FromStr, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
 use clap::{
@@ -172,11 +170,6 @@ pub(crate) struct MainConfig {
         help = "Comma separated list of profile names to apply"
     )]
     pub(crate) profile: Vec<String>,
-    #[arg(
-        long,
-        help = "Path to kernel configuration (e.g. /boot/config-6.3.8-200.fc38.x86_64; default: auto-detect)"
-    )]
-    pub(crate) kconf: Option<PathBuf>,
 }
 
 #[derive(Debug, Default)]

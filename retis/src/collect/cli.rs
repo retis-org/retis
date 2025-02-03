@@ -8,7 +8,7 @@ use anyhow::Result;
 use clap::{builder::PossibleValuesParser, Parser};
 
 use super::Collectors;
-use crate::{cli::*, collect::collector::*};
+use crate::{cli::*, collect::collector::*, core::inspect::init_inspector};
 
 /// Collect events.
 ///
@@ -154,6 +154,12 @@ fully operational:
 "#
     )]
     pub(crate) allow_system_changes: bool,
+    pub(crate) profile: Vec<String>,
+    #[arg(
+        long,
+        help = "Path to kernel configuration (e.g. /boot/config-6.3.8-200.fc38.x86_64; default: auto-detect)"
+    )]
+    pub(crate) kconf: Option<PathBuf>,
     #[arg(long, help = "Print the time as UTC")]
     pub(super) utc: bool,
     #[arg(long, help = "Format used when printing an event.")]
@@ -179,6 +185,9 @@ pub(crate) struct CollectorsArgs {
 
 impl SubCommandParserRunner for Collect {
     fn run(&mut self, main_config: &MainConfig) -> Result<()> {
+        if let Some(kconf) = &self.kconf {
+            init_inspector(kconf)?;
+        }
         let mut collectors = Collectors::new()?;
 
         collectors.check(self)?;
