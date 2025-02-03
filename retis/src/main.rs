@@ -28,6 +28,8 @@ fn main() -> Result<()> {
     // Per-command early fixups.
     match cli.subcommand.name().as_str() {
         // Try setting up the pager for a selected subset of commands.
+        // This needs to be done before the final round of cli parsing because logs can be emitted
+        // and we need to redirect them to stdout if pager is active.
         "print" | "sort" => {
             try_enable_pager(&cli.logger.clone());
         }

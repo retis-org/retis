@@ -19,7 +19,10 @@ use crate::benchmark::cli::Benchmark;
 use crate::{
     collect::cli::Collect,
     generate::Complete,
-    helpers::logger::{set_libbpf_rs_print_callback, Logger},
+    helpers::{
+        logger::{set_libbpf_rs_print_callback, Logger},
+        pager::try_enable_pager,
+    },
     inspect::Inspect,
     process::cli::*,
     profiles::{cli::ProfileCmd, Profile},
@@ -298,6 +301,16 @@ impl RetisCli {
                 command
                     .try_get_matches_from_mut(args.iter())
                     .expect_err("clap should fail with no arguments"))?;
+
+        match subcommand.name().as_str() {
+            // Try setting up the pager for a selected subset of commands.
+            // This needs to be done before the final round of cli parsing because logs can be emitted
+            // and we need to redirect them to stdout if pager is active.
+            "print" | "sort" => {
+                try_enable_pager(&logger);
+            }
+            _ => (),
+        }
 
         // Expand profile arguments.
         RetisCli::enhance_profile(&main_config, subcommand.name().as_str(), &mut args)
