@@ -72,12 +72,6 @@ pub(crate) trait SubCommand {
     /// Returns the unique name of the subcommand.
     fn name(&self) -> String;
 
-    /// Returns self as a std::any::Any trait.
-    ///
-    /// This is useful for dynamically downcast the SubCommand into it's specific type to access
-    /// subcommand-specific functionality.
-    fn as_any(&self) -> &dyn Any;
-
     /// Returns self as a mutable std::any::Any trait.
     ///
     /// This is useful for dynamically downcast the SubCommand into it's specific type to access
@@ -122,10 +116,6 @@ where
         <Self as clap::CommandFactory>::command()
             .get_name()
             .to_string()
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
