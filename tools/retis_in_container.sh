@@ -54,7 +54,7 @@ fi
 
 # Run the Retis container.
 exec $runtime run $extra_args $term_opts --privileged --rm --pid=host \
-      -e TERM -e LC_ALL="C.UTF-8" \
+      -e PAGER -e NOPAGER -e TERM -e LC_ALL="C.UTF-8" \
       --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
