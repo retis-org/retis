@@ -1,3 +1,5 @@
+#![allow(dead_code)] // All helpers are useful even if not used ATM.
+
 use anyhow::{anyhow, Result};
 
 /// Parses an Ethernet address into a String.

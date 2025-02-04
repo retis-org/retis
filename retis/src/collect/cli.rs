@@ -80,6 +80,12 @@ Examples of meta filters:
     )]
     pub(super) meta_filter: Option<String>,
     #[arg(
+        short = 'e',
+        default_value = "false",
+        help = "Print link-layer information from the packet"
+    )]
+    pub(crate) print_ll: bool,
+    #[arg(
         short,
         long,
         num_args = 0..=1,
