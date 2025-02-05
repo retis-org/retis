@@ -159,6 +159,7 @@ impl Collector for NftCollector {
         args: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
+        _: &mut SectionFactories,
     ) -> Result<()> {
         if self.install_chain {
             // Ignore if delete fails here as the table might not exist

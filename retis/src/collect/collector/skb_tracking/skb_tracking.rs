@@ -31,6 +31,7 @@ impl Collector for SkbTrackingCollector {
         _: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
+        _: &mut SectionFactories,
     ) -> Result<()> {
         probes.register_kernel_hook(Hook::from(tracking_hook::DATA))
     }

@@ -97,6 +97,7 @@ impl Collector for OvsCollector {
         cli: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
+        _: &mut SectionFactories,
     ) -> Result<()> {
         self.track = cli.collector_args.ovs.ovs_track;
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);

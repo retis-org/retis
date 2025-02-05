@@ -47,6 +47,7 @@ impl Collector for CtCollector {
         _: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
+        _: &mut SectionFactories,
     ) -> Result<()> {
         // Register our generic conntrack hook.
         probes.register_kernel_hook(Hook::from(ct_hook::DATA))
