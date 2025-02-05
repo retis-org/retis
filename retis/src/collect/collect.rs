@@ -22,7 +22,7 @@ use super::{
 };
 use crate::{
     bindings::packet_filter_uapi,
-    cli::CliDisplayFormat,
+    cli::{CliDisplayFormat, MainConfig},
     collect::collector::{section_factories, skb::SkbEventFactory},
     core::{
         events::{BpfEventsFactory, EventResult, FactoryId, RetisEventsFactory},
@@ -217,7 +217,7 @@ impl Collectors {
     }
 
     /// Initialize all collectors by calling their `init()` function.
-    pub(super) fn init(&mut self, collect: &Collect) -> Result<()> {
+    pub(super) fn init(&mut self, _: &MainConfig, collect: &Collect) -> Result<()> {
         self.run.register_term_signals()?;
 
         // Check if we need to report stack traces in the events.

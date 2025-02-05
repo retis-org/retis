@@ -62,7 +62,7 @@ pub(crate) struct Sort {
 }
 
 impl SubCommandParserRunner for Sort {
-    fn run(&mut self) -> Result<()> {
+    fn run(&mut self, _: &MainConfig) -> Result<()> {
         // Create running instance that will handle signal termination.
         let run = Running::new();
         run.register_term_signals()?;

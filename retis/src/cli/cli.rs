@@ -102,7 +102,7 @@ impl Debug for dyn SubCommand {
 
 /// Trait to convert a clap::Parser into a SubCommandRunner.
 pub(crate) trait SubCommandParserRunner: clap::Parser + Default {
-    fn run(&mut self) -> Result<()>;
+    fn run(&mut self, main_config: &MainConfig) -> Result<()>;
 }
 
 // Default implementation of SubCommand for all SubCommandParserRunner.
@@ -149,7 +149,7 @@ where
                     .as_any_mut()
                     .downcast_mut::<Self>()
                     .ok_or_else(|| anyhow!("wrong subcommand"))?;
-                cmd.run()
+                cmd.run(&cli.main_config)
             },
         )))
     }
@@ -447,7 +447,7 @@ mod tests {
     }
 
     impl SubCommandParserRunner for Sub2 {
-        fn run(&mut self) -> Result<()> {
+        fn run(&mut self, main_config: &MainConfig) -> Result<()> {
             Ok(())
         }
     }
