@@ -19,7 +19,8 @@ dnf install -y \
     socat \
     nftables \
     make \
-    jq
+    jq \
+    ethtool
 
     python3 -m pip install pytest pyroute2
 SCRIPT
