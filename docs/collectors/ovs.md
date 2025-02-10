@@ -55,7 +55,7 @@ The following diagram represents the OVS components as described in the previous
 slow path  ──┼──────────────────────┴───┘                                            └──────────────┤►
              │                                                                                      │
 fast path  ──┼──────────────────────────────────────────────────────────────────────────────────────┼─►
-             │                                                                       action_execute │
+             │                                 flow_lookup                           action_execute │
              │                                                                                      │
              └──────────────────────────────────────────────────────────────────────────────────────┘
 
@@ -79,6 +79,8 @@ event might be followed by multiple *upcall_enqueue* events.
 of the processing of the packet.
 	- **flow_exec**: USDT probe that indicates ovs-vswitchd will instruct the kernel to execute
 some actions on the packet.
+- **flow_tbl_lookup**: Kernel kretprobe that contains the result of a flow lookup, including the
+UFID(Unique Flow ID) of the matched flow.
 - **action_execute**: Kernel tracepoint that denotes that the kernel module is executing an
 [OVS action](#OVS Actions) on a packet.
 
@@ -99,6 +101,22 @@ Besides collecting USDT events, the `--ovs-track` also enables packet tracking. 
 OVS consists on inserting some identifiers in the events that allow retis to correlate the events to their
 originating packet. This means that, even if the packet was sent to upstream (upcall) and inserted back,
 retis is able to keep track of it and know which skb it belongs to.
+
+## OVS Detrace
+OVS runtime information can be queried using a json-rpc interface that is typically exposed through a
+UNIX socket. There are lots of commands available (see ovs-vswitchd(8)), but some of them are specially
+relevant for traffic debugging:
+
+- **dpctl/get {ufid}** shows the datapath flow given a UFID (Unique Flow ID).
+- **ofproto/detrace {ufid}** (since OVS 3.4) shows the OpenFlow flows that created a particular
+datapath flow.
+
+The `--ovs-enrich-flows` option enables querying the running OVS daemon for this information
+and adding it to the event list as a new event section called `ovs-detrace`.
+Then, `retis sort` will combine this event with the `flow_tbl_lookup` event to show extra information
+of each flow hit.
+
+Queries to OVS are throttled to 20 requests per second.
 
 ### Example
 Let's see an example. Say we capture ICMP traffic going through OVS and store the events in a file
