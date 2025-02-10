@@ -221,11 +221,13 @@ impl Collectors {
     }
 
     /// Initialize all collectors by calling their `init()` function.
-    pub(super) fn init(&mut self, _: &MainConfig, collect: &Collect) -> Result<()> {
+    pub(super) fn init(&mut self, main_config: &MainConfig, collect: &Collect) -> Result<()> {
         self.run.register_term_signals()?;
 
-        // Determine if auto mode is enabled.
-        self.auto_mode = collect.collectors.is_none();
+        // Determine if auto mode is enabled:
+        // - No profile is used.
+        // - No collector was explicitly enabled.
+        self.auto_mode = main_config.profile.is_empty() && collect.collectors.is_none();
 
         // Check if we need to report stack traces in the events.
         if collect.stack || collect.probe_stack {
