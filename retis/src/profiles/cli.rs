@@ -27,7 +27,7 @@ pub(crate) struct ProfileCmd {
 }
 
 impl SubCommandParserRunner for ProfileCmd {
-    fn run(&mut self) -> Result<()> {
+    fn run(&mut self, _: &MainConfig) -> Result<()> {
         match &self.command {
             ProfileSubCommand::List => {
                 for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {

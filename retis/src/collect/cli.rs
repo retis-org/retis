@@ -171,11 +171,11 @@ pub(crate) struct CollectorsArgs {
 }
 
 impl SubCommandParserRunner for Collect {
-    fn run(&mut self) -> Result<()> {
+    fn run(&mut self, main_config: &MainConfig) -> Result<()> {
         let mut collectors = Collectors::new()?;
 
         collectors.check(self)?;
-        collectors.init(self)?;
+        collectors.init(main_config, self)?;
 
         collectors.start(self)?;
 

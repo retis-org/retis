@@ -21,7 +21,7 @@ pub(crate) struct Benchmark {
 }
 
 impl SubCommandParserRunner for Benchmark {
-    fn run(&mut self) -> Result<()> {
+    fn run(&mut self, _: &MainConfig) -> Result<()> {
         match self.r#type.as_str() {
             "events_parsing" => events_parsing::bench(self.ci)?,
             "events_output" => events_output::bench(self.ci)?,
