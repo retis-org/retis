@@ -526,3 +526,143 @@ def test_ovs_drop(two_port_ovs):
     # Should report XLATE_RECURSION_TOO_DEEP (2)
     drops = list(filter(is_drops(2), events))
     assert len(drops) == 1
+
+
+def test_ovs_detrace_sanity(two_port_ovs):
+    """Tests that identical flows are not enriched more than once."""
+    ovs, ns = two_port_ovs
+
+    retis = Retis()
+
+    retis.collect("-c", "ovs,skb", "--ovs-enrich-flows", "-f", "icmp")
+
+    print(ns.run("ns0", "ping", "-4", "-i", "0.1", "-c", "10", "192.168.1.2"))
+
+    retis.stop()
+
+    events = retis.events()
+    print(events)
+
+    lookups = list(
+        filter(
+            lambda e: e.get("ovs", {}).get("event_type", None) == "flow_lookup",
+            events,
+        )
+    )
+
+    enrich = list(
+        filter(
+            lambda e: e.get("ovs-detrace", None),
+            events,
+        )
+    )
+
+    assert len(lookups) == 18
+    assert len(enrich) == 2
+
+    ovs_ver = ovs.version()
+    if ovs_ver[0] < 3 or (ovs_ver[0] == 3 and ovs_ver[1] < 4):
+        return  # OVS version does not support ofproto/detrace command
+
+    for e in enrich:
+        assert len(e["ovs-detrace"].get("ofpflows", [])) > 0
+
+
+def test_ovs_detrace_throtle(two_port_ovs):
+    """Tests that OVS is not queried more than expected."""
+    ovs, ns = two_port_ovs
+
+    # Configure a simple conntrack set of flows
+    ovs.ofctl("del-flows", "test")
+    # Allow ARP
+    ovs.ofctl("add-flow", "test", "table=0,arp actions=NORMAL")
+    # Send untracked traffic through ct using the destination port as zone.
+    # This will force a different flow per connection
+    ovs.ofctl(
+        "add-flow",
+        "test",
+        "table=0,in_port=p0l,ct_state=-trk,tcp"
+        "actions=move:NXM_OF_TCP_SRC[]->NXM_NX_REG0[0..15],ct(table=1,zone=NXM_NX_REG0[0..15])",  # noqa: 501
+    )
+    ovs.ofctl(
+        "add-flow",
+        "test",
+        "table=0,in_port=p1l,ct_state=-trk,tcp"
+        "actions=move:NXM_OF_TCP_DST[]->NXM_NX_REG0[0..15],ct(table=1,zone=NXM_NX_REG0[0..15])",  # noqa: 501
+    )
+    # Commit new connections
+    ovs.ofctl(
+        "add-flow",
+        "test",
+        "table=1,ct_state=+new+trk,tcp,in_port=p0l"
+        "actions=move:NXM_OF_TCP_SRC[]->NXM_NX_REG0[0..15],ct(commit,zone=NXM_NX_REG0[0..15]),NORMAL",  # noqa: 501
+    )
+    ovs.ofctl(
+        "add-flow",
+        "test",
+        "table=1,ct_state=+new+trk,tcp,in_port=p1l"
+        "actions=move:NXM_OF_TCP_DST[]->NXM_NX_REG0[0..15],ct(commit,zone=NXM_NX_REG0[0..15]),NORMAL",  # noqa: 501
+    )
+
+    # Accept established connection
+    ovs.ofctl("add-flow", "test", "table=1,ct_state=+trk+est,ip actions=NORMAL")
+
+    retis = Retis()
+
+    retis.collect(
+        "-c", "ovs,skb", "--ovs-enrich-flows", "-f", "tcp and host 192.168.1.1"
+    )
+
+    server = ns.run_bg("ns1", "socat", "TCP-LISTEN:9999,fork", "STDOUT")
+    time.sleep(1)
+
+    # Send 100 requests
+    print(
+        ns.run(
+            "ns0",
+            "/bin/sh",
+            "-c",
+            "for port in `seq 1 100`; do "
+            "echo hello | "
+            "socat -t 0 - TCP:192.168.1.2:9999;"
+            "done",
+        )
+    )
+
+    retis.stop()
+    server.kill()
+
+    events = retis.events()
+
+    lookups = list(
+        filter(
+            lambda e: e.get("ovs", {}).get("event_type", None) == "flow_lookup",
+            events,
+        )
+    )
+
+    enrich = list(
+        filter(
+            lambda e: e.get("ovs-detrace", None),
+            events,
+        )
+    )
+
+    # There are 7 flow lookups per connection
+    assert len(lookups) >= 700
+
+    MIN_DELAY = 50 * 1000000  # 50ms
+    last = None
+    for e in enrich:
+        print(e)
+        current = e["common"]["timestamp"]
+        if not last:
+            last = current
+            continue
+
+        delta = current - last
+        # Delta should be around 100ms but some inaccuracy can exist
+        # because time between events is not exactly the same as time between
+        # unixctl calls. Allow for a 10% deviation.
+        print(delta)
+        assert (MIN_DELAY - delta) / MIN_DELAY <= 0.1
