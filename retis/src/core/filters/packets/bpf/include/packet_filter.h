@@ -56,10 +56,11 @@ unsigned int packet_filter(struct retis_packet_filter_ctx *ctx, u32 placeholder)
 	u8 stack[STACK_SIZE] __attribute__ ((aligned (8)));
 	register u64 *fp asm("r9");
 
-	if (!ctx)
+	if (!ctx) {
 		return 0;
+	}
 
-	ctx_reg = ctx;
+   ctx_reg = ctx;
 	fp = (u64 *)((void *)stack + sizeof(stack));
 
 	asm volatile (
@@ -74,7 +75,7 @@ unsigned int packet_filter(struct retis_packet_filter_ctx *ctx, u32 placeholder)
 		  "r4", "r5", "r6", "r7",
 		  "r8", "r9");
 
-	return ctx->ret;
-}
+ return ctx->ret;
+ } 
 
 #endif

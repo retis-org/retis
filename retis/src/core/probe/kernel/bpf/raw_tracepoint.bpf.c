@@ -6,7 +6,7 @@
 /* It is safe to have these values per-object as the loaded object won't be
  * shared between attached programs for raw tracepoints.
  */
-const volatile u64 ksym = 0;
+ const volatile u64 ksym = 0;
 const volatile u32 nargs = 0;
 
 /* We unroll the loop bellow as the verifier disallow arithmetic operations on
