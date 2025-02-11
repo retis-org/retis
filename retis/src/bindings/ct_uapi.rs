@@ -3,9 +3,11 @@
 pub type __u8 = ::std::os::raw::c_uchar;
 pub type __u16 = ::std::os::raw::c_ushort;
 pub type __u32 = ::std::os::raw::c_uint;
+pub type __u64 = ::std::os::raw::c_ulonglong;
 pub type u8_ = __u8;
 pub type u16_ = __u16;
 pub type u32_ = __u32;
+pub type u64_ = __u64;
 pub const SECTION_META: ct_sections = 0;
 pub const SECTION_BASE_CONN: ct_sections = 1;
 pub const SECTION_PARENT_CONN: ct_sections = 2;
@@ -73,6 +75,7 @@ impl Default for nf_conn_tuple {
 pub struct ct_event {
     pub orig: nf_conn_tuple,
     pub reply: nf_conn_tuple,
+    pub status: u64_,
     pub flags: u32_,
     pub mark: u32_,
     pub labels: [u8_; 16usize],
