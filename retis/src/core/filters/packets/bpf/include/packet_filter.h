@@ -4,9 +4,11 @@
 #include <common_defs.h>
 
 struct retis_packet_filter_ctx {
-	u32 len;	/* In: linear length. */
-	u32 ret;	/* Out: outcome of the match (zero if miss). */
-	u8 *data;	/* In: points to the beginning of the mac header. */
+	/* Input */
+	char *data;		/* points to the beginning of the mac header. */
+	unsigned int len;	/* linear length. */
+	/* Output */
+	unsigned int ret;	/* outcome of the match (zero if miss). */
 } __binding;
 
 /* We need an actual define here because __FILTER_MAX_INSNS is used by the
