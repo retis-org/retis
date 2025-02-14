@@ -109,8 +109,6 @@ pub(crate) struct Collectors {
     tracking_config_map: Option<libbpf_rs::MapHandle>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
-    // Bpf section factories.
-    section_factories: Option<SectionFactories>,
     // Are we in "auto mode", aka. allowed to do parts of the collection
     // configuration automatically?
     auto_mode: bool,
@@ -132,7 +130,6 @@ impl Collectors {
             tracking_gc: None,
             tracking_config_map: None,
             events_factory: Arc::new(RetisEventsFactory::default()),
-            section_factories: None,
             auto_mode: false,
             mounted_debugfs: false,
         })
@@ -224,11 +221,12 @@ impl Collectors {
         collection_prerequisites()
     }
 
-    /// Initialize all collectors by calling their `init()` function.
-    pub(super) fn init(&mut self, main_config: &MainConfig, collect: &Collect) -> Result<()> {
-        let mut section_factories = section_factories()?;
-        self.run.register_term_signals()?;
-
+    fn init_collectors(
+        &mut self,
+        section_factories: &mut SectionFactories,
+        collect: &Collect,
+        main_config: &MainConfig,
+    ) -> Result<()> {
         // Determine if auto mode is enabled:
         // - No profile is used.
         // - No collector was explicitly enabled.
@@ -240,19 +238,6 @@ impl Collectors {
                 .builder_mut()?
                 .set_probe_opt(probe::ProbeOption::StackTrace)?;
         }
-
-        // Generate an initial event with the startup section.
-        self.events_factory.add_event(|event| {
-            event.insert_section(
-                SectionId::Startup,
-                Box::new(StartupEvent {
-                    retis_version: option_env!("RELEASE_VERSION")
-                        .unwrap_or("unspec")
-                        .to_string(),
-                    clock_monotonic_offset: monotonic_clock_offset()?,
-                }),
-            )
-        })?;
 
         let collectors = match &collect.collectors {
             Some(collectors) => collectors.iter().map(|c| c.as_ref()).collect::<Vec<&str>>(),
@@ -287,7 +272,7 @@ impl Collectors {
                 collect,
                 self.probes.builder_mut()?,
                 Arc::clone(&self.events_factory),
-                &mut section_factories,
+                section_factories,
             )
             .context(format!("Could not initialize the {name} collector"))?;
 
@@ -313,17 +298,35 @@ impl Collectors {
                     .join(", ")
             );
         }
+        Ok(())
+    }
 
-        self.section_factories = Some(section_factories);
+    // Generate an initial event with the startup section.
+    fn initial_event(&mut self) -> Result<()> {
+        self.events_factory.add_event(|event| {
+            event.insert_section(
+                SectionId::Startup,
+                Box::new(StartupEvent {
+                    retis_version: option_env!("RELEASE_VERSION")
+                        .unwrap_or("unspec")
+                        .to_string(),
+                    clock_monotonic_offset: monotonic_clock_offset()?,
+                }),
+            )
+        })
+    }
 
+    fn config_filters(&mut self, collect: &Collect) -> Result<()> {
         // Initialize tracking & filters.
         if !cfg!(test) && self.known_kernel_types.contains("struct sk_buff *") {
             let (gc, map) = init_tracking(self.probes.builder_mut()?)?;
             self.tracking_gc = Some(gc);
             self.tracking_config_map = Some(map);
         }
-        Self::setup_filters(self.probes.builder_mut()?, collect)?;
+        Self::setup_filters(self.probes.builder_mut()?, collect)
+    }
 
+    fn register_probes(&mut self, collect: &Collect) -> Result<()> {
         // If auto_mode is on and no probe is given, find the right set
         // automagically.
         if self.auto_mode && collect.probes.is_empty() {
@@ -376,23 +379,14 @@ impl Collectors {
         collect.probes.iter().try_for_each(|p| -> Result<()> {
             probe_from_cli(p, filter)?
                 .drain(..)
-                .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
-            Ok(())
-        })?;
-
-        Ok(())
+                .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))
+        })
     }
 
     /// Start the event retrieval for all collectors by calling
     /// their `start()` function.
-    pub(super) fn start(&mut self, _collect: &Collect) -> Result<()> {
-        // Create factories.
-        #[cfg_attr(test, allow(unused_mut))]
-        let mut section_factories = self
-            .section_factories
-            .take()
-            .ok_or_else(|| anyhow!("collectors started without being initialized"))?;
-
+    #[cfg_attr(test, allow(unused_mut))]
+    fn start_collectors(&mut self, mut section_factories: SectionFactories) -> Result<()> {
         #[cfg(not(test))]
         {
             let sm = init_stack_map()?;
@@ -434,6 +428,20 @@ impl Collectors {
 
         // Start factory
         self.factory.start(section_factories)?;
+
+        Ok(())
+    }
+
+    /// Configure collection.
+    pub(super) fn config(&mut self, collect: &Collect, main_config: &MainConfig) -> Result<()> {
+        let mut section_factories = section_factories()?;
+
+        self.run.register_term_signals()?;
+        self.initial_event()?;
+        self.init_collectors(&mut section_factories, collect, main_config)?;
+        self.config_filters(collect)?;
+        self.register_probes(collect)?;
+        self.start_collectors(section_factories)?;
 
         Ok(())
     }
