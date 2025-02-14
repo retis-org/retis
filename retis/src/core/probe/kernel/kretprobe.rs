@@ -36,6 +36,7 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
+        ctx_hook: Option<Hook>,
     ) -> Result<()> {
         if self.skel.is_some() {
             bail!("Kretprobe builder already initialized");
@@ -64,6 +65,10 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
             .as_raw_fd();
         let mut links = replace_hooks(fd, &hooks)?;
         self.links.append(&mut links);
+
+        if let Some(ctx_hook) = ctx_hook {
+            self.links.push(replace_ctx_hook(fd, &ctx_hook)?);
+        }
 
         self.skel = Some(skel);
         Ok(())
@@ -126,7 +131,9 @@ mod tests {
         );
 
         let mut builder = KretprobeBuilder::new();
-        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
+        assert!(builder
+            .init(Vec::new(), Vec::new(), Vec::new(), None)
+            .is_ok());
         assert!(builder
             .attach(
                 &Probe::kretprobe(Symbol::from_name("tcp_sendmsg").expect("symbol should exist"))

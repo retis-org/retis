@@ -490,6 +490,7 @@ impl ProbeRuntimeManager {
                     Vec::new()
                 },
                 self.filters.clone(),
+                None,
             )?;
 
             builders.insert(p.type_key(), builder);
@@ -514,7 +515,12 @@ impl ProbeRuntimeManager {
             hooks.extend(self.hooks.clone());
         }
 
-        builder.init(self.map_fds.clone(), hooks, self.filters.clone())?;
+        builder.init(
+            self.map_fds.clone(),
+            hooks,
+            self.filters.clone(),
+            probe.ctx_hook.clone(),
+        )?;
 
         Self::attach_probe(
             &mut builder,

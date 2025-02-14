@@ -144,6 +144,73 @@ HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
 
+__attribute__ ((noinline))
+int ctx_hook(struct retis_context *ctx)
+{
+	volatile int ret = 0;
+	if (!ctx)
+		return 0;
+	return ret;
+}
+
+#define DEFINE_CTX_HOOK(statements)						\
+	SEC("ext/hook")								\
+	int hook(struct retis_context *ctx)					\
+	{									\
+		if (!ctx)							\
+			return 0;						\
+		statements							\
+	}
+
+static __always_inline int extend_ctx_nft(struct retis_context *ctx)
+{
+	struct nft_traceinfo___6_3_0 *info_63;
+	const struct nft_pktinfo *pkt;
+	struct nft_traceinfo *info;
+
+	if (retis_arg_valid(ctx, sk_buff) ||
+	    !bpf_core_type_exists(struct nft_traceinfo) ||
+	    !bpf_core_type_exists(struct nft_pktinfo))
+		return 0;
+
+	info = retis_get_nft_traceinfo(ctx);
+	if (!info)
+		return 0;
+
+	info_63 = (struct nft_traceinfo___6_3_0 *)info;
+	if (bpf_core_field_exists(info_63->pkt))
+		pkt = BPF_CORE_READ(info_63, pkt);
+	else
+		pkt = retis_get_nft_pktinfo(ctx);
+
+	if (pkt)
+		retis_set_ext_sk_buff(ctx, BPF_CORE_READ(pkt, skb));
+
+	return 0;
+}
+
+static __always_inline int extend_ctx(struct retis_context *ctx)
+{
+	void *orig_ctx;
+	int ret;
+
+	/* Builtin context extensions. */
+	ret = extend_ctx_nft(ctx);
+	if (ret)
+		return ret;
+
+	/* Builtin context extensions. */
+	/* The verifier seems to have trouble keeping track of the type of
+	 * the original context which. This seems to help.
+	 */
+	orig_ctx = ctx->orig_ctx;
+	barrier_var(orig_ctx);
+	ret = ctx_hook(ctx);
+	ctx->orig_ctx = orig_ctx;
+
+	return ret;
+}
+
 static __always_inline void filter(struct retis_context *ctx)
 {
 	struct retis_packet_filter_ctx fctx = {};
@@ -212,6 +279,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct kernel_event *k;
+	int ret;
 
 	/* Check if the collection is enabled, otherwise bail out. Once we have
 	 * a positive result, cache it.
@@ -227,6 +295,10 @@ static __always_inline int chain(struct retis_context *ctx)
 		return 0;
 
 	ctx->offsets = cfg->offsets;
+
+	ret = extend_ctx(ctx);
+	if (ret)
+		log_warning("ctx extension failed: %d", ret);
 
 	filter(ctx);
 
