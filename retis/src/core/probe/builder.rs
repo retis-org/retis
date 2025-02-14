@@ -27,6 +27,7 @@ pub(super) trait ProbeBuilder {
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
+        ctx_hook: Option<Hook>,
     ) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
     fn attach(&mut self, probe: &Probe) -> Result<()>;
@@ -56,34 +57,41 @@ pub(super) fn reuse_map_fds(
     Ok(())
 }
 
+pub(super) fn replace_hook(fd: RawFd, hook: &Hook, target: String) -> Result<libbpf_rs::Link> {
+    let mut open_obj = libbpf_rs::ObjectBuilder::default().open_memory(hook.bpf_prog)?;
+
+    // We have to explicitly use a Vec below to avoid having an unknown size
+    // at build time.
+    let map_fds: Vec<(String, RawFd)> = hook.maps.clone().into_iter().collect();
+    reuse_map_fds(&mut open_obj, &map_fds)?;
+
+    let mut open_prog = open_obj
+        .progs_mut()
+        .find(|p| p.name() == "hook")
+        .ok_or_else(|| anyhow!("Couldn't get hook program"))?;
+
+    open_prog.set_prog_type(libbpf_rs::ProgramType::Ext);
+    open_prog.set_attach_target(fd, Some(target))?;
+
+    let obj = open_obj.load()?;
+    let link = obj
+        .progs_mut()
+        .find(|p| p.name() == "hook")
+        .ok_or_else(|| anyhow!("Couldn't get hook program"))?
+        .attach_trace()?;
+    Ok(link)
+}
+
 pub(super) fn replace_hooks(fd: RawFd, hooks: &[Hook]) -> Result<Vec<libbpf_rs::Link>> {
     let mut links = Vec::new();
 
     for (i, hook) in hooks.iter().enumerate() {
         let target = format!("hook{i}");
-
-        let mut open_obj = libbpf_rs::ObjectBuilder::default().open_memory(hook.bpf_prog)?;
-
-        // We have to explicitly use a Vec below to avoid having an unknown size
-        // at build time.
-        let map_fds: Vec<(String, RawFd)> = hook.maps.clone().into_iter().collect();
-        reuse_map_fds(&mut open_obj, &map_fds)?;
-
-        let mut open_prog = open_obj
-            .progs_mut()
-            .find(|p| p.name() == "hook")
-            .ok_or_else(|| anyhow!("Couldn't get hook program"))?;
-
-        open_prog.set_prog_type(libbpf_rs::ProgramType::Ext);
-        open_prog.set_attach_target(fd, Some(target))?;
-
-        let obj = open_obj.load()?;
-        links.push(
-            obj.progs_mut()
-                .find(|p| p.name() == "hook")
-                .ok_or_else(|| anyhow!("Couldn't get hook program"))?
-                .attach_trace()?,
-        );
+        links.push(replace_hook(fd, hook, target)?);
     }
     Ok(links)
+}
+
+pub(super) fn replace_ctx_hook(fd: RawFd, hook: &Hook) -> Result<libbpf_rs::Link> {
+    replace_hook(fd, hook, "ctx_hook".to_string())
 }
