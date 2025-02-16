@@ -9,7 +9,7 @@ cargo_task_tempate: &cargo_task_template
       - cat Cargo.lock
   setup_script:
     - apt-get update
-    - apt-get -y install llvm clang libelf-dev libpcap-dev python3-pip make jq
+    - apt-get -y install locales llvm clang libelf-dev libpcap-dev python3-pip make jq
     - rustup component add rustfmt
     - rustup component add clippy
   before_cache_script: rm -rf $CARGO_HOME/registry/index
@@ -20,9 +20,25 @@ unittest_task:
     image: rust:bookworm
   build_script: make V=1 CARGO_OPTS=--verbose
   test_script: make test V=1 CARGO_OPTS=--verbose
-  check_script:
+  rust_check_script:
     - cargo fmt --check
     - cargo clippy -- -D warnings
+  ebpf_style_script: |
+    # make perl happy.
+    locale-gen en_US.UTF-8
+    export LANGUAGE=en_US.UTF-8
+    git remote update origin
+    cirrus_base=$(git merge-base origin/$CIRRUS_BASE_BRANCH HEAD)
+    COMMIT_RANGE=$(git rev-list ${cirrus_base}..HEAD --reverse)
+    for commit in $COMMIT_RANGE; do
+        pretty_commit=$(git -P show -s --format="%h (\"%s\")" --abbrev=12 ${commit})
+        echo "Commit ${pretty_commit}"
+        printf -- '-%0.s' $(seq 1 ${#pretty_commit})
+        echo "-------"
+        git show --format=email ${commit} -- '*/bpf/*' | ./tools/checkpatch.pl --no-tree --ignore=SPDX_LICENSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || { restyle=1 ; true ; }
+        echo
+    done
+    [ -z "${restyle}" ]
 
 benchmark_task:
   << : *cargo_task_template
