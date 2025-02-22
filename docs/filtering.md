@@ -95,32 +95,28 @@ DEC ::= #'[0-9]+'
 BIN ::= #'0b[0-1]+'
 ```
 
-An example of filter that respect a previous definition is:
+An example of a simple filter that respect a previous definition is:
 
 ```none
 $ retis collect -m 'sk_buff.dev.nd_net.net.ns.inum == 4026531840'
 ...
 ```
 
-The comparison operators are:
+The relational operators are:
 
-1. "==" for *equal to*
-2. "!=" for *not equal to*
-3. "<" and "<=" for *less than* and *less than or equal to*
-4. ">" and ">=" for *greater than* and *greater than or equal to*
-5. if OP and RHS are omitted, a *not equal to* zero numeric comparison is assumed
+1. `==` for *equal to*
+2. `!=` for *not equal to*
+3. `<` and `<=` for *less than* and *less than or equal to*
+4. `>` and `>=` for *greater than* and *greater than or equal to*
+5. if `op` and `rhs` are omitted in `term`, a *not equal to* zero numeric comparison is assumed
 
-At the moment, only number and string comparisons are supported.
-The right-hand side (rhs) of numeric matches must be expressed as
-literal and can be represented in either base 10 or base 16, with the
-latter starting with `0x` prefix.
-All the comparison operators support numbers (both signed and unsigned).
 Bitfields are supported as well (both signed and unsigned) and they
 are treated as regular numbers.
 For numeric comparisons, an additional bitwise AND operation can be
 performed by specifying a *mask*.
-A *mask* can be expressed as a hexadecimal number (e.g. *0xdeaf*), a
-binary number (e.g. *0b01010101*), and a regular decimal number.
+A `mask` can be expressed as a hexadecimal number (e.g. *0xdeaf*), a
+binary number (e.g. *0b01010101*), and a regular decimal number and
+**MUST** strictly be positive.
 The filtering engine allows you to specify masks up to **u64::MAX**
 with any target. While this approach is safe, ensuring consistency is
 the user's responsibility.
@@ -138,7 +134,7 @@ which is equivalent to the following:
 ```
 
 For strings only the operators *equal to* and *not equal to* are supported,
-furthermore, the string (rhs) must be enclosed between *quotes*.
+furthermore, the string (`rhs`) must be enclosed between *quotes*.
 
 ```none
 $ retis collect -m 'sk_buff.dev.name == "eth0"'
@@ -163,13 +159,17 @@ is equivalent to the following:
 ((struct nf_conn *)(skb->_nfct & NFCT_PTRMASK))->mark != 0
 ```
 
+Please, notice in the previous example the operator `~` which is
+semantically equivalent to a `bitwise not`.
+`Bitwise not` is only applicable to masks (in any base).
+
 Metadata filtering, being a BTF-based way of filtering, is theoretically
 not limited to `sk_buff`, so from a generic point of view it can support
 all filters under the form *struct_type_name.field1.field2.field3* with
 the above constraints, but for the time being only `struct sk_buff` is
 supported.
 This implies that the `sk_buff` keyword **MUST** always be present and **MUST**
-always appear first.
+always appear first in each expression.
 
 It is possible to combine packet and meta filtering, and doing so is just a
 matter of specifying their respective options and filters.
