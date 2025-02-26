@@ -149,9 +149,8 @@ dependencies = [
 
 [[package]]
 name = "btf-rs"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe86bb5e4b3b6428b947ecfd9bef6c504c000c0174200dc52a2df432d5fd88fc"
+version = "1.1.0"
+source = "git+https://github.com/retis-org/btf-rs?branch=main#6cc52525402d3577813c7c5336b3990aa9ead51e"
 dependencies = [
  "anyhow",
  "byteorder",
