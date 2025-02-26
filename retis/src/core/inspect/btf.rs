@@ -29,7 +29,9 @@ impl BtfInfo {
         let modules = match cfg!(test) || cfg!(feature = "benchmark") {
             false => fs::read_dir("/sys/kernel/btf")?
                 .filter(|f| f.is_ok() && f.as_ref().unwrap().file_name().ne("vmlinux"))
-                .map(|f| Btf::from_split_file(f.as_ref().unwrap().path(), &vmlinux))
+                .map(|f| {
+                    Btf::from_split_file(f.as_ref().unwrap().path(), &vmlinux).map_err(|e| e.into())
+                })
                 .collect::<Result<Vec<Btf>>>()?,
             true => vec![Btf::from_split_file(
                 BASE_TEST_DIR.to_owned() + "/test_data/openvswitch",
