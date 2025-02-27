@@ -12,19 +12,24 @@ install probes and gather events for instant reporting on the console or for
 later processing writing events to a file (or both). In addition to
 collect-level options, `retis collect` has the concept of collectors. Those
 collectors can be enabled individually and will act on different parts of the
-networking stack to retrieve specific information.
+networking stack to retrieve specific information. Currently supported
+collectors are [listed below](#collectors).
 
-Currently supported collectors are [listed below](#collectors). By default Retis
-will try to load all collectors if their individual requirements are met (e.g.
-the `ovs` collector needs the OpenVSwitch kernel module to be loaded) but
-collectors can be explicitly selected too (here if prerequisites are not met an
-error will be returned). If no specific option is used, Retis will by default
+Without arguments (specifically when `--profile` and `--collector are all unset)
+Retis will will try to load all collectors if their individual requirements are
+met (e.g. the `ovs` collector needs the OpenVSwitch kernel module to be loaded).
+If in addition no probe is specificed (`--probe` is unset) Retis will use a
+default set of probes (`net:netif_receive_skb` and `net:net_dev_start_xmit`).
+
+But collectors can be explicitly selected too (here if prerequisites are not met
+an error will be returned). If no specific option is used, Retis will by default
 output the events to the console.
 
 ```none
 $ retis collect
 Collector(s) started: skb-tracking, skb, skb-drop, ovs, nft, ct
-5 probe(s) loaded
+No probe(s) given: using tp:net:netif_receive_skb, tp:net:net_dev_start_xmit
+7 probe(s) loaded
 ...
 $ retis collect -c skb,skb-drop
 4 probe(s) loaded

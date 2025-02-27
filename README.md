@@ -38,8 +38,9 @@ Collecting packet events going in and out network devices (similarly to
 well-known `AF_PACKET` existing utilities) can be as simple as:
 
 ```
-$ retis collect -p net:netif_receive_skb -p net:net_dev_start_xmit
+$ retis collect
 Collector(s) started: nft, skb, ct, skb-tracking, skb-drop
+No probe(s) given: using tp:net:netif_receive_skb, tp:net:net_dev_start_xmit
 7 probe(s) loaded
 
 6034438235097 (9) [ping] 22026 [tp] net:net_dev_start_xmit #57d008c23d9ffff93bc8e6a6580 (skb ffff93bc8fe2f700)
@@ -50,9 +51,7 @@ Collector(s) started: nft, skb, ct, skb-tracking, skb-drop
 ```
 
 The output is described in the [official
-documentation](https://retis.readthedocs.io/en/stable/). The above example is
-similar to running the [ifdump](https://retis.readthedocs.io/en/stable/profiles/#ifdump)
-profile (`retis -p ifdump c`).
+documentation](https://retis.readthedocs.io/en/stable/).
 
 More advanced collections can be performed by providing more probes and by
 adding filtering rules. For example one can use the [generic

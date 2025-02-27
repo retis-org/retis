@@ -20,6 +20,9 @@ Collect packets just after the device driver in ingress and right before the
 device driver in egress. This is similar to many well known packet capture
 utilities (they use `AF_PACKET`).
 
+Note that when not using a profile, user defined collectors and probes;
+`retis collect` uses the same probes automatically.
+
 ```none
 $ retis -p ifdump collect
 7129250251406 (5) [ping] 23561 [tp] net:net_dev_start_xmit #67be86dc28effff8f67ed249b80 (skb ffff8f67919c2b00)
