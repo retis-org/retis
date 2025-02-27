@@ -19,7 +19,7 @@ impl BtfInfo {
     pub(super) fn new() -> Result<BtfInfo> {
         let vmlinux = match cfg!(test) || cfg!(feature = "benchmark") {
             false => "/sys/kernel/btf/vmlinux".to_owned(),
-            true => BASE_TEST_DIR.to_owned() + "/test_data/vmlinux",
+            true => BASE_TEST_DIR.to_owned() + "/test_data/btf/vmlinux",
         };
 
         let vmlinux = Btf::from_file(vmlinux.clone())
@@ -34,7 +34,7 @@ impl BtfInfo {
                 })
                 .collect::<Result<Vec<Btf>>>()?,
             true => vec![Btf::from_split_file(
-                BASE_TEST_DIR.to_owned() + "/test_data/openvswitch",
+                BASE_TEST_DIR.to_owned() + "/test_data/btf/openvswitch",
                 &vmlinux,
             )?],
         };
