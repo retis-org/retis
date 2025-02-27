@@ -1,43 +1,25 @@
-use std::fs;
-
-use anyhow::{anyhow, bail, Result};
-use btf_rs::{Btf, Type};
+use anyhow::{bail, Result};
+use btf_rs::{
+    utils::collection::{BtfCollection, NamedBtf},
+    Type,
+};
 
 use super::BASE_TEST_DIR;
 use crate::core::kernel::Symbol;
 
 /// Btf provides multi-module Btf lookups.
-pub(crate) struct BtfInfo {
-    /// Main Btf object (vmlinux).
-    vmlinux: Btf,
-    /// Extra Btf objects (modules).
-    modules: Vec<Btf>,
-}
+pub(crate) struct BtfInfo(BtfCollection);
 
 impl BtfInfo {
     /// Parse kernel BTF files and create a Btf object.
-    pub(super) fn new() -> Result<BtfInfo> {
-        let vmlinux = match cfg!(test) || cfg!(feature = "benchmark") {
-            false => "/sys/kernel/btf/vmlinux".to_owned(),
-            true => BASE_TEST_DIR.to_owned() + "/test_data/vmlinux",
-        };
-
-        let vmlinux = Btf::from_file(vmlinux.clone())
-            .map_err(|e| anyhow!("Could not open {vmlinux}: {e}"))?;
-
-        // Load module btf files if possible.
-        let modules = match cfg!(test) || cfg!(feature = "benchmark") {
-            false => fs::read_dir("/sys/kernel/btf")?
-                .filter(|f| f.is_ok() && f.as_ref().unwrap().file_name().ne("vmlinux"))
-                .map(|f| Btf::from_split_file(f.as_ref().unwrap().path(), &vmlinux))
-                .collect::<Result<Vec<Btf>>>()?,
-            true => vec![Btf::from_split_file(
-                BASE_TEST_DIR.to_owned() + "/test_data/openvswitch",
-                &vmlinux,
-            )?],
-        };
-
-        Ok(BtfInfo { vmlinux, modules })
+    pub(super) fn new() -> Result<Self> {
+        Ok(Self(BtfCollection::from_dir(
+            match cfg!(test) || cfg!(feature = "benchmark") {
+                false => "/sys/kernel/btf/".to_owned(),
+                true => BASE_TEST_DIR.to_owned() + "/test_data/",
+            },
+            "vmlinux",
+        )?))
     }
 
     /// Get a function's number of arguments.
@@ -83,52 +65,35 @@ impl BtfInfo {
         Ok(None)
     }
 
-    /// Look for a type based on its name and return both a Vec of Type objects as well as
-    /// the Btf object where it was found.
-    /// Subsequent lookups based on this type (such as nested types by id) must be done on
-    /// the returned Btf object since type ids of different modules overlap.
-    ///
-    /// vmlinux is given priority in the lookups.
-    pub(crate) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<(&Btf, Type)>> {
-        let mut types = Vec::new();
-
-        let mut base_types = self.vmlinux.resolve_types_by_name(name).unwrap_or_default();
-
-        for module in self.modules.iter() {
-            if let Ok(mut res) = module.resolve_types_by_name(name) {
-                // FIXME: We can't filter base types so they'll be reported more
-                // than once (we need some changes in btf-rs that are not
-                // released yet). Not optimal but should be fine with how we use
-                // this function for now.
-                res.drain(..).for_each(|t| types.push((module, t)));
-            }
-        }
-
-        // Now add types found in the base BTF.
-        base_types
-            .drain(..)
-            .for_each(|t| types.push((&self.vmlinux, t)));
-
+    /// Look for a type based on its name and return both a Vec of Type objects
+    /// as well as the NamedBtf object where it was found. Subsequent lookups
+    /// based on this type (such as nested types by id) must be done on the
+    /// returned NamedBtf object since type ids of different modules overlap.
+    pub(crate) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, Type)>> {
+        let types = self.0.resolve_types_by_name(name)?;
         if types.is_empty() {
             bail!("No type linked to name {name}");
         }
-
         Ok(types)
     }
 
-    /// Look for a function symbol and return a Vec of matching Type objects as well as
-    /// the Btf object where it was found.
-    ///
-    /// Subsequent lookups based on this type (such as nested types by id) must be done on
-    /// the returned Btf object since type ids of different modules overlap.
-    ///
-    /// vmlinux is given priority in the lookups.
-    pub(crate) fn resolve_types_by_symbol(&self, symbol: &Symbol) -> Result<Vec<(&Btf, Type)>> {
+    /// Look for a function symbol and return a Vec of matching Type objects as
+    /// well as the NamedBtf object where it was found. Subsequent lookups based
+    /// on this type (such as nested types by id) must be done on the returned
+    /// Btf object since type ids of different modules overlap.
+    pub(crate) fn resolve_types_by_symbol(
+        &self,
+        symbol: &Symbol,
+    ) -> Result<Vec<(&NamedBtf, Type)>> {
         self.resolve_types_by_name(&symbol.typedef_name())
     }
 
-    /// Look for symbol prototype. Return the prototype and the Btf object that contains it.
-    pub(crate) fn find_prototype_btf(&self, symbol: &Symbol) -> Result<(&Btf, btf_rs::FuncProto)> {
+    /// Look for symbol prototype. Return the prototype and the NamedBtf object
+    /// that contains it.
+    pub(crate) fn find_prototype_btf(
+        &self,
+        symbol: &Symbol,
+    ) -> Result<(&NamedBtf, btf_rs::FuncProto)> {
         for (btf, t) in self.resolve_types_by_symbol(symbol)? {
             if let Ok(proto) = match symbol {
                 Symbol::Func(_) => Self::get_function_prototype(btf, &t),
@@ -142,7 +107,7 @@ impl BtfInfo {
     }
 
     /// Determine if a parameter is from a specific type.
-    fn is_param_type(btf: &Btf, param: &btf_rs::Parameter, r#type: &str) -> Result<bool> {
+    fn is_param_type(btf: &NamedBtf, param: &btf_rs::Parameter, r#type: &str) -> Result<bool> {
         let mut resolved = btf.resolve_chained_type(param)?;
         let mut full_name = String::new();
 
@@ -189,7 +154,7 @@ impl BtfInfo {
         Ok(r#type == full_name)
     }
 
-    fn get_function_prototype(btf: &Btf, func: &Type) -> Result<btf_rs::FuncProto> {
+    fn get_function_prototype(btf: &NamedBtf, func: &Type) -> Result<btf_rs::FuncProto> {
         // Functions are using directly the target function definition, no
         // change to make to the target format and the prototype resolution
         // is straightforward: Func -> FuncProto.
@@ -204,7 +169,7 @@ impl BtfInfo {
         }
     }
 
-    fn get_event_prototype(btf: &Btf, func: &Type) -> Result<btf_rs::FuncProto> {
+    fn get_event_prototype(btf: &NamedBtf, func: &Type) -> Result<btf_rs::FuncProto> {
         // The prototype resolution for events is:
         // Typedef -> Ptr -> FuncProto.
         let func = match func {
