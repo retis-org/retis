@@ -16,7 +16,7 @@ impl BtfInfo {
         Ok(Self(BtfCollection::from_dir(
             match cfg!(test) || cfg!(feature = "benchmark") {
                 false => "/sys/kernel/btf/".to_owned(),
-                true => BASE_TEST_DIR.to_owned() + "/test_data/",
+                true => BASE_TEST_DIR.to_owned() + "/test_data/btf/",
             },
             "vmlinux",
         )?))
