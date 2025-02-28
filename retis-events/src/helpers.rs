@@ -71,7 +71,7 @@ impl U128 {
     }
 
     pub fn bits(&self) -> u128 {
-        (self.hi as u128) << 64 | self.lo as u128
+        ((self.hi as u128) << 64) | self.lo as u128
     }
 }
 

@@ -32,7 +32,7 @@ pub struct SkbTrackingEvent {
 impl SkbTrackingEvent {
     /// Get the tracking id.
     pub fn tracking_id(&self) -> u128 {
-        (self.timestamp as u128) << 64 | self.orig_head as u128
+        ((self.timestamp as u128) << 64) | self.orig_head as u128
     }
 
     /// Check if two tracking event sections are from related skbs, including
