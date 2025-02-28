@@ -10,6 +10,7 @@ pub(crate) use ovs::*;
 
 pub(crate) mod bpf;
 pub(crate) use bpf::OvsEventFactory;
+pub(crate) mod flow_info;
 
 mod hooks {
     pub(super) mod kernel_enqueue {
@@ -23,6 +24,18 @@ mod hooks {
     }
     pub(super) mod kernel_exec_tp {
         include!("bpf/.out/kernel_exec_tp.rs");
+    }
+    pub(super) mod kernel_process_packet {
+        include!("bpf/.out/kernel_process_packet.rs");
+    }
+    pub(super) mod kernel_tbl_lookup {
+        include!("bpf/.out/kernel_flow_tbl_lookup.rs");
+    }
+    pub(super) mod kernel_tbl_lookup_ctx {
+        include!("bpf/.out/kernel_flow_tbl_lookup_ctx.rs");
+    }
+    pub(super) mod kernel_tbl_lookup_ret {
+        include!("bpf/.out/kernel_flow_tbl_lookup_ret.rs");
     }
     pub(super) mod kernel_upcall_tp {
         include!("bpf/.out/kernel_upcall_tp.rs");

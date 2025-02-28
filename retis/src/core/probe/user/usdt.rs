@@ -32,6 +32,7 @@ impl<'a> ProbeBuilder for UsdtBuilder<'a> {
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         _filters: Vec<Filter>,
+        _ctx_hook: Option<Hook>,
     ) -> Result<()> {
         self.map_fds = map_fds;
         if hooks.len() > 1 {
@@ -92,7 +93,9 @@ mod tests {
         let p = Process::from_pid(std::process::id() as i32).unwrap();
 
         // It's for now, the probes below won't do much.
-        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
+        assert!(builder
+            .init(Vec::new(), Vec::new(), Vec::new(), None)
+            .is_ok());
         assert!(builder
             .attach(&Probe::usdt(UsdtProbe::new(&p, "test_builder::usdt").unwrap()).unwrap())
             .is_ok());
