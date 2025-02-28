@@ -138,10 +138,10 @@ impl Collectors {
     fn setup_filters(probes: &mut ProbeBuilderManager, collect: &Collect) -> Result<()> {
         if let Some(f) = &collect.packet_filter {
             // L2 filter MUST always succeed. Any failure means we need to bail.
-            let fb = FilterPacket::from_string_opt(f.to_string(), packet_filter_uapi::FILTER_L2)?;
+            let fb = FilterPacket::from_string_opt(f.to_string(), packet_filter_uapi::L2)?;
 
             probes.register_filter(Filter::Packet(
-                packet_filter_uapi::FILTER_L2,
+                packet_filter_uapi::L2,
                 BpfFilter(fb.to_bytes()?),
             ))?;
 
@@ -151,7 +151,7 @@ impl Collectors {
                 debug!("Skipping L3 filter generation (ether[n:m] not allowed)");
                 FilterPacket::reject_filter()
             } else {
-                match FilterPacket::from_string_opt(f.to_string(), packet_filter_uapi::FILTER_L3) {
+                match FilterPacket::from_string_opt(f.to_string(), packet_filter_uapi::L3) {
                     Err(e) => {
                         debug!("Skipping L3 filter generation ({e}).");
                         FilterPacket::reject_filter()
@@ -164,7 +164,7 @@ impl Collectors {
             };
 
             probes.register_filter(Filter::Packet(
-                packet_filter_uapi::FILTER_L3,
+                packet_filter_uapi::L3,
                 BpfFilter(fb.to_bytes()?),
             ))?;
 

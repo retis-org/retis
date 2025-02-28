@@ -30,7 +30,7 @@
 
 - As explained in the [filtering section](https://retis.readthedocs.io/en/stable/#filtering)
   filters are eventually translated to eBPF instructions. Currently, the maximum
-  size of an eBPF filter is 4096 instructions.
+  allowed size for an eBPF filter is 4096 instructions.
 
 - Some fields present in the packet might not be reported when probes are early
   in the stack, while being shown in later ones. This is because Retis probes

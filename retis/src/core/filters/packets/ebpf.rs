@@ -158,7 +158,7 @@ impl eBpfProg {
 
         // mov %fp, %arg1
         self.add(Insn::mov(MovInfo::Reg {
-            src: BpfReg::INLINE_FP,
+            src: BpfReg::FP,
             dst: BpfReg::ARG1,
         }));
         // add -8, %arg1
@@ -207,7 +207,7 @@ impl eBpfProg {
         // ldx -packet_filter_uapi::stack_reserved(%r10), %r0
         self.add(Insn::ld(
             LdInfo::Reg {
-                src: BpfReg::INLINE_FP,
+                src: BpfReg::FP,
                 dst: BpfReg::A,
                 off: -(packet_filter_uapi::STACK_RESERVED as i16),
             },
@@ -370,7 +370,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 )),
                 t @ BpfInsnType::LdxMem | t @ BpfInsnType::LdMem => ebpf.add(Insn::ld(
                     LdInfo::Reg {
-                        src: BpfReg::INLINE_FP,
+                        src: BpfReg::FP,
                         dst: if let BpfInsnType::LdMem = t {
                             BpfReg::A
                         } else {
@@ -468,7 +468,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 BpfInsnType::St => ebpf.add(Insn::st(
                     StInfo::Reg {
                         src: BpfReg::A,
-                        dst: BpfReg::INLINE_FP,
+                        dst: BpfReg::FP,
                         off: -(packet_filter_uapi::SCRATCH_MEM_START as i16)
                             + (cbpf_insn.k * packet_filter_uapi::SCRATCH_MEM_SIZE) as i16,
                     },
@@ -477,7 +477,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 BpfInsnType::Stx => ebpf.add(Insn::st(
                     StInfo::Reg {
                         src: BpfReg::X,
-                        dst: BpfReg::INLINE_FP,
+                        dst: BpfReg::FP,
                         off: -(packet_filter_uapi::SCRATCH_MEM_START as i16)
                             + (cbpf_insn.k * packet_filter_uapi::SCRATCH_MEM_SIZE) as i16,
                     },
