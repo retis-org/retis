@@ -37,6 +37,7 @@ pub(crate) enum ProbeOption {
 pub(crate) struct Probe {
     r#type: ProbeType,
     pub(super) hooks: Vec<Hook>,
+    pub(super) ctx_hook: Option<Hook>,
     pub(super) options: HashSet<ProbeOption>,
 }
 
@@ -46,6 +47,7 @@ impl Probe {
             r#type,
             hooks: Vec::new(),
             options: HashSet::new(),
+            ctx_hook: None,
         }
     }
 
@@ -122,6 +124,15 @@ impl Probe {
         Ok(())
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn set_ctx_hook(&mut self, hook: Hook) -> Result<()> {
+        if self.ctx_hook.is_some() {
+            bail!("Context hook can only be set once");
+        }
+        self.ctx_hook = Some(hook);
+        Ok(())
+    }
+
     /// Returns the number of hooks installed on the probe.
     pub(crate) fn hooks_len(&self) -> usize {
         self.hooks.len()
@@ -155,7 +166,12 @@ impl Probe {
     pub(crate) fn reuse_map(&mut self, name: &str, fd: RawFd) -> Result<()> {
         self.hooks
             .iter_mut()
-            .try_for_each(|h| h.reuse_map(name, fd).map(|_| ()))
+            .try_for_each(|h| h.reuse_map(name, fd).map(|_| ()))?;
+
+        if let Some(hook) = self.ctx_hook.as_mut() {
+            hook.reuse_map(name, fd)?;
+        }
+        Ok(())
     }
 
     /// Merge two probes into the current one. The second probe can't be used

@@ -37,9 +37,12 @@ struct retis_probe_offsets {
  */
 struct retis_regs {
 #define REG_MAX 12	/* Fexit max, let's use this */
-	u64 reg[REG_MAX];
+/* Extended registers are used to store dynamically extracted arguments. */
+#define EXT_REG_SKB REG_MAX	/* Extended registry for struct sk_buff. */
+#define EXT_REG_MAX EXT_REG_SKB + 1
+	u64 reg[EXT_REG_MAX];
 	u64 ret;
-	u32 num;
+	u32 num; /* Number of non-extended registers in use. */
 };
 
 /* Common context information consumed by all hooks. It serves as an abstraction
@@ -68,14 +71,15 @@ struct retis_context {
 	void *orig_ctx;
 	/* Contains the bits identifying what filters yield a hit outcome.
 	 * A bit is set means that the filter matched the data based on its
-	 * criteria .
+	 * criteria.
 	 */
 	u32 filters_ret;
 };
 
 /* Helper to retrieve a function parameter argument using the common context */
-#define retis_get_param(ctx, offset, type)	\
-	(type)(((offset) >= 0 && (offset) < REG_MAX && (offset) < ctx->regs.num) ?	\
+#define retis_get_param(ctx, offset, type)			\
+	(type)(((offset) >= 0 && (offset) < EXT_REG_MAX &&	\
+	((offset) >= REG_MAX || (offset) < ctx->regs.num)) ?	\
        ctx->regs.reg[offset] : 0)
 
 /* Check if a given offset is valid. */
@@ -96,7 +100,7 @@ struct retis_context {
 	(retis_offset_valid(offsets.name) ?	\
 	 retis_get_param(ctx, offsets.name, type) : 0)
 
-#define __retis_get_sk_buff(ctx)	\
+#define retis_get_sk_buff(ctx)	\
 	RETIS_GET(ctx, sk_buff, struct sk_buff *)
 #define retis_get_skb_drop_reason(ctx)	\
 	RETIS_GET(ctx, skb_drop_reason, enum skb_drop_reason)
@@ -108,40 +112,5 @@ struct retis_context {
 	RETIS_GET(ctx, nft_pktinfo, struct nft_pktinfo *)
 #define retis_get_nft_traceinfo(ctx)	\
 	RETIS_GET(ctx, nft_traceinfo, struct nft_traceinfo *)
-
-/* Returns the skb trying to get it first from the arguments (common case)
- * and if not found from the nft_pktinfo (useful for nft).
- */
-static __always_inline struct sk_buff *retis_get_sk_buff(struct retis_context *ctx)
-{
-	struct nft_traceinfo___6_3_0 *info_63;
-	const struct nft_pktinfo *pkt;
-	struct sk_buff *skb = NULL;
-	struct nft_traceinfo *info;
-
-	skb = __retis_get_sk_buff(ctx);
-	if (!skb) {
-		if (!bpf_core_type_exists(struct nft_traceinfo) ||
-		    !bpf_core_type_exists(struct nft_pktinfo)) {
-			goto out;
-		}
-
-		info = retis_get_nft_traceinfo(ctx);
-		if (!info)
-			goto out;
-
-		info_63 = (struct nft_traceinfo___6_3_0 *)info;
-		if (bpf_core_field_exists(info_63->pkt))
-			pkt = BPF_CORE_READ(info_63, pkt);
-		else
-			pkt = retis_get_nft_pktinfo(ctx);
-
-		if (pkt)
-			skb = (struct sk_buff *)BPF_CORE_READ(pkt, skb);
-	}
-
-out:
-	return skb;
-}
 
 #endif /* __CORE_PROBE_KERNEL_BPF_RETIS_CONTEXT__ */
