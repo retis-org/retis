@@ -21,7 +21,7 @@ pub(crate) struct PythonCli {
 }
 
 impl SubCommandParserRunner for PythonCli {
-    fn run(&mut self) -> Result<()> {
+    fn run(&mut self, _: &MainConfig) -> Result<()> {
         shell_execute(self.input.clone(), self.script.as_ref())
     }
 }

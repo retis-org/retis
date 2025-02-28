@@ -22,7 +22,7 @@ use super::{
 };
 use crate::{
     bindings::packet_filter_uapi,
-    cli::CliDisplayFormat,
+    cli::{CliDisplayFormat, MainConfig},
     collect::collector::{section_factories, skb::SkbEventFactory},
     core::{
         events::{BpfEventsFactory, EventResult, FactoryId, RetisEventsFactory},
@@ -108,6 +108,9 @@ pub(crate) struct Collectors {
     tracking_config_map: Option<libbpf_rs::MapHandle>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
+    // Are we in "auto mode", aka. allowed to do parts of the collection
+    // configuration automatically?
+    auto_mode: bool,
     // Did we mount debugfs ourselves?
     mounted_debugfs: bool,
 }
@@ -126,6 +129,7 @@ impl Collectors {
             tracking_gc: None,
             tracking_config_map: None,
             events_factory: Arc::new(RetisEventsFactory::default()),
+            auto_mode: false,
             mounted_debugfs: false,
         })
     }
@@ -217,8 +221,13 @@ impl Collectors {
     }
 
     /// Initialize all collectors by calling their `init()` function.
-    pub(super) fn init(&mut self, collect: &Collect) -> Result<()> {
+    pub(super) fn init(&mut self, main_config: &MainConfig, collect: &Collect) -> Result<()> {
         self.run.register_term_signals()?;
+
+        // Determine if auto mode is enabled:
+        // - No profile is used.
+        // - No collector was explicitly enabled.
+        self.auto_mode = main_config.profile.is_empty() && collect.collectors.is_none();
 
         // Check if we need to report stack traces in the events.
         if collect.stack || collect.probe_stack {
@@ -240,15 +249,9 @@ impl Collectors {
             )
         })?;
 
-        let (auto_mode, collectors) = match &collect.collectors {
-            Some(collectors) => (
-                false,
-                collectors.iter().map(|c| c.as_ref()).collect::<Vec<&str>>(),
-            ),
-            None => (
-                true,
-                vec!["skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct"],
-            ),
+        let collectors = match &collect.collectors {
+            Some(collectors) => collectors.iter().map(|c| c.as_ref()).collect::<Vec<&str>>(),
+            None => vec!["skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct"],
         };
 
         // Try initializing all collectors.
@@ -267,7 +270,7 @@ impl Collectors {
             if let Err(e) = c.can_run(collect) {
                 // Do not issue an error if the list of collectors was set by
                 // default, aka. auto-detect mode.
-                if auto_mode {
+                if self.auto_mode {
                     debug!("Cannot run collector {name}: {e}");
                     continue;
                 } else {
@@ -295,7 +298,7 @@ impl Collectors {
         }
 
         //  If auto-mode is used, print the list of collectors that were started.
-        if auto_mode {
+        if self.auto_mode {
             info!(
                 "Collector(s) started: {}",
                 self.collectors
@@ -314,17 +317,37 @@ impl Collectors {
         }
         Self::setup_filters(self.probes.builder_mut()?, collect)?;
 
-        // If probe_stack is on and user hasn't provided a starting point, use
-        // skb:consume_skb & skb:kfree_skb.
-        if collect.probe_stack && collect.probes.is_empty() {
-            self.probes
-                .builder_mut()?
-                .register_probe(Probe::raw_tracepoint(Symbol::from_name(
-                    "skb:consume_skb",
-                )?)?)?;
-            self.probes
-                .builder_mut()?
-                .register_probe(Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?)?;
+        // If auto_mode is on and no probe is given, find the right set
+        // automagically.
+        if self.auto_mode && collect.probes.is_empty() {
+            let mut probes = if collect.probe_stack {
+                // If --probe-stack is used, use skb:consume_skb & skb:kfree_skb
+                // as a starting point (these should capture most if not all of
+                // the packets and help moving up the stack).
+                vec![
+                    Probe::raw_tracepoint(Symbol::from_name("skb:consume_skb")?)?,
+                    Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?,
+                ]
+            } else {
+                // By default dump packets after the device in ingress and
+                // before the device in egress; like AF_PACKET utilities.
+                vec![
+                    Probe::raw_tracepoint(Symbol::from_name("net:netif_receive_skb")?)?,
+                    Probe::raw_tracepoint(Symbol::from_name("net:net_dev_start_xmit")?)?,
+                ]
+            };
+
+            info!(
+                "No probe(s) given: using {}",
+                probes
+                    .iter()
+                    .map(|p| format!("{p}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            probes
+                .drain(..)
+                .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
         }
 
         // Setup user defined probes.

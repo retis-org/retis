@@ -218,7 +218,7 @@ See `retis collect --help` for more details on the probe format."
 }
 
 impl SubCommandParserRunner for Pcap {
-    fn run(&mut self) -> Result<()> {
+    fn run(&mut self, _: &MainConfig) -> Result<()> {
         let (probe_type, target) = parse_cli_probe(&self.probe)?;
         let symbol = Symbol::from_name_no_inspect(target);
 
