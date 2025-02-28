@@ -5,17 +5,28 @@
 //! Events can be added to EventSeries in any order and it will internally arrange them based on
 //! their TrackingInfo.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 
 use anyhow::{anyhow, Result};
 
-use crate::events::{CommonEvent, Event, EventSeries, SectionId, TrackingInfo};
+use crate::events::*;
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+struct FlowId {
+    /// Flow UFID
+    ufid: Ufid,
+    /// Flow pointer
+    flow: u64,
+    /// Actions pointer
+    sf_acts: u64,
+}
 
 #[derive(Default)]
 pub(crate) struct EventSorter {
     series: BTreeMap<TrackingInfo, Vec<Event>>,
     untracked: VecDeque<Event>,
     n_events: usize,
+    flow_info: HashMap<FlowId, OvsFlowInfoEvent>,
 }
 
 impl EventSorter {
@@ -25,6 +36,7 @@ impl EventSorter {
             series: BTreeMap::new(),
             untracked: VecDeque::new(),
             n_events: 0,
+            flow_info: HashMap::new(),
         }
     }
 
@@ -33,8 +45,40 @@ impl EventSorter {
         self.n_events
     }
 
+    fn enrich_ovs_lookup(&mut self, ovs: &mut OvsEvent) {
+        if let OvsEvent::DpLookup {
+            flow_lookup: lookup,
+        } = ovs
+        {
+            let flow_id = FlowId {
+                ufid: lookup.ufid,
+                flow: lookup.flow,
+                sf_acts: lookup.sf_acts,
+            };
+            if let Some(info) = self.flow_info.get(&flow_id) {
+                lookup.dpflow = info.dpflow.clone();
+                lookup.ofpflows = info.ofpflows.clone();
+            }
+        }
+    }
+
     /// Adds an event to the EventSorter.
-    pub(crate) fn add(&mut self, event: Event) {
+    pub(crate) fn add(&mut self, mut event: Event) {
+        // Store FlowInfoEvents.
+        if let Some(flow_info) = event.get_section::<OvsFlowInfoEvent>(SectionId::OvsFlowInfo) {
+            let flow_id = FlowId {
+                ufid: flow_info.ufid,
+                flow: flow_info.flow,
+                sf_acts: flow_info.sf_acts,
+            };
+            self.flow_info.insert(flow_id, flow_info.clone());
+        }
+
+        // Enrich Lookup events with FlowInfoEvents from the past.
+        if let Some(ovs) = event.get_section_mut::<OvsEvent>(SectionId::Ovs) {
+            self.enrich_ovs_lookup(ovs);
+        }
+
         match event.get_section::<TrackingInfo>(SectionId::Tracking) {
             Some(track) => match self.series.get_mut(track) {
                 Some(series) => {
@@ -96,8 +140,13 @@ impl EventSorter {
             Some((key, _)) => {
                 let key = key.clone();
                 match self.series.remove(&key) {
-                    Some(series) => {
+                    Some(mut series) => {
                         self.n_events -= series.len();
+                        // Enrich flow lookups with information that came after them.
+                        series
+                            .iter_mut()
+                            .filter_map(|e| e.get_section_mut::<OvsEvent>(SectionId::Ovs))
+                            .for_each(|o| self.enrich_ovs_lookup(o));
                         Some(series)
                     }
                     None => None,
