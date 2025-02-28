@@ -6,7 +6,7 @@ import clang.cindex
 
 def extract_annotated_types(file_path, annotation, clang_args):
     index = clang.cindex.Index.create()
-    translation_unit = index.parse(file_path, args=clang_args)
+    translation_unit = index.parse(file_path, args=clang_args, options=clang.cindex.TranslationUnit.PARSE_INCOMPLETE | clang.cindex.TranslationUnit.PARSE_SKIP_FUNCTION_BODIES)
     annotated = []
 
     def find_annotations(node, file_name):

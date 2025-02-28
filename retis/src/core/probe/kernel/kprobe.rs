@@ -9,7 +9,7 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::{OpenSkel, Skel};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
+use crate::core::{probe::builder::*, probe::*, workaround::*};
 
 mod kprobe_bpf {
     include!("bpf/.out/kprobe.skel.rs");
@@ -27,12 +27,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         KprobeBuilder::default()
     }
 
-    fn init(
-        &mut self,
-        map_fds: Vec<(String, RawFd)>,
-        hooks: Vec<Hook>,
-        filters: Vec<Filter>,
-    ) -> Result<()> {
+    fn init(&mut self, map_fds: Vec<(String, RawFd)>, hooks: Vec<Hook>) -> Result<()> {
         if self.skel.is_some() {
             bail!("Kprobe builder already initialized");
         }
@@ -41,12 +36,6 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
 
         skel.maps.rodata_data.nhooks = hooks.len() as u32;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
-
-        filters.iter().for_each(|f| {
-            if let Filter::Meta(m) = f {
-                skel.maps.rodata_data.nmeta = m.0.len() as u32
-            }
-        });
 
         reuse_map_fds(skel.open_object_mut(), &map_fds)?;
 
@@ -113,7 +102,7 @@ mod tests {
 
         let mut builder = KprobeBuilder::new();
 
-        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
+        assert!(builder.init(Vec::new(), Vec::new()).is_ok());
         assert!(builder
             .attach(&Probe::kprobe(Symbol::from_name("kfree_skb_reason").unwrap()).unwrap())
             .is_ok());

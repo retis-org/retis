@@ -83,12 +83,31 @@ impl eBpfProg {
     pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
+
     pub(crate) fn add(&mut self, insn: eBpfInsn) {
         self.0.push(insn);
     }
 
+    pub(crate) fn add_multi(&mut self, insns: &[eBpfInsn]) {
+        self.0.extend_from_slice(insns);
+    }
+
+    pub(crate) fn insert(&mut self, insn: eBpfInsn, offset: usize) {
+        self.0.insert(offset, insn);
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         self.0.iter().flat_map(|insn| insn.to_vec()).collect()
+    }
+
+    pub(crate) fn append_prog(&mut self, prog: &eBpfProg) {
+        self.add_multi(&prog.0);
+    }
+
+    pub(crate) fn get_raw_insn_mut(&mut self, pos: usize) -> Result<&mut eBpfInsn> {
+        self.0
+            .get_mut(pos)
+            .ok_or_else(|| anyhow!("Error retrieving ebpf jmp instruction at {pos}"))
     }
 
     #[cfg(feature = "debug")]
@@ -113,7 +132,7 @@ impl eBpfProg {
     // Only intended for early exit.
     fn exit_if_reg_imm(&mut self, reg: BpfReg, val: i32, eq: bool) {
         let j_type = match eq {
-            true => eBpfJmpOpExt::Ne,
+            true => eBpfJmpOpExt::eBpf(eBpfJmpOp::Ne),
             false => eBpfJmpOpExt::Bpf(BpfJmpOp::Eq),
         };
 
@@ -132,11 +151,11 @@ impl eBpfProg {
         self.add(eBpfInsn::exit());
     }
 
-    fn exit_retval_eq(&mut self, rval: i32) {
+    pub(crate) fn exit_retval_eq(&mut self, rval: i32) {
         self.exit_if_reg_imm(BpfReg::A, rval, true);
     }
 
-    fn exit_retval_neq(&mut self, rval: i32) {
+    pub(crate) fn exit_retval_neq(&mut self, rval: i32) {
         self.exit_if_reg_imm(BpfReg::A, rval, false);
     }
 
@@ -158,7 +177,7 @@ impl eBpfProg {
 
         // mov %fp, %arg1
         self.add(Insn::mov(MovInfo::Reg {
-            src: BpfReg::INLINE_FP,
+            src: BpfReg::FP,
             dst: BpfReg::ARG1,
         }));
         // add -8, %arg1
@@ -207,7 +226,7 @@ impl eBpfProg {
         // ldx -packet_filter_uapi::stack_reserved(%r10), %r0
         self.add(Insn::ld(
             LdInfo::Reg {
-                src: BpfReg::INLINE_FP,
+                src: BpfReg::FP,
                 dst: BpfReg::A,
                 off: -(packet_filter_uapi::STACK_RESERVED as i16),
             },
@@ -370,7 +389,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 )),
                 t @ BpfInsnType::LdxMem | t @ BpfInsnType::LdMem => ebpf.add(Insn::ld(
                     LdInfo::Reg {
-                        src: BpfReg::INLINE_FP,
+                        src: BpfReg::FP,
                         dst: if let BpfInsnType::LdMem = t {
                             BpfReg::A
                         } else {
@@ -468,7 +487,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 BpfInsnType::St => ebpf.add(Insn::st(
                     StInfo::Reg {
                         src: BpfReg::A,
-                        dst: BpfReg::INLINE_FP,
+                        dst: BpfReg::FP,
                         off: -(packet_filter_uapi::SCRATCH_MEM_START as i16)
                             + (cbpf_insn.k * packet_filter_uapi::SCRATCH_MEM_SIZE) as i16,
                     },
@@ -477,7 +496,7 @@ impl TryFrom<BpfProg> for eBpfProg {
                 BpfInsnType::Stx => ebpf.add(Insn::st(
                     StInfo::Reg {
                         src: BpfReg::X,
-                        dst: BpfReg::INLINE_FP,
+                        dst: BpfReg::FP,
                         off: -(packet_filter_uapi::SCRATCH_MEM_START as i16)
                             + (cbpf_insn.k * packet_filter_uapi::SCRATCH_MEM_SIZE) as i16,
                     },

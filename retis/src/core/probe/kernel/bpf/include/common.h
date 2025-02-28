@@ -144,6 +144,36 @@ HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
 
+
+/* The template defines a placeholder instruction that will be
+ * replaced on load with the actual filtering instructions.
+ * Normally, if no filter gets set, a simple mov r0, 0x40000 will
+ * replace the call. 0x40000 is used as it is also used by generated
+ * cBPF filters, whereas 0 means no match, instead.
+ * Ideally this function would be __naked, but apparently subprogs and
+ * non-ctx arguments don't play well together during BTF generation.
+ */
+#define FILTER(x)								\
+static __noinline unsigned int filter_##x(void *ctx)				\
+{										\
+	/* Not strictly required, but make sure r1 doesn't change for		\
+	 * some reason.								\
+	 */									\
+	register void *ctx_reg asm("r1") = ctx;					\
+	unsigned int ret;							\
+	asm volatile (								\
+		"call " s(x) ";"						\
+		"*(u32 *)%[ret] = r0"						\
+		: [ret] "=m" (ret)						\
+		: "r" (ctx_reg)							\
+		: "r0", "r1", "r2", "r3", "r4",					\
+		  "r5", "r6", "r7", "r8");					\
+	return ret;								\
+}
+FILTER(l2)
+FILTER(l3)
+FILTER(meta)
+
 static __always_inline void filter(struct retis_context *ctx)
 {
 	struct retis_packet_filter_ctx fctx = {};
@@ -175,8 +205,9 @@ static __always_inline void filter(struct retis_context *ctx)
 	 */
 	if (is_mac_data_valid(skb)) {
 		fctx.data = head + BPF_CORE_READ(skb, mac_header);
-		packet_filter(&fctx, FILTER_L2);
-		goto filter_outcome;
+		ctx->filters_ret |=
+			!!filter_l2(&fctx) << RETIS_F_PACKET_PASS_SH;
+		goto next_filter;
 	}
 
 	if (!is_network_data_valid(skb))
@@ -186,14 +217,11 @@ static __always_inline void filter(struct retis_context *ctx)
 	/* L3 filter can be a nop, meaning the criteria are not enough to
 	 * express a match in terms of L3 only.
 	 */
-	packet_filter(&fctx, FILTER_L3);
+	ctx->filters_ret |=
+		!!filter_l3(&fctx) << RETIS_F_PACKET_PASS_SH;
 
-	/* Due to a bug we can't use the return value of packet_filter(), but
-	 * we have to rely on the value returned into the context.
-	 */
-filter_outcome:
-	ctx->filters_ret |= (!!fctx.ret) << RETIS_F_PACKET_PASS_SH;
-	ctx->filters_ret |= (!!meta_filter(skb)) << RETIS_F_META_PASS_SH;
+next_filter:
+	ctx->filters_ret |= (!!filter_meta(skb)) << RETIS_F_META_PASS_SH;
 }
 
 /* The chaining function, which contains all our core probe logic. This is
