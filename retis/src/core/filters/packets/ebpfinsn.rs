@@ -303,7 +303,7 @@ impl eBpfInsn {
     }
 
     pub(crate) fn to_vec(self) -> Vec<u8> {
-        let mut byte_insn = vec![self.code, self.src << 4 | self.dst];
+        let mut byte_insn = vec![self.code, (self.src << 4) | self.dst];
 
         byte_insn.extend(self.off.to_le_bytes());
         byte_insn.extend(self.imm.to_le_bytes());
