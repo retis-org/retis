@@ -373,9 +373,12 @@ impl OvsCollector {
         let mut ovs_flow_tbl_lookup_stats = Hook::from(hooks::kernel_tbl_lookup_ret::DATA);
         ovs_flow_tbl_lookup_stats
             .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        let mut ovs_flow_tbl_lookup_stats_ctx = Hook::from(hooks::kernel_tbl_lookup_ctx::DATA);
+        ovs_flow_tbl_lookup_stats_ctx
+            .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
         let mut probe = Probe::kretprobe(Symbol::from_name("ovs_flow_tbl_lookup_stats")?)?;
-        probe.set_option(ProbeOption::NoGenericHook)?;
         probe.add_hook(ovs_flow_tbl_lookup_stats)?;
+        probe.set_ctx_hook(ovs_flow_tbl_lookup_stats_ctx)?;
         probes.register_probe(probe)?;
 
         self.inflight_exec_map = Some(inflight_exec_map);

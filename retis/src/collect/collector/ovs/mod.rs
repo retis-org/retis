@@ -31,6 +31,9 @@ mod hooks {
     pub(super) mod kernel_tbl_lookup {
         include!("bpf/.out/kernel_flow_tbl_lookup.rs");
     }
+    pub(super) mod kernel_tbl_lookup_ctx {
+        include!("bpf/.out/kernel_flow_tbl_lookup_ctx.rs");
+    }
     pub(super) mod kernel_tbl_lookup_ret {
         include!("bpf/.out/kernel_flow_tbl_lookup_ret.rs");
     }
