@@ -121,7 +121,7 @@ impl EventFmt for UpcallEvent {
 
 /// OVS lookup event
 #[event_type]
-#[derive(Copy, Default, PartialEq)]
+#[derive(Default, PartialEq)]
 pub struct LookupEvent {
     /// flow pointer
     pub flow: u64,
@@ -133,15 +133,46 @@ pub struct LookupEvent {
     pub n_mask_hit: u32,
     /// Number of cache matches that occurred during the lookup.
     pub n_cache_hit: u32,
+    /// datapath flow string
+    pub dpflow: String,
+    /// openflow flows
+    pub ofpflows: Vec<String>,
 }
 
 impl EventFmt for LookupEvent {
-    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
+    fn event_fmt(&self, f: &mut Formatter, d: &DisplayFormat) -> fmt::Result {
+        let sep = if d.multiline { "\n" } else { " " };
+
         write!(
             f,
             "ufid {} hit (mask/cache) {}/{} flow {:x} sf_acts {:x}",
             self.ufid, self.n_mask_hit, self.n_cache_hit, self.flow, self.sf_acts,
-        )
+        )?;
+        if !self.dpflow.is_empty() {
+            write!(f, "{sep}odpflow {}", self.dpflow)?;
+        }
+        if !self.ofpflows.is_empty() {
+            write!(f, "{sep}openflow{sep}")?;
+            if d.multiline {
+                f.conf.inc_level(4)
+            }
+            write!(f, "{}", self.ofpflows.join(sep))?;
+            if d.multiline {
+                f.conf.reset_level();
+            }
+        }
+        Ok(())
+    }
+}
+
+impl LookupEvent {
+    /// Return a FlowId that represents a unique flow fingerprint.
+    pub fn flow_id(&self) -> FlowId {
+        FlowId {
+            ufid: self.ufid,
+            flow: self.flow,
+            sf_acts: self.sf_acts,
+        }
     }
 }
 
@@ -660,6 +691,30 @@ impl EventFmt for OvsFlowInfoEvent {
             write!(f, " openflow: {}", self.ofpflows.join(" "))?;
         }
         Ok(())
+    }
+}
+
+/// The uniqueness of a flow can only be guaranteed if, apart from the ufid,
+/// both "flow" and "sf_acts" pointers are the same. This struct combines these
+/// fields for easier comparisons.
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct FlowId {
+    /// Flow UFID
+    ufid: Ufid,
+    /// Flow pointer
+    flow: u64,
+    /// Actions pointer
+    sf_acts: u64,
+}
+
+impl OvsFlowInfoEvent {
+    /// Return a FlowId that represents a unique flow fingerprint.
+    pub fn flow_id(&self) -> FlowId {
+        FlowId {
+            ufid: self.ufid,
+            flow: self.flow,
+            sf_acts: self.sf_acts,
+        }
     }
 }
 
