@@ -117,7 +117,7 @@ impl<'a, W: Write> EventParser<'a, W> {
         };
 
         // If we see this iface for the first time, add a description block.
-        let key: u64 = (netns as u64) << 32 | ifindex as u64;
+        let key: u64 = ((netns as u64) << 32) | ifindex as u64;
         let id = match self.ifaces.contains_key(&key) {
             // Unwrap if contains is true.
             true => *self.ifaces.get(&key).unwrap(),
