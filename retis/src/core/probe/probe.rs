@@ -136,7 +136,6 @@ impl Probe {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub(crate) fn set_ctx_hook(&mut self, hook: Hook) -> Result<()> {
         if self.ctx_hook.is_some() {
             bail!("Context hook can only be set once");
