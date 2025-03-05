@@ -32,6 +32,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
+        ctx_hook: Option<Hook>,
     ) -> Result<()> {
         if self.skel.is_some() {
             bail!("Kprobe builder already initialized");
@@ -60,6 +61,10 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
             .as_raw_fd();
         let mut links = replace_hooks(fd, &hooks)?;
         self.links.append(&mut links);
+
+        if let Some(ctx_hook) = ctx_hook {
+            self.links.push(replace_ctx_hook(fd, &ctx_hook)?);
+        }
 
         self.skel = Some(skel);
         Ok(())
@@ -113,7 +118,9 @@ mod tests {
 
         let mut builder = KprobeBuilder::new();
 
-        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
+        assert!(builder
+            .init(Vec::new(), Vec::new(), Vec::new(), None)
+            .is_ok());
         assert!(builder
             .attach(&Probe::kprobe(Symbol::from_name("kfree_skb_reason").unwrap()).unwrap())
             .is_ok());

@@ -21,6 +21,7 @@ use raw_tracepoint_bpf::*;
 pub(crate) struct RawTracepointBuilder<'a> {
     hooks: Vec<Hook>,
     filters: Vec<Filter>,
+    ctx_hook: Option<Hook>,
     links: Vec<libbpf_rs::Link>,
     skel: Option<SkelStorage<RawTracepointSkel<'a>>>,
     map_fds: Vec<(String, RawFd)>,
@@ -36,10 +37,12 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
+        ctx_hook: Option<Hook>,
     ) -> Result<()> {
         self.map_fds = map_fds;
         self.hooks = hooks;
         self.filters = filters;
+        self.ctx_hook = ctx_hook;
 
         Ok(())
     }
@@ -72,8 +75,13 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
             .find(|p| p.name() == "probe_raw_tracepoint")
             .ok_or_else(|| anyhow!("Couldn't get program"))?;
 
-        let mut links = replace_hooks(prog.as_fd().as_raw_fd(), &self.hooks)?;
+        let fd = prog.as_fd().as_raw_fd();
+        let mut links = replace_hooks(fd, &self.hooks)?;
         self.links.append(&mut links);
+
+        if let Some(ctx_hook) = &self.ctx_hook {
+            self.links.push(replace_ctx_hook(fd, ctx_hook)?);
+        }
 
         self.links
             .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
@@ -111,7 +119,9 @@ mod tests {
         let mut builder = RawTracepointBuilder::new();
 
         // It's for now, the probes below won't do much.
-        assert!(builder.init(Vec::new(), Vec::new(), Vec::new()).is_ok());
+        assert!(builder
+            .init(Vec::new(), Vec::new(), Vec::new(), None)
+            .is_ok());
         assert!(builder
             .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
             .is_ok());
