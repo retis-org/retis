@@ -15,8 +15,9 @@ use usdt_bpf::*;
 
 #[derive(Default)]
 pub(crate) struct UsdtBuilder<'a> {
-    links: Vec<libbpf_rs::Link>,
     skel: Option<SkelStorage<UsdtSkel<'a>>>,
+    probes: Vec<Probe>,
+    links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, RawFd)>,
     hooks: Vec<Hook>,
 }
@@ -40,7 +41,24 @@ impl<'a> ProbeBuilder for UsdtBuilder<'a> {
         Ok(())
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
+    fn add_probe(&mut self, probe: Probe) -> Result<()> {
+        self.probes.push(probe);
+        Ok(())
+    }
+
+    fn attach(&mut self) -> Result<()> {
+        let tmp = std::mem::take(&mut self.probes);
+        tmp.iter().try_for_each(|p| self.attach_usdt(p))
+    }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
+        Ok(())
+    }
+}
+
+impl UsdtBuilder<'_> {
+    fn attach_usdt(&mut self, probe: &Probe) -> Result<()> {
         let probe = match probe.r#type() {
             ProbeType::Usdt(usdt) => usdt,
             _ => bail!("Wrong probe type"),
@@ -71,11 +89,6 @@ impl<'a> ProbeBuilder for UsdtBuilder<'a> {
 
         Ok(())
     }
-
-    fn detach(&mut self) -> Result<()> {
-        self.links.drain(..);
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -98,7 +111,8 @@ mod tests {
         // It's for now, the probes below won't do much.
         assert!(builder.init(Vec::new(), Vec::new(), None).is_ok());
         assert!(builder
-            .attach(&Probe::usdt(UsdtProbe::new(&p, "test_builder::usdt").unwrap()).unwrap())
+            .add_probe(Probe::usdt(UsdtProbe::new(&p, "test_builder::usdt").unwrap()).unwrap())
             .is_ok());
+        assert!(builder.attach().is_ok());
     }
 }

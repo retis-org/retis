@@ -18,9 +18,10 @@ use kprobe_bpf::*;
 
 #[derive(Default)]
 pub(crate) struct KprobeBuilder<'a> {
-    links: Vec<libbpf_rs::Link>,
     skel: Option<SkelStorage<KprobeSkel<'a>>>,
     kretprobe: bool,
+    probes: Vec<Probe>,
+    links: Vec<libbpf_rs::Link>,
 }
 
 impl<'a> ProbeBuilder for KprobeBuilder<'a> {
@@ -78,35 +79,13 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         Ok(())
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
-        let obj = match &mut self.skel {
-            Some(skel) => skel.object(),
-            _ => bail!("Kprobe builder is uninitialized"),
-        };
-
-        let symbol = match probe.r#type() {
-            ProbeType::Kprobe(probe) if !self.kretprobe => &probe.symbol,
-            ProbeType::Kretprobe(probe) if self.kretprobe => &probe.symbol,
-            _ => bail!("Wrong probe type {}", probe),
-        };
-
-        self.links.push(
-            obj.progs_mut()
-                .find(|p| p.name() == "probe_kprobe")
-                .ok_or_else(|| anyhow!("Couldn't get kprobe program"))?
-                .attach_kprobe(false, symbol.attach_name())?,
-        );
-
-        if self.kretprobe {
-            self.links.push(
-                obj.progs_mut()
-                    .find(|p| p.name() == "probe_kretprobe")
-                    .ok_or_else(|| anyhow!("Couldn't get kretprobe program"))?
-                    .attach_kprobe(true, symbol.attach_name())?,
-            );
-        }
-
+    fn add_probe(&mut self, probe: Probe) -> Result<()> {
+        self.probes.push(probe);
         Ok(())
+    }
+
+    fn attach(&mut self) -> Result<()> {
+        self.attach_kprobes()
     }
 
     fn detach(&mut self) -> Result<()> {
@@ -119,6 +98,44 @@ impl KprobeBuilder<'_> {
     pub(crate) fn kretprobe(mut self) -> Self {
         self.kretprobe = true;
         self
+    }
+
+    fn attach_kprobes(&mut self) -> Result<()> {
+        let obj = match &mut self.skel {
+            Some(skel) => skel.object(),
+            _ => bail!("Kprobe builder is uninitialized"),
+        };
+
+        let prog = obj
+            .progs_mut()
+            .find(|p| p.name() == "probe_kprobe")
+            .ok_or_else(|| anyhow!("Couldn't get kprobe program"))?;
+        let prog_ret = match self.kretprobe {
+            true => Some(
+                obj.progs_mut()
+                    .find(|p| p.name() == "probe_kretprobe")
+                    .ok_or_else(|| anyhow!("Couldn't get kretprobe program"))?,
+            ),
+            false => None,
+        };
+
+        for probe in self.probes.drain(..) {
+            let symbol = match probe.r#type() {
+                ProbeType::Kprobe(probe) if !self.kretprobe => &probe.symbol,
+                ProbeType::Kretprobe(probe) if self.kretprobe => &probe.symbol,
+                _ => bail!("Wrong probe type {}", probe),
+            };
+
+            self.links
+                .push(prog.attach_kprobe(false, symbol.attach_name())?);
+
+            if let Some(ref prog_ret) = prog_ret {
+                self.links
+                    .push(prog_ret.attach_kprobe(true, symbol.attach_name())?);
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -147,10 +164,8 @@ mod tests {
 
         assert!(builder.init(Vec::new(), Vec::new(), None).is_ok());
         assert!(builder
-            .attach(&Probe::kprobe(Symbol::from_name("kfree_skb_reason").unwrap()).unwrap())
+            .add_probe(Probe::kprobe(Symbol::from_name("consume_skb").unwrap()).unwrap())
             .is_ok());
-        assert!(builder
-            .attach(&Probe::kprobe(Symbol::from_name("consume_skb").unwrap()).unwrap())
-            .is_ok());
+        assert!(builder.attach().is_ok());
     }
 }
