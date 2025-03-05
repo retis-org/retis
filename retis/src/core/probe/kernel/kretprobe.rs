@@ -11,7 +11,10 @@
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::{OpenSkel, Skel};
+use libbpf_rs::{
+    skel::{OpenSkel, Skel},
+    KprobeOpts,
+};
 
 use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
 
@@ -85,12 +88,17 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
             _ => bail!("Wrong probe type {}", probe),
         };
 
+        let opts = KprobeOpts {
+            cookie: probe.symbol.addr()?,
+            ..Default::default()
+        };
+
         // Attach the kretprobe
         self.links.push(
             obj.progs_mut()
                 .find(|p| p.name() == "probe_kretprobe_kretprobe")
                 .ok_or_else(|| anyhow!("Couldn't get kretprobe program"))?
-                .attach_kprobe(true, probe.symbol.attach_name())?,
+                .attach_kprobe_with_opts(true, probe.symbol.attach_name(), opts.clone())?,
         );
 
         // Attach the kprobe
@@ -98,7 +106,7 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
             obj.progs_mut()
                 .find(|p| p.name() == "probe_kretprobe_kprobe")
                 .ok_or_else(|| anyhow!("Couldn't get kprobe program"))?
-                .attach_kprobe(false, probe.symbol.attach_name())?,
+                .attach_kprobe_with_opts(false, probe.symbol.attach_name(), opts)?,
         );
         Ok(())
     }

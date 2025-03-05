@@ -8,7 +8,10 @@
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::{OpenSkel, Skel};
+use libbpf_rs::{
+    skel::{OpenSkel, Skel},
+    RawTracepointOpts,
+};
 
 use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
 
@@ -55,7 +58,6 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
             _ => bail!("Wrong probe type {}", probe),
         };
 
-        skel.maps.rodata_data.ksym = probe.symbol.addr()?;
         skel.maps.rodata_data.nargs = probe.symbol.nargs()?;
         skel.maps.rodata_data.nhooks = self.hooks.len() as u32;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
@@ -83,8 +85,13 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
             self.links.push(replace_ctx_hook(fd, ctx_hook)?);
         }
 
+        let opts = RawTracepointOpts {
+            cookie: probe.symbol.addr()?,
+            ..Default::default()
+        };
+
         self.links
-            .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
+            .push(prog.attach_raw_tracepoint_with_opts(probe.symbol.attach_name(), opts)?);
         self.skel = Some(skel);
         Ok(())
     }

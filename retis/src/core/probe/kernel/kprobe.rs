@@ -7,7 +7,10 @@
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::{OpenSkel, Skel};
+use libbpf_rs::{
+    skel::{OpenSkel, Skel},
+    KprobeOpts,
+};
 
 use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
 
@@ -80,11 +83,16 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
             _ => bail!("Wrong probe type {}", probe),
         };
 
+        let opts = KprobeOpts {
+            cookie: probe.symbol.addr()?,
+            ..Default::default()
+        };
+
         self.links.push(
             obj.progs_mut()
                 .find(|p| p.name() == "probe_kprobe")
                 .ok_or_else(|| anyhow!("Couldn't get program"))?
-                .attach_kprobe(false, probe.symbol.attach_name())?,
+                .attach_kprobe_with_opts(false, probe.symbol.attach_name(), opts)?,
         );
         Ok(())
     }
