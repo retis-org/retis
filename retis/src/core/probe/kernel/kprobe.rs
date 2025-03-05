@@ -21,8 +21,9 @@ use kprobe_bpf::*;
 
 #[derive(Default)]
 pub(crate) struct KprobeBuilder<'a> {
-    links: Vec<libbpf_rs::Link>,
     skel: Option<SkelStorage<KprobeSkel<'a>>>,
+    probes: Vec<Probe>,
+    links: Vec<libbpf_rs::Link>,
 }
 
 impl<'a> ProbeBuilder for KprobeBuilder<'a> {
@@ -73,7 +74,25 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         Ok(())
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
+    fn add_probe(&mut self, probe: Probe) -> Result<()> {
+        self.probes.push(probe);
+        Ok(())
+    }
+
+    fn attach(&mut self) -> Result<()> {
+        let tmp = std::mem::take(&mut self.probes);
+        tmp.iter().try_for_each(|p| self.attach_kprobe(p))?;
+        Ok(())
+    }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
+        Ok(())
+    }
+}
+
+impl KprobeBuilder<'_> {
+    fn attach_kprobe(&mut self, probe: &Probe) -> Result<()> {
         let obj = match &mut self.skel {
             Some(skel) => skel.object(),
             _ => bail!("Kprobe builder is uninitialized"),
@@ -94,11 +113,6 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
                 .ok_or_else(|| anyhow!("Couldn't get program"))?
                 .attach_kprobe_with_opts(false, probe.symbol.attach_name(), opts)?,
         );
-        Ok(())
-    }
-
-    fn detach(&mut self) -> Result<()> {
-        self.links.drain(..);
         Ok(())
     }
 }
@@ -130,10 +144,8 @@ mod tests {
             .init(Vec::new(), Vec::new(), Vec::new(), None)
             .is_ok());
         assert!(builder
-            .attach(&Probe::kprobe(Symbol::from_name("kfree_skb_reason").unwrap()).unwrap())
+            .add_probe(Probe::kprobe(Symbol::from_name("consume_skb").unwrap()).unwrap())
             .is_ok());
-        assert!(builder
-            .attach(&Probe::kprobe(Symbol::from_name("consume_skb").unwrap()).unwrap())
-            .is_ok());
+        assert!(builder.attach().is_ok());
     }
 }

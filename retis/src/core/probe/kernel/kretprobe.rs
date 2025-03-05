@@ -25,8 +25,9 @@ use kretprobe_bpf::*;
 
 #[derive(Default)]
 pub(crate) struct KretprobeBuilder<'a> {
-    links: Vec<libbpf_rs::Link>,
     skel: Option<SkelStorage<KretprobeSkel<'a>>>,
+    probes: Vec<Probe>,
+    links: Vec<libbpf_rs::Link>,
 }
 
 impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
@@ -77,7 +78,25 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
         Ok(())
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
+    fn add_probe(&mut self, probe: Probe) -> Result<()> {
+        self.probes.push(probe);
+        Ok(())
+    }
+
+    fn attach(&mut self) -> Result<()> {
+        let tmp = std::mem::take(&mut self.probes);
+        tmp.iter().try_for_each(|p| self.attach_kretprobe(p))?;
+        Ok(())
+    }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
+        Ok(())
+    }
+}
+
+impl KretprobeBuilder<'_> {
+    fn attach_kretprobe(&mut self, probe: &Probe) -> Result<()> {
         let obj = match &mut self.skel {
             Some(skel) => skel.object(),
             _ => bail!("Kretprobe builder is uninitialized"),
@@ -110,11 +129,6 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
         );
         Ok(())
     }
-
-    fn detach(&mut self) -> Result<()> {
-        self.links.drain(..);
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -143,18 +157,19 @@ mod tests {
             .init(Vec::new(), Vec::new(), Vec::new(), None)
             .is_ok());
         assert!(builder
-            .attach(
-                &Probe::kretprobe(Symbol::from_name("tcp_sendmsg").expect("symbol should exist"))
+            .add_probe(
+                Probe::kretprobe(Symbol::from_name("tcp_sendmsg").expect("symbol should exist"))
                     .expect("kreprobe creation should succeed")
             )
             .is_ok());
         assert!(builder
-            .attach(
-                &Probe::kretprobe(
+            .add_probe(
+                Probe::kretprobe(
                     Symbol::from_name("skb_send_sock_locked").expect("symbol should exist")
                 )
                 .expect("kreprobe creation should succeed")
             )
             .is_ok());
+        assert!(builder.attach().is_ok());
     }
 }
