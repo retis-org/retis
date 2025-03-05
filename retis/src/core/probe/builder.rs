@@ -28,10 +28,11 @@ pub(super) trait ProbeBuilder {
         hooks: Vec<Hook>,
         ctx_hook: Option<Hook>,
     ) -> Result<()>;
-    /// Attach a probe to a given target (function, tracepoint, etc).
-    fn attach(&mut self, probe: &Probe) -> Result<()>;
-    /// Detach all probes installed by the builder (function,
-    /// tracepoint, etc).
+    /// Add a probe to the probe builder.
+    fn add_probe(&mut self, probe: Probe) -> Result<()>;
+    /// Attach all probes added to the builder.
+    fn attach(&mut self) -> Result<()>;
+    /// Detach all probes installed by the builder.
     fn detach(&mut self) -> Result<()>;
 }
 

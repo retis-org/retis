@@ -143,23 +143,27 @@ impl ProbeManager {
             hooks: builder.generic_hooks.into_iter().collect(),
             generic_builders: HashMap::new(),
             targeted_builders: Vec::new(),
+            links: Vec::new(),
             probes: HashMap::new(),
             global_probes_options: builder.global_probes_options.into_iter().collect(),
             filters: builder.filters,
         };
 
         // Install probes.
+        let probes_count = builder.probes.len();
         #[cfg(not(test))]
         builder
             .probes
-            .values_mut()
-            .try_for_each(|p| match p.is_generic() {
-                true => runtime.attach_generic_probe(p),
-                false => runtime.attach_targeted_probe(p),
+            .drain()
+            .try_for_each(|(_, p)| match p.is_generic() {
+                true => runtime.add_generic_probe(p),
+                false => runtime.add_targeted_probe(p),
             })?;
 
+        runtime.attach_probes()?;
+
         // All probes loaded, issue an info log.
-        info!("{} probe(s) loaded", builder.probes.len());
+        info!("{probes_count} probe(s) loaded");
 
         #[cfg(not(test))]
         {
@@ -374,6 +378,7 @@ pub(crate) struct ProbeRuntimeManager {
     counters_map: libbpf_rs::MapHandle,
     generic_builders: HashMap<usize, Box<dyn ProbeBuilder>>,
     targeted_builders: Vec<Box<dyn ProbeBuilder>>,
+    links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, RawFd)>,
     hooks: Vec<Hook>,
     probes: HashMap<String, Vec<ProbeOption>>,
@@ -382,13 +387,13 @@ pub(crate) struct ProbeRuntimeManager {
 }
 
 impl ProbeRuntimeManager {
-    /// Internal function installing a probe using a type-specific builder.
+    /// Internal function adding a probe using a type-specific builder.
     #[cfg(not(test))]
-    fn attach_probe(
+    fn add_probe(
         builder: &mut Box<dyn ProbeBuilder>,
         config_map: &mut libbpf_rs::MapHandle,
         counters_map: &mut libbpf_rs::MapHandle,
-        probe: &mut Probe,
+        mut probe: Probe,
     ) -> Result<()> {
         let (counters_key, counters);
         // First load the probe configuration.
@@ -416,8 +421,8 @@ impl ProbeRuntimeManager {
         )?;
 
         // Finally attach a probe to the target.
-        debug!("Attaching probe to {probe}");
-        builder.attach(probe)
+        debug!("Adding probe to {probe}");
+        builder.add_probe(probe)
     }
 
     /// Generate a new builder for the given probe.
@@ -476,10 +481,10 @@ impl ProbeRuntimeManager {
             .try_for_each(|o| probe.set_option(o.clone()))
     }
 
-    /// Attach a new targeted probe.
+    /// Add a new targeted probe.
     #[cfg(not(test))]
-    fn attach_targeted_probe(&mut self, probe: &mut Probe) -> Result<()> {
-        self.prepare_probe(probe)?;
+    fn add_targeted_probe(&mut self, mut probe: Probe) -> Result<()> {
+        self.prepare_probe(&mut probe)?;
         if self
             .probes
             .insert(probe.key(), probe.options.clone().into_iter().collect())
@@ -488,7 +493,7 @@ impl ProbeRuntimeManager {
             bail!("A probe on {probe} is already attached");
         }
 
-        let mut builder = Self::gen_builder(probe)?;
+        let mut builder = Self::gen_builder(&probe)?;
 
         let mut hooks = probe.hooks.clone();
         if probe.supports_generic_hooks() {
@@ -497,7 +502,7 @@ impl ProbeRuntimeManager {
 
         builder.init(self.map_fds.clone(), hooks, probe.ctx_hook.clone())?;
 
-        Self::attach_probe(
+        Self::add_probe(
             &mut builder,
             &mut self.config_map,
             &mut self.counters_map,
@@ -507,10 +512,10 @@ impl ProbeRuntimeManager {
         Ok(())
     }
 
-    /// Attach a new generic probe.
+    /// Add a new generic probe.
     #[cfg(not(test))]
-    pub(crate) fn attach_generic_probe(&mut self, probe: &mut Probe) -> Result<()> {
-        self.prepare_probe(probe)?;
+    pub(crate) fn add_generic_probe(&mut self, mut probe: Probe) -> Result<()> {
+        self.prepare_probe(&mut probe)?;
         if self
             .probes
             .insert(probe.key(), probe.options.clone().into_iter().collect())
@@ -522,7 +527,18 @@ impl ProbeRuntimeManager {
         self.gen_generic_builders()?;
 
         let builder = self.generic_builders.get_mut(&probe.r#type_key()).unwrap();
-        Self::attach_probe(builder, &mut self.config_map, &mut self.counters_map, probe)
+        Self::add_probe(builder, &mut self.config_map, &mut self.counters_map, probe)
+    }
+
+    /// Load add pending probes.
+    pub(crate) fn attach_probes(&mut self) -> Result<()> {
+        self.generic_builders
+            .values_mut()
+            .try_for_each(|b| b.attach())?;
+        self.targeted_builders
+            .iter_mut()
+            .try_for_each(|b| b.attach())?;
+        Ok(())
     }
 
     /// Get the list of all currently attached probes.
