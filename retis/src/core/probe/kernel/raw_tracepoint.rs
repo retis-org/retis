@@ -27,8 +27,8 @@ pub(crate) struct RawTracepointBuilder<'a> {
 }
 
 impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
-    fn new() -> RawTracepointBuilder<'a> {
-        RawTracepointBuilder::default()
+    fn new() -> Result<RawTracepointBuilder<'a>> {
+        Ok(RawTracepointBuilder::default())
     }
 
     fn init(
@@ -112,7 +112,7 @@ mod tests {
             Some(fixup_filter_load_fn),
         );
 
-        let mut builder = RawTracepointBuilder::new();
+        let mut builder = RawTracepointBuilder::new().unwrap();
 
         // It's for now, the probes below won't do much.
         assert!(builder.init(Vec::new(), Vec::new(), None).is_ok());

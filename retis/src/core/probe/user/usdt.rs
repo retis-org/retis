@@ -22,8 +22,8 @@ pub(crate) struct UsdtBuilder<'a> {
 }
 
 impl<'a> ProbeBuilder for UsdtBuilder<'a> {
-    fn new() -> UsdtBuilder<'a> {
-        UsdtBuilder::default()
+    fn new() -> Result<UsdtBuilder<'a>> {
+        Ok(UsdtBuilder::default())
     }
 
     fn init(
@@ -91,7 +91,7 @@ mod tests {
     fn init_and_attach_usdt() {
         define_usdt!(test_builder, usdt, 1);
 
-        let mut builder = UsdtBuilder::new();
+        let mut builder = UsdtBuilder::new().unwrap();
 
         let p = Process::from_pid(std::process::id() as i32).unwrap();
 

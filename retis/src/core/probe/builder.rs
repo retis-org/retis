@@ -16,7 +16,7 @@ use crate::core::probe::*;
 pub(super) trait ProbeBuilder {
     /// Allocate and return a new instance of the probe builder, with default
     /// values.
-    fn new() -> Self
+    fn new() -> Result<Self>
     where
         Self: Sized;
     /// Initialize the probe builder before attaching programs to probes. It

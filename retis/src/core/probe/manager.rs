@@ -421,13 +421,13 @@ impl ProbeRuntimeManager {
     }
 
     /// Generate a new builder for the given probe.
-    fn gen_builder(probe: &Probe) -> Box<dyn ProbeBuilder> {
-        match probe.r#type() {
-            ProbeType::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
-            ProbeType::Kretprobe(_) => Box::new(kprobe::KprobeBuilder::new().kretprobe()),
-            ProbeType::RawTracepoint(_) => Box::new(raw_tracepoint::RawTracepointBuilder::new()),
-            ProbeType::Usdt(_) => Box::new(usdt::UsdtBuilder::new()),
-        }
+    fn gen_builder(probe: &Probe) -> Result<Box<dyn ProbeBuilder>> {
+        Ok(match probe.r#type() {
+            ProbeType::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()?),
+            ProbeType::Kretprobe(_) => Box::new(kprobe::KprobeBuilder::new()?.kretprobe()),
+            ProbeType::RawTracepoint(_) => Box::new(raw_tracepoint::RawTracepointBuilder::new()?),
+            ProbeType::Usdt(_) => Box::new(usdt::UsdtBuilder::new()?),
+        })
     }
 
     /// Populates generic builders.
@@ -446,7 +446,7 @@ impl ProbeRuntimeManager {
 
         let mut builders = HashMap::new();
         fake_probes.iter().try_for_each(|p| -> Result<()> {
-            let mut builder = ProbeRuntimeManager::gen_builder(p);
+            let mut builder = ProbeRuntimeManager::gen_builder(p)?;
 
             builder.init(
                 self.map_fds.clone(),
@@ -488,7 +488,7 @@ impl ProbeRuntimeManager {
             bail!("A probe on {probe} is already attached");
         }
 
-        let mut builder = Self::gen_builder(probe);
+        let mut builder = Self::gen_builder(probe)?;
 
         let mut hooks = probe.hooks.clone();
         if probe.supports_generic_hooks() {
