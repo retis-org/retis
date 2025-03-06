@@ -99,7 +99,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         let tmp = std::mem::take(&mut self.probes);
         match self.kprobe_multi {
             true => self.attach_kprobe_multi(&tmp)?,
-            false => tmp.iter().try_for_each(|p| self.attach_kprobe(p))?,
+            false => self.attach_kprobes(&tmp)?,
         }
 
         Ok(())
@@ -156,27 +156,35 @@ impl KprobeBuilder<'_> {
     }
 
     // Legacy way of attaching kprobes; one at a time.
-    fn attach_kprobe(&mut self, probe: &Probe) -> Result<()> {
+    fn attach_kprobes(&mut self, probes: &[Probe]) -> Result<()> {
         let obj = match &mut self.skel {
             Some(skel) => skel.object(),
             _ => bail!("Kprobe builder is uninitialized"),
         };
-        let probe = match probe.r#type() {
-            ProbeType::Kprobe(probe) => probe,
-            _ => bail!("Wrong probe type {}", probe),
-        };
 
-        let opts = KprobeOpts {
-            cookie: probe.symbol.addr()?,
-            ..Default::default()
-        };
+        let prog = obj
+            .progs_mut()
+            .find(|p| p.name() == "probe_kprobe")
+            .ok_or_else(|| anyhow!("Couldn't get program"))?;
 
-        self.links.push(
-            obj.progs_mut()
-                .find(|p| p.name() == "probe_kprobe")
-                .ok_or_else(|| anyhow!("Couldn't get program"))?
-                .attach_kprobe_with_opts(false, probe.symbol.attach_name(), opts)?,
-        );
+        for probe in probes {
+            let probe = match probe.r#type() {
+                ProbeType::Kprobe(probe) => probe,
+                _ => bail!("Wrong probe type {}", probe),
+            };
+
+            let opts = KprobeOpts {
+                cookie: probe.symbol.addr()?,
+                ..Default::default()
+            };
+
+            self.links.push(prog.attach_kprobe_with_opts(
+                false,
+                probe.symbol.attach_name(),
+                opts,
+            )?);
+        }
+
         Ok(())
     }
 }
