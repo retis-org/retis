@@ -39,8 +39,13 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
 
         let mut skel = OpenSkelStorage::new::<KprobeSkelBuilder>()?;
 
-        skel.maps.rodata_data.nhooks = hooks.len() as u32;
-        skel.maps.rodata_data.log_level = log::max_level() as u8;
+        let rodata = skel
+            .maps
+            .rodata_data
+            .as_deref_mut()
+            .ok_or_else(|| anyhow!("Can't access eBPF rodata: not memory mapped"))?;
+        rodata.nhooks = hooks.len() as u32;
+        rodata.log_level = log::max_level() as u8;
 
         reuse_map_fds(skel.open_object_mut(), &map_fds)?;
 
