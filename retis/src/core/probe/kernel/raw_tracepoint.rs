@@ -5,7 +5,10 @@
 //! in two parts, the Rust code (here) and the eBPF one
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
 
-use std::os::fd::{AsFd, AsRawFd, RawFd};
+use std::{
+    collections::HashMap,
+    os::fd::{AsFd, AsRawFd, RawFd},
+};
 
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::{
@@ -22,12 +25,12 @@ use raw_tracepoint_bpf::*;
 
 #[derive(Default)]
 pub(crate) struct RawTracepointBuilder<'a> {
-    probes: Vec<Probe>,
+    skels: HashMap<u32, SkelStorage<RawTracepointSkel<'a>>>,
+    probes: HashMap<u32, Vec<Probe>>,
     hooks: Vec<Hook>,
     filters: Vec<Filter>,
     ctx_hook: Option<Hook>,
     links: Vec<libbpf_rs::Link>,
-    skel: Option<SkelStorage<RawTracepointSkel<'a>>>,
     map_fds: Vec<(String, RawFd)>,
 }
 
@@ -52,13 +55,24 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
     }
 
     fn add_probe(&mut self, probe: Probe) -> Result<()> {
-        self.probes.push(probe);
+        let nargs = match probe.r#type() {
+            ProbeType::RawTracepoint(probe) => probe.symbol.nargs()?,
+            _ => bail!("Wrong probe type {}", probe),
+        };
+
+        let probes = self.probes.entry(nargs).or_default();
+        probes.push(probe);
+
         Ok(())
     }
 
     fn attach(&mut self) -> Result<()> {
         let tmp = std::mem::take(&mut self.probes);
-        tmp.iter().try_for_each(|p| self.attach_raw_tracepoint(p))?;
+
+        for (nargs, probes) in tmp {
+            self.attach_raw_tracepoints(nargs, &probes)?;
+        }
+
         Ok(())
     }
 
@@ -69,15 +83,14 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
 }
 
 impl RawTracepointBuilder<'_> {
-    fn attach_raw_tracepoint(&mut self, probe: &Probe) -> Result<()> {
+    fn try_init_skel(&mut self, nargs: u32) -> Result<()> {
+        if self.skels.contains_key(&nargs) {
+            return Ok(());
+        }
+
         let mut skel = OpenSkelStorage::new::<RawTracepointSkelBuilder>()?;
 
-        let probe = match probe.r#type() {
-            ProbeType::RawTracepoint(probe) => probe,
-            _ => bail!("Wrong probe type {}", probe),
-        };
-
-        skel.maps.rodata_data.nargs = probe.symbol.nargs()?;
+        skel.maps.rodata_data.nargs = nargs;
         skel.maps.rodata_data.nhooks = self.hooks.len() as u32;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
 
@@ -104,14 +117,36 @@ impl RawTracepointBuilder<'_> {
             self.links.push(replace_ctx_hook(fd, ctx_hook)?);
         }
 
-        let opts = RawTracepointOpts {
-            cookie: probe.symbol.addr()?,
-            ..Default::default()
-        };
+        self.skels.insert(nargs, skel);
+        Ok(())
+    }
 
-        self.links
-            .push(prog.attach_raw_tracepoint_with_opts(probe.symbol.attach_name(), opts)?);
-        self.skel = Some(skel);
+    fn attach_raw_tracepoints(&mut self, nargs: u32, probes: &[Probe]) -> Result<()> {
+        self.try_init_skel(nargs)?;
+        // Unwrap as we just made sure we have a corresponding skel.
+        let skel = self.skels.get_mut(&nargs).unwrap();
+
+        let prog = skel
+            .object()
+            .progs_mut()
+            .find(|p| p.name() == "probe_raw_tracepoint")
+            .ok_or_else(|| anyhow!("Couldn't get program"))?;
+
+        for probe in probes {
+            let symbol = match probe.r#type() {
+                ProbeType::RawTracepoint(probe) => &probe.symbol,
+                _ => bail!("Wrong probe type {}", probe),
+            };
+
+            let opts = RawTracepointOpts {
+                cookie: symbol.addr()?,
+                ..Default::default()
+            };
+
+            self.links
+                .push(prog.attach_raw_tracepoint_with_opts(symbol.attach_name(), opts)?);
+        }
+
         Ok(())
     }
 }
