@@ -9,10 +9,10 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::{
     skel::{OpenSkel, Skel},
-    KprobeOpts,
+    KprobeMultiOpts, KprobeOpts,
 };
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
+use crate::core::{filters::Filter, inspect, probe::builder::*, probe::*, workaround::*};
 
 mod kprobe_bpf {
     include!("bpf/.out/kprobe.skel.rs");
@@ -22,13 +22,17 @@ use kprobe_bpf::*;
 #[derive(Default)]
 pub(crate) struct KprobeBuilder<'a> {
     skel: Option<SkelStorage<KprobeSkel<'a>>>,
+    kprobe_multi: bool,
     probes: Vec<Probe>,
     links: Vec<libbpf_rs::Link>,
 }
 
 impl<'a> ProbeBuilder for KprobeBuilder<'a> {
     fn new() -> Result<KprobeBuilder<'a>> {
-        Ok(Default::default())
+        Ok(Self {
+            kprobe_multi: Self::kprobe_multi_support()?,
+            ..Default::default()
+        })
     }
 
     fn init(
@@ -55,6 +59,14 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
 
         reuse_map_fds(skel.open_object_mut(), &map_fds)?;
 
+        if self.kprobe_multi {
+            skel.open_object_mut()
+                .progs_mut()
+                .find(|p| p.name() == "probe_kprobe")
+                .ok_or_else(|| anyhow!("Couldn't get program"))?
+                .set_attach_type(libbpf_rs::ProgramAttachType::KprobeMulti);
+        }
+
         let skel = SkelStorage::load(skel)?;
         let fd = skel
             .object()
@@ -80,8 +92,16 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
     }
 
     fn attach(&mut self) -> Result<()> {
+        if self.probes.is_empty() {
+            return Ok(());
+        }
+
         let tmp = std::mem::take(&mut self.probes);
-        tmp.iter().try_for_each(|p| self.attach_kprobe(p))?;
+        match self.kprobe_multi {
+            true => self.attach_kprobe_multi(&tmp)?,
+            false => tmp.iter().try_for_each(|p| self.attach_kprobe(p))?,
+        }
+
         Ok(())
     }
 
@@ -92,6 +112,50 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
 }
 
 impl KprobeBuilder<'_> {
+    fn kprobe_multi_support() -> Result<bool> {
+        Ok(inspect::parse_enum("bpf_attach_type", &[])?
+            .values()
+            .any(|variant| variant == "BPF_TRACE_KPROBE_MULTI"))
+    }
+
+    // Attach a set of kprobes in a single call, speeding up attaching time *a
+    // lot*.
+    fn attach_kprobe_multi(&mut self, probes: &[Probe]) -> Result<()> {
+        let obj = match &mut self.skel {
+            Some(skel) => skel.object(),
+            _ => bail!("Kprobe builder is uninitialized"),
+        };
+
+        let mut targets = Vec::new();
+        let mut ksyms = Vec::new();
+
+        for probe in probes {
+            let symbol = match probe.r#type() {
+                ProbeType::Kprobe(probe) => &probe.symbol,
+                _ => bail!("Wrong probe type {}", probe),
+            };
+
+            targets.push(symbol.attach_name());
+            ksyms.push(symbol.addr()?);
+        }
+
+        let opts = KprobeMultiOpts {
+            symbols: targets,
+            cookies: ksyms,
+            ..Default::default()
+        };
+
+        self.links.push(
+            obj.progs_mut()
+                .find(|p| p.name() == "probe_kprobe")
+                .ok_or_else(|| anyhow!("Couldn't get program"))?
+                .attach_kprobe_multi_with_opts(opts)?,
+        );
+
+        Ok(())
+    }
+
+    // Legacy way of attaching kprobes; one at a time.
     fn attach_kprobe(&mut self, probe: &Probe) -> Result<()> {
         let obj = match &mut self.skel {
             Some(skel) => skel.object(),
