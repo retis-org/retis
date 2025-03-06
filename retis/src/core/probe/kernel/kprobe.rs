@@ -24,8 +24,8 @@ pub(crate) struct KprobeBuilder<'a> {
 }
 
 impl<'a> ProbeBuilder for KprobeBuilder<'a> {
-    fn new() -> KprobeBuilder<'a> {
-        KprobeBuilder::default()
+    fn new() -> Result<KprobeBuilder<'a>> {
+        Ok(Default::default())
     }
 
     fn init(
@@ -143,7 +143,7 @@ mod tests {
             Some(fixup_filter_load_fn),
         );
 
-        let mut builder = KprobeBuilder::new();
+        let mut builder = KprobeBuilder::new().unwrap();
 
         assert!(builder.init(Vec::new(), Vec::new(), None).is_ok());
         assert!(builder
