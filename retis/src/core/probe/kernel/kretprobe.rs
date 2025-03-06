@@ -31,8 +31,8 @@ pub(crate) struct KretprobeBuilder<'a> {
 }
 
 impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
-    fn new() -> KretprobeBuilder<'a> {
-        KretprobeBuilder::default()
+    fn new() -> Result<KretprobeBuilder<'a>> {
+        Ok(KretprobeBuilder::default())
     }
 
     fn init(
@@ -152,7 +152,7 @@ mod tests {
             Some(fixup_filter_load_fn),
         );
 
-        let mut builder = KretprobeBuilder::new();
+        let mut builder = KretprobeBuilder::new().unwrap();
         assert!(builder
             .init(Vec::new(), Vec::new(), Vec::new(), None)
             .is_ok());
