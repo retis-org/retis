@@ -10,9 +10,12 @@ use crate::bindings::skb_drop_hook_uapi::skb_drop_event;
 const SKB_DROP_REASON_SUBSYS_SHIFT: u32 = 16;
 
 use crate::{
-    core::events::{
-        parse_enum, parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
-        RawEventSectionFactory,
+    core::{
+        events::{
+            parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+            RawEventSectionFactory,
+        },
+        inspect::parse_enum,
     },
     event_section_factory,
     events::*,
