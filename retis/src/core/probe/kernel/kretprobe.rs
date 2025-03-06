@@ -44,12 +44,17 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
 
         let mut skel = OpenSkelStorage::new::<KretprobeSkelBuilder>()?;
 
-        skel.maps.rodata_data.nhooks = hooks.len() as u32;
-        skel.maps.rodata_data.log_level = log::max_level() as u8;
+        let rodata = skel
+            .maps
+            .rodata_data
+            .as_deref_mut()
+            .ok_or_else(|| anyhow!("Can't access eBPF rodata: not memory mapped"))?;
+        rodata.nhooks = hooks.len() as u32;
+        rodata.log_level = log::max_level() as u8;
 
         filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {
-                skel.maps.rodata_data.nmeta = m.0.len() as u32
+                rodata.nmeta = m.0.len() as u32
             }
         });
 
