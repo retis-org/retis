@@ -9,7 +9,7 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::{
     skel::{OpenSkel, Skel},
-    KprobeOpts,
+    KprobeMultiOpts,
 };
 
 use crate::core::{inspect, probe::builder::*, probe::*, workaround::*};
@@ -19,15 +19,14 @@ mod kprobe_bpf {
 }
 use kprobe_bpf::*;
 
+#[derive(Default, PartialEq, Eq)]
 enum KprobeVariant {
-    Kprobe,
+    KprobeMulti,
+    // We're not supporting every variant in between (kprobe + cookie, kprobe
+    // multi - cookies) to keep things reasonable. It's also fine to fallback in
+    // case the kernel is not recent enough.
+    #[default]
     KprobeNoCookie,
-}
-
-impl Default for KprobeVariant {
-    fn default() -> Self {
-        Self::KprobeNoCookie
-    }
 }
 
 #[derive(Default)]
@@ -45,8 +44,8 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         log::debug!(
             "Kprobe builder {} support",
             match variant {
-                KprobeVariant::Kprobe => "with cookie",
-                KprobeVariant::KprobeNoCookie => "without cookie",
+                KprobeVariant::KprobeMulti => "with multi and cookies",
+                KprobeVariant::KprobeNoCookie => "without multi nor cookie",
             }
         );
 
@@ -78,6 +77,19 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         rodata.log_level = log::max_level() as u8;
 
         reuse_map_fds(skel.open_object_mut(), &map_fds)?;
+
+        if self.variant == KprobeVariant::KprobeMulti {
+            skel.open_object_mut()
+                .progs_mut()
+                .find(|p| p.name() == "probe_kprobe")
+                .ok_or_else(|| anyhow!("Couldn't get program"))?
+                .set_attach_type(libbpf_rs::ProgramAttachType::KprobeMulti);
+            skel.open_object_mut()
+                .progs_mut()
+                .find(|p| p.name() == "probe_kretprobe")
+                .ok_or_else(|| anyhow!("Couldn't get program"))?
+                .set_attach_type(libbpf_rs::ProgramAttachType::KprobeMulti);
+        }
 
         let skel = SkelStorage::load(skel)?;
         let fd = skel
@@ -112,12 +124,16 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
     }
 
     fn attach(&mut self) -> Result<()> {
+        if self.probes.is_empty() {
+            return Ok(());
+        }
+
         let tmp = std::mem::take(&mut self.probes);
 
         use KprobeVariant::*;
         match self.variant {
-            Kprobe => self.attach_kprobes(&tmp, true)?,
-            KprobeNoCookie => self.attach_kprobes(&tmp, false)?,
+            KprobeMulti => self.attach_kprobe_multi(&tmp)?,
+            KprobeNoCookie => self.attach_kprobes_no_cookie(&tmp)?,
         }
 
         Ok(())
@@ -139,18 +155,72 @@ impl KprobeBuilder<'_> {
     fn inspect_variant() -> Result<KprobeVariant> {
         use KprobeVariant::*;
 
-        Ok(
-            match inspect::parse_struct("bpf_trace_run_ctx")?
-                .iter()
-                .any(|field| field == "bpf_cookie")
-            {
-                true => Kprobe,
-                false => KprobeNoCookie,
-            },
-        )
+        let multi = inspect::parse_enum("bpf_attach_type", &[])?
+            .values()
+            .any(|variant| variant == "BPF_TRACE_KPROBE_MULTI");
+        let multi_cookies = inspect::parse_struct("bpf_kprobe_multi_link")?
+            .iter()
+            .any(|field| field == "cookies");
+
+        if multi && multi_cookies {
+            return Ok(KprobeMulti);
+        }
+        Ok(KprobeNoCookie)
     }
 
-    fn attach_kprobes(&mut self, probes: &[Probe], cookie: bool) -> Result<()> {
+    // Attach a set of kprobes in a single call, speeding up attaching time *a
+    // lot*.
+    fn attach_kprobe_multi(&mut self, probes: &[Probe]) -> Result<()> {
+        let obj = match &mut self.skel {
+            Some(skel) => skel.object(),
+            _ => bail!("Kprobe builder is uninitialized"),
+        };
+
+        let prog = obj
+            .progs_mut()
+            .find(|p| p.name() == "probe_kprobe")
+            .ok_or_else(|| anyhow!("Couldn't get program"))?;
+        let prog_ret = match self.kretprobe {
+            true => Some(
+                obj.progs_mut()
+                    .find(|p| p.name() == "probe_kretprobe")
+                    .ok_or_else(|| anyhow!("Couldn't get kretprobe program"))?,
+            ),
+            false => None,
+        };
+
+        let mut targets = Vec::new();
+        let mut ksyms = Vec::new();
+        for probe in probes {
+            let symbol = match probe.r#type() {
+                ProbeType::Kprobe(probe) if !self.kretprobe => &probe.symbol,
+                ProbeType::Kretprobe(probe) if self.kretprobe => &probe.symbol,
+                _ => bail!("Wrong probe type {}", probe),
+            };
+
+            targets.push(symbol.attach_name());
+            ksyms.push(symbol.addr()?);
+        }
+
+        let opts = KprobeMultiOpts {
+            symbols: targets.clone(),
+            cookies: ksyms,
+            ..Default::default()
+        };
+
+        self.links.push(prog.attach_kprobe_multi_with_opts(opts)?);
+        if let Some(ref prog_ret) = prog_ret {
+            // No need to set the cookie in the kretprobe as the symbol address
+            // is retrieved in the kprobe.
+            self.links
+                .push(prog_ret.attach_kprobe_multi(true, targets)?);
+        }
+
+        Ok(())
+    }
+
+    // Legacy way of attaching kprobes; one at a time, without cookies.
+    fn attach_kprobes_no_cookie(&mut self, probes: &[Probe]) -> Result<()> {
         let obj = match &mut self.skel {
             Some(skel) => skel.object(),
             _ => bail!("Kprobe builder is uninitialized"),
@@ -176,22 +246,9 @@ impl KprobeBuilder<'_> {
                 _ => bail!("Wrong probe type {}", probe),
             };
 
-            if cookie {
-                let opts = KprobeOpts {
-                    cookie: symbol.addr()?,
-                    ..Default::default()
-                };
-
-                self.links
-                    .push(prog.attach_kprobe_with_opts(false, symbol.attach_name(), opts)?);
-            } else {
-                self.links
-                    .push(prog.attach_kprobe(false, symbol.attach_name())?);
-            }
-
+            self.links
+                .push(prog.attach_kprobe(false, symbol.attach_name())?);
             if let Some(ref prog_ret) = prog_ret {
-                // No need to set the cookie in the kretprobe as the symbol
-                // address is retrieved in the kprobe.
                 self.links
                     .push(prog_ret.attach_kprobe(true, symbol.attach_name())?);
             }
