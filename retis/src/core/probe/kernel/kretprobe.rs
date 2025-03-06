@@ -11,7 +11,10 @@
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::{OpenSkel, Skel};
+use libbpf_rs::{
+    skel::{OpenSkel, Skel},
+    KprobeOpts,
+};
 
 use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
 
@@ -22,13 +25,14 @@ use kretprobe_bpf::*;
 
 #[derive(Default)]
 pub(crate) struct KretprobeBuilder<'a> {
-    links: Vec<libbpf_rs::Link>,
     skel: Option<SkelStorage<KretprobeSkel<'a>>>,
+    probes: Vec<Probe>,
+    links: Vec<libbpf_rs::Link>,
 }
 
 impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
-    fn new() -> KretprobeBuilder<'a> {
-        KretprobeBuilder::default()
+    fn new() -> Result<KretprobeBuilder<'a>> {
+        Ok(KretprobeBuilder::default())
     }
 
     fn init(
@@ -74,7 +78,25 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
         Ok(())
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
+    fn add_probe(&mut self, probe: Probe) -> Result<()> {
+        self.probes.push(probe);
+        Ok(())
+    }
+
+    fn attach(&mut self) -> Result<()> {
+        let tmp = std::mem::take(&mut self.probes);
+        tmp.iter().try_for_each(|p| self.attach_kretprobe(p))?;
+        Ok(())
+    }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
+        Ok(())
+    }
+}
+
+impl KretprobeBuilder<'_> {
+    fn attach_kretprobe(&mut self, probe: &Probe) -> Result<()> {
         let obj = match &mut self.skel {
             Some(skel) => skel.object(),
             _ => bail!("Kretprobe builder is uninitialized"),
@@ -85,12 +107,17 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
             _ => bail!("Wrong probe type {}", probe),
         };
 
+        let opts = KprobeOpts {
+            cookie: probe.symbol.addr()?,
+            ..Default::default()
+        };
+
         // Attach the kretprobe
         self.links.push(
             obj.progs_mut()
                 .find(|p| p.name() == "probe_kretprobe_kretprobe")
                 .ok_or_else(|| anyhow!("Couldn't get kretprobe program"))?
-                .attach_kprobe(true, probe.symbol.attach_name())?,
+                .attach_kprobe_with_opts(true, probe.symbol.attach_name(), opts.clone())?,
         );
 
         // Attach the kprobe
@@ -98,13 +125,8 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
             obj.progs_mut()
                 .find(|p| p.name() == "probe_kretprobe_kprobe")
                 .ok_or_else(|| anyhow!("Couldn't get kprobe program"))?
-                .attach_kprobe(false, probe.symbol.attach_name())?,
+                .attach_kprobe_with_opts(false, probe.symbol.attach_name(), opts)?,
         );
-        Ok(())
-    }
-
-    fn detach(&mut self) -> Result<()> {
-        self.links.drain(..);
         Ok(())
     }
 }
@@ -130,23 +152,24 @@ mod tests {
             Some(fixup_filter_load_fn),
         );
 
-        let mut builder = KretprobeBuilder::new();
+        let mut builder = KretprobeBuilder::new().unwrap();
         assert!(builder
             .init(Vec::new(), Vec::new(), Vec::new(), None)
             .is_ok());
         assert!(builder
-            .attach(
-                &Probe::kretprobe(Symbol::from_name("tcp_sendmsg").expect("symbol should exist"))
+            .add_probe(
+                Probe::kretprobe(Symbol::from_name("tcp_sendmsg").expect("symbol should exist"))
                     .expect("kreprobe creation should succeed")
             )
             .is_ok());
         assert!(builder
-            .attach(
-                &Probe::kretprobe(
+            .add_probe(
+                Probe::kretprobe(
                     Symbol::from_name("skb_send_sock_locked").expect("symbol should exist")
                 )
                 .expect("kreprobe creation should succeed")
             )
             .is_ok());
+        assert!(builder.attach().is_ok());
     }
 }

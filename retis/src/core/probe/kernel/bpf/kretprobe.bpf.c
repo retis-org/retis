@@ -53,7 +53,7 @@ int probe_kretprobe_kretprobe(struct pt_regs *ctx)
 	bpf_map_delete_elem(&kretprobe_context, &tid);
 
 	context.timestamp = bpf_ktime_get_ns();
-	context.ksym = kprobe_ctx->ksym;
+	context.ksym = bpf_get_attach_cookie(ctx);
 	context.probe_type = KERNEL_PROBE_KRETPROBE;
 	context.orig_ctx = ctx;
 
@@ -69,7 +69,7 @@ int probe_kretprobe_kprobe(struct pt_regs *ctx)
 	u64 tid = bpf_get_current_pid_tgid();
 
 	context.timestamp = bpf_ktime_get_ns();
-	context.ksym = kprobe_get_func_ip(ctx);
+	context.ksym = bpf_get_attach_cookie(ctx);
 	kprobe_get_regs(&context.regs, ctx);
 
 	/* Store the current context and let the kretprobe run the hooks. */
