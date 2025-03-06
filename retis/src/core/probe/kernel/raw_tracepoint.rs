@@ -52,10 +52,15 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
             _ => bail!("Wrong probe type {}", probe),
         };
 
-        skel.maps.rodata_data.ksym = probe.symbol.addr()?;
-        skel.maps.rodata_data.nargs = probe.symbol.nargs()?;
-        skel.maps.rodata_data.nhooks = self.hooks.len() as u32;
-        skel.maps.rodata_data.log_level = log::max_level() as u8;
+        let rodata = skel
+            .maps
+            .rodata_data
+            .as_deref_mut()
+            .ok_or_else(|| anyhow!("Can't access eBPF rodata: not memory mapped"))?;
+        rodata.ksym = probe.symbol.addr()?;
+        rodata.nargs = probe.symbol.nargs()?;
+        rodata.nhooks = self.hooks.len() as u32;
+        rodata.log_level = log::max_level() as u8;
 
         reuse_map_fds(skel.open_object_mut(), &self.map_fds)?;
 

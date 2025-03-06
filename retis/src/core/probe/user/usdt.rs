@@ -47,7 +47,12 @@ impl<'a> ProbeBuilder for UsdtBuilder<'a> {
         };
 
         let mut skel = OpenSkelStorage::new::<UsdtSkelBuilder>()?;
-        skel.maps.rodata_data.log_level = log::max_level() as u8;
+        let rodata = skel
+            .maps
+            .rodata_data
+            .as_deref_mut()
+            .ok_or_else(|| anyhow!("Can't access eBPF rodata: not memory mapped"))?;
+        rodata.log_level = log::max_level() as u8;
 
         reuse_map_fds(skel.open_object_mut(), &self.map_fds)?;
 
