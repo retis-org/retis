@@ -196,10 +196,7 @@ impl BpfEventsFactory {
             }
         })?)
     }
-}
 
-#[cfg(not(test))]
-impl BpfEventsFactory {
     /// This starts the event polling mechanism. A dedicated thread is started
     /// for events to be retrieved and processed.
     pub(crate) fn start(&mut self, mut section_factories: SectionFactories) -> Result<()> {
