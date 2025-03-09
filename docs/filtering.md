@@ -160,7 +160,7 @@ $ retis collect -m sk_buff._nfct:~0x7:nf_conn.mark
 is equivalent to the following:
 
 ```none
-(nf_conn *)(skb->_nfct & NFCT_PTRMASK)->mark != 0
+((struct nf_conn *)(skb->_nfct & NFCT_PTRMASK))->mark != 0
 ```
 
 Metadata filtering, being a BTF-based way of filtering, is theoretically
