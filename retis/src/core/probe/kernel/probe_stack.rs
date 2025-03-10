@@ -102,14 +102,14 @@ impl ProbeStack {
                     return Ok(());
                 }
 
-                let mut probe = match Probe::kprobe(symbol) {
+                let probe = match Probe::kprobe(symbol) {
                     Ok(probe) => probe,
                     _ => return Ok(()),
                 };
 
                 #[cfg(not(test))]
-                if let Err(e) = mgr.attach_generic_probe(&mut probe) {
-                    warn!("Could not attach additional probe {probe}: {e}");
+                if let Err(e) = mgr.add_generic_probe(probe) {
+                    warn!("Could not attach additional probe: {e}");
                     return Ok(());
                 }
 
@@ -118,6 +118,8 @@ impl ProbeStack {
 
             Ok(())
         })?;
+
+        mgr.attach_probes()?;
 
         if !self.keep_stack {
             kernel.stack_trace = None;

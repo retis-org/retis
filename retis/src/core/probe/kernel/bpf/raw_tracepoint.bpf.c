@@ -6,7 +6,6 @@
 /* It is safe to have these values per-object as the loaded object won't be
  * shared between attached programs for raw tracepoints.
  */
-const volatile u64 ksym = 0;
 const volatile u32 nargs = 0;
 
 /* We unroll the loop bellow as the verifier disallow arithmetic operations on
@@ -47,7 +46,7 @@ int probe_raw_tracepoint(struct bpf_raw_tracepoint_args *ctx)
 	struct retis_context context = {};
 
 	context.timestamp = bpf_ktime_get_ns();
-	context.ksym = ksym;
+	context.ksym = bpf_get_attach_cookie(ctx);
 	context.probe_type = KERNEL_PROBE_TRACEPOINT;
 	context.orig_ctx = ctx;
 	get_regs(&context.regs, ctx);
