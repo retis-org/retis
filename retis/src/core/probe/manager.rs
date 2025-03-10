@@ -15,7 +15,7 @@ use super::common::{Counters, CountersKey};
 use super::*;
 use super::{
     builder::ProbeBuilder,
-    kernel::{kprobe, kretprobe, raw_tracepoint},
+    kernel::{kprobe, raw_tracepoint},
     user::usdt,
 };
 
@@ -122,7 +122,7 @@ impl ProbeManager {
             Some(fixup_filter_load_fn),
         )?;
         register_filter_handler(
-            "kretprobe/probe",
+            "kprobe/retprobe",
             libbpf_rs::ProgramType::Kprobe,
             Some(fixup_filter_load_fn),
         )?;
@@ -424,7 +424,7 @@ impl ProbeRuntimeManager {
     fn gen_builder(probe: &Probe) -> Box<dyn ProbeBuilder> {
         match probe.r#type() {
             ProbeType::Kprobe(_) => Box::new(kprobe::KprobeBuilder::new()),
-            ProbeType::Kretprobe(_) => Box::new(kretprobe::KretprobeBuilder::new()),
+            ProbeType::Kretprobe(_) => Box::new(kprobe::KprobeBuilder::new().kretprobe()),
             ProbeType::RawTracepoint(_) => Box::new(raw_tracepoint::RawTracepointBuilder::new()),
             ProbeType::Usdt(_) => Box::new(usdt::UsdtBuilder::new()),
         }
