@@ -1,6 +1,11 @@
 #![allow(dead_code)] // FIXME
 
-use std::{collections::HashMap, fmt, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 
 use anyhow::{anyhow, bail, Result};
 
@@ -82,11 +87,11 @@ impl fmt::Display for UsdtProbe {
 #[event_section_factory(FactoryId::Userspace)]
 #[derive(Default)]
 pub(crate) struct UserEventFactory {
-    cache: HashMap<String, Process>,
+    cache: RwLock<HashMap<String, Arc<Process>>>,
 }
 
 impl RawEventSectionFactory for UserEventFactory {
-    fn create(&mut self, mut raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, mut raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         if raw_sections.len() != 1 {
             bail!("User event from BPF must be a single section")
         }
@@ -110,17 +115,19 @@ impl RawEventSectionFactory for UserEventFactory {
         let tid = (pid_tid & 0xFFFFFFFF) as i32;
 
         let pid_key = format!("user_proc_{pid}");
+
         // Try to obtain the Process object from the Context.
-        let proc = match self.cache.get(&pid_key) {
-            Some(val) => val,
-            None => {
-                // Not found, create it, insert it and retrieve it.
-                let proc = Process::from_pid(pid)?;
-                self.cache.insert(pid_key.clone(), proc);
-                self.cache
-                    .get(&pid_key)
-                    .ok_or_else(|| anyhow!("Failed to insert process"))?
-            }
+        let cached_proc = self.cache.read().unwrap().get(&pid_key).cloned();
+        let proc = if let Some(proc) = cached_proc {
+            proc
+        } else {
+            let proc = Arc::new(Process::from_pid(pid)?);
+            self.cache
+                .write()
+                .unwrap()
+                .entry(pid_key)
+                .or_insert(proc)
+                .clone()
         };
 
         let note = proc

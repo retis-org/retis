@@ -199,7 +199,7 @@ impl BpfEventsFactory {
 
     /// This starts the event polling mechanism. A dedicated thread is started
     /// for events to be retrieved and processed.
-    pub(crate) fn start(&mut self, mut section_factories: SectionFactories) -> Result<()> {
+    pub(crate) fn start(&mut self, section_factories: SectionFactories) -> Result<()> {
         if section_factories.is_empty() {
             bail!("No section factory, can't parse events, aborting");
         }
@@ -220,7 +220,7 @@ impl BpfEventsFactory {
                 return -4;
             }
             // Parse the raw event.
-            let event = match parse_raw_event(data, &mut section_factories) {
+            let event = match parse_raw_event(data, &section_factories) {
                 Ok(event) => event,
                 Err(e) => {
                     error!("Could not parse raw event: {e}");
@@ -329,7 +329,7 @@ impl BpfEventsFactory {
 
 pub(crate) fn parse_raw_event<'a>(
     data: &'a [u8],
-    factories: &'a mut SectionFactories,
+    factories: &'a SectionFactories,
 ) -> Result<Event> {
     // First retrieve the buffer length.
     let data_size = data.len();
@@ -406,7 +406,7 @@ pub(crate) fn parse_raw_event<'a>(
     raw_sections.drain().try_for_each(|(owner, sections)| {
         let factory = factories
             .0
-            .get_mut(&owner)
+            .get(&owner)
             .ok_or_else(|| anyhow!("Unknown factory {}", owner as u8))?;
 
         factory
@@ -448,7 +448,7 @@ pub(crate) fn parse_single_raw_section<'a, T>(raw_sections: &'a [BpfRawSection])
 pub(crate) struct CommonEventFactory {}
 
 impl RawEventSectionFactory for CommonEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let mut common = CommonEvent::default();
 
         for section in raw_sections.iter() {
@@ -557,7 +557,7 @@ pub(crate) trait EventSectionFactory: RawEventSectionFactory {
 /// Event section factory helpers to convert from BPF raw events. Requires a
 /// per-object implementation.
 pub(crate) trait RawEventSectionFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()>;
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()>;
 }
 
 /// Identifier for factories. Should match their counterparts in the BPF side.
@@ -702,7 +702,7 @@ mod tests {
     struct TestEventFactory {}
 
     impl RawEventSectionFactory for TestEventFactory {
-        fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+        fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
             let mut test = TestEvent::default();
 
             for raw in raw_sections.iter() {
