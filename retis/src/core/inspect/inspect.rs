@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::{bail, Result};
+use btf_rs::Type;
 use once_cell::sync::OnceCell;
 
 use super::kernel::KernelInspector;
@@ -35,6 +36,23 @@ impl Inspector {
             kernel: KernelInspector::from(kconf)?,
         })
     }
+}
+
+/// Parses a struct and returns its field names.
+pub(crate) fn parse_struct(r#struct: &str) -> Result<Vec<String>> {
+    let mut fields = Vec::new();
+
+    if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(r#struct) {
+        if let Some((btf, Type::Struct(r#enum))) =
+            types.iter().find(|(_, t)| matches!(t, Type::Struct(_)))
+        {
+            for member in r#enum.members.iter() {
+                fields.push(btf.resolve_name(member)?);
+            }
+        }
+    }
+
+    Ok(fields)
 }
 
 #[cfg(test)]

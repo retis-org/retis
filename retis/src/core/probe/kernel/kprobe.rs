@@ -7,9 +7,12 @@
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::{OpenSkel, Skel};
+use libbpf_rs::{
+    skel::{OpenSkel, Skel},
+    KprobeOpts,
+};
 
-use crate::core::{probe::builder::*, probe::*, workaround::*};
+use crate::core::{inspect, probe::builder::*, probe::*, workaround::*};
 
 mod kprobe_bpf {
     include!("bpf/.out/kprobe.skel.rs");
@@ -19,6 +22,8 @@ use kprobe_bpf::*;
 #[derive(Default)]
 pub(crate) struct KprobeBuilder<'a> {
     skel: Option<SkelStorage<KprobeSkel<'a>>>,
+    // Use the compatibility mode, aka. older APIs, to support older kernels.
+    compat: bool,
     kretprobe: bool,
     probes: Vec<Probe>,
     links: Vec<libbpf_rs::Link>,
@@ -26,7 +31,15 @@ pub(crate) struct KprobeBuilder<'a> {
 
 impl<'a> ProbeBuilder for KprobeBuilder<'a> {
     fn new() -> Result<KprobeBuilder<'a>> {
-        Ok(Default::default())
+        let compat = Self::check_compat()?;
+        if compat {
+            log::debug!("Kprobe builder using compat mode");
+        }
+
+        Ok(Self {
+            compat,
+            ..Default::default()
+        })
     }
 
     fn init(
@@ -85,7 +98,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
     }
 
     fn attach(&mut self) -> Result<()> {
-        self.attach_kprobes()
+        self.attach_kprobes(self.compat)
     }
 
     fn detach(&mut self) -> Result<()> {
@@ -100,7 +113,15 @@ impl KprobeBuilder<'_> {
         self
     }
 
-    fn attach_kprobes(&mut self) -> Result<()> {
+    /// Inspect the kprobe support in the running kernel, returning true if the
+    /// compat' mode should be used.
+    fn check_compat() -> Result<bool> {
+        Ok(!inspect::parse_struct("bpf_trace_run_ctx")?
+            .iter()
+            .any(|field| field == "bpf_cookie"))
+    }
+
+    fn attach_kprobes(&mut self, compat: bool) -> Result<()> {
         let obj = match &mut self.skel {
             Some(skel) => skel.object(),
             _ => bail!("Kprobe builder is uninitialized"),
@@ -126,10 +147,22 @@ impl KprobeBuilder<'_> {
                 _ => bail!("Wrong probe type {}", probe),
             };
 
-            self.links
-                .push(prog.attach_kprobe(false, symbol.attach_name())?);
+            if !compat {
+                let opts = KprobeOpts {
+                    cookie: symbol.addr()?,
+                    ..Default::default()
+                };
+
+                self.links
+                    .push(prog.attach_kprobe_with_opts(false, symbol.attach_name(), opts)?);
+            } else {
+                self.links
+                    .push(prog.attach_kprobe(false, symbol.attach_name())?);
+            }
 
             if let Some(ref prog_ret) = prog_ret {
+                // No need to set the cookie in the kretprobe as the symbol
+                // address is retrieved in the kprobe.
                 self.links
                     .push(prog_ret.attach_kprobe(true, symbol.attach_name())?);
             }
