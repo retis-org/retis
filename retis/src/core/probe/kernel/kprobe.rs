@@ -7,18 +7,33 @@
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::{OpenSkel, Skel};
+use libbpf_rs::{
+    skel::{OpenSkel, Skel},
+    KprobeOpts,
+};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
+use crate::core::{filters::Filter, inspect, probe::builder::*, probe::*, workaround::*};
 
 mod kprobe_bpf {
     include!("bpf/.out/kprobe.skel.rs");
 }
 use kprobe_bpf::*;
 
+enum KprobeVariant {
+    Kprobe,
+    KprobeNoCookie,
+}
+
+impl Default for KprobeVariant {
+    fn default() -> Self {
+        Self::KprobeNoCookie
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct KprobeBuilder<'a> {
     skel: Option<SkelStorage<KprobeSkel<'a>>>,
+    variant: KprobeVariant,
     kretprobe: bool,
     probes: Vec<Probe>,
     links: Vec<libbpf_rs::Link>,
@@ -26,7 +41,19 @@ pub(crate) struct KprobeBuilder<'a> {
 
 impl<'a> ProbeBuilder for KprobeBuilder<'a> {
     fn new() -> Result<KprobeBuilder<'a>> {
-        Ok(Default::default())
+        let variant = Self::inspect_variant()?;
+        log::debug!(
+            "Kprobe builder {} support",
+            match variant {
+                KprobeVariant::Kprobe => "with cookie",
+                KprobeVariant::KprobeNoCookie => "without cookie",
+            }
+        );
+
+        Ok(Self {
+            variant,
+            ..Default::default()
+        })
     }
 
     fn init(
@@ -93,7 +120,13 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
 
     fn attach(&mut self) -> Result<()> {
         let tmp = std::mem::take(&mut self.probes);
-        self.attach_kprobes(&tmp)?;
+
+        use KprobeVariant::*;
+        match self.variant {
+            Kprobe => self.attach_kprobes(&tmp, true)?,
+            KprobeNoCookie => self.attach_kprobes(&tmp, false)?,
+        }
+
         Ok(())
     }
 
@@ -109,7 +142,22 @@ impl KprobeBuilder<'_> {
         self
     }
 
-    fn attach_kprobes(&mut self, probes: &[Probe]) -> Result<()> {
+    /// Inspect the kprobe variant supported by the running kernel.
+    fn inspect_variant() -> Result<KprobeVariant> {
+        use KprobeVariant::*;
+
+        Ok(
+            match inspect::parse_struct("bpf_trace_run_ctx")?
+                .iter()
+                .any(|field| field == "bpf_cookie")
+            {
+                true => Kprobe,
+                false => KprobeNoCookie,
+            },
+        )
+    }
+
+    fn attach_kprobes(&mut self, probes: &[Probe], cookie: bool) -> Result<()> {
         let obj = match &mut self.skel {
             Some(skel) => skel.object(),
             _ => bail!("Kprobe builder is uninitialized"),
@@ -135,10 +183,22 @@ impl KprobeBuilder<'_> {
                 _ => bail!("Wrong probe type {}", probe),
             };
 
-            self.links
-                .push(prog.attach_kprobe(false, symbol.attach_name())?);
+            if cookie {
+                let opts = KprobeOpts {
+                    cookie: symbol.addr()?,
+                    ..Default::default()
+                };
+
+                self.links
+                    .push(prog.attach_kprobe_with_opts(false, symbol.attach_name(), opts)?);
+            } else {
+                self.links
+                    .push(prog.attach_kprobe(false, symbol.attach_name())?);
+            }
 
             if let Some(ref prog_ret) = prog_ret {
+                // No need to set the cookie in the kretprobe as the symbol
+                // address is retrieved in the kprobe.
                 self.links
                     .push(prog_ret.attach_kprobe(true, symbol.attach_name())?);
             }
