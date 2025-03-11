@@ -1,6 +1,6 @@
 #![allow(dead_code)] // FIXME
 
-use std::{any::Any, collections::HashMap, fmt, path::PathBuf};
+use std::{collections::HashMap, fmt, path::PathBuf};
 
 use anyhow::{anyhow, bail, Result};
 
@@ -82,7 +82,7 @@ impl fmt::Display for UsdtProbe {
 #[event_section_factory(FactoryId::Userspace)]
 #[derive(Default)]
 pub(crate) struct UserEventFactory {
-    cache: HashMap<String, Box<dyn Any>>,
+    cache: HashMap<String, Process>,
 }
 
 impl RawEventSectionFactory for UserEventFactory {
@@ -112,18 +112,16 @@ impl RawEventSectionFactory for UserEventFactory {
         let pid_key = format!("user_proc_{pid}");
         // Try to obtain the Process object from the Context.
         let proc = match self.cache.get(&pid_key) {
-            Some(val) => val.downcast_ref::<Process>(),
+            Some(val) => val,
             None => {
                 // Not found, create it, insert it and retrieve it.
-                let proc = Box::new(Process::from_pid(pid)?);
+                let proc = Process::from_pid(pid)?;
                 self.cache.insert(pid_key.clone(), proc);
                 self.cache
                     .get(&pid_key)
                     .ok_or_else(|| anyhow!("Failed to insert process"))?
-                    .downcast_ref::<Process>()
             }
-        }
-        .ok_or_else(|| anyhow!("Failed to retrieve process information"))?;
+        };
 
         let note = proc
             .get_note_from_symbol(symbol)?
