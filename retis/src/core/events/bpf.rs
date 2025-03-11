@@ -169,6 +169,7 @@ impl BpfEventsFactory {
         &self,
         map: &libbpf_rs::MapHandle,
         rb_handler: CB,
+        name: &str,
     ) -> Result<thread::JoinHandle<()>>
     where
         CB: FnMut(&[u8]) -> i32 + 'static,
@@ -178,7 +179,8 @@ impl BpfEventsFactory {
         let rb = rb.build()?;
         let rs = self.run_state.clone();
         // Start an event polling thread.
-        Ok(thread::spawn(move || {
+        let thread = thread::Builder::new().name(format!("retis-ringbuf-{name}"));
+        Ok(thread.spawn(move || {
             while rs.running() {
                 if let Err(e) = rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS)) {
                     match e.kind() {
@@ -192,7 +194,7 @@ impl BpfEventsFactory {
                     }
                 }
             }
-        }))
+        })?)
     }
 }
 
@@ -289,8 +291,8 @@ impl BpfEventsFactory {
 
         // Finally make our ring buffers and associate maps to their
         // respective events processing closure.
-        self.handle = Some(self.ringbuf_handler(&self.map, process_event)?);
-        self.log_handle = Some(self.ringbuf_handler(&self.log_map, process_log)?);
+        self.handle = Some(self.ringbuf_handler(&self.map, process_event, "events")?);
+        self.log_handle = Some(self.ringbuf_handler(&self.log_map, process_log, "logs")?);
 
         Ok(())
     }

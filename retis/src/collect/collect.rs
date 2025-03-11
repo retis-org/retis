@@ -581,7 +581,8 @@ impl Collectors {
 
         if let Some(cmd) = collect.cmd.to_owned() {
             let run = self.run.clone();
-            std::thread::spawn(move || {
+            let thread = std::thread::Builder::new().name("retis-collect-cmd".to_string());
+            thread.spawn(move || {
                 match Command::new("sh")
                     .arg("-c")
                     .arg(&cmd)
@@ -596,7 +597,7 @@ impl Collectors {
                 }
 
                 run.terminate();
-            });
+            })?;
         }
 
         let (mut iccount, mut eccount) = (0, 0);
