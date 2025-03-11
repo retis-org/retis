@@ -34,7 +34,7 @@ pub(super) const VERD_MAX: u64 = VERD_REPEAT;
 pub(crate) struct NftEventFactory {}
 
 impl RawEventSectionFactory for NftEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let mut nft = NftEvent::default();
         let raw = parse_single_raw_section::<nft_event>(&raw_sections)?;
 

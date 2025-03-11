@@ -50,7 +50,7 @@ pub(crate) struct NsEventFactory {
 }
 
 impl RawEventSectionFactory for NsEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let raw = parse_single_raw_section::<netns_event>(&raw_sections)?;
 
         event.netns = Some(NetnsEvent {

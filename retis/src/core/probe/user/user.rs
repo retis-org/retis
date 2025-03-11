@@ -1,6 +1,6 @@
 #![allow(dead_code)] // FIXME
 
-use std::{any::Any, collections::HashMap, fmt, path::PathBuf};
+use std::{any::Any, collections::HashMap, fmt, path::PathBuf, sync::RwLock};
 
 use anyhow::{anyhow, bail, Result};
 
@@ -82,11 +82,11 @@ impl fmt::Display for UsdtProbe {
 #[event_section_factory(FactoryId::Userspace)]
 #[derive(Default)]
 pub(crate) struct UserEventFactory {
-    cache: HashMap<String, Box<dyn Any>>,
+    cache: RwLock<HashMap<String, Box<dyn Any>>>,
 }
 
 impl RawEventSectionFactory for UserEventFactory {
-    fn create(&mut self, mut raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, mut raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         if raw_sections.len() != 1 {
             bail!("User event from BPF must be a single section")
         }
@@ -110,20 +110,21 @@ impl RawEventSectionFactory for UserEventFactory {
         let tid = (pid_tid & 0xFFFFFFFF) as i32;
 
         let pid_key = format!("user_proc_{pid}");
+
         // Try to obtain the Process object from the Context.
-        let proc = match self.cache.get(&pid_key) {
-            Some(val) => val.downcast_ref::<Process>(),
-            None => {
-                // Not found, create it, insert it and retrieve it.
-                let proc = Box::new(Process::from_pid(pid)?);
-                self.cache.insert(pid_key.clone(), proc);
-                self.cache
-                    .get(&pid_key)
-                    .ok_or_else(|| anyhow!("Failed to insert process"))?
-                    .downcast_ref::<Process>()
-            }
+        if !self.cache.read().unwrap().contains_key(&pid_key) {
+            self.cache
+                .write()
+                .unwrap()
+                .insert(pid_key.clone(), Box::new(Process::from_pid(pid)?));
         }
-        .ok_or_else(|| anyhow!("Failed to retrieve process information"))?;
+
+        let cache = self.cache.read().unwrap();
+        let proc = cache
+            .get(&pid_key)
+            .unwrap()
+            .downcast_ref::<Process>()
+            .ok_or_else(|| anyhow!("Failed to retrieve process information from cache"))?;
 
         let note = proc
             .get_note_from_symbol(symbol)?
