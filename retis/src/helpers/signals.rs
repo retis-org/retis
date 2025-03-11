@@ -34,11 +34,12 @@ impl Running {
         let run = Self::ignore_signals();
         let condition = Arc::clone(&run.condition);
 
-        thread::spawn(move || {
+        let thread = thread::Builder::new().name("retis-signals-handler".to_string());
+        thread.spawn(move || {
             sigs.wait();
             condition.store(true, Ordering::Relaxed);
             info!("Received signal, terminating...");
-        });
+        })?;
 
         Ok(run)
     }
