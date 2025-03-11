@@ -1,6 +1,6 @@
 #![allow(dead_code)] // FIXME
 
-use std::{any::Any, collections::HashMap, fmt, path::PathBuf, sync::RwLock};
+use std::{collections::HashMap, fmt, path::PathBuf, sync::RwLock};
 
 use anyhow::{anyhow, bail, Result};
 
@@ -82,7 +82,7 @@ impl fmt::Display for UsdtProbe {
 #[event_section_factory(FactoryId::Userspace)]
 #[derive(Default)]
 pub(crate) struct UserEventFactory {
-    cache: RwLock<HashMap<String, Box<dyn Any>>>,
+    cache: RwLock<HashMap<String, Process>>,
 }
 
 impl RawEventSectionFactory for UserEventFactory {
@@ -116,15 +116,12 @@ impl RawEventSectionFactory for UserEventFactory {
             self.cache
                 .write()
                 .unwrap()
-                .insert(pid_key.clone(), Box::new(Process::from_pid(pid)?));
+                .insert(pid_key.clone(), Process::from_pid(pid)?);
         }
 
         let cache = self.cache.read().unwrap();
-        let proc = cache
-            .get(&pid_key)
-            .unwrap()
-            .downcast_ref::<Process>()
-            .ok_or_else(|| anyhow!("Failed to retrieve process information from cache"))?;
+        // Unwrap as we just made sure the entry exists.
+        let proc = cache.get(&pid_key).unwrap();
 
         let note = proc
             .get_note_from_symbol(symbol)?
