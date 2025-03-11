@@ -30,8 +30,8 @@ impl FilterPacket {
         layer_type: packet_filter_uapi::filter_type,
     ) -> Result<Self> {
         let link_type = match layer_type {
-            packet_filter_uapi::FILTER_L3 => Linktype(12), // DLT_RAW
-            packet_filter_uapi::FILTER_L2 => Linktype::ETHERNET,
+            packet_filter_uapi::L3 => Linktype(12), // DLT_RAW
+            packet_filter_uapi::L2 => Linktype::ETHERNET,
             _ => bail!("Unsupported filter type"),
         };
 
