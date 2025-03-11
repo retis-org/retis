@@ -447,7 +447,7 @@ mod tests {
     }
 
     impl SubCommandParserRunner for Sub2 {
-        fn run(&mut self, main_config: &MainConfig) -> Result<()> {
+        fn run(&mut self, _main_config: &MainConfig) -> Result<()> {
             Ok(())
         }
     }
