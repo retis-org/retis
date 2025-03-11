@@ -546,11 +546,13 @@ unsafe impl Plain for BpfRawSectionHeader {}
 ///
 /// Please use `#[retis_derive::event_section_factory]` to implement the common
 /// traits.
-pub(crate) trait EventSectionFactory: RawEventSectionFactory {
+pub(crate) trait EventSectionFactory: RawEventSectionFactory + Send + Sync {
     #[allow(dead_code)]
     fn id() -> u8
     where
         Self: Sized;
+    /// This should only be used during initialization, before factories are
+    /// shared between threads!
     fn as_any_mut(&mut self) -> &mut dyn any::Any;
 }
 
