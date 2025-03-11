@@ -200,17 +200,22 @@ impl<'a, W: Write> EventParser<'a, W> {
 #[derive(Parser, Debug, Default)]
 #[command(name = "pcap")]
 pub(crate) struct Pcap {
+    #[arg(short, long, help = "List probes that are available in the data file")]
+    pub(super) list_probes: bool,
     #[arg(
         short,
         long,
+        conflicts_with = "list_probes",
         help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern.
 See `retis collect --help` for more details on the probe format."
     )]
-    pub(super) probe: String,
+    pub(super) probe: Option<String>,
     #[arg(
         short,
         long,
-        help = "Write the generated PCAP output to a file rather than stdio"
+        requires = "probe",
+        conflicts_with = "list_probes",
+        help = "Write the generated PCAP output to a file rather than stdout"
     )]
     pub(super) out: Option<PathBuf>,
     #[arg(default_value = "retis.data", help = "File from which to read events")]
@@ -219,7 +224,15 @@ See `retis collect --help` for more details on the probe format."
 
 impl SubCommandParserRunner for Pcap {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
-        let (probe_type, target) = parse_cli_probe(&self.probe)?;
+        if self.list_probes {
+            println!("{:#?}", list_probes(self.input.as_path())?);
+            return Ok(());
+        }
+        let probe = self
+            .probe
+            .as_ref()
+            .ok_or_else(|| anyhow!("Probe cannot be empty"))?;
+        let (probe_type, target) = parse_cli_probe(probe)?;
         let symbol = Symbol::from_name_no_inspect(target);
 
         // Create a PCAP writer to push our events / metadata.
@@ -293,4 +306,92 @@ where
 
     parser.report_stats();
     Ok(())
+}
+
+/// List the probes that are available in the input.
+fn list_probes(input: &Path) -> Result<Vec<String>> {
+    let mut probe_set: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // Create running instance that will handle signal termination.
+    let run = Running::new();
+    run.register_term_signals()?;
+
+    // Start our events factory.
+    let mut factory = FileEventsFactory::new(input)?;
+
+    while run.running() {
+        match factory.next_event()? {
+            Some(event) => {
+                if let Some(kernel) = event.get_section::<KernelEvent>(SectionId::Kernel) {
+                    // Insert the full probe_type:symbol.
+                    probe_set.insert(format!("{}:{}", kernel.probe_type, kernel.symbol));
+                }
+            }
+            None => break,
+        }
+    }
+
+    if probe_set.is_empty() {
+        bail!("could not find any probes in provided data set");
+    }
+    let mut ret = probe_set.into_iter().collect::<Vec<String>>();
+    ret.sort();
+    Ok(ret)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_probes() {
+        let test_cases = [
+            (
+                "test_data/test_events_bench.json",
+                Ok(vec![
+                    "kprobe:tcp_v4_rcv".to_string(),
+                    "kretprobe:ovs_dp_upcall".to_string(),
+                    "raw_tracepoint:openvswitch:ovs_dp_upcall".to_string(),
+                    "raw_tracepoint:skb:kfree_skb".to_string(),
+                ]),
+            ),
+            (
+                "test_data/test_events_bench_no_probes.json",
+                Err(anyhow!("could not find any probes in provided data set")),
+            ),
+            (
+                "test_data/available_events",
+                Err(anyhow!(
+                    "Failed to parse event file: \
+                Error(\"expected value\", line: 1, column: 1)"
+                )),
+            ),
+        ];
+        for (file_path, expected_res) in test_cases.into_iter() {
+            match list_probes(Path::new(file_path)) {
+                Ok(v) => match expected_res {
+                    Ok(expected_v) => assert_eq!(v, expected_v),
+                    Err(expected_e) => {
+                        panic!(
+                            "Expected error but got valid result instead\n\
+                            expected error: {}\n\
+                            result: {:#?}",
+                            expected_e, v
+                        )
+                    }
+                },
+                Err(e) => match expected_res {
+                    Ok(expected_v) => {
+                        panic!(
+                            "Expected a valid result but got err instead\n\
+                            result: {:#?},\n\
+                            err: {}",
+                            expected_v, e
+                        )
+                    }
+                    Err(expected_e) => assert_eq!(e.to_string(), expected_e.to_string(),),
+                },
+            }
+        }
+    }
 }
