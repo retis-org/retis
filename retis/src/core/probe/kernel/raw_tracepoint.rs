@@ -8,9 +8,12 @@
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::{OpenSkel, Skel};
+use libbpf_rs::{
+    skel::{OpenSkel, Skel},
+    RawTracepointOpts,
+};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
+use crate::core::{filters::Filter, inspect, probe::builder::*, probe::*, workaround::*};
 
 mod raw_tracepoint_bpf {
     include!("bpf/.out/raw_tracepoint.skel.rs");
@@ -20,6 +23,7 @@ use raw_tracepoint_bpf::*;
 #[derive(Default)]
 pub(crate) struct RawTracepointBuilder<'a> {
     skels: Vec<SkelStorage<RawTracepointSkel<'a>>>,
+    cookie_support: bool,
     probes: Vec<Probe>,
     hooks: Vec<Hook>,
     filters: Vec<Filter>,
@@ -30,7 +34,16 @@ pub(crate) struct RawTracepointBuilder<'a> {
 
 impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
     fn new() -> Result<RawTracepointBuilder<'a>> {
-        Ok(RawTracepointBuilder::default())
+        let cookie_support = Self::cookie_support()?;
+        log::debug!(
+            "Raw tracepoint builder {} cookie support",
+            if cookie_support { "with" } else { "without" }
+        );
+
+        Ok(Self {
+            cookie_support,
+            ..Default::default()
+        })
     }
 
     fn init(
@@ -66,6 +79,16 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
 }
 
 impl RawTracepointBuilder<'_> {
+    // Checks whether the underlying kernel supports setting/retrieving cookies
+    // in raw tracepoints.
+    fn cookie_support() -> Result<bool> {
+        Ok(inspect::inspector()?
+            .kernel
+            .btf
+            .resolve_types_by_name("bpf_get_attach_cookie_tracing")
+            .is_ok())
+    }
+
     fn attach_raw_tracepoint(&mut self, probe: &Probe) -> Result<()> {
         let mut skel = OpenSkelStorage::new::<RawTracepointSkelBuilder>()?;
 
@@ -74,7 +97,10 @@ impl RawTracepointBuilder<'_> {
             _ => bail!("Wrong probe type {}", probe),
         };
 
-        skel.maps.rodata_data.ksym = probe.symbol.addr()?;
+        if !self.cookie_support {
+            skel.maps.rodata_data.ksym = probe.symbol.addr()?;
+        }
+
         skel.maps.rodata_data.nargs = probe.symbol.nargs()?;
         skel.maps.rodata_data.nhooks = self.hooks.len() as u32;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
@@ -102,8 +128,19 @@ impl RawTracepointBuilder<'_> {
             self.links.push(replace_ctx_hook(fd, ctx_hook)?);
         }
 
-        self.links
-            .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
+        if self.cookie_support {
+            let opts = RawTracepointOpts {
+                cookie: probe.symbol.addr()?,
+                ..Default::default()
+            };
+
+            self.links
+                .push(prog.attach_raw_tracepoint_with_opts(probe.symbol.attach_name(), opts)?);
+        } else {
+            self.links
+                .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
+        }
+
         self.skels.push(skel);
         Ok(())
     }

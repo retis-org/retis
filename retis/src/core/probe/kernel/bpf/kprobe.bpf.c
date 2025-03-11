@@ -32,10 +32,17 @@ int probe_kprobe(struct pt_regs *ctx)
 	struct retis_context context = {};
 
 	context.timestamp = bpf_ktime_get_ns();
-	context.ksym = kprobe_get_func_ip(ctx);
 	context.probe_type = KERNEL_PROBE_KPROBE;
 	context.orig_ctx = ctx;
 	kprobe_get_regs(&context.regs, ctx);
+
+	/* Check if cookies can be set and retrieved from kprobes, otherwise
+	 * fallback to getting the symbol address using our own helper.
+	 */
+	if (bpf_core_field_exists(((struct bpf_trace_run_ctx *) 0)->bpf_cookie))
+		context.ksym = bpf_get_attach_cookie(ctx);
+	else
+		context.ksym = kprobe_get_func_ip(ctx);
 
 	if (kretprobe) {
 		u64 tgid = bpf_get_current_pid_tgid();
