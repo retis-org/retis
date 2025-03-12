@@ -205,7 +205,7 @@ impl BpfEventsFactory {
         }
 
         // Create the sending and receiving channels.
-        let (txc, rxc) = mpsc::channel();
+        let (txc, rxc) = mpsc::sync_channel(EVENTS_MAX as usize);
         self.rxc = Some(rxc);
 
         let run_state = self.run_state.clone();
