@@ -35,4 +35,4 @@ COPY --from=builder /retis/target/release/retis /usr/bin/retis
 COPY --from=builder /retis/retis/profiles /etc/retis/profiles
 
 WORKDIR /data
-ENTRYPOINT ["/usr/bin/retis", "--kconf", "/kconfig"]
+ENTRYPOINT ["/usr/bin/retis"]

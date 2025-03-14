@@ -35,9 +35,12 @@ for kconfig in /proc/config.gz \
                /lib/modules/$(uname -r)/config; do
     if [ -f $kconfig ]; then
         kconfig_map="$kconfig_map -v ${kconfig}:${kconfig}:ro"
+	# Map the first item to /kconfig to support older versions of the container
+	# image.
+	[[ -z $kconfig_legacy_map ]] && kconfig_legacy_map="-v ${kconfig}:/kconfig"
     fi
 done
-if [ $kconfig_map == "" ]; then
+if [[ -z $kconfig_map ]]; then
 	echo "WARN: Could not auto-detect kernel configuration location. "
 	echo "You can place your configuration file in the current directory and use the '--kconf' option"
 fi
@@ -58,7 +61,7 @@ exec $runtime run $extra_args $term_opts --privileged --rm --pid=host \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
       -v /sys/kernel/debug:/sys/kernel/debug:ro \
       -v $(pwd):/data:rw \
-      $kconfig_map \
+      $kconfig_legacy_map $kconfig_map \
       $local_conf \
       $ovs_binary_mount \
       $RETIS_IMAGE:$RETIS_TAG "$@"
