@@ -1,10 +1,12 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 use clap::{arg, Parser};
 
 use crate::{
     cli::*,
     collect::collector::get_known_types,
-    core::{kernel::Symbol, probe::kernel::utils::probe_from_cli},
+    core::{inspect::init_inspector, kernel::Symbol, probe::kernel::utils::probe_from_cli},
 };
 
 /// Inspect the current machine.
@@ -23,10 +25,18 @@ a compatibility check is performed for each one.
 Eg. '-p tp:*'. See `retis collect --help` for more details on the probe format."
     )]
     pub(crate) probe: Option<String>,
+    #[arg(
+        long,
+        help = "Path to kernel configuration (e.g. /boot/config-6.3.8-200.fc38.x86_64; default: auto-detect)"
+    )]
+    pub(crate) kconf: Option<PathBuf>,
 }
 
 impl SubCommandParserRunner for Inspect {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
+        if let Some(kconf) = &self.kconf {
+            init_inspector(kconf)?;
+        }
         if let Some(probe) = &self.probe {
             let known_types = get_known_types()?;
 
