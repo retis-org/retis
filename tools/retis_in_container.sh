@@ -37,7 +37,7 @@ for kconfig in /proc/config.gz \
         kconfig_map="$kconfig_map -v ${kconfig}:${kconfig}:ro"
     fi
 done
-if [ $kconfig_map == "" ]; then
+if [[ -z $kconfig_map ]]; then
 	echo "WARN: Could not auto-detect kernel configuration location. "
 	echo "You can place your configuration file in the current directory and use the '--kconf' option"
 fi
