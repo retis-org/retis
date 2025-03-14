@@ -381,6 +381,7 @@ pub(crate) fn parse_raw_event<'a>(
     let mut event = Event::new();
     raw_sections.drain().try_for_each(|(owner, sections)| {
         let factory = factories
+            .0
             .get_mut(&owner)
             .ok_or_else(|| anyhow!("Unknown factory {}", owner as u8))?;
 
@@ -590,8 +591,41 @@ impl FactoryId {
     }
 }
 
-/// Type alias to refer to the commonly used EventSectionFactory HashMap.
-pub(crate) type SectionFactories = HashMap<FactoryId, Box<dyn EventSectionFactory>>;
+/// Map of Section Factories.
+#[derive(Default)]
+pub(crate) struct SectionFactories(HashMap<FactoryId, Box<dyn EventSectionFactory>>);
+
+impl SectionFactories {
+    /// Create a new factory map.
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Check whether the map is empty.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Insert a new factory.
+    pub(crate) fn insert(&mut self, id: FactoryId, factory: Box<dyn EventSectionFactory>) {
+        self.0.insert(id, factory);
+    }
+
+    /// Get a mutable factory by it's FactoryId.
+    pub(crate) fn get_mut<T: EventSectionFactory + 'static>(
+        &mut self,
+        id: &FactoryId,
+    ) -> Result<Option<&mut T>> {
+        match self.0.get_mut(id) {
+            Some(f) => Ok(Some(
+                f.as_any_mut()
+                    .downcast_mut::<T>()
+                    .ok_or_else(|| anyhow!("Failed to downcast"))?,
+            )),
+            None => Ok(None),
+        }
+    }
+}
 
 #[cfg(feature = "benchmark")]
 pub(crate) mod benchmark {
@@ -684,7 +718,7 @@ mod tests {
 
     #[test]
     fn parse_raw_event() {
-        let mut factories: SectionFactories = HashMap::new();
+        let mut factories = SectionFactories::new();
         factories.insert(FactoryId::Common, Box::<TestEventFactory>::default());
 
         // Empty event.
