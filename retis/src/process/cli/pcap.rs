@@ -1,13 +1,13 @@
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{File, OpenOptions},
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use anyhow::{anyhow, bail, Result};
-use clap::{arg, Parser};
+use clap::{arg, Args, Parser};
 use log::{info, warn};
 use pcap_file::{
     pcapng::{
@@ -201,26 +201,50 @@ impl EventParser {
 #[derive(Parser, Debug, Default)]
 #[command(name = "pcap")]
 pub(crate) struct Pcap {
-    #[arg(
-        short,
-        long,
-        help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern.
-See `retis collect --help` for more details on the probe format."
-    )]
-    pub(super) probe: String,
-    #[arg(
-        short,
-        long,
-        help = "Write the generated PCAP output to a file rather than stdio"
-    )]
-    pub(super) out: Option<PathBuf>,
+    #[command(flatten)]
+    list: PcapList,
+    #[command(flatten)]
+    out: PcapOut,
     #[arg(default_value = "retis.data", help = "File from which to read events")]
     pub(super) input: PathBuf,
+}
+#[derive(Args, Debug, Default)]
+#[group(required = false, multiple = false)]
+pub(crate) struct PcapList {
+    #[arg(short, long, help = "List probes that are available in the data file")]
+    pub(super) list_probes: bool,
+}
+#[derive(Args, Debug, Default)]
+#[group(required = false, multiple = true)]
+pub(crate) struct PcapOut {
+    #[arg(
+        short,
+        long,
+        conflicts_with = "list_probes",
+        help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern.
+See `retis collect --help` for more details on the probe format"
+    )]
+    pub(super) probe: Option<String>,
+    #[arg(
+        short,
+        long,
+        requires = "probe",
+        conflicts_with = "list_probes",
+        help = "Write the generated PCAP output to a file rather than stdout"
+    )]
+    pub(super) out: Option<PathBuf>,
 }
 
 impl SubCommandParserRunner for Pcap {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
-        let (probe_type, target) = parse_cli_probe(&self.probe)?;
+        if self.list.list_probes {
+            let probes = list_probes(self.input.as_path())?;
+            probes.iter().for_each(|p| println!("{p}"));
+            return Ok(());
+        }
+        // unwrap() can never fail due to ArgGroup
+        let probe = self.out.probe.as_ref().unwrap();
+        let (probe_type, target) = parse_cli_probe(probe)?;
         let symbol = Symbol::from_name_no_inspect(target);
 
         // Filtering logic.
@@ -235,7 +259,7 @@ impl SubCommandParserRunner for Pcap {
         let write_block = |b: &Block| -> Result<()> {
             if writer.is_none() {
                 // Create a PCAP writer to push our events / metadata.
-                writer = Some(PcapNgWriter::new(match &self.out {
+                writer = Some(PcapNgWriter::new(match &self.out.out {
                     Some(file) => OpenOptions::new()
                         .create(true)
                         .write(true)
@@ -308,6 +332,64 @@ where
 
     parser.report_stats();
     Ok(())
+}
+
+/// List the probes that are available in the input. Only add probes from events
+/// that can be fully parsed by the parser.
+fn list_probes(input: &Path) -> Result<Vec<String>> {
+    let mut probe_set: HashSet<String> = HashSet::new();
+
+    // Create running instance that will handle signal termination.
+    let run = Running::new();
+    run.register_term_signals()?;
+
+    // Start our events factory.
+    let mut factory = FileEventsFactory::new(input)?;
+
+    while run.running() {
+        match factory.next_event()? {
+            None => break,
+            Some(event) => {
+                if let Some(kernel) = event.get_section::<KernelEvent>(SectionId::Kernel) {
+                    let probe_name = format!("{}:{}", kernel.probe_type, kernel.symbol);
+                    if probe_set.contains(&probe_name) {
+                        continue;
+                    }
+                    // Having a common & a kernel section is mandatory for now, seeing a
+                    // filtered event w/o one of those is bogus.
+                    if event
+                        .get_section::<KernelEvent>(SectionId::Kernel)
+                        .is_none()
+                    {
+                        continue;
+                    }
+                    if event
+                        .get_section::<CommonEvent>(SectionId::Common)
+                        .is_none()
+                    {
+                        continue;
+                    }
+                    // The skb & packet sections are mandatory for us to generate PCAP
+                    // events, but they might not be present in some filtered events.
+                    match event.get_section::<SkbEvent>(SectionId::Skb) {
+                        None => {}
+                        Some(skb) => {
+                            if skb.packet.as_ref().is_some() {
+                                probe_set.insert(probe_name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if probe_set.is_empty() {
+        bail!("Could not find any probes in provided data set");
+    }
+    let mut probes = probe_set.into_iter().collect::<Vec<String>>();
+    probes.sort();
+    Ok(probes)
 }
 
 #[cfg(test)]
@@ -450,6 +532,70 @@ mod tests {
                         assert_eq!(v, expected_v);
                         assert_eq!(blocks, expected_blocks);
                     }
+                    Err(expected_e) => {
+                        panic!(
+                            "Expected error but got valid result instead\n\
+                            expected error: {}\n\
+                            result: {:#?}",
+                            expected_e, v
+                        )
+                    }
+                },
+                Err(e) => match expected_res {
+                    Ok(expected_v) => {
+                        panic!(
+                            "Expected a valid result but got err instead\n\
+                            result: {:#?},\n\
+                            err: {}",
+                            expected_v, e
+                        )
+                    }
+                    Err(expected_e) => assert_eq!(e.to_string(), expected_e.to_string(),),
+                },
+            }
+        }
+    }
+
+    #[test]
+    fn test_list_probes() {
+        let test_cases = [
+            // Valid data.
+            (
+                "test_data/test_events_packets.json",
+                Ok(vec![
+                    "kretprobe:ovs_dp_upcall".to_string(),
+                    "raw_tracepoint:net:net_dev_start_xmit".to_string(),
+                    "raw_tracepoint:net:netif_receive_skb".to_string(),
+                    "raw_tracepoint:openvswitch:ovs_do_execute_action".to_string(),
+                    "raw_tracepoint:openvswitch:ovs_dp_upcall".to_string(),
+                    "raw_tracepoint:skb:kfree_skb".to_string(),
+                ]),
+            ),
+            // Partially valid data (outdated ct, missing ct_status field).
+            // TODO: Skip invalid lines, but process everything else.
+            // Both for list-probes and for generating the actual pcap.
+            (
+                "test_data/test_events_packets_invalid_ct.json",
+                Err(anyhow!("Failed to create EventSection for owner ct from json: missing field `ct_status`")),
+            ),
+            // Completely missing probe section.
+            (
+                "test_data/test_events_bench_no_probes.json",
+                Err(anyhow!("Could not find any probes in provided data set")),
+            ),
+            // Garbage data.
+            (
+                "test_data/available_events",
+                Err(anyhow!(
+                    "Failed to parse event file: \
+                Error(\"expected value\", line: 1, column: 1)"
+                )),
+            ),
+        ];
+        for (file_path, expected_res) in test_cases.into_iter() {
+            match list_probes(Path::new(file_path)) {
+                Ok(v) => match expected_res {
+                    Ok(expected_v) => assert_eq!(v, expected_v),
                     Err(expected_e) => {
                         panic!(
                             "Expected error but got valid result instead\n\
