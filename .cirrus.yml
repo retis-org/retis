@@ -105,6 +105,10 @@ functional_task:
       env:
         DISTRO: x86_64-c9s
         TEST_EXTRA_ARGS: "--ovs-track"
+    - name: Centos 10 Stream (x86_64)
+      env:
+        DISTRO: x86_64-c10s
+        TEST_EXTRA_ARGS: "--ovs-track"
     - name: Ubuntu Jammy (x86_64)
       env:
         DISTRO: x86_64-jammy
