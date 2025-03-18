@@ -1,8 +1,7 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
-    fs::OpenOptions,
-    io::Write,
+    fs::{File, OpenOptions},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -223,20 +222,6 @@ impl SubCommandParserRunner for Pcap {
         let (probe_type, target) = parse_cli_probe(&self.probe)?;
         let symbol = Symbol::from_name_no_inspect(target);
 
-        // Create a PCAP writer to push our events / metadata.
-        let mut writer = PcapNgWriter::new(match &self.out {
-            Some(file) => OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(file)
-                .or_else(|_| bail!("Could not create or open '{}'", file.display()))?,
-            None => OpenOptions::new()
-                .write(true)
-                .open("/proc/self/fd/1")
-                .or_else(|_| bail!("Could not open stdout"))?,
-        })?;
-
         // Filtering logic.
         let filter = |r#type: &str, name: &str| -> bool {
             if name == symbol.name() && r#type == probe_type.to_str() {
@@ -245,24 +230,46 @@ impl SubCommandParserRunner for Pcap {
             false
         };
 
+        let mut writer: Option<PcapNgWriter<File>> = None;
+        let write_block = |b: &Block| -> Result<()> {
+            if writer.is_none() {
+                // Create a PCAP writer to push our events / metadata.
+                writer = Some(PcapNgWriter::new(match &self.out {
+                    Some(file) => OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(file)
+                        .or_else(|_| bail!("Could not create or open '{}'", file.display()))?,
+                    None => OpenOptions::new()
+                        .write(true)
+                        .open("/proc/self/fd/1")
+                        .or_else(|_| bail!("Could not open stdout"))?,
+                })?);
+            }
+            writer.as_mut().unwrap().write_block(b)?;
+            Ok(())
+        };
+
         handle_events(
             self.input.as_path(),
             &filter,
             &mut EventParser::new(),
-            &mut writer,
-        )
+            write_block,
+        )?;
+        Ok(())
     }
 }
 
 /// Internal logic to retrieve our events to feed the parser.
-fn handle_events<W>(
+fn handle_events<F>(
     input: &Path,
     filter: &dyn Fn(&str, &str) -> bool,
     parser: &mut EventParser,
-    writer: &mut PcapNgWriter<W>,
+    mut writer_callback: F,
 ) -> Result<()>
 where
-    W: Write,
+    F: FnMut(&Block) -> Result<()>,
 {
     // Create running instance that will handle signal termination.
     let run = Running::new();
@@ -286,7 +293,7 @@ where
                     // Parse the event and then write the pcap blocks to the file.
                     let parsed_blocks = parser.parse(&event)?;
                     for b in parsed_blocks {
-                        writer.write_block(&b)?;
+                        writer_callback(&b)?;
                     }
                 }
             }
