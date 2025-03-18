@@ -15,6 +15,7 @@ use pcap_file::{
         blocks::{
             enhanced_packet::{EnhancedPacketBlock, EnhancedPacketOption},
             interface_description::{InterfaceDescriptionBlock, InterfaceDescriptionOption},
+            Block,
         },
         PcapNgBlock, PcapNgWriter,
     },
@@ -46,8 +47,7 @@ struct EventParserStats {
 
 /// Events parser: handles the logic to convert our events to the PCAP format
 /// that is represented by the internal writer.
-struct EventParser<'a, W: Write> {
-    writer: &'a mut PcapNgWriter<W>,
+struct EventParser {
     /// Known network interfaces and their PCAP id: netns|ifindex -> pcap id.
     ifaces: HashMap<u64, u32>,
     /// Statistics.
@@ -61,24 +61,23 @@ macro_rules! some_or_return {
             Some(val) => val,
             None => {
                 $stat += 1;
-                return Ok(());
+                return Ok(Vec::<Block>::new());
             }
         }
     };
 }
 
-impl<'a, W: Write> EventParser<'a, W> {
+impl EventParser {
     /// Creates a new EventParser from a PcapNgWriter<W: Write>.
-    fn from(writer: &'a mut PcapNgWriter<W>) -> Self {
+    fn new() -> Self {
         Self {
-            writer,
             ifaces: HashMap::new(),
             stats: EventParserStats::default(),
         }
     }
 
     /// Parse & process a single Retis event.
-    fn parse(&mut self, event: &Event) -> Result<()> {
+    fn parse(&mut self, event: &Event) -> Result<Vec<Block>> {
         // Having a common & a kernel section is mandatory for now, seeing a
         // filtered event w/o one of those is bogus.
         let common = event
@@ -117,13 +116,14 @@ impl<'a, W: Write> EventParser<'a, W> {
         };
 
         // If we see this iface for the first time, add a description block.
+        let mut v = Vec::new();
         let key: u64 = ((netns as u64) << 32) | ifindex as u64;
         let id = match self.ifaces.contains_key(&key) {
             // Unwrap if contains is true.
             true => *self.ifaces.get(&key).unwrap(),
             false => {
-                self.writer.write_block(
-                    &InterfaceDescriptionBlock {
+                v.push(
+                    InterfaceDescriptionBlock {
                         linktype: DataLink::ETHERNET,
                         snaplen: 0xffff,
                         options: vec![
@@ -138,7 +138,7 @@ impl<'a, W: Write> EventParser<'a, W> {
                         ],
                     }
                     .into_block(),
-                )?;
+                );
 
                 let id = self.ifaces.len() as u32;
                 self.ifaces.insert(key, id);
@@ -147,8 +147,8 @@ impl<'a, W: Write> EventParser<'a, W> {
         };
 
         // Add the packet itself.
-        self.writer.write_block(
-            &EnhancedPacketBlock {
+        v.push(
+            EnhancedPacketBlock {
                 interface_id: id,
                 timestamp: Duration::from_nanos(common.timestamp),
                 original_len: packet.len,
@@ -158,10 +158,11 @@ impl<'a, W: Write> EventParser<'a, W> {
                     &kernel.probe_type, &kernel.symbol
                 )))],
             }
+            .into_owned()
             .into_block(),
-        )?;
+        );
 
-        Ok(())
+        Ok(v)
     }
 
     /// Report parser statistics. Should be called after processing was
@@ -247,7 +248,8 @@ impl SubCommandParserRunner for Pcap {
         handle_events(
             self.input.as_path(),
             &filter,
-            &mut EventParser::from(&mut writer),
+            &mut EventParser::new(),
+            &mut writer,
         )
     }
 }
@@ -256,7 +258,8 @@ impl SubCommandParserRunner for Pcap {
 fn handle_events<W>(
     input: &Path,
     filter: &dyn Fn(&str, &str) -> bool,
-    parser: &mut EventParser<W>,
+    parser: &mut EventParser,
+    writer: &mut PcapNgWriter<W>,
 ) -> Result<()>
 where
     W: Write,
@@ -280,7 +283,11 @@ where
                     }
                     matched = true;
 
-                    parser.parse(&event)?;
+                    // Parse the event and then write the pcap blocks to the file.
+                    let parsed_blocks = parser.parse(&event)?;
+                    for b in parsed_blocks {
+                        writer.write_block(&b)?;
+                    }
                 }
             }
             None => break,
