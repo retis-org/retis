@@ -308,3 +308,168 @@ where
     parser.report_stats();
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_handle_events() {
+        let test_cases = [
+            // Valid data.
+            (
+                "test_data/test_events_packets.json",
+                "kretprobe",
+                "ovs_dp_upcall",
+                Ok(()),
+                vec![
+                    Block::InterfaceDescription(InterfaceDescriptionBlock {
+                        linktype: DataLink::ETHERNET,
+                        snaplen: 65535,
+                        options: vec![
+                            InterfaceDescriptionOption::IfName(Cow::Owned(
+                                "veth-ns01-ovs (4026531840)".to_string(),
+                            )),
+                            InterfaceDescriptionOption::IfDescription(Cow::Owned(
+                                "ifindex=10".to_string(),
+                            )),
+                        ],
+                    }),
+                    Block::EnhancedPacket(EnhancedPacketBlock {
+                        data: Cow::Borrowed(&[
+                            250, 92, 189, 142, 204, 1, 166, 194, 17, 113, 89, 69, 8, 0, 69, 0, 0,
+                            84, 163, 249, 64, 0, 64, 1, 27, 73, 192, 168, 125, 10, 192, 168, 125,
+                            11, 8, 0, 64, 90, 113, 76, 0, 1, 237, 253, 217, 103, 0, 0, 0, 0, 179,
+                            31, 13, 0, 0, 0, 0, 0, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+                            28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
+                            46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+                        ]),
+                        interface_id: 0,
+                        timestamp: Duration::from_nanos(30419169125909),
+                        original_len: 98,
+                        options: vec![EnhancedPacketOption::Comment(Cow::Owned(
+                            "probe=kretprobe:ovs_dp_upcall".to_string(),
+                        ))],
+                    }),
+                    Block::InterfaceDescription(InterfaceDescriptionBlock {
+                        linktype: DataLink::ETHERNET,
+                        snaplen: 65535,
+                        options: vec![
+                            InterfaceDescriptionOption::IfName(Cow::Owned(
+                                "veth-ns02-ovs (4026531840)".to_string(),
+                            )),
+                            InterfaceDescriptionOption::IfDescription(Cow::Owned(
+                                "ifindex=12".to_string(),
+                            )),
+                        ],
+                    }),
+                    Block::EnhancedPacket(EnhancedPacketBlock {
+                        data: Cow::Borrowed(&[
+                            166, 194, 17, 113, 89, 69, 250, 92, 189, 142, 204, 1, 8, 0, 69, 0, 0,
+                            84, 76, 35, 0, 0, 64, 1, 179, 31, 192, 168, 125, 11, 192, 168, 125, 10,
+                            0, 0, 72, 90, 113, 76, 0, 1, 237, 253, 217, 103, 0, 0, 0, 0, 179, 31,
+                            13, 0, 0, 0, 0, 0, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+                            29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
+                            47, 48, 49, 50, 51, 52, 53, 54, 55,
+                        ]),
+                        interface_id: 1,
+                        timestamp: Duration::from_nanos(30419169372774),
+                        original_len: 98,
+                        options: vec![EnhancedPacketOption::Comment(Cow::Owned(
+                            "probe=kretprobe:ovs_dp_upcall".to_string(),
+                        ))],
+                    }),
+                ],
+            ),
+            // Partially valid data (outdated ct, missing ct_status field).
+            // TODO: Skip invalid lines, but process everything else.
+            // Both for list-probes and for generating the actual pcap.
+            (
+                "test_data/test_events_packets_invalid_ct.json",
+                "",
+                "",
+                Err(anyhow!(
+                    "Failed to create EventSection for owner ct from \
+                json: missing field `ct_status`"
+                )),
+                Vec::<Block>::new(),
+            ),
+            // No packet data provided.
+            (
+                "test_data/test_events_bench.json",
+                "",
+                "",
+                Err(anyhow!("Probe not found in the events")),
+                Vec::<Block>::new(),
+            ),
+            // Completely missing probe section.
+            (
+                "test_data/test_events_bench_no_probes.json",
+                "",
+                "",
+                Err(anyhow!("Probe not found in the events")),
+                Vec::<Block>::new(),
+            ),
+            // Garbage data.
+            (
+                "test_data/available_events",
+                "",
+                "",
+                Err(anyhow!(
+                    "Failed to parse event file: \
+                Error(\"expected value\", line: 1, column: 1)"
+                )),
+                Vec::<Block>::new(),
+            ),
+        ];
+        for (file_path, filter_probe_type, filter_symbol, expected_res, expected_blocks) in
+            test_cases.into_iter()
+        {
+            // Filtering logic.
+            let filter = |r#type: &str, name: &str| -> bool {
+                if name == filter_symbol && r#type == filter_probe_type {
+                    return true;
+                }
+                false
+            };
+            // Write all results into a vector.
+            let mut blocks = Vec::<Block>::new();
+            let write_blocks = |b: &Block| -> Result<()> {
+                blocks.push(b.clone().into_owned());
+                Ok(())
+            };
+            match handle_events(
+                Path::new(file_path),
+                &filter,
+                &mut EventParser::new(),
+                write_blocks,
+            ) {
+                Ok(v) => match expected_res {
+                    Ok(expected_v) => {
+                        assert_eq!(v, expected_v);
+                        assert_eq!(blocks, expected_blocks);
+                    }
+                    Err(expected_e) => {
+                        panic!(
+                            "Expected error but got valid result instead\n\
+                            expected error: {}\n\
+                            result: {:#?}",
+                            expected_e, v
+                        )
+                    }
+                },
+                Err(e) => match expected_res {
+                    Ok(expected_v) => {
+                        panic!(
+                            "Expected a valid result but got err instead\n\
+                            result: {:#?},\n\
+                            err: {}",
+                            expected_v, e
+                        )
+                    }
+                    Err(expected_e) => assert_eq!(e.to_string(), expected_e.to_string(),),
+                },
+            }
+        }
+    }
+}
