@@ -75,7 +75,7 @@ struct retis_context {
 
 /* Helper to retrieve a function parameter argument using the common context */
 #define retis_get_param(ctx, offset, type)	\
-	(type)(((offset) >= 0 && (offset) < REG_MAX && (offset) < ctx->regs.num) ?	\
+	(type)(((offset) >= 0 && (offset) < ctx->regs.num) && (offset) < REG_MAX ?	\
        ctx->regs.reg[offset] : 0)
 
 /* Check if a given offset is valid. */
