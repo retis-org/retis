@@ -96,6 +96,23 @@ class Retis:
 
         return result
 
+    def pcap(self, *args):
+        """Run retis pcap {ARGS}. Always appends location of events file."""
+        cmd = [self.binary, "pcap"] + list(args) + [self._event_file()]
+        print(f"running command: {cmd}")
+        try:
+            result = subprocess.run(cmd, capture_output=True, check=True)
+        except subprocess.CalledProcessError as e:
+            raise Exception(
+                "Failure running pcap subcommand\n"
+                + f"cmd: {e.cmd}\n"
+                + f"stdout: {e.stdout}\n"
+                + f"stderr: {e.stderr}\n"
+                + f"return code: {e.returncode}"
+            )
+
+        return result.stdout
+
 
 class NetworkNamespaces:
     """Helper class that allows adding and removing network namespaces."""

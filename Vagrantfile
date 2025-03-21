@@ -2,6 +2,7 @@
 # vi: set ft=ruby :
 
 # Common for all rhel-like distros
+# Installation of scapy 2.6.1 and above will fail on RHEL 8.
 $bootstrap_rhel_common = <<SCRIPT
 set -euxo pipefail
 dnf install -y \
@@ -23,6 +24,7 @@ dnf install -y \
     ethtool
 
     python3 -m pip install pytest pyroute2
+    python3 -m pip install "scapy>=2.6.1"
 SCRIPT
 
 # CentOS mirror URL changed but the c8s image is no longer being built. We
@@ -145,7 +147,7 @@ Vagrant.configure("2") do |config|
           jq
 
       su vagrant -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy"
-      python3 -m pip install pytest pyroute2
+      python3 -m pip install pytest pyroute2 "scapy>=2.6.1"
     SHELL
 
     jammy.vm.synced_folder ".", "/vagrant", type: "rsync"
