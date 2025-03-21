@@ -120,10 +120,6 @@ static __always_inline bool batch_is_processing(const struct upcall_batch *batch
 
 /* Retrieve the current upcall being processed. */
 static __always_inline struct user_upcall_info *batch_current(struct upcall_batch *batch) {
-	/* In some cases the branch get optimized. The barrier below
-	 * appear to prevent that making the verifier happy.
-	 */
-	barrier_var(batch->current_upcall);
 	if (!batch ||
 	    batch->current_upcall >= (UPCALL_MAX_BATCH -1))
 		return NULL;
