@@ -148,13 +148,13 @@ impl EventFmt for SkbEvent {
 
                     let mut flags = Vec::new();
                     // Same order as tcpdump.
-                    if (v4.flags & 1) << 2 != 0 {
+                    if v4.flags & (1 << 2) != 0 {
                         flags.push("+");
                     }
-                    if (v4.flags & 1) << 1 != 0 {
+                    if v4.flags & (1 << 1) != 0 {
                         flags.push("DF");
                     }
-                    if (v4.flags & 1) != 0 {
+                    if v4.flags & 1 != 0 {
                         flags.push("rsvd");
                     }
 
@@ -186,22 +186,22 @@ impl EventFmt for SkbEvent {
             space.write(f)?;
 
             let mut flags = Vec::new();
-            if (tcp.flags & 1) != 0 {
+            if tcp.flags & 1 != 0 {
                 flags.push('F');
             }
-            if (tcp.flags & 1) << 1 != 0 {
+            if tcp.flags & (1 << 1) != 0 {
                 flags.push('S');
             }
-            if (tcp.flags & 1) << 2 != 0 {
+            if tcp.flags & (1 << 2) != 0 {
                 flags.push('R');
             }
-            if (tcp.flags & 1) << 3 != 0 {
+            if tcp.flags & (1 << 3) != 0 {
                 flags.push('P');
             }
-            if (tcp.flags & 1) << 4 != 0 {
+            if tcp.flags & (1 << 4) != 0 {
                 flags.push('.');
             }
-            if (tcp.flags & 1) << 5 != 0 {
+            if tcp.flags & (1 << 5) != 0 {
                 flags.push('U');
             }
             write!(f, "flags [{}]", flags.into_iter().collect::<String>())?;
@@ -213,7 +213,7 @@ impl EventFmt for SkbEvent {
                 write!(f, " seq {}", tcp.seq)?;
             }
 
-            if (tcp.flags & 1) << 4 != 0 {
+            if tcp.flags & (1 << 4) != 0 {
                 write!(f, " ack {}", tcp.ack_seq)?;
             }
 
