@@ -109,13 +109,8 @@ Vagrant.configure("2") do |config|
        dnf config-manager --set-enabled crb
     SHELL
     centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
-    # Repo https://mirror.stream.centos.org/SIGs/10-stream/nfv/x86_64/openvswitch-2/
-    # exists but at the moment does not provide the selinux dependency that's
-    # required to install openvswitch. Use a COPR repo instead.
-    # Issue tracker: https://issues.redhat.com/browse/RHEL-83794
     centos.vm.provision "shell", inline: <<-SHELL
-       rpm --import https://download.copr.fedorainfracloud.org/results/nmstate/ovs-el10/pubkey.gpg
-       dnf copr enable -y nmstate/ovs-el10
+       dnf install -y centos-release-nfv-openvswitch
        dnf install -y openvswitch3.5
     SHELL
 
