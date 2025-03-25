@@ -19248,6 +19248,7 @@ struct bpf_prog_kstats {
 struct bpf_raw_tp_link {
 	struct bpf_link link;
 	struct bpf_raw_event_map *btp;
+	u64 cookie;
 };
 
 struct bpf_perf_link {
