@@ -30,31 +30,70 @@ When collecting event for later `pcap-ng` file generation (see `retis pcap
 Full `skb` collector events will be constructed with the following. Non-reported
 or invalid fields are automatically hidden.
 
-### Ns event section
+When using the multi-line format the metadata is displayed on a line, followed
+by information from the packet itself on a second dedicated line:
+
+```none
+{metadata info}
+{packet info}
+```
+
+### Metadata info
+
+#### Ns event section
 
 ```none
 ns {namespace id}
 ```
 
-### Net device event section
+#### Net device event section
 
 ```none
 if {interface index} ({interface name}) rxif {rx interface index}
 ```
 
-### Ethernet section
-
-```none
-{src mac} > {dst mac} ethertype {etype name} ({etype hex})
-```
-
-### VLAN section
+#### VLAN section
 
 ```none
 vlan (id {id} prio {prio} [drop] [accel])
 ```
 
-### ARP section
+#### Metadata & dataref sections
+
+Those two sections report metadata and reference counting from the socket buffer
+itself.
+
+```none
+skb [{csum} hash {skb hash} data_len {skb data lenght} priority {skb priority}
+    {flags} fclone {fast clone count} users {user count} dataref {skb refcount}]
+```
+
+- `csum` information, the format is slightly different depending on the checksum
+  status (`none`, `unnecessary`, `partial` or `complete`).
+- `flags` are a combination of `nohdr` and `cloned`.
+
+#### GSO section
+
+Generic Segmentation Offload information linked to an `skb` (see
+`skb_shared_info`).
+
+```none
+gso [type {GSO type} flags {GSO flags} frags {nr of GSO frags}
+    segs {nr of GSO segs} size {GSO size}]
+```
+
+- `GSO type`, see `SKBFL_*` in the Linux kernel `include/linux/skbuff.h`.
+- `GSO flags`, see `SKB_GSO_*` in the Linux kernel `include/linux/skbuff.h`.
+
+### Packet info
+
+#### Ethernet section
+
+```none
+{src mac} > {dst mac} ethertype {etype name} ({etype hex})
+```
+
+#### ARP section
 
 ```none
 request who-has {ip} tell {ip}
@@ -66,7 +105,7 @@ or,
 reply {ip} is at {mac}
 ```
 
-### IP section
+#### IP section
 
 For IPv4:
 
@@ -85,7 +124,7 @@ For IPv6:
     len {packet len} proto {protocol name}
 ```
 
-### TCP section
+#### TCP section
 
 ```none
 flags [{flags}] seq {sequence} ack {acked sequence} win {window}
@@ -95,41 +134,14 @@ flags [{flags}] seq {sequence} ack {acked sequence} win {window}
   (reset), `P` (push), `.` (ack), `U` (urgent).
 - `sequence` can be a range (`{start}:{end}`) or a single number (`{sequence}`).
 
-### UDP section
+#### UDP section
 
 ```none
 len {UDP data len}
 ```
 
-### ICMP & ICMPv6 sections
+#### ICMP & ICMPv6 sections
 
 ```none
 type {type number} code {code number}
 ```
-
-### Metadata & dataref sections
-
-Those two sections report metadata and reference counting from the socket buffer
-itself.
-
-```none
-skb [{csum} hash {skb hash} data_len {skb data lenght} priority {skb priority}
-    {flags} fclone {fast clone count} users {user count} dataref {skb refcount}]
-```
-
-- `csum` information, the format is slightly different depending on the checksum
-  status (`none`, `unnecessary`, `partial` or `complete`).
-- `flags` are a combination of `nohdr` and `cloned`.
-
-### GSO section
-
-Generic Segmentation Offload information linked to an `skb` (see
-`skb_shared_info`).
-
-```none
-gso [type {GSO type} flags {GSO flags} frags {nr of GSO frags}
-    segs {nr of GSO segs} size {GSO size}]
-```
-
-- `GSO type`, see `SKBFL_*` in the Linux kernel `include/linux/skbuff.h`.
-- `GSO flags`, see `SKB_GSO_*` in the Linux kernel `include/linux/skbuff.h`.

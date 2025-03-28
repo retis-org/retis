@@ -326,6 +326,11 @@ impl DelimWriter {
         Ok(())
     }
 
+    /// Reset the DelimWriter to behave as if it was new.
+    pub fn reset(&mut self) {
+        self.first = true;
+    }
+
     /// Was the DelimWriter used?
     pub fn used(&self) -> bool {
         !self.first
