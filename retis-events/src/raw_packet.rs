@@ -4,7 +4,7 @@ use std::fmt;
 use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
-use retis_pnet::ethernet::*;
+use retis_pnet::{ethernet::*, vlan::*, *};
 
 use super::*;
 
@@ -119,6 +119,53 @@ impl RawPacket {
             )?;
         }
 
+        let (etype, payload) = self.traverse_vlan(f, format, eth.get_ethertype(), eth.payload())?;
+
+        Ok(())
+    }
+
+    fn traverse_vlan<'a>(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        etype: EtherType,
+        payload: &'a [u8],
+    ) -> FmtResult<(EtherType, &'a [u8])> {
+        match etype {
+            EtherTypes::Vlan | EtherTypes::PBridge => match VlanPacket::new(payload) {
+                Some(vlan) => {
+                    if format.print_ll {
+                        self.format_vlan(f, &vlan)?;
+                    }
+                    self.traverse_vlan(f, format, vlan.get_ethertype(), &payload[4..])
+                }
+                None => Err(PacketFmtError::Truncated),
+            },
+            _ => Ok((etype, payload)),
+        }
+    }
+
+    fn format_vlan(&self, f: &mut Formatter, vlan: &VlanPacket) -> FmtResult<()> {
+        write!(
+            f,
+            " vlan {} p {}{} ethertype {} ({:#06x})",
+            vlan.get_vlan_identifier(),
+            vlan.get_priority_code_point().0,
+            if vlan.get_drop_eligible_indicator() == 1 {
+                " DEI"
+            } else {
+                ""
+            },
+            match helpers::etype_str(vlan.get_ethertype().0) {
+                Some(etype) => etype,
+                None =>
+                    return Err(PacketFmtError::NotSupported(format!(
+                        "etype {:#06x}",
+                        vlan.get_ethertype().0
+                    ))),
+            },
+            vlan.get_ethertype().0,
+        )?;
         Ok(())
     }
 }
