@@ -20,6 +20,7 @@ pub fn etype_str(etype: u16) -> Option<&'static str> {
         0x88a8 => "802.1Q QinQ",
         0x88e5 => "802.1AE MACsec",
         0x88f7 => "PTP",
+        0x9100 => "802.1Q-9100",
         _ => return None,
     })
 }
