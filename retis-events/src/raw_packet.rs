@@ -3,7 +3,7 @@ use std::fmt;
 use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
-use retis_pnet::{ethernet::*, vlan::*, *};
+use retis_pnet::{arp::*, ethernet::*, vlan::*, *};
 
 use super::*;
 
@@ -120,7 +120,20 @@ impl RawPacket {
 
         let (etype, payload) = self.traverse_vlan(f, format, eth.get_ethertype(), eth.payload())?;
 
-        Ok(())
+        if format.print_ll {
+            write!(f, " ")?;
+        }
+
+        match etype {
+            EtherTypes::Arp => match ArpPacket::new(payload) {
+                Some(arp) => self.format_arp(f, format, &arp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            _ => Err(PacketFmtError::NotSupported(format!(
+                "etype {:#06x}",
+                etype.0
+            ))),
+        }
     }
 
     fn traverse_vlan<'a>(
@@ -168,6 +181,43 @@ impl RawPacket {
         match helpers::etype_str(ethertype.0) {
             Some(etype) => write!(f, " ethertype {etype} ({:#06x})", ethertype.0)?,
             None => write!(f, " ethertype ({:#06x})", ethertype.0)?,
+        }
+
+        Ok(())
+    }
+
+    fn format_arp(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        arp: &ArpPacket,
+    ) -> FmtResult<()> {
+        let sha = arp.get_sender_hw_addr();
+        let tha = arp.get_target_hw_addr();
+        let spa = arp.get_sender_proto_addr();
+        let tpa = arp.get_target_proto_addr();
+
+        match arp.get_operation() {
+            ArpOperations::Request => {
+                write!(f, "request who-has {tpa}")?;
+                if !tha.is_zero() {
+                    write!(f, " ({tha})")?;
+                }
+                write!(f, " tell {spa}")?;
+            }
+            ArpOperations::Reply => {
+                write!(f, "reply {spa} is-at {sha}")?;
+            }
+            ArpOperations::ReverseRequest => write!(f, "reverse request who-is {tha} tell {sha}")?,
+            ArpOperations::ReverseReply => {
+                write!(f, "reverse reply {tha} at {tpa}")?;
+            }
+            op => {
+                return Err(PacketFmtError::NotSupported(format!(
+                    "ARP operation {}",
+                    op.0
+                )))
+            }
         }
 
         Ok(())

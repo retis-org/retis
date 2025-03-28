@@ -154,29 +154,6 @@ impl EventFmt for SkbEvent {
             packet.packet.event_fmt(f, format)?;
         }
 
-        if let Some(arp) = &self.arp {
-            space.write(f)?;
-
-            match arp.operation {
-                ArpOperation::Request => {
-                    write!(f, "request who-has {}", arp.tpa)?;
-                    if arp.tha != "00:00:00:00:00:00" {
-                        write!(f, " ({})", arp.tha)?;
-                    }
-                    write!(f, " tell {}", arp.spa)?;
-                }
-                ArpOperation::Reply => {
-                    write!(f, "reply {} is-at {}", arp.spa, arp.sha)?;
-                }
-                ArpOperation::ReverseRequest => {
-                    write!(f, "reverse request who-is {} tell {}", arp.tha, arp.sha)?;
-                }
-                ArpOperation::ReverseReply => {
-                    write!(f, "reverse reply {} at {}", arp.tha, arp.tpa)?;
-                }
-            }
-        }
-
         if let Some(ip) = &self.ip {
             space.write(f)?;
 
