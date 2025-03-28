@@ -1,7 +1,7 @@
 use std::fmt;
 
 use super::{
-    helpers::{etype_str, protocol_str, RawPacket},
+    helpers::{etype_str, protocol_str},
     *,
 };
 use crate::{event_section, event_type, Formatter};
@@ -150,6 +150,10 @@ impl EventFmt for SkbEvent {
         if format.multiline && space.used() {
             writeln!(f)?;
             space.reset();
+        }
+
+        if let Some(packet) = &self.packet {
+            packet.packet.event_fmt(f, format)?;
         }
 
         if format.print_ll {

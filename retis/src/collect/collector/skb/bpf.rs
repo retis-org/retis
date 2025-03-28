@@ -20,10 +20,7 @@ use crate::{
         parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
     },
     event_section_factory,
-    events::{
-        helpers::{etype_str, RawPacket},
-        *,
-    },
+    events::{helpers::etype_str, *},
     helpers,
 };
 
