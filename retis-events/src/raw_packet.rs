@@ -4,7 +4,7 @@ use std::fmt;
 use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
-use retis_pnet::{ethernet::*, vlan::*, *};
+use retis_pnet::{arp::*, ethernet::*, vlan::*, *};
 
 use super::*;
 
@@ -64,6 +64,8 @@ enum PacketFmtError {
     Truncated,
     #[error("Protocol not supported ({0})")]
     NotSupported(String),
+    #[error("Parsing error ({0})")]
+    Parsing(String),
 }
 
 type FmtResult<T> = std::result::Result<T, PacketFmtError>;
@@ -76,6 +78,7 @@ impl EventFmt for RawPacket {
         match self.format_packet(f, format) {
             Err(Truncated) => write!(f, "... (truncated or incomplete packet)"),
             Err(NotSupported(p)) => write!(f, "... ({p} not supported, use 'retis pcap')"),
+            Err(Parsing(e)) => write!(f, "... (parsing error: {e})"),
             Err(Fmt(e)) => Err(e),
             _ => Ok(()),
         }
@@ -121,7 +124,20 @@ impl RawPacket {
 
         let (etype, payload) = self.traverse_vlan(f, format, eth.get_ethertype(), eth.payload())?;
 
-        Ok(())
+        if format.print_ll {
+            write!(f, " ")?;
+        }
+
+        match etype {
+            EtherTypes::Arp => match ArpPacket::new(payload) {
+                Some(arp) => self.format_arp(f, format, &arp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            _ => Err(PacketFmtError::NotSupported(format!(
+                "etype {:#06x}",
+                etype.0
+            ))),
+        }
     }
 
     fn traverse_vlan<'a>(
@@ -168,4 +184,78 @@ impl RawPacket {
         )?;
         Ok(())
     }
+
+    fn format_arp(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        arp: &ArpPacket,
+    ) -> FmtResult<()> {
+        let sha = arp.get_sender_hw_addr();
+        let tha = arp.get_target_hw_addr();
+        let spa = arp.get_sender_proto_addr();
+        let tpa = arp.get_target_proto_addr();
+
+        match arp.get_operation() {
+            ArpOperations::Request => {
+                write!(f, "request who-has ")?;
+                format_ipv4_addr(f, u32::from(tpa))?;
+                if !tha.is_zero() {
+                    write!(f, " ({tha})")?;
+                }
+                write!(f, " tell ")?;
+                format_ipv4_addr(f, u32::from(spa))?;
+            }
+            ArpOperations::Reply => {
+                write!(f, "reply ")?;
+                format_ipv4_addr(f, u32::from(spa))?;
+                write!(f, " is-at {sha}")?;
+            }
+            ArpOperations::ReverseRequest => write!(f, "reverse request who-is {tha} tell {sha}")?,
+            ArpOperations::ReverseReply => {
+                write!(f, "reverse reply {tha} at ")?;
+                format_ipv4_addr(f, u32::from(tpa))?;
+            }
+            op => {
+                return Err(PacketFmtError::NotSupported(format!(
+                    "ARP operation {}",
+                    op.0
+                )))
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Formats an IPv4 address.
+fn format_ipv4_addr(f: &mut Formatter, raw: u32) -> FmtResult<()> {
+    let u8_to_utf8 = |f: &mut Formatter, mut input: u32| -> FmtResult<()> {
+        let mut push = false;
+
+        for ord in [100, 10, 1] {
+            let current = input / ord;
+            input %= ord;
+
+            // Do not push leading 0s but always push the last number in case
+            // all we got was 0s.
+            if push || current != 0 || ord == 1 {
+                push = true;
+                match char::from_digit(current, 10) {
+                    Some(digit) => write!(f, "{digit}")?,
+                    None => return Err(PacketFmtError::Parsing("IPv4 address".to_string())),
+                }
+            }
+        }
+
+        Ok(())
+    };
+
+    u8_to_utf8(f, raw >> 24)?;
+    write!(f, ".")?;
+    u8_to_utf8(f, (raw >> 16) & 0xff)?;
+    write!(f, ".")?;
+    u8_to_utf8(f, (raw >> 8) & 0xff)?;
+    write!(f, ".")?;
+    u8_to_utf8(f, raw & 0xff)
 }
