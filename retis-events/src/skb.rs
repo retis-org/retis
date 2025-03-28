@@ -66,16 +66,6 @@ impl EventFmt for SkbEvent {
         }
 
         if format.print_ll {
-            if let Some(eth) = &self.eth {
-                space.write(f)?;
-
-                write!(f, "{} > {} ethertype", eth.src, eth.dst)?;
-                if let Some(etype) = etype_str(eth.etype) {
-                    write!(f, " {etype}")?;
-                }
-                write!(f, " ({:#06x})", eth.etype)?;
-            }
-
             if let Some(vlan) = &self.vlan {
                 space.write(f)?;
 
@@ -86,6 +76,91 @@ impl EventFmt for SkbEvent {
                     "vlan (id {} prio {}{}{})",
                     vlan.vid, vlan.pcp, drop, accel
                 )?;
+            }
+        }
+
+        if self.meta.is_some() || self.data_ref.is_some() {
+            space.write(f)?;
+            write!(f, "skb [")?;
+
+            if let Some(meta) = &self.meta {
+                write!(f, "csum ")?;
+                match meta.ip_summed {
+                    0 => write!(f, "none ")?,
+                    1 => write!(f, "unnecessary (level {}) ", meta.csum_level)?,
+                    2 => write!(f, "complete ({:#x}) ", meta.csum)?,
+                    3 => {
+                        let start = meta.csum & 0xffff;
+                        let off = meta.csum >> 16;
+                        write!(f, "partial (start {start} off {off}) ")?;
+                    }
+                    x => write!(f, "unknown ({x}) ")?,
+                }
+
+                if meta.hash != 0 {
+                    write!(f, "hash {:#x} ", meta.hash)?;
+                }
+                write!(f, "len {} ", meta.len,)?;
+                if meta.data_len != 0 {
+                    write!(f, "data_len {} ", meta.data_len)?;
+                }
+                write!(f, "priority {}", meta.priority)?;
+            }
+
+            if self.meta.is_some() && self.data_ref.is_some() {
+                write!(f, " ")?;
+            }
+
+            if let Some(dataref) = &self.data_ref {
+                if dataref.nohdr {
+                    write!(f, "nohdr ")?;
+                }
+                if dataref.cloned {
+                    write!(f, "cloned ")?;
+                }
+                if dataref.fclone > 0 {
+                    write!(f, "fclone {} ", dataref.fclone)?;
+                }
+                write!(f, "users {} dataref {}", dataref.users, dataref.dataref)?;
+            }
+
+            write!(f, "]")?;
+        }
+
+        if let Some(gso) = &self.gso {
+            space.write(f)?;
+            write!(f, "gso [type {:#x} ", gso.r#type)?;
+
+            if gso.flags != 0 {
+                write!(f, "flags {:#x} ", gso.flags)?;
+            }
+
+            if gso.frags != 0 {
+                write!(f, "frags {} ", gso.frags)?;
+            }
+
+            if gso.segs != 0 {
+                write!(f, "segs {} ", gso.segs)?;
+            }
+
+            write!(f, "size {}]", gso.size)?;
+        }
+
+        // Do not format any section other than packet information after this.
+        if format.multiline && space.used() {
+            writeln!(f)?;
+            space.reset();
+        }
+
+        if format.print_ll {
+            if let Some(eth) = &self.eth {
+                space.write(f)?;
+
+                write!(f, "{} > {} ethertype", eth.src, eth.dst)?;
+                if let Some(etype) = etype_str(eth.etype) {
+                    write!(f, " {etype}")?;
+                }
+                write!(f, " ({:#06x})", eth.etype)?;
             }
         }
 
@@ -239,73 +314,6 @@ impl EventFmt for SkbEvent {
             space.write(f)?;
             // TODO: text version
             write!(f, "type {} code {}", icmpv6.r#type, icmpv6.code)?;
-        }
-
-        if self.meta.is_some() || self.data_ref.is_some() {
-            space.write(f)?;
-            write!(f, "skb [")?;
-
-            if let Some(meta) = &self.meta {
-                write!(f, "csum ")?;
-                match meta.ip_summed {
-                    0 => write!(f, "none ")?,
-                    1 => write!(f, "unnecessary (level {}) ", meta.csum_level)?,
-                    2 => write!(f, "complete ({:#x}) ", meta.csum)?,
-                    3 => {
-                        let start = meta.csum & 0xffff;
-                        let off = meta.csum >> 16;
-                        write!(f, "partial (start {start} off {off}) ")?;
-                    }
-                    x => write!(f, "unknown ({x}) ")?,
-                }
-
-                if meta.hash != 0 {
-                    write!(f, "hash {:#x} ", meta.hash)?;
-                }
-                write!(f, "len {} ", meta.len,)?;
-                if meta.data_len != 0 {
-                    write!(f, "data_len {} ", meta.data_len)?;
-                }
-                write!(f, "priority {}", meta.priority)?;
-            }
-
-            if self.meta.is_some() && self.data_ref.is_some() {
-                write!(f, " ")?;
-            }
-
-            if let Some(dataref) = &self.data_ref {
-                if dataref.nohdr {
-                    write!(f, "nohdr ")?;
-                }
-                if dataref.cloned {
-                    write!(f, "cloned ")?;
-                }
-                if dataref.fclone > 0 {
-                    write!(f, "fclone {} ", dataref.fclone)?;
-                }
-                write!(f, "users {} dataref {}", dataref.users, dataref.dataref)?;
-            }
-
-            write!(f, "]")?;
-        }
-
-        if let Some(gso) = &self.gso {
-            space.write(f)?;
-            write!(f, "gso [type {:#x} ", gso.r#type)?;
-
-            if gso.flags != 0 {
-                write!(f, "flags {:#x} ", gso.flags)?;
-            }
-
-            if gso.frags != 0 {
-                write!(f, "frags {} ", gso.frags)?;
-            }
-
-            if gso.segs != 0 {
-                write!(f, "segs {} ", gso.segs)?;
-            }
-
-            write!(f, "size {}]", gso.size)?;
         }
 
         // If we didn't print any section, it means the section has raw packet
