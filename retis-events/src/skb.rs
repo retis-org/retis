@@ -68,10 +68,10 @@ impl EventFmt for SkbEvent {
 
                 write!(
                     f,
-                    "vlan_accel (id {} prio {}{})",
+                    "vlan_accel (vlan {} p {}{})",
                     vlan.vid,
                     vlan.pcp,
-                    if vlan.dei { " drop" } else { "" }
+                    if vlan.dei { " DEI" } else { "" }
                 )?;
             }
         }

@@ -55,7 +55,7 @@ if {interface index} ({interface name}) rxif {rx interface index}
 #### VLAN acceleration section
 
 ```none
-vlan_accel (id {id} prio {prio} [drop])
+vlan_accel (vlan {id} p {prio} [DEI])
 ```
 
 #### Metadata & dataref sections
@@ -91,6 +91,12 @@ gso [type {GSO type} flags {GSO flags} frags {nr of GSO frags}
 
 ```none
 {src mac} > {dst mac} ethertype {etype name} ({etype hex})
+```
+
+#### VLAN
+
+```none
+vlan {id} p {prio} [DEI] ethertype {etype name} ({etype hex})
 ```
 
 #### ARP section
