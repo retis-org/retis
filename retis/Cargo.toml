@@ -29,7 +29,7 @@ debug = ["dep:rbpf"]
 [dependencies]
 anyhow = "1.0"
 base64 = "0.22"
-btf-rs = "1.1"
+btf-rs = { git = "https://github.com/retis-org/btf-rs", branch = "main" }
 byteorder = "1.5"
 caps = "0.5"
 cargo-platform = "=0.1.8" # 0.1.9 requires rustc >= 1.78 but c8s only has 1.75.0
