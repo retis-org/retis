@@ -39,8 +39,6 @@ pub struct SkbEvent {
 
 impl EventFmt for SkbEvent {
     fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
-        let mut len = 0;
-
         let mut space = DelimWriter::new(' ');
 
         if let Some(ns) = &self.ns {
@@ -152,54 +150,6 @@ impl EventFmt for SkbEvent {
         if let Some(packet) = &self.packet {
             space.write(f)?;
             packet.packet.event_fmt(f, format)?;
-        }
-
-        if let Some(ip) = &self.ip {
-            // The below is not 100% correct:
-            // - IPv4: we use the fixed 20 bytes size as options are rarely used.
-            // - IPv6: we do not support extension headers.
-            len = match ip.version {
-                SkbIpVersion::V4 { .. } => ip.len.saturating_sub(20),
-                _ => ip.len,
-            };
-        }
-
-        if let Some(tcp) = &self.tcp {
-            space.write(f)?;
-
-            let mut flags = Vec::new();
-            if tcp.flags & 1 != 0 {
-                flags.push('F');
-            }
-            if tcp.flags & (1 << 1) != 0 {
-                flags.push('S');
-            }
-            if tcp.flags & (1 << 2) != 0 {
-                flags.push('R');
-            }
-            if tcp.flags & (1 << 3) != 0 {
-                flags.push('P');
-            }
-            if tcp.flags & (1 << 4) != 0 {
-                flags.push('.');
-            }
-            if tcp.flags & (1 << 5) != 0 {
-                flags.push('U');
-            }
-            write!(f, "flags [{}]", flags.into_iter().collect::<String>())?;
-
-            let len = len.saturating_sub(tcp.doff as u16 * 4);
-            if len > 0 {
-                write!(f, " seq {}:{}", tcp.seq, tcp.seq as u64 + len as u64)?;
-            } else {
-                write!(f, " seq {}", tcp.seq)?;
-            }
-
-            if tcp.flags & (1 << 4) != 0 {
-                write!(f, " ack {}", tcp.ack_seq)?;
-            }
-
-            write!(f, " win {}", tcp.window)?;
         }
 
         if let Some(icmp) = &self.icmp {
