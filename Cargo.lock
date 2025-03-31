@@ -1417,6 +1417,8 @@ dependencies = [
 name = "retis-pnet"
 version = "1.5.0"
 dependencies = [
+ "pnet_macros",
+ "pnet_macros_support",
  "pnet_packet",
 ]
 
