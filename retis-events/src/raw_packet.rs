@@ -302,7 +302,14 @@ impl RawPacket {
         }
         write!(f, " ({protocol})")?;
 
-        self.format_l4(f, format, ip.get_next_level_protocol(), ip.payload())
+        self.format_l4(
+            f,
+            format,
+            ip.get_next_level_protocol(),
+            ip.payload(),
+            // FIXME: support IPv4 options.
+            ip.get_total_length().saturating_sub(20) as u32,
+        )
     }
 
     fn format_ipv6(
@@ -357,7 +364,14 @@ impl RawPacket {
         }
         write!(f, " ({protocol})")?;
 
-        self.format_l4(f, format, ip.get_next_header(), ip.payload())
+        self.format_l4(
+            f,
+            format,
+            ip.get_next_header(),
+            ip.payload(),
+            // FIXME: support extension headers.
+            ip.get_payload_length() as u32,
+        )
     }
 
     fn format_l4(
@@ -366,10 +380,15 @@ impl RawPacket {
         format: &DisplayFormat,
         protocol: IpNextHeaderProtocol,
         payload: &[u8],
+        payload_len: u32,
     ) -> FmtResult<()> {
         match protocol {
             IpNextHeaderProtocols::Udp => match UdpPacket::new(payload) {
                 Some(udp) => self.format_udp(f, format, &udp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            IpNextHeaderProtocols::Tcp => match TcpPacket::new(payload) {
+                Some(tcp) => self.format_tcp(f, format, &tcp, payload_len),
                 None => Err(PacketFmtError::Truncated),
             },
             _ => Err(PacketFmtError::NotSupported(format!(
@@ -387,6 +406,51 @@ impl RawPacket {
     ) -> FmtResult<()> {
         // Substract the UDP header size when reporting the length.
         write!(f, " len {}", udp.get_length().saturating_sub(8))?;
+        Ok(())
+    }
+
+    fn format_tcp(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        tcp: &TcpPacket,
+        payload_len: u32,
+    ) -> FmtResult<()> {
+        let tcp_flags = tcp.get_flags();
+
+        let mut flags = Vec::new();
+        if tcp_flags & 1 != 0 {
+            flags.push('F');
+        }
+        if tcp_flags & (1 << 1) != 0 {
+            flags.push('S');
+        }
+        if tcp_flags & (1 << 2) != 0 {
+            flags.push('R');
+        }
+        if tcp_flags & (1 << 3) != 0 {
+            flags.push('P');
+        }
+        if tcp_flags & (1 << 4) != 0 {
+            flags.push('.');
+        }
+        if tcp_flags & (1 << 5) != 0 {
+            flags.push('U');
+        }
+        write!(f, " flags [{}]", flags.into_iter().collect::<String>())?;
+
+        let seq = tcp.get_sequence();
+        match payload_len.saturating_sub(tcp.get_data_offset() as u32 * 4) {
+            off if off > 0 => write!(f, " seq {seq}:{}", seq + off)?,
+            _ => write!(f, " seq {seq}")?,
+        }
+
+        if tcp_flags & (1 << 4) != 0 {
+            write!(f, " ack {}", tcp.get_acknowledgement())?;
+        }
+
+        write!(f, " win {}", tcp.get_window())?;
+
         Ok(())
     }
 }
