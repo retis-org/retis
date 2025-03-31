@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{helpers::protocol_str, *};
+use super::*;
 use crate::{event_section, event_type, Formatter};
 
 /// Skb event section.
@@ -155,8 +155,6 @@ impl EventFmt for SkbEvent {
         }
 
         if let Some(ip) = &self.ip {
-            space.write(f)?;
-
             // The below is not 100% correct:
             // - IPv4: we use the fixed 20 bytes size as options are rarely used.
             // - IPv6: we do not support extension headers.
@@ -164,66 +162,6 @@ impl EventFmt for SkbEvent {
                 SkbIpVersion::V4 { .. } => ip.len.saturating_sub(20),
                 _ => ip.len,
             };
-
-            if let Some(tcp) = &self.tcp {
-                write!(f, "{}.{} > {}.{}", ip.saddr, tcp.sport, ip.daddr, tcp.dport)?;
-            } else if let Some(udp) = &self.udp {
-                write!(f, "{}.{} > {}.{}", ip.saddr, udp.sport, ip.daddr, udp.dport)?;
-            } else {
-                write!(f, "{} > {}", ip.saddr, ip.daddr)?;
-            }
-
-            write!(
-                f,
-                "{}",
-                match ip.ecn {
-                    1 => " ECT(1)",
-                    2 => " ECT(0)",
-                    3 => " CE",
-                    _ => "",
-                }
-            )?;
-
-            write!(f, " ttl {}", ip.ttl)?;
-
-            match &ip.version {
-                SkbIpVersion::V4 { v4 } => {
-                    write!(f, " tos {:#x} id {} off {}", v4.tos, v4.id, v4.offset * 8)?;
-
-                    let mut flags = Vec::new();
-                    // Same order as tcpdump.
-                    if v4.flags & (1 << 2) != 0 {
-                        flags.push("+");
-                    }
-                    if v4.flags & (1 << 1) != 0 {
-                        flags.push("DF");
-                    }
-                    if v4.flags & 1 != 0 {
-                        flags.push("rsvd");
-                    }
-
-                    if !flags.is_empty() {
-                        write!(f, " [{}]", flags.join(","))?;
-                    }
-                }
-                SkbIpVersion::V6 { v6 } => {
-                    if v6.flow_label != 0 {
-                        write!(f, " label {:#x}", v6.flow_label)?;
-                    }
-                }
-            }
-
-            // In some rare cases the IP header might not be fully filled yet,
-            // length might be unset.
-            if ip.len != 0 {
-                write!(f, " len {}", ip.len)?;
-            }
-
-            if let Some(proto) = protocol_str(ip.protocol) {
-                write!(f, " proto {proto}")?;
-            }
-
-            write!(f, " ({})", ip.protocol)?;
         }
 
         if let Some(tcp) = &self.tcp {

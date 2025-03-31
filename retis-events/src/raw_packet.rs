@@ -3,7 +3,7 @@ use std::fmt;
 use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
-use retis_pnet::{arp::*, ethernet::*, vlan::*, *};
+use retis_pnet::{arp::*, ethernet::*, ip::*, ipv4::*, ipv6::*, tcp::*, udp::*, vlan::*, *};
 
 use super::*;
 
@@ -129,6 +129,14 @@ impl RawPacket {
                 Some(arp) => self.format_arp(f, format, &arp),
                 None => Err(PacketFmtError::Truncated),
             },
+            EtherTypes::Ipv4 => match Ipv4Packet::new(payload) {
+                Some(ip) => self.format_ipv4(f, format, &ip),
+                None => Err(PacketFmtError::Truncated),
+            },
+            EtherTypes::Ipv6 => match Ipv6Packet::new(payload) {
+                Some(ip) => self.format_ipv6(f, format, &ip),
+                None => Err(PacketFmtError::Truncated),
+            },
             _ => Err(PacketFmtError::NotSupported(format!(
                 "etype {:#06x}",
                 etype.0
@@ -218,6 +226,130 @@ impl RawPacket {
                     op.0
                 )))
             }
+        }
+
+        Ok(())
+    }
+
+    fn format_ipv4(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        ip: &Ipv4Packet,
+    ) -> FmtResult<()> {
+        let ports =
+            match ip.get_next_level_protocol() {
+                IpNextHeaderProtocols::Tcp => TcpPacket::new(ip.payload())
+                    .map(|tcp| (tcp.get_source(), tcp.get_destination())),
+                IpNextHeaderProtocols::Udp => UdpPacket::new(ip.payload())
+                    .map(|udp| (udp.get_source(), udp.get_destination())),
+                _ => None,
+            };
+        if let Some((sport, dport)) = ports {
+            write!(
+                f,
+                "{}.{sport} > {}.{dport}",
+                ip.get_source(),
+                ip.get_destination()
+            )?;
+        } else {
+            write!(f, "{} > {}", ip.get_source(), ip.get_destination())?;
+        }
+
+        write!(
+            f,
+            " tos {:#x}{} ttl {} id {} off {}",
+            ip.get_dscp(),
+            match ip.get_ecn() {
+                1 => " ECT(1)",
+                2 => " ECT(0)",
+                3 => " CE",
+                _ => "",
+            },
+            ip.get_ttl(),
+            ip.get_identification(),
+            ip.get_fragment_offset() * 8,
+        )?;
+
+        let mut flags = Vec::new();
+        if ip.get_flags() & (1 << 2) != 0 {
+            flags.push("+");
+        }
+        if ip.get_flags() & (1 << 1) != 0 {
+            flags.push("DF");
+        }
+        if ip.get_flags() & 1 != 0 {
+            flags.push("rsvd");
+        }
+        if !flags.is_empty() {
+            write!(f, " [{}]", flags.join(","))?;
+        }
+
+        // In some rare cases the IP header might not be fully filled yet,
+        // length might be unset.
+        let len = ip.get_total_length();
+        if len > 0 {
+            write!(f, " len {len}")?;
+        }
+
+        let protocol = ip.get_next_level_protocol().0;
+        match helpers::protocol_str(protocol) {
+            Some(proto) => write!(f, " proto {proto} ({protocol})")?,
+            None => write!(f, " proto ({protocol})")?,
+        }
+
+        Ok(())
+    }
+
+    fn format_ipv6(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        ip: &Ipv6Packet,
+    ) -> FmtResult<()> {
+        let ports =
+            match ip.get_next_header() {
+                IpNextHeaderProtocols::Tcp => TcpPacket::new(ip.payload())
+                    .map(|tcp| (tcp.get_source(), tcp.get_destination())),
+                IpNextHeaderProtocols::Udp => UdpPacket::new(ip.payload())
+                    .map(|udp| (udp.get_source(), udp.get_destination())),
+                _ => None,
+            };
+        if let Some((sport, dport)) = ports {
+            write!(
+                f,
+                "{}.{sport} > {}.{dport}",
+                ip.get_source(),
+                ip.get_destination()
+            )?;
+        } else {
+            write!(f, "{} > {}", ip.get_source(), ip.get_destination())?;
+        }
+
+        write!(
+            f,
+            "{} ttl {} label {:#x}",
+            match ip.get_traffic_class() & 0x3 {
+                1 => " ECT(1)",
+                2 => " ECT(0)",
+                3 => " CE",
+                _ => "",
+            },
+            ip.get_hop_limit(),
+            ip.get_flow_label(),
+        )?;
+
+        // In some rare cases the IP header might not be fully filled yet,
+        // length might be unset.
+        let len = ip.get_payload_length();
+        if len > 0 {
+            write!(f, " len {len}")?;
+        }
+
+        let protocol = ip.get_next_header().0;
+        match helpers::protocol_str(protocol) {
+            Some(proto) => write!(f, " proto {proto} ({protocol})")?,
+            None => write!(f, " proto ({protocol})")?,
         }
 
         Ok(())

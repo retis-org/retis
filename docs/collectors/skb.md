@@ -121,8 +121,8 @@ reply {ip} is at {mac}
 For IPv4:
 
 ```none
-{src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} tos {tos} id {id}
-    off {frag offset} [{flags}] len {packet len} proto {protocol name}
+{src ip}.{src port} > {dst ip}.{dst port} tos {tos} {ECN info} ttl {ttl} id {id}
+    off {frag offset} [{flags}] len {packet len} proto {protocol name} ({protocol hex})
 ```
 
 - `ECN info` can be one of `CE`, `ECT(0)` or `ECT(1)`.
@@ -132,7 +132,7 @@ For IPv6:
 
 ```none
 {src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} label {flow label}
-    len {packet len} proto {protocol name}
+    len {packet len} proto {protocol name} ({protocol hex})
 ```
 
 #### TCP section
