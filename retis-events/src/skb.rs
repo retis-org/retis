@@ -1,9 +1,6 @@
 use std::fmt;
 
-use super::{
-    helpers::{etype_str, protocol_str},
-    *,
-};
+use super::{helpers::protocol_str, *};
 use crate::{event_section, event_type, Formatter};
 
 /// Skb event section.
@@ -153,19 +150,8 @@ impl EventFmt for SkbEvent {
         }
 
         if let Some(packet) = &self.packet {
+            space.write(f)?;
             packet.packet.event_fmt(f, format)?;
-        }
-
-        if format.print_ll {
-            if let Some(eth) = &self.eth {
-                space.write(f)?;
-
-                write!(f, "{} > {} ethertype", eth.src, eth.dst)?;
-                if let Some(etype) = etype_str(eth.etype) {
-                    write!(f, " {etype}")?;
-                }
-                write!(f, " ({:#06x})", eth.etype)?;
-            }
         }
 
         if let Some(arp) = &self.arp {
