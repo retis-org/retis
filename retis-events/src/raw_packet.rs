@@ -3,6 +3,7 @@ use std::fmt;
 use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
+use retis_pnet::ethernet::*;
 
 use super::*;
 
@@ -54,10 +55,69 @@ impl<'de> serde::Deserialize<'de> for RawPacket {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+enum PacketFmtError {
+    #[error("Formatting error")]
+    Fmt(#[from] fmt::Error),
+    #[error("Payload is truncated or incomplete")]
+    Truncated,
+    #[error("Protocol not supported ({0})")]
+    NotSupported(String),
+}
+
+type FmtResult<T> = std::result::Result<T, PacketFmtError>;
+
 impl EventFmt for RawPacket {
-    // Do not issue errors on parsing: keep things best effort (except for real
-    // formatting issues).
     fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
+        // Do not propagate errors on parsing: keep things best effort (except
+        // for real formatting issues).
+        use PacketFmtError::*;
+        match self.format_packet(f, format) {
+            Err(Truncated) => write!(f, "... (truncated or incomplete packet)"),
+            Err(NotSupported(p)) => write!(f, "... ({p} not supported, use 'retis pcap')"),
+            Err(Fmt(e)) => Err(e),
+            _ => Ok(()),
+        }
+    }
+}
+
+impl RawPacket {
+    fn format_packet(&self, f: &mut Formatter, format: &DisplayFormat) -> FmtResult<()> {
+        match EthernetPacket::new(&self.0) {
+            Some(eth) => self.format_ethernet(f, format, &eth),
+            None => Err(PacketFmtError::Truncated),
+        }
+    }
+
+    fn format_ethernet(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        eth: &EthernetPacket,
+    ) -> FmtResult<()> {
+        let etype = match helpers::etype_str(eth.get_ethertype().0) {
+            Some(etype) => etype,
+            // We can report non-Ethernet packets, sanity check they look like
+            // one. We could still get invalid ones, if the data at the right
+            // offset looks like an Ethernet packet; but what else can we do?
+            None => {
+                return Err(PacketFmtError::NotSupported(format!(
+                    "etype {:#06x}",
+                    eth.get_ethertype().0
+                )))
+            }
+        };
+
+        if format.print_ll {
+            write!(
+                f,
+                "{} > {} ethertype {etype} ({:#06x})",
+                eth.get_source(),
+                eth.get_destination(),
+                eth.get_ethertype().0
+            )?;
+        }
+
         Ok(())
     }
 }

@@ -1406,9 +1406,11 @@ dependencies = [
  "once_cell",
  "pyo3",
  "retis-derive",
+ "retis-pnet",
  "serde",
  "serde_json",
  "serde_with",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
