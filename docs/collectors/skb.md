@@ -151,3 +151,13 @@ len {UDP data len}
 ```none
 type {type number} code {code number}
 ```
+
+#### Geneve
+
+```none
+geneve [{flags}] vni {vni} [rsvd {rsvd}] proto {etype name} ({etype hex})
+    opts_len {opts_len}
+```
+
+- `flags` are constructed using a combination of `O` (control), `C` (critical)
+  and `Rx` for reserved bits where `x` is the bit number.
