@@ -234,7 +234,7 @@ impl RawPacket {
     fn format_ipv4(
         &self,
         f: &mut Formatter,
-        _format: &DisplayFormat,
+        format: &DisplayFormat,
         ip: &Ipv4Packet,
     ) -> FmtResult<()> {
         let ports =
@@ -298,13 +298,13 @@ impl RawPacket {
             None => write!(f, " proto ({protocol})")?,
         }
 
-        Ok(())
+        self.format_l4(f, format, ip.get_next_level_protocol(), ip.payload())
     }
 
     fn format_ipv6(
         &self,
         f: &mut Formatter,
-        _format: &DisplayFormat,
+        format: &DisplayFormat,
         ip: &Ipv6Packet,
     ) -> FmtResult<()> {
         let ports =
@@ -352,6 +352,36 @@ impl RawPacket {
             None => write!(f, " proto ({protocol})")?,
         }
 
+        self.format_l4(f, format, ip.get_next_header(), ip.payload())
+    }
+
+    fn format_l4(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        protocol: IpNextHeaderProtocol,
+        payload: &[u8],
+    ) -> FmtResult<()> {
+        match protocol {
+            IpNextHeaderProtocols::Udp => match UdpPacket::new(payload) {
+                Some(udp) => self.format_udp(f, format, &udp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            _ => Err(PacketFmtError::NotSupported(format!(
+                "protocol {:#x}",
+                protocol.0
+            ))),
+        }
+    }
+
+    fn format_udp(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        udp: &UdpPacket,
+    ) -> FmtResult<()> {
+        // Substract the UDP header size when reporting the length.
+        write!(f, " len {}", udp.get_length().saturating_sub(8))?;
         Ok(())
     }
 }
