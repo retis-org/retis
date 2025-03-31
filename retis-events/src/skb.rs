@@ -202,13 +202,6 @@ impl EventFmt for SkbEvent {
             write!(f, " win {}", tcp.window)?;
         }
 
-        if let Some(udp) = &self.udp {
-            space.write(f)?;
-            let len = udp.len;
-            // Substract the UDP header size when reporting the length.
-            write!(f, "len {}", len.saturating_sub(8))?;
-        }
-
         if let Some(icmp) = &self.icmp {
             space.write(f)?;
             // TODO: text version
