@@ -4,4 +4,6 @@ version = "1.5.0"
 edition = "2021"
 
 [dependencies]
+pnet_macros = "0.35"
+pnet_macros_support = "0.35"
 pnet_packet = "0.35"
