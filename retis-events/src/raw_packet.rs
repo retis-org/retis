@@ -4,7 +4,8 @@ use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
 use retis_pnet::{
-    arp::*, ethernet::*, icmp::*, icmpv6::*, ip::*, ipv4::*, ipv6::*, tcp::*, udp::*, vlan::*, *,
+    arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipv4::*, ipv6::*, tcp::*, udp::*,
+    vlan::*, *,
 };
 
 use super::*;
@@ -104,7 +105,7 @@ impl RawPacket {
             // offset looks like an Ethernet packet; but what else can we do?
             None => {
                 return Err(PacketFmtError::NotSupported(format!(
-                    "etype {:#06x}",
+                    "ethertype {:#06x}",
                     eth.get_ethertype().0
                 )))
             }
@@ -126,6 +127,16 @@ impl RawPacket {
             write!(f, " ")?;
         }
 
+        self.format_l3(f, format, etype, payload)
+    }
+
+    fn format_l3(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        etype: EtherType,
+        payload: &[u8],
+    ) -> FmtResult<()> {
         match etype {
             EtherTypes::Arp => match ArpPacket::new(payload) {
                 Some(arp) => self.format_arp(f, format, &arp),
@@ -140,7 +151,7 @@ impl RawPacket {
                 None => Err(PacketFmtError::Truncated),
             },
             _ => Err(PacketFmtError::NotSupported(format!(
-                "etype {:#06x}",
+                "ethertype {:#06x}",
                 etype.0
             ))),
         }
@@ -406,12 +417,19 @@ impl RawPacket {
     fn format_udp(
         &self,
         f: &mut Formatter,
-        _format: &DisplayFormat,
+        format: &DisplayFormat,
         udp: &UdpPacket,
     ) -> FmtResult<()> {
         // Substract the UDP header size when reporting the length.
         write!(f, " len {}", udp.get_length().saturating_sub(8))?;
-        Ok(())
+
+        match udp.get_destination() {
+            6081 => match GenevePacket::new(udp.payload()) {
+                Some(geneve) => self.format_geneve(f, format, &geneve),
+                None => Err(PacketFmtError::Truncated),
+            },
+            _ => Ok(()),
+        }
     }
 
     fn format_tcp(
@@ -487,5 +505,48 @@ impl RawPacket {
             icmp.get_icmpv6_code().0
         )?;
         Ok(())
+    }
+
+    fn format_geneve(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        geneve: &GenevePacket,
+    ) -> FmtResult<()> {
+        let mut flags = Vec::new();
+        if geneve.get_control() == 1 {
+            flags.push("O");
+        }
+        if geneve.get_critical() == 1 {
+            flags.push("C");
+        }
+
+        write!(
+            f,
+            " geneve [{}] vni {:#x}",
+            flags.into_iter().collect::<String>(),
+            geneve.get_vni(),
+        )?;
+
+        let protocol = geneve.get_protocol();
+        if format.print_ll {
+            match helpers::etype_str(protocol.0) {
+                Some(etype) => write!(f, " proto {etype} ({:#06x})", protocol.0)?,
+                None => write!(f, " proto ({:#06x})", protocol.0)?,
+            }
+        }
+
+        if geneve.get_options_len() > 0 {
+            write!(f, " opts_len {}", geneve.get_options_len())?;
+        }
+
+        write!(f, " ")?;
+        match protocol.0 {
+            0x6558 => match EthernetPacket::new(geneve.payload()) {
+                Some(eth) => self.format_ethernet(f, format, &eth),
+                None => Err(PacketFmtError::Truncated),
+            },
+            _ => self.format_l3(f, format, protocol, geneve.payload()),
+        }
     }
 }
