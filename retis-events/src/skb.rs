@@ -152,25 +152,6 @@ impl EventFmt for SkbEvent {
             packet.packet.event_fmt(f, format)?;
         }
 
-        if let Some(icmp) = &self.icmp {
-            space.write(f)?;
-            // TODO: text version
-            write!(f, "type {} code {}", icmp.r#type, icmp.code)?;
-        }
-
-        if let Some(icmpv6) = &self.icmpv6 {
-            space.write(f)?;
-            // TODO: text version
-            write!(f, "type {} code {}", icmpv6.r#type, icmpv6.code)?;
-        }
-
-        // If we didn't print any section, it means the section has raw packet
-        // data but we were unable to decode it. Print something.
-        if !space.used() {
-            space.write(f)?;
-            write!(f, "unknown packet (see raw data)")?;
-        }
-
         Ok(())
     }
 }

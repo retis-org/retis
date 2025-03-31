@@ -3,7 +3,9 @@ use std::fmt;
 use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
-use retis_pnet::{arp::*, ethernet::*, ip::*, ipv4::*, ipv6::*, tcp::*, udp::*, vlan::*, *};
+use retis_pnet::{
+    arp::*, ethernet::*, icmp::*, icmpv6::*, ip::*, ipv4::*, ipv6::*, tcp::*, udp::*, vlan::*, *,
+};
 
 use super::*;
 
@@ -386,6 +388,14 @@ impl RawPacket {
                 Some(tcp) => self.format_tcp(f, format, &tcp, payload_len),
                 None => Err(PacketFmtError::Truncated),
             },
+            IpNextHeaderProtocols::Icmp => match IcmpPacket::new(payload) {
+                Some(icmp) => self.format_icmp(f, format, &icmp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            IpNextHeaderProtocols::Icmpv6 => match Icmpv6Packet::new(payload) {
+                Some(icmp) => self.format_icmpv6(f, format, &icmp),
+                None => Err(PacketFmtError::Truncated),
+            },
             _ => Err(PacketFmtError::NotSupported(format!(
                 "protocol {:#x}",
                 protocol.0
@@ -446,6 +456,36 @@ impl RawPacket {
 
         write!(f, " win {}", tcp.get_window())?;
 
+        Ok(())
+    }
+
+    fn format_icmp(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        icmp: &IcmpPacket,
+    ) -> FmtResult<()> {
+        write!(
+            f,
+            " type {} code {}",
+            icmp.get_icmp_type().0,
+            icmp.get_icmp_code().0
+        )?;
+        Ok(())
+    }
+
+    fn format_icmpv6(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        icmp: &Icmpv6Packet,
+    ) -> FmtResult<()> {
+        write!(
+            f,
+            " type {} code {}",
+            icmp.get_icmpv6_type().0,
+            icmp.get_icmpv6_code().0
+        )?;
         Ok(())
     }
 }
