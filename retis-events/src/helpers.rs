@@ -6,6 +6,7 @@ pub fn etype_str(etype: u16) -> Option<&'static str> {
     Some(match etype {
         0x0800 => "IPv4",
         0x0806 => "ARP",
+        0x6558 => "TEB",
         0x8035 => "Reverse ARP",
         0x809b => "Appletalk",
         0x80f3 => "Appletalk ARP",
