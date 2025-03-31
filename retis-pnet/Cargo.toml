@@ -1,0 +1,7 @@
+[package]
+name = "retis-pnet"
+version = "1.5.0"
+edition = "2021"
+
+[dependencies]
+pnet_packet = "0.35"

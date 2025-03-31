@@ -5,6 +5,7 @@
 !**/Cargo.*
 !retis-derive
 !retis-events
+!retis-pnet
 !retis/profiles
 !retis/build.rs
 !retis/src
