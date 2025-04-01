@@ -5,7 +5,7 @@ use base64::{
 };
 use retis_pnet::{
     arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipv4::*, ipv6::*, tcp::*, udp::*,
-    vlan::*, *,
+    vlan::*, vxlan::*, *,
 };
 
 use super::*;
@@ -424,6 +424,10 @@ impl RawPacket {
         write!(f, " len {}", udp.get_length().saturating_sub(8))?;
 
         match udp.get_destination() {
+            4789 | 8472 => match VxlanPacket::new(udp.payload()) {
+                Some(vxlan) => self.format_vxlan(f, format, &vxlan),
+                None => Err(PacketFmtError::Truncated),
+            },
             6081 => match GenevePacket::new(udp.payload()) {
                 Some(geneve) => self.format_geneve(f, format, &geneve),
                 None => Err(PacketFmtError::Truncated),
@@ -505,6 +509,30 @@ impl RawPacket {
             icmp.get_icmpv6_code().0
         )?;
         Ok(())
+    }
+
+    fn format_vxlan(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        vxlan: &VxlanPacket,
+    ) -> FmtResult<()> {
+        write!(
+            f,
+            " vxlan [{}] vni {:#x}",
+            if vxlan.get_flags() & (1 << 3) != 0 {
+                "I"
+            } else {
+                ""
+            },
+            vxlan.get_vni(),
+        )?;
+
+        write!(f, " ")?;
+        match EthernetPacket::new(vxlan.payload()) {
+            Some(eth) => self.format_ethernet(f, format, &eth),
+            None => Err(PacketFmtError::Truncated),
+        }
     }
 
     fn format_geneve(

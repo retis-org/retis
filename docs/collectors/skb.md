@@ -165,3 +165,11 @@ geneve [{flags}] vni {vni} proto {etype name} ({etype hex}) opts_len {opts_len}
 
 - `flags` are constructed using a combination of `O` (control) and `C`
   (critical).
+
+#### VXLAN
+
+```none
+vxlan [{flags}] vni {vni}
+```
+
+- `flags` can be `I` (set for a valid VNI).
