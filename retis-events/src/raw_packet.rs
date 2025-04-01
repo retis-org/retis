@@ -369,20 +369,41 @@ impl RawPacket {
             write!(f, " len {len}")?;
         }
 
-        let protocol = ip.get_next_header().0;
-        if let Some(proto) = helpers::protocol_str(protocol) {
+        let mut protocol = ip.get_next_header();
+        let mut len = ip.get_payload_length() as u32;
+        let mut payload = ip.payload();
+
+        // Check if the next header is an IPv6 extension.
+        use IpNextHeaderProtocols::*;
+        let is_extension = |protocol| match protocol {
+            #[allow(non_upper_case_globals)]
+            Hopopt | Ipv6Route | Ipv6Frag | Ah | Ipv6NoNxt | Ipv6Opts | MobilityHeader | Hip
+            | Shim6 | Test1 | Test2 => true,
+            _ => false,
+        };
+
+        // Skip IPv6 extensions.
+        while is_extension(protocol) {
+            let mut exts = vec![format!("{protocol}")];
+            match ExtensionPacket::new(payload) {
+                Some(ext) => {
+                    protocol = ext.get_next_header();
+                    len = ext.get_hdr_ext_len() as u32 * 8 + 8 - 2;
+                    payload = &payload[(len as usize + 2)..];
+
+                    exts.push(format!("{protocol}"));
+                }
+                None => return Err(PacketFmtError::Truncated),
+            }
+            write!(f, " exts [{}]", exts.join(","),)?;
+        }
+
+        if let Some(proto) = helpers::protocol_str(protocol.0) {
             write!(f, " proto {proto}")?;
         }
-        write!(f, " ({protocol})")?;
+        write!(f, " ({})", protocol.0)?;
 
-        self.format_l4(
-            f,
-            format,
-            ip.get_next_header(),
-            ip.payload(),
-            // FIXME: support extension headers.
-            ip.get_payload_length() as u32,
-        )
+        self.format_l4(f, format, protocol, payload, len)
     }
 
     fn format_l4(
