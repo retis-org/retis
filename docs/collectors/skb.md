@@ -161,3 +161,11 @@ geneve [{flags}] vni {vni} [rsvd {rsvd}] proto {etype name} ({etype hex})
 
 - `flags` are constructed using a combination of `O` (control), `C` (critical)
   and `Rx` for reserved bits where `x` is the bit number.
+
+#### VXLAN
+
+```none
+vxlan [{flags}] vni {vni}
+```
+
+- `flags` can be `I` (set for a valid VNI).
