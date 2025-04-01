@@ -122,7 +122,8 @@ For IPv4:
 
 ```none
 {src ip}.{src port} > {dst ip}.{dst port} tos {tos} {ECN info} ttl {ttl} id {id}
-    off {frag offset} [{flags}] len {packet len} proto {protocol name} ({protocol hex})
+    off {frag offset} [{flags}] len {packet len} opts [{IPv4 options}]
+    proto {protocol name} ({protocol hex})
 ```
 
 - `ECN info` can be one of `CE`, `ECT(0)` or `ECT(1)`.

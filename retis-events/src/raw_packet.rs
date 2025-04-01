@@ -305,6 +305,25 @@ impl RawPacket {
             write!(f, " len {len}")?;
         }
 
+        // Handle IPv4 options.
+        let mut opts = Vec::new();
+        for opt in ip.get_options_iter() {
+            match opt.get_number() {
+                // EOL and padding are more or less the same thing. Only show
+                // the EOL option if it is a genuine one.
+                Ipv4OptionNumbers::EOL => {
+                    if !opts.is_empty() {
+                        opts.push(format!("{:?}", opt.get_number()))
+                    }
+                    break;
+                }
+                _ => opts.push(format!("{:?}", opt.get_number())),
+            }
+        }
+        if !opts.is_empty() {
+            write!(f, " opts [{}]", opts.join(","))?;
+        }
+
         let protocol = ip.get_next_level_protocol().0;
         match helpers::protocol_str(protocol) {
             Some(proto) => write!(f, " proto {proto} ({protocol})")?,
@@ -316,8 +335,7 @@ impl RawPacket {
             format,
             ip.get_next_level_protocol(),
             ip.payload(),
-            // FIXME: support IPv4 options.
-            ip.get_total_length().saturating_sub(20) as u32,
+            (ip.get_total_length() as u32).saturating_sub(ip.get_header_length() as u32 * 4),
         )
     }
 
