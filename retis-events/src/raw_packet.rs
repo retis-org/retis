@@ -308,6 +308,14 @@ impl RawPacket {
             write!(f, " len {len}")?;
         }
 
+        let opts = ip
+            .get_options_iter()
+            .map(|o| format!("{:?}", o.get_number()))
+            .collect::<Vec<_>>();
+        if !opts.is_empty() {
+            write!(f, " opts [{}]", opts.join(","))?;
+        }
+
         let protocol = ip.get_next_level_protocol().0;
         write!(f, " proto")?;
         if let Some(proto) = helpers::protocol_str(protocol) {
@@ -320,8 +328,7 @@ impl RawPacket {
             format,
             ip.get_next_level_protocol(),
             ip.payload(),
-            // FIXME: support IPv4 options.
-            ip.get_total_length().saturating_sub(20) as u32,
+            (ip.get_total_length() as u32).saturating_sub(ip.get_header_length() as u32 * 4),
         )
     }
 
