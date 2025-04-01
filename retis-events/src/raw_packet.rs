@@ -508,6 +508,16 @@ impl RawPacket {
         if tcp_flags & TcpFlags::URG != 0 {
             flags.push('U');
         }
+        if tcp_flags & TcpFlags::ECE != 0 {
+            flags.push('E');
+        }
+        if tcp_flags & TcpFlags::CWR != 0 {
+            flags.push('W');
+        }
+        if tcp.get_reserved() & 1 != 0 {
+            /* RFC7560 */
+            flags.push('e');
+        }
         write!(f, " flags [{}]", flags.into_iter().collect::<String>())?;
 
         let seq = tcp.get_sequence();
@@ -521,6 +531,117 @@ impl RawPacket {
         }
 
         write!(f, " win {}", tcp.get_window())?;
+
+        if (tcp.get_data_offset() * 4).saturating_sub(20) > 0 {
+            write!(f, " [")?;
+            let mut sep = DelimWriter::new(',');
+
+            for opt in tcp.get_options_iter() {
+                let optnum = opt.get_number();
+                let datalen = match opt.get_length_raw().first() {
+                    Some(len) if *len >= 2 => *len as usize - 2,
+                    _ => 0,
+                };
+
+                sep.write(f)?;
+                write!(
+                    f,
+                    "{}",
+                    match optnum {
+                        TcpOptionNumbers::EOL => "eol",
+                        TcpOptionNumbers::NOP => "nop",
+                        TcpOptionNumbers::MSS => "mss",
+                        TcpOptionNumbers::WSCALE => "wscale",
+                        TcpOptionNumbers::SACK_PERMITTED => "sackOK",
+                        TcpOptionNumbers::SACK => "sack",
+                        TcpOptionNumbers::ECHO => "echo",
+                        TcpOptionNumbers::ECHO_REPLY => "echoreply",
+                        TcpOptionNumbers::TIMESTAMPS => "TS",
+                        TcpOptionNumbers::CC => "cc",
+                        TcpOptionNumbers::CC_NEW => "ccnew",
+                        TcpOptionNumbers::CC_ECHO => "ccecho",
+                        TcpOptionNumbers::MD5 => "md5",
+                        TcpOptionNumbers::SCPS => "scps",
+                        TcpOptionNumbers::UTO => "uto",
+                        TcpOptionNumbers::TCP_AO => "tcp-ao",
+                        TcpOptionNumbers::MPTCP => "mptcp",
+                        TcpOptionNumbers::TFO => "tfo",
+                        TcpOptionNumbers::EXP_2 => "exp",
+                        _ => "?",
+                    }
+                )?;
+
+                match optnum {
+                    TcpOptionNumbers::MSS => {
+                        if let Some(mss) = opt.payload().get(..2) {
+                            write!(f, " {}", u16::from_be_bytes(mss.try_into().unwrap()))?;
+                        }
+                    }
+                    TcpOptionNumbers::WSCALE => {
+                        if let Some(len) = opt.payload().first() {
+                            write!(f, " {len}")?;
+                        }
+                    }
+                    TcpOptionNumbers::SACK => {
+                        if datalen % 8 != 0 {
+                            write!(f, " invalid")?;
+                        } else {
+                            write!(f, " {} ", datalen / 8)?;
+
+                            for i in (0..datalen).step_by(8) {
+                                if let Some(sack) = opt.payload().get(i..(i + 8)) {
+                                    write!(
+                                        f,
+                                        "{{{}:{}}}",
+                                        u32::from_be_bytes(sack[0..4].try_into().unwrap()),
+                                        u32::from_be_bytes(sack[4..8].try_into().unwrap()),
+                                    )?;
+                                }
+                            }
+                        }
+                    }
+                    TcpOptionNumbers::ECHO
+                    | TcpOptionNumbers::ECHO_REPLY
+                    | TcpOptionNumbers::CC
+                    | TcpOptionNumbers::CC_NEW
+                    | TcpOptionNumbers::CC_ECHO => {
+                        if let Some(val) = opt.payload().get(..4) {
+                            write!(f, " {}", u32::from_be_bytes(val.try_into().unwrap()))?;
+                        }
+                    }
+                    TcpOptionNumbers::TIMESTAMPS => {
+                        if let Some(ts) = opt.payload().get(..8) {
+                            write!(
+                                f,
+                                " val {} ecr {}",
+                                u32::from_be_bytes(ts[0..4].try_into().unwrap()),
+                                u32::from_be_bytes(ts[4..8].try_into().unwrap()),
+                            )?;
+                        }
+                    }
+                    TcpOptionNumbers::MPTCP => {
+                        // FIXME
+                    }
+                    TcpOptionNumbers::TFO => {
+                        if datalen == 0 {
+                            write!(f, " cookiereq")?;
+                        } else {
+                            write!(f, " cookie ")?;
+                            for i in 0..datalen {
+                                if let Some(c) = opt.payload().get(i) {
+                                    write!(f, "{c:#02x}")?;
+                                } else {
+                                    write!(f, "??")?;
+                                }
+                            }
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+
+            write!(f, "]")?;
+        }
 
         Ok(())
     }

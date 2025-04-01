@@ -139,12 +139,16 @@ For IPv6:
 #### TCP section
 
 ```none
-flags [{flags}] seq {sequence} ack {acked sequence} win {window}
+flags [{flags}] seq {sequence} ack {acked sequence} win {window} [{options}]
 ```
 
 - `flags` are constructed using a combination of `F` (fin), `S` (syn), `R`
-  (reset), `P` (push), `.` (ack), `U` (urgent).
+  (reset), `P` (push), `.` (ack), `U` (urgent), `E` (ece), `W` (cwr) and `e`
+  (RFC7560).
 - `sequence` can be a range (`{start}:{end}`) or a single number (`{sequence}`).
+- {options} are constructed by listing all options and for some extra
+  information (mss, wscale, sack, echo, echoreply, cc, ccnew, ccecho, timestamp,
+  tfo).
 
 #### UDP section
 
