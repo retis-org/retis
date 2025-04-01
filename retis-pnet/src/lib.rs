@@ -5,3 +5,4 @@ pub use pnet_packet::*;
 
 pub mod arp;
 pub mod geneve;
+pub mod ipv6;

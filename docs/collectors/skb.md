@@ -132,7 +132,7 @@ For IPv6:
 
 ```none
 {src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} label {flow label}
-    len {packet len} proto {protocol name} ({protocol hex})
+    len {packet len} exts [{IPv6 extensions}] proto {protocol name} ({protocol hex})
 ```
 
 #### TCP section
