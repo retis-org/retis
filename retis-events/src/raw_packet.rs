@@ -508,23 +508,33 @@ impl RawPacket {
         let tcp_flags = tcp.get_flags();
 
         let mut flags = Vec::new();
-        if tcp_flags & 1 != 0 {
+        if tcp_flags & TcpFlags::FIN != 0 {
             flags.push('F');
         }
-        if tcp_flags & (1 << 1) != 0 {
+        if tcp_flags & TcpFlags::SYN != 0 {
             flags.push('S');
         }
-        if tcp_flags & (1 << 2) != 0 {
+        if tcp_flags & TcpFlags::RST != 0 {
             flags.push('R');
         }
-        if tcp_flags & (1 << 3) != 0 {
+        if tcp_flags & TcpFlags::PSH != 0 {
             flags.push('P');
         }
-        if tcp_flags & (1 << 4) != 0 {
+        if tcp_flags & TcpFlags::ACK != 0 {
             flags.push('.');
         }
-        if tcp_flags & (1 << 5) != 0 {
+        if tcp_flags & TcpFlags::URG != 0 {
             flags.push('U');
+        }
+        if tcp_flags & TcpFlags::ECE != 0 {
+            flags.push('E');
+        }
+        if tcp_flags & TcpFlags::CWR != 0 {
+            flags.push('W');
+        }
+        if tcp.get_reserved() & 1 != 0 {
+            /* RFC7560 */
+            flags.push('e');
         }
         write!(f, " flags [{}]", flags.into_iter().collect::<String>())?;
 
@@ -539,6 +549,115 @@ impl RawPacket {
         }
 
         write!(f, " win {}", tcp.get_window())?;
+
+        if (tcp.get_data_offset() * 4).saturating_sub(20) > 0 {
+            write!(f, " [")?;
+            let mut sep = DelimWriter::new(',');
+
+            for opt in tcp.get_options_iter() {
+                let optnum = opt.get_number().0;
+                let datalen = match opt.get_length_raw().first() {
+                    Some(len) if *len >= 2 => *len as usize - 2,
+                    _ => 0,
+                };
+
+                sep.write(f)?;
+                write!(
+                    f,
+                    "{}",
+                    match optnum {
+                        0 => "eol",
+                        1 => "nop",
+                        2 => "mss",
+                        3 => "wscale",
+                        4 => "sackOK",
+                        5 => "sack",
+                        6 => "echo",
+                        7 => "echoreply",
+                        8 => "TS",
+                        11 => "cc",
+                        12 => "ccnew",
+                        13 => "ccecho",
+                        19 => "md5",
+                        20 => "scps",
+                        28 => "uto",
+                        29 => "tcp-ao",
+                        30 => "mptcp",
+                        34 => "tfo",
+                        254 => "exp",
+                        _ => "?",
+                    }
+                )?;
+
+                match optnum {
+                    2 /* MSS */ => {
+                        if let Some(mss) = opt.payload().get(..2) {
+                            write!(f, " {}", u16::from_be_bytes(mss.try_into().unwrap()))?;
+                        }
+                    }
+                    3 /* WSCALE */ => {
+                        if let Some(len) = opt.payload().first() {
+                            write!(f, " {len}")?;
+                        }
+                    }
+                    5 /* SACK */ => {
+                        if datalen % 8 != 0 {
+                            write!(f, " invalid")?;
+                        } else {
+                            write!(f, " {} ", datalen / 8)?;
+
+                            for i in (0..datalen).step_by(8) {
+                                if let Some(sack) = opt.payload().get(i..(i+8)) {
+                                    write!(
+                                        f,
+                                        "{{{}:{}}}",
+                                        u32::from_be_bytes(sack[0..4].try_into().unwrap()),
+                                        u32::from_be_bytes(sack[4..8].try_into().unwrap()),
+                                    )?;
+                                }
+                            }
+                        }
+                    }
+                    6 /* echo */ |
+                    7 /* echoreply */ |
+                    11 /* cc */ |
+                    12 /* ccnew */ |
+                    13 /* ccecho */ => {
+                        if let Some(val) = opt.payload().get(..4) {
+                            write!(f, " {}", u32::from_be_bytes(val.try_into().unwrap()))?;
+                        }
+                    }
+                    8 /* TS */ => if let Some(ts) = opt.payload().get(..8) {
+                        write!(
+                            f,
+                            " val {} ecr {}",
+                            u32::from_be_bytes(ts[0..4].try_into().unwrap()),
+                            u32::from_be_bytes(ts[4..8].try_into().unwrap()),
+                        )?;
+                    }
+                    30 /* MPTCP */ => {
+                        // FIXME
+                    }
+                    34 /* TFO */ => {
+                        if datalen == 0 {
+                            write!(f, " cookiereq")?;
+                        } else {
+                            write!(f, " cookie ")?;
+                            for i in 0..datalen {
+                                if let Some(c) = opt.payload().get(i) {
+                                    write!(f, "{:#02x}", c)?;
+                                } else {
+                                    write!(f, "??")?;
+                                }
+                            }
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+
+            write!(f, "]")?;
+        }
 
         Ok(())
     }
