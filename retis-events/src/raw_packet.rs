@@ -371,21 +371,47 @@ impl RawPacket {
             write!(f, " len {len}")?;
         }
 
-        let protocol = ip.get_next_header().0;
+        let mut protocol = ip.get_next_header();
+        let mut prev_protocol = protocol;
+        let mut len = ip.get_payload_length() as u32;
+        let mut payload = ip.payload();
+        let mut exts = Vec::new();
+
+        // Skip IPv6 extensions.
+        let extensions = ExtensionIterable::from(ip);
+        extensions.for_each(|ext| {
+            exts.push(format!("{protocol}"));
+            prev_protocol = protocol;
+            protocol = ext.get_next_header();
+            // Using `packet_size` works because the payload isn't part of the
+            // extension "packets".
+            len = len.saturating_sub(ext.packet_size() as u32);
+            payload = &payload[ext.packet_size()..];
+        });
+
+        if !exts.is_empty() {
+            write!(f, " exts [{}]", exts.join(","),)?;
+        }
+
+        // Payload, if any, is garbage.
+        if prev_protocol == IpNextHeaderProtocols::Ipv6NoNxt {
+            return Ok(());
+        }
+
         write!(f, " proto")?;
-        if let Some(proto) = helpers::protocol_str(protocol) {
+        if let Some(proto) = helpers::protocol_str(protocol.0) {
             write!(f, " {proto}")?;
         }
-        write!(f, " ({protocol})")?;
+        write!(f, " ({})", protocol.0)?;
 
-        self.format_l4(
-            f,
-            format,
-            ip.get_next_header(),
-            ip.payload(),
-            // FIXME: support extension headers.
-            ip.get_payload_length() as u32,
-        )
+        // ESP is valid but the payload might be unparsable, provide the len and
+        // skip for now.
+        if prev_protocol == IpNextHeaderProtocols::Esp {
+            write!(f, " len {len}")?;
+            return Err(PacketFmtError::NotSupported("ESP packet".to_string()));
+        }
+
+        self.format_l4(f, format, protocol, payload, len)
     }
 
     fn format_l4(
