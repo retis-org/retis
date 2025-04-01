@@ -370,21 +370,71 @@ impl RawPacket {
             write!(f, " len {len}")?;
         }
 
-        let protocol = ip.get_next_header().0;
+        let mut protocol = ip.get_next_header();
+        let mut len = ip.get_payload_length() as u32;
+        let mut payload = ip.payload();
+
+        // Check if the next header is an IPv6 extension.
+        use IpNextHeaderProtocols::*;
+        let is_extension = |protocol| match protocol {
+            #[allow(non_upper_case_globals)]
+            Hopopt | Ipv6Route | Ipv6Frag | Ah | Esp | Ipv6Opts | MobilityHeader | Hip | Shim6
+            | Test1 | Test2 => true,
+            _ => false,
+        };
+
+        // Skip IPv6 extensions.
+        let mut exts = Vec::new();
+        while is_extension(protocol) {
+            exts.push(format!("{protocol}"));
+            // Those should be last anyway.
+            if protocol == Ipv6NoNxt || protocol == Esp {
+                break;
+            }
+            match ExtensionPacket::new(payload) {
+                Some(ext) => {
+                    protocol = ext.get_next_header();
+                    len = ext.get_hdr_ext_len() as u32 * 8 + 8 - 2;
+                    payload = &payload[(len as usize + 2)..];
+                }
+                None => return Err(PacketFmtError::Truncated),
+            }
+        }
+        if !exts.is_empty() {
+            write!(f, " exts [{}]", exts.join(","),)?;
+        }
+
+        // Special handling of some extensions.
+        #[allow(non_upper_case_globals)]
+        match protocol {
+            // Payload, if any, is garbage.
+            Ipv6NoNxt => return Ok(()),
+            // ESP is valid but the payload might be unparsable, provide the
+            // protocol + len and skip for now.
+            Esp => {
+                return match ExtensionPacket::new(payload) {
+                    Some(ext) => {
+                        write!(
+                            f,
+                            " proto {} len {}",
+                            ext.get_next_header().0,
+                            ext.get_hdr_ext_len() as u32 * 8 + 8 - 2
+                        )?;
+                        Err(PacketFmtError::NotSupported("ESP packet".to_string()))
+                    }
+                    None => Err(PacketFmtError::Truncated),
+                };
+            }
+            _ => (),
+        }
+
         write!(f, " proto")?;
-        if let Some(proto) = helpers::protocol_str(protocol) {
+        if let Some(proto) = helpers::protocol_str(protocol.0) {
             write!(f, " {proto}")?;
         }
-        write!(f, " ({protocol})")?;
+        write!(f, " ({})", protocol.0)?;
 
-        self.format_l4(
-            f,
-            format,
-            ip.get_next_header(),
-            ip.payload(),
-            // FIXME: support extension headers.
-            ip.get_payload_length() as u32,
-        )
+        self.format_l4(f, format, protocol, payload, len)
     }
 
     fn format_l4(
