@@ -1,9 +1,10 @@
 /// Networking utilities
-use std::fmt;
+use std::{ffi::CString, fmt, str};
 
 use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
+use pyo3::{exceptions::*, prelude::*, types::*};
 use retis_pnet::{
     arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipv4::*, ipv6::*, tcp::*, udp::*,
     vlan::*, vxlan::*, *,
@@ -15,7 +16,7 @@ use super::*;
 /// We don't use #[event_type] as we're implementing serde::Serialize and
 /// serde::Deserialize manually.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "python", derive(pyo3::IntoPyObject))]
+#[cfg_attr(feature = "python", pyclass)]
 pub struct RawPacket(pub Vec<u8>);
 
 impl serde::Serialize for RawPacket {
@@ -56,6 +57,26 @@ impl<'de> serde::Deserialize<'de> for RawPacket {
         }
 
         deserializer.deserialize_str(RawPacketVisitor)
+    }
+}
+
+#[allow(dead_code)]
+#[cfg_attr(feature = "python", pymethods)]
+impl RawPacket {
+    pub(crate) fn to_scapy(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match py.import("scapy.all") {
+            Ok(scapy) => {
+                let locals = [("scapy", scapy)].into_py_dict(py)?;
+                let packet = self
+                    .0
+                    .iter()
+                    .flat_map(|b| std::ascii::escape_default(*b))
+                    .collect::<Vec<u8>>();
+                let ins = CString::new(format!("scapy.Ether(b\"{}\")", str::from_utf8(&packet)?))?;
+                Ok(py.eval(ins.as_c_str(), Some(&locals), None)?.into())
+            }
+            Err(_) => Err(PyImportError::new_err("Could not import scapy.all")),
+        }
     }
 }
 
