@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, str};
 
 use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
@@ -8,13 +8,19 @@ use retis_pnet::{
     vlan::*, vxlan::*, *,
 };
 
+#[cfg(feature = "python")]
+use {
+    pyo3::{exceptions::*, prelude::*, types::*},
+    std::ffi::CString,
+};
+
 use super::*;
 
 /// Represents a raw packet. Stored internally as a `Vec<u8>`.
 /// We don't use #[event_type] as we're implementing serde::Serialize and
 /// serde::Deserialize manually.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "python", derive(pyo3::IntoPyObject))]
+#[cfg_attr(feature = "python", pyclass)]
 pub struct RawPacket(pub Vec<u8>);
 
 impl serde::Serialize for RawPacket {
@@ -55,6 +61,31 @@ impl<'de> serde::Deserialize<'de> for RawPacket {
         }
 
         deserializer.deserialize_str(RawPacketVisitor)
+    }
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "python")]
+#[cfg_attr(feature = "python", pymethods)]
+impl RawPacket {
+    fn __repr__(&self, py: Python<'_>) -> String {
+        self.__bytes__(py).to_string()
+    }
+
+    fn __bytes__(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, &self.0).into()
+    }
+
+    pub(crate) fn to_scapy(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        match py.import("scapy.all") {
+            Ok(scapy) => {
+                let locals = [("scapy", scapy)].into_py_dict(py)?;
+                let packet = PyBytes::new(py, &self.0);
+                let ins = CString::new(format!("scapy.Ether({packet})"))?;
+                Ok(py.eval(ins.as_c_str(), None, Some(&locals))?.into())
+            }
+            Err(_) => Err(PyImportError::new_err("Could not import scapy.all")),
+        }
     }
 }
 

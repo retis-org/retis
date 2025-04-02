@@ -121,3 +121,54 @@ events_per_series = [len(s) for s in reader]
 print("Number of series: {}".format(len(events_per_series)))
 print("Average events per series: {}".format(statistics.mean(events_per_series)))
 ```
+
+## Parsing the packet data
+
+The packet itself is stored as raw data in the Retis events and as such
+individual packet fields cannot be directly accessed. A third party library is
+required, such as (Scapy)[https://scapy.readthedocs.io/].
+
+To ease packet consumption a helper is available to convert raw packets to a
+Scapy `Ether` representation. The helper only works if Scapy is available on the
+system.
+
+Example after launching the builtin interpreter (`retis python`):
+
+```text
+$ retis python
+>>> events = reader.events()
+>>> e = next(events) # Skip startup event
+>>> e = next(events)
+>>> p = e.skb.packet.to_scapy()
+>>> print(p.summary())
+Ether / IP / TCP 1.1.1.1:https > 10.0.0.42:12345 A
+>>> if IP in p:
+...     print("src: " + p[IP].src)
+...
+src: 1.1.1.1
+>>> if TCP in p:
+...     p[TCP].options(2)
+...
+('Timestamp', (3570509991, 2706919))
+```
+
+While not mandatory for using `to_scapy()`, to access the full Scapy
+functionalities its objects must be imported first when using the Retis Python
+library or when executing a Python script (Scapy is automatically imported when
+using the builtin interpreter).
+
+```python
+from scapy.all import *
+```
+
+The raw packet can also be accessed as a bytes string or as bytes, for low-level
+access or for using in other packet-parsing libraries:
+
+```python
+e.skb.packet.raw          # Bytes string
+bytes(e.skb.packet.raw)   # bytes
+
+# Manual implementation of to_scapy().
+from scapy.layers.l2 import Ether
+Ether(bytes(e.skb.packet.raw))
+```
