@@ -252,6 +252,16 @@ def test_ovs_conntrack(two_port_ovs):
 # Expected OVS upcall events.
 def gen_expected_events(skb):
     return [
+        # Lookup event with no flow information, i.e: miss.
+        {
+            "kernel": {
+                "probe_type": "kretprobe",
+                "symbol": "ovs_flow_tbl_lookup_stats",
+            },
+            "ovs": {"event_type": "flow_lookup", "flow": 0},
+            "skb": skb,
+            "skb-tracking": {"orig_head": "&orig_head"},
+        },
         # Packet hits ovs_dp_upcall. Upcall start.
         {
             "kernel": {
@@ -260,7 +270,7 @@ def gen_expected_events(skb):
             },
             "ovs": {"event_type": "upcall"},
             "skb": skb,
-            "skb-tracking": {"orig_head": "&orig_head"},  # Store orig_head in aliases
+            "skb-tracking": {"orig_head": "*orig_head"},  # Check same orig_head
         },
         # Packet is enqueued for upcall (only 1, i.e: no fragmentation
         # expected).
@@ -557,7 +567,7 @@ def test_ovs_detrace_sanity(two_port_ovs):
         )
     )
 
-    assert len(lookups) == 18
+    assert len(lookups) == 20
     assert len(enrich) == 2
 
     ovs_ver = ovs.version()

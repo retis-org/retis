@@ -302,15 +302,17 @@ impl OvsEventFactory {
         let flow = raw.flow as usize as u64;
         let sf_acts = raw.sf_acts as usize as u64;
 
-        if let Some(sender) = &self.ufid_sender {
-            match sender.try_send(flow_info::EnrichRequest::new(ufid, flow, sf_acts)) {
-                Err(mpsc::TrySendError::Full(_)) => {
-                    warn!("Flow enrichment channel full, dropping enrichment request");
+        if flow != 0 {
+            if let Some(sender) = &self.ufid_sender {
+                match sender.try_send(flow_info::EnrichRequest::new(ufid, flow, sf_acts)) {
+                    Err(mpsc::TrySendError::Full(_)) => {
+                        warn!("Flow enrichment channel full, dropping enrichment request");
+                    }
+                    Err(mpsc::TrySendError::Disconnected(_)) => {
+                        warn!("Flow enrichment channel disconnected, dropping enrichment request");
+                    }
+                    Ok(_) => (),
                 }
-                Err(mpsc::TrySendError::Disconnected(_)) => {
-                    warn!("Flow enrichment channel disconnected, dropping enrichment request");
-                }
-                Ok(_) => (),
             }
         }
 
