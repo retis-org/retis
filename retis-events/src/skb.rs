@@ -1,5 +1,8 @@
 use std::fmt;
 
+#[cfg(feature = "python")]
+use pyo3::*;
+
 use super::*;
 use crate::{event_section, event_type, Formatter};
 
@@ -374,4 +377,14 @@ pub struct SkbPacketEvent {
     /// Raw packet data.
     #[serde(alias = "packet")] // Backward compatiblity.
     pub raw: RawPacket,
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "python")]
+#[cfg_attr(feature = "python", pymethods)]
+impl SkbPacketEvent {
+    /// Forward the `to_scapy` method down to the RawPacket.
+    fn to_scapy(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.raw.to_scapy(py)
+    }
 }
