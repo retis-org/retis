@@ -32,7 +32,13 @@ struct PyShell<'a> {
 }
 
 impl<'a> PyShell<'a> {
-    const INTERACTIVE_SHELL: &'static CStr = c"import code; code.interact(local=locals())";
+    const INTERACTIVE_SHELL: &'static CStr = c"import code;
+try:
+    from scapy.all import *
+except ImportError:
+    pass
+
+code.interact(local=locals())";
 
     fn new(py: Python<'a>, file: PyEventFile) -> PyResult<Self> {
         let globals = PyDict::new(py);
