@@ -143,9 +143,17 @@ impl EventFmt for LookupEvent {
     fn event_fmt(&self, f: &mut Formatter, d: &DisplayFormat) -> fmt::Result {
         let sep = if d.multiline { "\n" } else { " " };
 
+        if self.flow == 0 {
+            return write!(
+                f,
+                "flow miss mask {} cache {}",
+                self.n_mask_hit, self.n_cache_hit,
+            );
+        }
+
         write!(
             f,
-            "ufid {} hit (mask/cache) {}/{} flow {:x} sf_acts {:x}",
+            "flow hit ufid {} mask {} cache {} flow {:x} sf_acts {:x}",
             self.ufid, self.n_mask_hit, self.n_cache_hit, self.flow, self.sf_acts,
         )?;
         if !self.dpflow.is_empty() {

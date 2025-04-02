@@ -79,8 +79,9 @@ event might be followed by multiple *upcall_enqueue* events.
 of the processing of the packet.
 	- **flow_exec**: USDT probe that indicates ovs-vswitchd will instruct the kernel to execute
 some actions on the packet.
-- **flow_tbl_lookup**: Kernel kretprobe that contains the result of a flow lookup, including the
-UFID(Unique Flow ID) of the matched flow.
+- **flow_tbl_lookup**: Kernel kretprobe that contains the result of a flow lookup (hit or miss),
+including the UFID(Unique Flow ID) of the matched flow, the number of masks hit, the number of
+cache lookups as well as the flow and action pointers.
 - **action_execute**: Kernel tracepoint that denotes that the kernel module is executing an
 [OVS action](#OVS Actions) on a packet.
 
