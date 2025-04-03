@@ -56,16 +56,18 @@ def test_skb_tcp_cc(two_ns_simple):
                 "symbol": "net:netif_rx",
             },
             "skb": {
-                "arp": {
-                    "operation": "Request",
-                    "spa": "10.0.42.1",
-                    "tpa": "10.0.42.2",
-                },
                 "dev": {
                     "name": "veth10",
                 },
-                "eth": {
-                    "etype": 2054,
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "arp",
+                },
+                "arp": {
+                    "op": "who-has",
+                    "psrc": "10.0.42.1",
+                    "pdst": "10.0.42.2",
                 },
             },
         },
@@ -81,16 +83,18 @@ def test_skb_tcp_cc(two_ns_simple):
                 "symbol": "net:netif_rx",
             },
             "skb": {
-                "arp": {
-                    "operation": "Reply",
-                    "spa": "10.0.42.2",
-                    "tpa": "10.0.42.1",
-                },
                 "dev": {
                     "name": "veth01",
                 },
-                "eth": {
-                    "etype": 2054,
+            },
+            "parsed_packet": {
+                "arp": {
+                    "op": "is-at",
+                    "psrc": "10.0.42.2",
+                    "pdst": "10.0.42.1",
+                },
+                "ethernet": {
+                    "type": "arp",
                 },
             },
         },
@@ -109,19 +113,20 @@ def test_skb_tcp_cc(two_ns_simple):
                 "dev": {
                     "name": "veth10",
                 },
-                "eth": {
-                    "etype": 2048,
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "ipv4",
                 },
                 "ip": {
-                    "daddr": "10.0.42.2",
-                    "ecn": 0,
-                    "protocol": 6,
-                    "saddr": "10.0.42.1",
-                    "ttl": 64,
+                    "dst": "10.0.42.2",
+                    "proto": "tcp",
+                    "src": "10.0.42.1",
+                    "ttl": "64",
                 },
                 "tcp": {
-                    "dport": 80,
-                    "flags": 2,
+                    "dport": "http",
+                    "flags": "s",
                 },
             },
         },
@@ -140,19 +145,20 @@ def test_skb_tcp_cc(two_ns_simple):
                 "dev": {
                     "name": "veth01",
                 },
-                "eth": {
-                    "etype": 2048,
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "ipv4",
                 },
                 "ip": {
-                    "daddr": "10.0.42.1",
-                    "ecn": 0,
-                    "protocol": 6,
-                    "saddr": "10.0.42.2",
-                    "ttl": 64,
+                    "dst": "10.0.42.1",
+                    "proto": "tcp",
+                    "src": "10.0.42.2",
+                    "ttl": "64",
                 },
                 "tcp": {
-                    "flags": 18,
-                    "sport": 80,
+                    "flags": "sa",
+                    "sport": "http",
                 },
             },
         },
@@ -171,19 +177,20 @@ def test_skb_tcp_cc(two_ns_simple):
                 "dev": {
                     "name": "veth10",
                 },
-                "eth": {
-                    "etype": 2048,
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "ipv4",
                 },
                 "ip": {
-                    "daddr": "10.0.42.2",
-                    "ecn": 0,
-                    "protocol": 6,
-                    "saddr": "10.0.42.1",
-                    "ttl": 64,
+                    "dst": "10.0.42.2",
+                    "proto": "tcp",
+                    "src": "10.0.42.1",
+                    "ttl": "64",
                 },
                 "tcp": {
-                    "dport": 80,
-                    "flags": 16,
+                    "dport": "http",
+                    "flags": "a",
                 },
             },
         },
@@ -202,19 +209,20 @@ def test_skb_tcp_cc(two_ns_simple):
                 "dev": {
                     "name": "veth10",
                 },
-                "eth": {
-                    "etype": 2048,
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "ipv4",
                 },
                 "ip": {
-                    "daddr": "10.0.42.2",
-                    "ecn": 0,
-                    "protocol": 6,
-                    "saddr": "10.0.42.1",
-                    "ttl": 64,
+                    "dst": "10.0.42.2",
+                    "proto": "tcp",
+                    "src": "10.0.42.1",
+                    "ttl": "64",
                 },
                 "tcp": {
-                    "dport": 80,
-                    "flags": 17,
+                    "dport": "http",
+                    "flags": "fa",
                 },
             },
         },
@@ -228,19 +236,20 @@ def test_skb_tcp_cc(two_ns_simple):
                 "dev": {
                     "name": "veth01",
                 },
-                "eth": {
-                    "etype": 2048,
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "ipv4",
                 },
                 "ip": {
-                    "daddr": "10.0.42.1",
-                    "ecn": 0,
-                    "protocol": 6,
-                    "saddr": "10.0.42.2",
-                    "ttl": 64,
+                    "dst": "10.0.42.1",
+                    "proto": "tcp",
+                    "src": "10.0.42.2",
+                    "ttl": "64",
                 },
                 "tcp": {
-                    "flags": 16,
-                    "sport": 80,
+                    "flags": "a",
+                    "sport": "http",
                 },
             },
         },
@@ -259,19 +268,20 @@ def test_skb_tcp_cc(two_ns_simple):
                 "dev": {
                     "name": "veth01",
                 },
-                "eth": {
-                    "etype": 2048,
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "ipv4",
                 },
                 "ip": {
-                    "daddr": "10.0.42.1",
-                    "ecn": 0,
-                    "protocol": 6,
-                    "saddr": "10.0.42.2",
-                    "ttl": 64,
+                    "dst": "10.0.42.1",
+                    "proto": "tcp",
+                    "src": "10.0.42.2",
+                    "ttl": "64",
                 },
                 "tcp": {
-                    "flags": 17,
-                    "sport": 80,
+                    "flags": "fa",
+                    "sport": "http",
                 },
             },
         },
@@ -285,19 +295,20 @@ def test_skb_tcp_cc(two_ns_simple):
                 "dev": {
                     "name": "veth10",
                 },
-                "eth": {
-                    "etype": 2048,
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "ipv4",
                 },
                 "ip": {
-                    "daddr": "10.0.42.2",
-                    "ecn": 0,
-                    "protocol": 6,
-                    "saddr": "10.0.42.1",
-                    "ttl": 64,
+                    "dst": "10.0.42.2",
+                    "proto": "tcp",
+                    "src": "10.0.42.1",
+                    "ttl": "64",
                 },
                 "tcp": {
-                    "dport": 80,
-                    "flags": 16,
+                    "dport": "http",
+                    "flags": "a",
                 },
             },
         },
@@ -314,7 +325,7 @@ def test_skb_vlan(two_ns_vlan):
         "-c",
         "skb",
         "--skb-sections",
-        "arp,dev,eth,vlan",
+        "all",
         "-f",
         "tcp port 80 or arp",
         "-p",
@@ -340,22 +351,23 @@ def test_skb_vlan(two_ns_vlan):
                 "symbol": "net:net_dev_start_xmit",
             },
             "skb": {
-                "arp": {
-                    "operation": "Request",
-                    "spa": "10.0.43.1",
-                    "tpa": "10.0.43.2",
-                },
                 "dev": {
                     "name": "veth01",
                 },
-                "eth": {
-                    "etype": 0x806,  # ARP
-                },
-                "vlan": {
-                    "acceleration": True,
+                "vlan_accel": {
                     "dei": False,
                     "pcp": 0,
                     "vid": 123,
+                },
+            },
+            "parsed_packet": {
+                "arp": {
+                    "op": "who-has",
+                    "psrc": "10.0.43.1",
+                    "pdst": "10.0.43.2",
+                },
+                "ethernet": {
+                    "type": "arp",
                 },
             },
         },
@@ -374,14 +386,16 @@ def test_skb_vlan(two_ns_vlan):
                 "dev": {
                     "name": "veth10",
                 },
-                "eth": {
-                    "etype": 0x8100,  # 802.1Q
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "n_802_1q",
                 },
-                "vlan": {
-                    "acceleration": False,
-                    "dei": False,
-                    "pcp": 0,
-                    "vid": 123,
+                "802.1q": {
+                    "dei": "0",
+                    "prio": "0",
+                    "vlan": "123",
+                    "type": "arp",
                 },
             },
         },
@@ -400,25 +414,25 @@ def test_skb_vlan(two_ns_vlan):
                 "dev": {
                     "name": "veth01",
                 },
-                "eth": {
-                    "etype": 0x800,  # IP
-                },
-                "vlan": {
-                    "acceleration": True,
+                "vlan_accel": {
                     "dei": False,
                     "pcp": 6,
                     "vid": 123,
                 },
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "ipv4",
+                },
                 "ip": {
-                    "daddr": "10.0.43.2",
-                    "ecn": 0,
-                    "protocol": 6,
-                    "saddr": "10.0.43.1",
-                    "ttl": 64,
+                    "dst": "10.0.43.2",
+                    "proto": "tcp",
+                    "src": "10.0.43.1",
+                    "ttl": "64",
                 },
                 "tcp": {
-                    "dport": 80,
-                    "flags": 2,
+                    "dport": "http",
+                    "flags": "s",
                 },
             },
         },
@@ -437,14 +451,16 @@ def test_skb_vlan(two_ns_vlan):
                 "dev": {
                     "name": "veth10",
                 },
-                "eth": {
-                    "etype": 0x8100,  # 802.1Q
+            },
+            "parsed_packet": {
+                "ethernet": {
+                    "type": "n_802_1q",
                 },
-                "vlan": {
-                    "acceleration": False,
-                    "dei": False,
-                    "pcp": 0,
-                    "vid": 123,
+                "802.1q": {
+                    "dei": "0",
+                    "prio": "0",
+                    "vlan": "123",
+                    "type": "ipv4",
                 },
             },
         },
