@@ -22,13 +22,15 @@ def test_tracking_sanity(three_ns_nat):
                 "dev": {
                     "name": "veth10",
                 },
+            },
+            "parsed_packet": {
                 "icmp": {
-                    "code": 0,
-                    "type": 8,
+                    "code": "0",
+                    "type": "echo-request",
                 },
                 "ip": {
-                    "saddr": "10.0.42.2",
-                    "daddr": "10.0.255.1",
+                    "src": "10.0.42.2",
+                    "dst": "10.0.255.1",
                 },
             },
             "skb-tracking": {
@@ -42,13 +44,15 @@ def test_tracking_sanity(three_ns_nat):
                 "dev": {
                     "name": "veth21",
                 },
+            },
+            "parsed_packet": {
                 "icmp": {
-                    "code": 0,
-                    "type": 8,
+                    "code": "0",
+                    "type": "echo-request",
                 },
                 "ip": {
-                    "saddr": "10.0.42.2",
-                    "daddr": "10.0.43.2",
+                    "src": "10.0.42.2",
+                    "dst": "10.0.43.2",
                 },
             },
             "skb-tracking": {
@@ -62,13 +66,15 @@ def test_tracking_sanity(three_ns_nat):
                 "dev": {
                     "name": "veth01",
                 },
+            },
+            "parsed_packet": {
                 "icmp": {
-                    "code": 0,
-                    "type": 0,
+                    "code": "0",
+                    "type": "echo-reply",
                 },
                 "ip": {
-                    "saddr": "10.0.255.1",
-                    "daddr": "10.0.42.2",
+                    "src": "10.0.255.1",
+                    "dst": "10.0.42.2",
                 },
             },
             "skb-tracking": {

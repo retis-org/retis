@@ -23,13 +23,15 @@ def test_meta_filter_string(two_ns_simple):
                 "dev": {
                     "name": "veth01",
                 },
+            },
+            "parsed_packet": {
                 "ip": {
-                    "saddr": "10.0.42.2",
-                    "daddr": "10.0.42.1",
+                    "src": "10.0.42.2",
+                    "dst": "10.0.42.1",
                 },
                 "icmp": {
-                    "type": 0,
-                    "code": 0,
+                    "type": "echo-reply",
+                    "code": "0",
                 },
             },
         }
@@ -70,8 +72,12 @@ def test_meta_filter_number(two_ns_simple):
                 "dev": {
                     "name": "veth01",
                 },
-                "ip": {"v4": {}},
-            }
+            },
+            "parsed_packet": {
+                "ip": {
+                    "version": "4",
+                },
+            },
         },
     ]
 

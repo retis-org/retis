@@ -24,20 +24,21 @@ def test_drop_sanity(two_ns_simple):
                 "dev": {
                     "name": "veth10",
                 },
-                "ip": {
-                    "daddr": "10.0.42.2",
-                    "ecn": 0,
-                    "protocol": 6,
-                    "saddr": "10.0.42.1",
-                    "ttl": 64,
-                },
-                "tcp": {
-                    "dport": 443,
-                    "flags": 2,
-                },
             },
             "skb-drop": {
                 "drop_reason": "NO_SOCKET",
+            },
+            "parsed_packet": {
+                "ip": {
+                    "dst": "10.0.42.2",
+                    "proto": "tcp",
+                    "src": "10.0.42.1",
+                    "ttl": "64",
+                },
+                "tcp": {
+                    "dport": "https",
+                    "flags": "s",
+                },
             },
         },
     ]
