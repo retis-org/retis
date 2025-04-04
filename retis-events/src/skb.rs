@@ -136,7 +136,7 @@ impl EventFmt for SkbEvent {
             }
 
             space.write(f)?;
-            packet.packet.event_fmt(f, format)?;
+            packet.raw.event_fmt(f, format)?;
         }
 
         Ok(())
@@ -362,5 +362,5 @@ pub struct SkbPacketEvent {
     /// Lenght of the capture. <= len.
     pub capture_len: u32,
     /// Raw packet data.
-    pub packet: RawPacket,
+    pub raw: RawPacket,
 }
