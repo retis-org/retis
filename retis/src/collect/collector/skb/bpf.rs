@@ -106,7 +106,7 @@ pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<SkbPacketE
     Ok(SkbPacketEvent {
         len: raw.len,
         capture_len: raw.capture_len,
-        packet: RawPacket(raw.packet[..(raw.capture_len as usize)].to_vec()),
+        raw: RawPacket(raw.packet[..(raw.capture_len as usize)].to_vec()),
     })
 }
 
