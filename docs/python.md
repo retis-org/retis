@@ -172,3 +172,50 @@ bytes(e.skb.packet.raw)   # bytes
 from scapy.layers.l2 import Ether
 Ether(bytes(e.skb.packet.raw))
 ```
+
+## Available helpers
+
+Different helpers are provided to help working with events in Python.
+
+With the top-level event:
+
+```text
+>>> print(event.sections())
+['ct', 'skb-tracking', 'common', 'skb', 'kernel']
+>>> event.raw().keys()  # Makes the event and all its sub-sections a real dict.
+dict_keys(['skb-tracking', 'kernel', 'common', 'ct', 'skb'])
+>>> event.raw()['skb'].keys()
+dict_keys(['dev', 'packet'])
+```
+
+With the top-level event and all sections:
+
+```text
+>>> print(event.show())
+8974965787422 (5) [ping] 100854 [tp] net:net_dev_start_xmit #829a5a5cb1effff8be0ca834000 (skb ffff8be0ca56ae00)
+  if 3 (eth0)
+  xx:xx:xx:xx:xx:xx > xx:xx:xx:xx:xx:xx ethertype IPv4 (0x0800) 10.0.42.5 > 1.1.1.1 tos 0x0 ttl 64 id 2368 off 0 [DF] len 84 proto ICMP (1) type 8 code 0
+  ct_state NEW status 0x188 icmp orig [10.0.42.5 > 1.1.1.1 type 8 code 0 id 1] reply [1.1.1.1 > 10.0.42.5 type 0 code 0 id 1] zone 0 mark 0
+>>> print(event.common.show())
+8974965787422 (5) [ping] 100854
+>>> print(event.ct.show())
+ct_state NEW status 0x188 icmp orig [10.0.42.5 > 1.1.1.1 type 8 code 0 id 1] reply [1.1.1.1 > 10.0.42.5 type 0 code 0 id 1] zone 0 mark 0
+```
+
+With the `skb-tracking` section:
+
+```text
+>>> hex(event.skb_tracking.tracking_id())
+'0x829a5a5cb1effff8be0ca834000'
+>>> e0.skb_tracking.match(e1.skb_tracking)        # Match on the tracking id.
+True
+>>> e0.skb_tracking.strict_match(e1.skb_tracking) # Match on the tracking id + skb address.
+False
+```
+
+With the `packet` sub-section in the `skb` section:
+
+```text
+>>> event.skb.packet.to_scapy()
+...
+```
