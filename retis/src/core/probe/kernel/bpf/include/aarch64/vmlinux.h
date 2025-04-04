@@ -73526,6 +73526,23 @@ typedef u64 (*btf_bpf_get_stackid_raw_tp)(struct bpf_raw_tracepoint_args *, stru
 
 typedef u64 (*btf_bpf_get_stack_raw_tp)(struct bpf_raw_tracepoint_args *, void *, u32, u64);
 
+struct bpf_kprobe_multi_link {
+	struct bpf_link link;
+	struct fprobe fp;
+	long unsigned int *addrs;
+	u64 *cookies;
+	u32 cnt;
+	u32 mods_cnt;
+	struct module **mods;
+	u32 flags;
+};
+
+struct bpf_kprobe_multi_run_ctx {
+	struct bpf_run_ctx run_ctx;
+	struct bpf_kprobe_multi_link *link;
+	long unsigned int entry_ip;
+};
+
 struct bpf_session_run_ctx {
 	struct bpf_run_ctx run_ctx;
 	bool is_return;
