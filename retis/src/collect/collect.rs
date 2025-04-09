@@ -1,7 +1,7 @@
 #[cfg(not(test))]
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fs::OpenOptions,
     io::{self, BufWriter},
     process::{Command, Stdio},
@@ -34,7 +34,7 @@ use crate::{
         inspect::check::collection_prerequisites,
         kernel::Symbol,
         probe::{
-            kernel::{probe_stack::ProbeStack, utils::probe_from_cli},
+            kernel::{probe_stack::ProbeStack, utils::{parse_cli_probe, probe_from_cli}},
             *,
         },
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
@@ -182,6 +182,10 @@ impl Collectors {
 
     /// Check prerequisites and cli arguments to ensure we can run.
     pub(super) fn check(&mut self, collect: &Collect) -> Result<()> {
+        if !collect.stack_trace_limit.is_empty() && !collect.stack && !collect.probe_stack {
+                bail!("Stack trace list requires is not compatible with the global stack option or dynamic stack probe");
+        }
+
         if collect.probe_stack && collect.packet_filter.is_none() && collect.meta_filter.is_none() {
             bail!("Probe-stack mode requires filtering (--filter-packet and/or --filter-meta)");
         }
@@ -231,9 +235,22 @@ impl Collectors {
 
         // Check if we need to report stack traces in the events.
         if collect.stack || collect.probe_stack {
+            let probe_option = if !collect.stack_trace_limit.is_empty() {
+                ProbeOption::StackTrace(Some(BTreeSet::from_iter(
+                    collect.stack_trace_limit.iter()
+                        .map(|p| {
+                            let (_, sym_str) = parse_cli_probe(p)?;
+                            Ok(format!("{}", sym_str))
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                    )))
+            } else {
+                ProbeOption::StackTrace(None)
+            };
+
             self.probes
                 .builder_mut()?
-                .set_probe_opt(probe::ProbeOption::StackTrace)?;
+                .set_probe_opt(probe_option)?;
         }
 
         // Generate an initial event with the startup section.

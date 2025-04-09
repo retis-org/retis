@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fmt, mem,
     os::fd::RawFd,
 };
@@ -26,7 +26,7 @@ pub(crate) enum ProbeType {
 /// Probe options, to toggle opt-in/out features.
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub(crate) enum ProbeOption {
-    StackTrace,
+    StackTrace(Option<BTreeSet<String>>),
     NoGenericHook,
 }
 
@@ -152,7 +152,23 @@ impl Probe {
 
     /// Set a probe option.
     pub(crate) fn set_option(&mut self, option: ProbeOption) -> Result<()> {
-        self.options.insert(option);
+        match option {
+            ProbeOption::StackTrace(Some(syms)) => {
+                    match self.r#type() {
+                        ProbeType::Kprobe(kp)
+                        | ProbeType::Kretprobe(kp)
+                        | ProbeType::RawTracepoint(kp) => {
+                            if syms.contains(&kp.symbol.name()) {
+                                self.options.insert(ProbeOption::StackTrace(None));
+                            }
+                        }
+                        _ => (),
+                    }
+            }
+            _ => {
+                self.options.insert(option);
+            }
+        }
         Ok(())
     }
 
@@ -186,7 +202,7 @@ impl Probe {
         //   set in the resulting probe.
         // - ProbeOption::NoGenericHook: has to be set in both probes to be set in the
         //   resulting probe.
-        if let Some(opt) = other.options.take(&ProbeOption::StackTrace) {
+        if let Some(opt) = other.options.take(&ProbeOption::StackTrace(None)) {
             self.options.insert(opt);
         }
         if !other.options.contains(&ProbeOption::NoGenericHook) {
