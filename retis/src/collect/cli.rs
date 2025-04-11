@@ -110,6 +110,12 @@ not released. If exhausted, no stack trace will be included."
     pub(super) stack: bool,
     #[arg(
         long,
+        value_delimiter=',',
+        help = "Requires to be used at with at least --stack or --probe-stack. The option will limit the stack traces generated to the specified symbols."
+    )]
+    pub(crate) stack_trace_limit: Vec<String>,
+    #[arg(
+        long,
         default_value = "false",
         help = "When set, evaluates where Retis could add additional probes based on functions reported
 in the events stack traces (their display is still controlled by --stack). All matching

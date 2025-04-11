@@ -5,6 +5,7 @@ collect:
   - args:
       collectors: skb-drop,skb
       stack: ~
+      stack_probes: tp:skb:kfree_skb
 pcap:
   - args:
       probe: tp:skb:kfree_skb
@@ -17,6 +18,7 @@ collect:
       collectors: nft,skb
       nft_verdicts: drop
       stack: ~
+      stack_probes: kprobe:__nft_trace_packet
 pcap:
   - args:
       probe: kprobe:__nft_trace_packet
