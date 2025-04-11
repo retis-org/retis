@@ -4,6 +4,15 @@ Retis can be installed from a container image,
 [COPR](https://copr.fedorainfracloud.org/coprs/g/retis/retis/) for
 rpm-compatible distributions, or from sources.
 
+### Fedora
+
+Starting with Fedora 43, Retis is available as an official package.
+
+```none
+$ dnf -y install retis
+$ retis --help
+```
+
 ### Container image
 
 We provide a script to run Retis in a container,
