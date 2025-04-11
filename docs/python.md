@@ -102,6 +102,22 @@ True
 Got 149 series
 ```
 
+### Command line arguments
+
+When executing a script using `retis python script.py`, command line arguments
+are available in `sys.argv`. Modules like `argparse` can be used as-is.
+
+```text
+$ cat argv.py
+print(sys.argv)
+$ retis python argv.py
+['argv.py']
+$ retis python argv.py foo
+['argv.py', 'foo']
+$ retis python -- argv.py -x --foo
+['argv.py', '-x', '--foo']
+```
+
 ## Python library
 
 For more sophisticated programs that require more control over the python
