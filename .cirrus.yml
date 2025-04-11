@@ -9,9 +9,11 @@ cargo_task_tempate: &cargo_task_template
       - cat Cargo.lock
   setup_script:
     - apt-get update
-    - apt-get -y install llvm clang libelf-dev libpcap-dev python3-pip make jq
+    - apt-get -y install llvm clang curl libelf-dev libpcap-dev python3-pip make jq
     - rustup component add rustfmt
     - rustup component add clippy
+    - rustup component add llvm-tools-preview
+    - cargo install cargo-llvm-cov
   before_cache_script: rm -rf $CARGO_HOME/registry/index
 
 unittest_task:
@@ -19,7 +21,11 @@ unittest_task:
   container:
     image: rust:bookworm
   build_script: make V=1 CARGO_OPTS=--verbose
-  test_script: make test V=1 CARGO_OPTS=--verbose
+  test_script:
+    - curl -Os https://uploader.codecov.io/latest/linux/codecov
+    - chmod +x codecov
+    - make test V=1 COV=1 CARGO_CMD_OPTS="--verbose --codecov --output-path retis.codecov"
+    - ./codecov --verbose upload-process --disable-search --fail-on-error --git-service github -F x86_64 -f ./retis.codecov
   check_script:
     - cargo fmt --check
     - cargo clippy -- -D warnings
@@ -43,7 +49,11 @@ aarch64_task:
   build_script:
     - ln -s /usr/include/asm-generic /usr/include/asm
     - make V=1 CARGO_OPTS=--verbose
-  test_script: make test V=1 CARGO_OPTS=--verbose
+  test_script:
+    - curl -Os https://uploader.codecov.io/latest/aarch64/codecov
+    - chmod +x codecov
+    - make test V=1 COV=1 CARGO_CMD_OPTS="--verbose --codecov --output-path retis.codecov"
+    - ./codecov --verbose upload-process --disable-search --fail-on-error --git-service github -F aarch64 -f ./retis.codecov
 
 python_task:
   name: Python lint & format
