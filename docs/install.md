@@ -1,26 +1,8 @@
 # Installation
 
-Retis can be installed from [COPR](https://copr.fedorainfracloud.org/coprs/g/retis/retis/)
-for rpm-compatible distributions, from a container image or from sources.
-
-### COPR
-
-RPM packages for Fedora (currently supported releases including Rawhide), RHEL (>=
-8) and EPEL (>= 8) are available.
-
-```none
-$ dnf -y copr enable @retis/retis
-$ dnf -y install retis
-$ retis --help
-```
-
-Or on older distributions,
-
-```none
-$ yum -y copr enable @retis/retis
-$ yum -y install retis
-$ retis --help
-```
+Retis can be installed from a container image,
+[COPR](https://copr.fedorainfracloud.org/coprs/g/retis/retis/) for
+rpm-compatible distributions, or from sources.
 
 ### Container image
 
@@ -58,6 +40,25 @@ $ RETIS_IMAGE=my-registry.example.com/retis ./retis_in_container.sh --help
 ```
 
 `PAGER` and `NOPAGER` environment variables work the same way as with the Retis binary.
+
+### COPR
+
+RPM packages for Fedora (currently supported releases including Rawhide), RHEL (>=
+8) and EPEL (>= 8) are available.
+
+```none
+$ dnf -y copr enable @retis/retis
+$ dnf -y install retis
+$ retis --help
+```
+
+Or on older distributions,
+
+```none
+$ yum -y copr enable @retis/retis
+$ yum -y install retis
+$ retis --help
+```
 
 ### From sources
 
