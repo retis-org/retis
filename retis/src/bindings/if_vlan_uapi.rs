@@ -10,5 +10,4 @@ pub struct skb_vlan_event {
     pub pcp: u8_,
     pub dei: u8_,
     pub vid: u16_,
-    pub acceleration: u8_,
 }
