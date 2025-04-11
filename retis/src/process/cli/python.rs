@@ -23,6 +23,8 @@ Alternatively scripts can be stored in $HOME/.config/retis/python and
 extension) can be provided."
     )]
     pub(super) script: Option<PathBuf>,
+    #[arg(help = "Arguments for the Python script (available in `sys.argv`).")]
+    pub(super) args: Vec<String>,
 }
 
 impl SubCommandParserRunner for PythonCli {
@@ -51,7 +53,7 @@ impl SubCommandParserRunner for PythonCli {
             }
         }
 
-        shell_execute(self.input.clone(), script_path.as_ref())
+        shell_execute(self.input.clone(), script_path.as_ref(), &self.args)
     }
 }
 
