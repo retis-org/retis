@@ -238,6 +238,7 @@ static __noinline unsigned int filter_##x(void *ctx)				\
 }
 FILTER(l2)
 FILTER(l3)
+FILTER(meta)
 
 static __always_inline void filter(struct retis_context *ctx)
 {
@@ -286,7 +287,7 @@ static __always_inline void filter(struct retis_context *ctx)
 		!!filter_l3(&fctx) << RETIS_F_PACKET_PASS_SH;
 
 next_filter:
-	ctx->filters_ret |= (!!meta_filter(skb)) << RETIS_F_META_PASS_SH;
+	ctx->filters_ret |= (!!filter_meta(skb)) << RETIS_F_META_PASS_SH;
 }
 
 /* The chaining function, which contains all our core probe logic. This is
