@@ -128,12 +128,13 @@ impl EventFmt for SkbEvent {
         }
 
         // Do not format any section other than packet information after this.
-        if format.multiline && space.used() {
-            writeln!(f)?;
-            space.reset();
-        }
 
         if let Some(packet) = &self.packet {
+            if format.multiline && space.used() {
+                writeln!(f)?;
+                space.reset();
+            }
+
             space.write(f)?;
             packet.packet.event_fmt(f, format)?;
         }
