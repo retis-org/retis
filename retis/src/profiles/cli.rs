@@ -30,7 +30,7 @@ impl SubCommandParserRunner for ProfileCmd {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
         match &self.command {
             ProfileSubCommand::List => {
-                for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {
+                for path in get_profile_paths().iter().filter(|p| p.as_path().exists()) {
                     for entry in path.read_dir()? {
                         let entry = entry?;
                         match Profile::load(entry.path()) {

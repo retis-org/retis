@@ -147,9 +147,9 @@ $ retis collect -p skb:kfree_skb -p ovs_ct_clear
 ...
 ```
 
-New profiles can be written and used if stored in `/etc/retis/profiles` or
-`$HOME/.config/retis/profiles`. Here is an
-[example profile](https://github.com/retis-org/retis/blob/main/retis/test_data/profiles/example.yaml)
+New profiles can be written and used if stored in
+`$HOME/.config/retis/profiles`. Here is an [example
+profile](https://github.com/retis-org/retis/blob/main/retis/test_data/profiles/example.yaml)
 with inlined comments. If a profile is generic enough, consider contributing it!
 
 ## Post-processing

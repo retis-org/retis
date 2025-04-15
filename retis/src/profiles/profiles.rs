@@ -137,7 +137,7 @@ impl Profile {
     }
     /// Find a profile
     pub(crate) fn find(name: &str) -> Result<Profile> {
-        for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {
+        for path in get_profile_paths().iter().filter(|p| p.as_path().exists()) {
             for entry in path.read_dir()? {
                 // Profile conflict is performed per-path to allow overriding
                 // global profiles in the $HOME location.
@@ -296,7 +296,7 @@ impl Profile {
 }
 
 /// Return the list of paths to be used for profile lookup.
-pub(super) fn get_profile_paths() -> Result<Vec<PathBuf>> {
+pub(super) fn get_profile_paths() -> Vec<PathBuf> {
     // Paths are inspected in order so keep them ordered by (descending) priority.
     let mut paths = Vec::new();
     if cfg!(debug_assertions) {
@@ -306,8 +306,10 @@ pub(super) fn get_profile_paths() -> Result<Vec<PathBuf>> {
     if let Ok(home) = env::var("HOME") {
         paths.push(PathBuf::from(home).join(".config/retis/profiles/"));
     }
+    paths.push(PathBuf::from("/usr/share/retis/profiles/"));
+    // Kept for backward compatibility.
     paths.push(PathBuf::from("/etc/retis/profiles/"));
-    Ok(paths)
+    paths
 }
 
 #[cfg(test)]
