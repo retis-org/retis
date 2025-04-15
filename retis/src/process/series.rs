@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, VecDeque};
 
 use anyhow::{anyhow, Result};
 
-use crate::events::{CommonEvent, Event, EventSeries, SectionId, TrackingInfo};
+use crate::events::{Event, EventSeries, TrackingInfo};
 
 #[derive(Default)]
 pub(crate) struct EventSorter {
@@ -35,7 +35,7 @@ impl EventSorter {
 
     /// Adds an event to the EventSorter.
     pub(crate) fn add(&mut self, event: Event) {
-        match event.get_section::<TrackingInfo>(SectionId::Tracking) {
+        match &event.tracking {
             Some(track) => match self.series.get_mut(track) {
                 Some(series) => {
                     series.push(event);
@@ -68,7 +68,8 @@ impl EventSorter {
                     .untracked
                     .front()
                     .unwrap()
-                    .get_section::<CommonEvent>(SectionId::Common)
+                    .common
+                    .as_ref()
                     .map(|c| c.timestamp)
                     .ok_or_else(|| anyhow!("malformed event: no common section"))?
             {

@@ -3,13 +3,15 @@
 //! This module contains python bindings for retis events so that they can
 //! be inspected in post-processing tools written in python.
 
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf};
 
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError},
     prelude::*,
-    types::{PyBool, PyList},
+    types::{PyBool, PyList, PyString},
 };
+
+use log::warn;
 
 use super::*;
 
@@ -54,7 +56,7 @@ use super::*;
 ///   if 15 (p1_p) 2001:db8:dead::1.20 > 2001:db8:dead::2.80 ttl 64 len 20 proto TCP (6) flags [S] seq 0 win 8192
 /// ```
 #[pyclass(name = "Event")]
-pub struct PyEvent(Event);
+pub struct PyEvent(Py<Event>);
 
 // We need this to make it a pyclass.
 //
@@ -62,8 +64,8 @@ pub struct PyEvent(Event);
 unsafe impl Sync for PyEvent {}
 
 impl PyEvent {
-    pub(crate) fn new(event: Event) -> Self {
-        Self(event)
+    pub(crate) fn new(py: Python<'_>, event: Event) -> PyResult<Self> {
+        Ok(Self(Py::new(py, event)?))
     }
 }
 
@@ -71,28 +73,110 @@ impl PyEvent {
 impl PyEvent {
     /// Controls how the PyEvent is represented, eg. what is the output of
     /// `print(e)`.
-    fn __repr__<'a>(&'a self, py: Python<'a>) -> String {
-        let raw = self.raw(py);
-        let dict: &Bound<'_, PyAny> = raw.bind(py);
-        dict.repr().unwrap().to_string()
+    fn __repr__<'a>(&'a self, py: Python<'a>) -> PyResult<Bound<'a, PyString>> {
+        self.0.bind(py).repr()
     }
 
     /// Allows to use the object as a dictionary, eg. `e['skb']`.
     fn __getitem__<'a>(&'a self, py: Python<'a>, attr: &str) -> PyResult<Py<PyAny>> {
-        if let Ok(id) = SectionId::from_str(attr) {
-            if let Some(section) = self.0.get(id) {
-                return Ok(section.to_py(py));
-            }
-        }
-        Err(PyKeyError::new_err(attr.to_string()))
+        warn!("Deprecation warning: The use of __getitem__ be deprecated in favor of direct attribute access");
+        self.__get_compat__(py, attr)
+    }
+
+    /// Allows to use the object as a dictionary, eg. `e['skb']`.
+    fn __getattr__<'a>(&'a self, py: Python<'a>, attr: &str) -> PyResult<Py<PyAny>> {
+        self.0.getattr(py, attr)
+    }
+
+    fn __get_compat__<'a>(&'a self, py: Python<'a>, attr: &str) -> PyResult<Py<PyAny>> {
+        Ok(match attr {
+            "common" => self
+                .0
+                .borrow(py)
+                .common
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "kernel" => self
+                .0
+                .borrow(py)
+                .kernel
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "userspace" => self
+                .0
+                .borrow(py)
+                .userspace
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "tracking" => self
+                .0
+                .borrow(py)
+                .tracking
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "skb_tracking" => self
+                .0
+                .borrow(py)
+                .skb_tracking
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "skb_drop" => self
+                .0
+                .borrow(py)
+                .skb_drop
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "skb" => self
+                .0
+                .borrow(py)
+                .skb
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "ovs" => self
+                .0
+                .borrow(py)
+                .ovs
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "nft" => self
+                .0
+                .borrow(py)
+                .nft
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "ct" => self
+                .0
+                .borrow(py)
+                .ct
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            "startup" => self
+                .0
+                .borrow(py)
+                .startup
+                .clone()
+                .ok_or_else(|| PyKeyError::new_err(attr.to_string()))?
+                .to_py(py),
+            _ => return Err(PyKeyError::new_err(attr.to_string())),
+        })
     }
 
     /// Allows to check if a section is present inthe event, e.g: `'skb' in e`
-    fn __contains__<'a>(&'a self, _py: Python<'a>, attr: &str) -> PyResult<bool> {
-        if let Ok(id) = SectionId::from_str(attr) {
-            if self.0.get(id).is_some() {
-                return Ok(true);
-            }
+    fn __contains__<'a>(&'a self, py: Python<'a>, attr: &str) -> PyResult<bool> {
+        warn!(
+            "Deprecation warning: The use of __contains__ be deprecated in favor of direct hasattr"
+        );
+        if self.__get_compat__(py, attr).is_ok() {
+            return Ok(true);
         }
         Ok(false)
     }
@@ -101,19 +185,42 @@ impl PyEvent {
     ///
     /// Returns a dictionary with all key<>data stored (recursively) in the
     /// event, eg. `e.raw()['skb']['dev']`.
-    fn raw(&self, py: Python<'_>) -> PyObject {
-        to_pyobject(&self.0.to_json(), py)
+    fn raw(&self, py: Python<'_>) -> PyResult<PyObject> {
+        Ok(to_pyobject(&self.0.borrow(py).to_json().unwrap(), py))
     }
 
     /// Returns a string representation of the event
-    fn show(&self) -> String {
+    fn show(&self, py: Python<'_>) -> String {
         let format = crate::DisplayFormat::new().multiline(true);
-        format!("{}", self.0.display(&format, &crate::FormatterConf::new()))
+        format!(
+            "{}",
+            self.0
+                .borrow(py)
+                .display(&format, &crate::FormatterConf::new())
+        )
     }
 
     /// Returns a list of existing section names.
     pub fn sections(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
-        let sections: Vec<&str> = self.0.sections().map(|s| s.to_str()).collect();
+        let mut sections = Vec::<&str>::new();
+
+        for attr in [
+            "common",
+            "kernel",
+            "userspace",
+            "tracking",
+            "skb-tracking",
+            "skb-drop",
+            "skb",
+            "ovs",
+            "nft",
+            "ct",
+            "startup",
+        ] {
+            if self.__get_compat__(py, attr).is_ok() {
+                sections.push(attr)
+            }
+        }
         PyList::new(py, sections).unwrap().extract()
     }
 }
@@ -148,7 +255,7 @@ impl PyEventSeries {
     pub(crate) fn new(py: Python<'_>, mut series: EventSeries) -> PyResult<Self> {
         let mut events = Vec::new();
         series.events.drain(..).try_for_each(|e| -> PyResult<()> {
-            events.push(Py::new(py, PyEvent::new(e))?);
+            events.push(Py::new(py, PyEvent::new(py, e)?)?);
             Ok(())
         })?;
         Ok(Self { events, idx: 0 })
@@ -167,7 +274,9 @@ impl PyEventSeries {
             .ok_or_else(|| PyRuntimeError::new_err("Malformed Series with < 1 events"))?
             .try_borrow(py)?
             .0
-            .get_section::<CommonEvent>(SectionId::Common)
+            .try_borrow(py)?
+            .common
+            .as_ref()
             .unwrap()
             .timestamp;
         Ok(format!(
@@ -246,7 +355,7 @@ impl PyEventReader {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
         {
             Some(event) => {
-                let pyevent: Bound<'_, PyEvent> = Bound::new(py, PyEvent::new(event))?;
+                let pyevent: Bound<'_, PyEvent> = Bound::new(py, PyEvent::new(py, event)?)?;
                 Ok(Some(pyevent.into_any().into()))
             }
             None => Ok(None),

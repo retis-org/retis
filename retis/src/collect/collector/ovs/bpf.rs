@@ -391,7 +391,8 @@ impl RawEventSectionFactory for OvsEventFactory {
         }
 
         let ovs = ovs.ok_or_else(|| anyhow!("Incomplete OVS event"))?;
-        event.insert_section(SectionId::from_u8(ovs.id())?, Box::new(ovs))
+        event.ovs = Some(ovs);
+        Ok(())
     }
 }
 
