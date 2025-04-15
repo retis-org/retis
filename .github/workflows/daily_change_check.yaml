@@ -21,3 +21,37 @@ jobs:
           gh workflow run build_push_image.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  stale-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          # Do not consider issues/PRs with a milestone set.
+          exempt-all-milestones: true
+          # Override the default stale/close (60d/7d) inactivity timeouts
+          days-before-stale: ${{ env.AUTO_STALE_THRESHOLD }}
+          days-before-close: ${{ env.AUTO_CLOSE_THRESHOLD }}
+          # Given environment variables cannot be referenced in the same map (and there's no apparent way to discriminate between
+          # PR and issues), use a custom + common part in the stale messages.
+          stale-pr-message: |
+            This PR has been automatically marked as stale due to ${{ env.AUTO_STALE_THRESHOLD }} day(s) of inactivity.
+            If this remains inactive for an additional ${{ env.AUTO_CLOSE_THRESHOLD }} day(s), it will be automatically closed.
+            ${{ env.AUTO_STALE_COMMON }}
+          stale-issue-message: |
+            This issue has been automatically marked as stale due to ${{ env.AUTO_STALE_THRESHOLD }} day(s) of inactivity.
+            If this remains inactive for an additional ${{ env.AUTO_CLOSE_THRESHOLD }} day(s), it will be automatically closed.
+            ${{ env.AUTO_STALE_COMMON }}
+          close-pr-message: ${{ env.AUTO_CLOSE_MSG }}
+          close-issue-message: ${{ env.AUTO_CLOSE_MSG }}
+        env:
+          AUTO_STALE_THRESHOLD: 365
+          AUTO_CLOSE_THRESHOLD: 30
+          AUTO_STALE_COMMON: |
+            In case this was incorrectly marked as stale, please, remove the `stale` label (or simply add a comment), and add it
+            to a milestone, if applicable.
+            If you do not have sufficient permissions to complete any of the previous actions, feel free to reach out to the maintainers.
+          AUTO_CLOSE_MSG: |
+            The item has been automatically closed for inactivity.
+            If this was not intended, please, reopen the item and follow the instructions included in the stale warning.
