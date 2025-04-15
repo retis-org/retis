@@ -261,7 +261,8 @@ impl FlowEnricher {
 
 fn fill_event(info: &'_ OvsFlowInfoEvent) -> impl Fn(&mut Event) -> Result<()> + use<'_> {
     move |event| -> Result<()> {
-        event.insert_section(SectionId::OvsFlowInfo, Box::new(info.clone()))
+        event.ovs_detrace = Some(info.clone());
+        Ok(())
     }
 }
 

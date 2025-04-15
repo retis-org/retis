@@ -412,7 +412,7 @@ impl RawEventSectionFactory for OvsEventFactory {
                     ovs = Some(self.unmarshall_exec(section)?);
                 }
                 OvsDataType::FlowLookup => {
-                    event = Some(self.unmarshall_flow_lookup(section)?);
+                    ovs = Some(self.unmarshall_flow_lookup(section)?);
                 }
                 OvsDataType::ActionExecTrack => unmarshall_exec_track(
                     section,
@@ -443,7 +443,8 @@ impl RawEventSectionFactory for OvsEventFactory {
         }
 
         let ovs = ovs.ok_or_else(|| anyhow!("Incomplete OVS event"))?;
-        event.insert_section(SectionId::from_u8(ovs.id())?, Box::new(ovs))
+        event.ovs = Some(ovs);
+        Ok(())
     }
 }
 

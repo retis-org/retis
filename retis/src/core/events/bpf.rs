@@ -79,7 +79,7 @@ macro_rules! raw_to_string_opt {
 /// The return value of EventFactory::next_event()
 pub(crate) enum EventResult {
     /// The Factory was able to create a new event.
-    Event(Event),
+    Event(Box<Event>),
     /// The timeout went off but a new attempt to retrieve an event might succeed.
     Timeout,
 }
@@ -295,11 +295,11 @@ impl BpfEventsFactory {
 
         Ok(match timeout {
             Some(timeout) => match rxc.recv_timeout(timeout) {
-                Ok(event) => EventResult::Event(event),
+                Ok(event) => EventResult::Event(Box::new(event)),
                 Err(mpsc::RecvTimeoutError::Timeout) => EventResult::Timeout,
                 Err(e) => return Err(anyhow!(e)),
             },
-            None => EventResult::Event(rxc.recv()?),
+            None => EventResult::Event(Box::new(rxc.recv()?)),
         })
     }
 }
@@ -461,7 +461,8 @@ impl RawEventSectionFactory for CommonEventFactory {
             }
         }
 
-        event.insert_section(SectionId::from_u8(common.id())?, Box::new(common))
+        event.common = Some(common);
+        Ok(())
     }
 }
 
@@ -494,7 +495,7 @@ impl BpfEventsFactory {
         Ok(())
     }
     pub(crate) fn next_event(&mut self, _: Option<Duration>) -> Result<EventResult> {
-        Ok(EventResult::Event(Event::new()))
+        Ok(EventResult::Event(Box::new(Event::new())))
     }
     pub(crate) fn stop(&mut self) -> Result<()> {
         Ok(())
@@ -722,7 +723,8 @@ mod tests {
                 }
             }
 
-            event.insert_section(SectionId::from_u8(test.id())?, Box::new(test))
+            event.test = Some(test);
+            Ok(())
         }
     }
 
@@ -750,13 +752,13 @@ mod tests {
         assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event with a single empty section. Section is ignored.
-        let data = [4, 0, SectionId::Common as u8, DATA_TYPE_U64, 0, 0];
+        let data = [4, 0, FactoryId::Common as u8, DATA_TYPE_U64, 0, 0];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with a section too large. Section is ignored.
-        let data = [4, 0, SectionId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
+        let data = [4, 0, FactoryId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
-        let data = [6, 0, SectionId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
+        let data = [6, 0, FactoryId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with a section having an invalid owner.
@@ -766,20 +768,20 @@ mod tests {
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with an invalid data type.
-        let data = [4, 0, SectionId::Common as u8, 0, 1, 0, 42];
+        let data = [4, 0, FactoryId::Common as u8, 0, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
-        let data = [4, 0, SectionId::Common as u8, 255, 1, 0, 42];
+        let data = [4, 0, FactoryId::Common as u8, 255, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event but invalid section (too small).
-        let data = [5, 0, SectionId::Common as u8, DATA_TYPE_U64, 1, 0, 42];
+        let data = [5, 0, FactoryId::Common as u8, DATA_TYPE_U64, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event, single section.
         let data = [
             12,
             0,
-            SectionId::Common as u8,
+            FactoryId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -793,7 +795,7 @@ mod tests {
             0,
         ];
         let event = super::parse_raw_event(&data, &mut factories).unwrap();
-        let section = event.get_section::<TestEvent>(SectionId::Common).unwrap();
+        let section = event.test.unwrap();
         assert!(section.field0 == Some(42));
 
         // Valid event, multiple sections.
@@ -801,7 +803,7 @@ mod tests {
             44,
             0,
             // Section 1
-            SectionId::Common as u8,
+            FactoryId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -814,7 +816,7 @@ mod tests {
             0,
             0,
             // Section 2
-            SectionId::Common as u8,
+            FactoryId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -827,7 +829,7 @@ mod tests {
             0,
             0,
             // Section 3
-            SectionId::Common as u8,
+            FactoryId::Common as u8,
             DATA_TYPE_U128,
             16,
             0,
@@ -849,7 +851,7 @@ mod tests {
             0,
         ];
         let event = super::parse_raw_event(&data, &mut factories).unwrap();
-        let section = event.get_section::<TestEvent>(SectionId::Common).unwrap();
+        let section = event.test.unwrap();
         assert!(section.field1 == Some(42));
         assert!(section.field2 == Some(1337));
     }

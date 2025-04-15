@@ -111,7 +111,7 @@ pub enum CtState {
     Untracked,
 }
 /// Conntrack event
-#[event_section(SectionId::Ct)]
+#[event_section]
 pub struct CtEvent {
     /// Packet's conntrack state
     pub state: CtState,

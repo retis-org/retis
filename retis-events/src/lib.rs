@@ -4,7 +4,7 @@
 //! well as some ancillary structs and helpers to facilitate parsing, displaying and
 //! inspecting events.
 
-#![allow(dead_code)]
+//#![allow(dead_code)]
 
 pub mod events;
 pub use events::*;
