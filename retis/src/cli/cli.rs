@@ -2,7 +2,9 @@
 //!
 //! Cli module, providing tools for registering and accessing command line interface arguments
 //! as well as defining the subcommands that the tool supports.
-use std::{any::Any, convert::From, env, ffi::OsString, fmt::Debug, fs, str::FromStr};
+use std::{
+    any::Any, convert::From, env, ffi::OsString, fmt::Debug, fs, path::PathBuf, str::FromStr,
+};
 
 use anyhow::{anyhow, bail, Result};
 use clap::{
@@ -165,6 +167,12 @@ pub(crate) struct MainConfig {
 - Path to a profile, in which case the file should contain a single profile."
     )]
     pub(crate) profile: Vec<String>,
+    #[arg(
+        long,
+        help = "Path to a directory with custom profiles. When used this overrides the
+default profile directories."
+    )]
+    pub(crate) profiles_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Default)]
@@ -228,7 +236,10 @@ impl RetisCli {
                     Ok(profile) => profile,
                     Err(e) => bail!("Could not import profile: {e}"),
                 },
-                _ => Profile::find(name.as_str())?,
+                _ => match &main_config.profiles_dir {
+                    Some(dir) => Profile::find_from(dir, name.as_str())?,
+                    None => Profile::find(name.as_str())?,
+                },
             };
 
             let mut extra_args = profile.cli_args(subcommand)?;
