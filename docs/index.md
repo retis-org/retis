@@ -153,6 +153,14 @@ like any other profile if stored in `$HOME/.config/retis/profiles`. Here is an
 profile](https://github.com/retis-org/retis/blob/main/retis/test_data/profiles/example.yaml)
 with inlined comments. If a profile is generic enough, consider contributing it!
 
+A custom directory containing profiles can be used. This is handy for sharing
+out-of-tree profiles.
+
+```none
+$ retis -P /custom/path profile list
+...
+```
+
 ## Post-processing
 
 Events stored in a file can be formatted and displayed to the console using the

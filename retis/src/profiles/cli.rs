@@ -2,6 +2,7 @@
 //!
 //! Profiles is a CLI subcommand that allows listing and inspecting
 //! profiles.
+use std::path::Path;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -27,30 +28,40 @@ pub(crate) struct ProfileCmd {
 }
 
 impl SubCommandParserRunner for ProfileCmd {
-    fn run(&mut self, _: &MainConfig) -> Result<()> {
+    fn run(&mut self, main_config: &MainConfig) -> Result<()> {
         match &self.command {
             ProfileSubCommand::List => {
-                for path in get_profile_paths().iter().filter(|p| p.as_path().exists()) {
-                    for entry in path.read_dir()? {
-                        let entry = entry?;
-                        match Profile::from_file(entry.path()) {
-                            Ok(mut profiles) => {
-                                if !profiles.is_empty() {
-                                    println!("{}:", entry.path().to_str().unwrap_or("unknown"));
-                                }
-                                for profile in profiles.drain(..) {
-                                    println!(
-                                        "  {: <20} {}",
-                                        profile.name,
-                                        profile.about.unwrap_or(String::new()),
-                                    );
-                                }
-                            }
-                            Err(err) => {
-                                warn!("Skipping invalid file {}: {err}", entry.path().display())
-                            }
-                        }
+                for path in get_profile_paths(main_config.extra_profiles_dir.as_ref())
+                    .iter()
+                    .filter(|p| p.as_path().exists())
+                {
+                    Self::list_path(path)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl ProfileCmd {
+    fn list_path(path: &Path) -> Result<()> {
+        for entry in path.read_dir()? {
+            let entry = entry?;
+            match Profile::from_file(entry.path()) {
+                Ok(mut profiles) => {
+                    if !profiles.is_empty() {
+                        println!("{}:", entry.path().to_str().unwrap_or("unknown"));
                     }
+                    for profile in profiles.drain(..) {
+                        println!(
+                            "  {: <20} {}",
+                            profile.name,
+                            profile.about.unwrap_or(String::new()),
+                        );
+                    }
+                }
+                Err(err) => {
+                    warn!("Skipping invalid file {}: {err}", entry.path().display())
                 }
             }
         }

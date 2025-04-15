@@ -1,4 +1,10 @@
-use std::{collections::BTreeMap, env, ffi::OsString, fs::read_to_string, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    env,
+    ffi::OsString,
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{bail, Result};
 use log::{debug, info, warn};
@@ -136,41 +142,50 @@ impl Profile {
         ApiVersion::parse(API_VERSION_STR)
     }
 
-    /// Find a profile
-    pub(crate) fn find(name: &str) -> Result<Profile> {
-        for path in get_profile_paths().iter().filter(|p| p.as_path().exists()) {
-            // Profile conflict is performed per-path to allow overriding
-            // global profiles in the $HOME location.
-            let mut found = None;
-
-            for entry in path.read_dir()? {
-                let entry = entry?;
-                match Profile::from_file(entry.path()) {
-                    Ok(mut profiles) => {
-                        for profile in profiles.drain(..) {
-                            if profile.name.eq(name) {
-                                // If we already found a profile this means we
-                                // have a name conflict.
-                                if found.is_some() {
-                                    bail!(
-                                        "Found two profiles with name '{name}' in {}",
-                                        path.to_str().unwrap_or("unknown path")
-                                    );
-                                }
-                                found = Some(profile);
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        debug!("Skipping invalid file {}: {err}", entry.path().display())
-                    }
-                }
-                if let Some(profile) = found {
-                    return Ok(profile);
-                }
+    /// Find a profile; an additional custom profiles directory can be provided.
+    pub(crate) fn find(name: &str, custom_dir: Option<&PathBuf>) -> Result<Profile> {
+        for path in get_profile_paths(custom_dir)
+            .iter()
+            .filter(|p| p.as_path().exists())
+        {
+            if let Some(profile) = Self::find_from(path, name)? {
+                return Ok(profile);
             }
         }
         bail!("Profile with name {name} not found");
+    }
+
+    /// Find a profile from a given path.
+    pub(crate) fn find_from(path: &Path, name: &str) -> Result<Option<Profile>> {
+        // Profile conflict is performed per-path to allow overriding global
+        // profiles in the $HOME location.
+        let mut found = None;
+
+        for entry in path.read_dir()? {
+            let entry = entry?;
+            match Profile::from_file(entry.path()) {
+                Ok(mut profiles) => {
+                    for profile in profiles.drain(..) {
+                        if profile.name.eq(name) {
+                            // If we already found a profile this means we
+                            // have a name conflict.
+                            if found.is_some() {
+                                bail!(
+                                    "Found two profiles with name '{name}' in {}",
+                                    path.to_str().unwrap_or("unknown path")
+                                );
+                            }
+                            found = Some(profile);
+                        }
+                    }
+                }
+                Err(err) => {
+                    debug!("Skipping invalid file {}: {err}", entry.path().display())
+                }
+            }
+        }
+
+        Ok(found)
     }
 
     /// Load profiles from a path.
@@ -297,9 +312,12 @@ impl Profile {
 }
 
 /// Return the list of paths to be used for profile lookup.
-pub(super) fn get_profile_paths() -> Vec<PathBuf> {
+pub(super) fn get_profile_paths(custom: Option<&PathBuf>) -> Vec<PathBuf> {
     // Paths are inspected in order so keep them ordered by (descending) priority.
     let mut paths = Vec::new();
+    if let Some(custom) = custom {
+        paths.push(custom.clone());
+    }
     if cfg!(debug_assertions) {
         paths.push(PathBuf::from("retis/profiles/"));
         paths.push(PathBuf::from("test_data/profiles/"));
