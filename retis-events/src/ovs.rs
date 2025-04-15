@@ -7,7 +7,7 @@ use super::*;
 use crate::{event_section, event_type, Formatter};
 
 ///The OVS Event
-#[event_section(SectionId::Ovs)]
+#[event_section]
 #[serde(tag = "event_type")]
 #[derive(PartialEq)]
 pub enum OvsEvent {
@@ -673,7 +673,7 @@ impl fmt::Display for Ufid {
 }
 
 /// The OVS flow information event
-#[event_section(SectionId::OvsFlowInfo)]
+#[event_section]
 pub struct OvsFlowInfoEvent {
     /// Unique FLow ID
     pub ufid: Ufid,

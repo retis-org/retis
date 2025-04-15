@@ -53,7 +53,8 @@ impl RawEventSectionFactory for SkbTrackingEventFactory {
             skb: raw.skb,
         };
 
-        event.insert_section(SectionId::from_u8(track.id())?, Box::new(track))
+        event.skb_tracking = Some(track);
+        Ok(())
     }
 }
 

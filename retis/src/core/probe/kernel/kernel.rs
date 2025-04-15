@@ -145,7 +145,8 @@ impl RawEventSectionFactory for KernelEventFactory {
         #[cfg(not(test))]
         self.unmarshal_stackid(&mut kernel, raw.stack_id as i32)?;
 
-        event.insert_section(SectionId::from_u8(kernel.id())?, Box::new(kernel))
+        event.kernel = Some(kernel);
+        Ok(())
     }
 }
 

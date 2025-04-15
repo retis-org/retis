@@ -69,6 +69,7 @@ impl RawEventSectionFactory for NftEventFactory {
             nft.verdict_chain_name = raw_to_string_opt!(&raw.verdict_chain_name)?;
         }
 
-        event.insert_section(SectionId::from_u8(nft.id())?, Box::new(nft))
+        event.nft = Some(nft);
+        Ok(())
     }
 }

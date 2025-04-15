@@ -72,7 +72,8 @@ impl RawEventSectionFactory for SkbDropEventFactory {
             drop_reason,
         };
 
-        event.insert_section(SectionId::from_u8(drop.id())?, Box::new(drop))
+        event.skb_drop = Some(drop);
+        Ok(())
     }
 }
 

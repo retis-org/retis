@@ -328,7 +328,8 @@ impl RawEventSectionFactory for SkbEventFactory {
             }
         }
 
-        event.insert_section(SectionId::from_u8(skb.id())?, Box::new(skb))
+        event.skb = Some(skb);
+        Ok(())
     }
 }
 
