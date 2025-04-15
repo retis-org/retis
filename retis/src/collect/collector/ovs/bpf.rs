@@ -388,68 +388,62 @@ impl OvsEventFactory {
 }
 
 impl RawEventSectionFactory for OvsEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let mut event = None; // = OvsEvent::default();
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+        let mut ovs = None; // = OvsEvent::default();
 
         for section in raw_sections.iter() {
             match OvsDataType::from_u8(section.header.data_type)? {
                 OvsDataType::Upcall => {
-                    event = Some(unmarshall_upcall(section)?);
+                    ovs = Some(unmarshall_upcall(section)?);
                 }
                 OvsDataType::UpcallEnqueue => {
-                    event = Some(unmarshall_upcall_enqueue(section)?);
+                    ovs = Some(unmarshall_upcall_enqueue(section)?);
                 }
                 OvsDataType::UpcallReturn => {
-                    event = Some(unmarshall_upcall_return(section)?);
+                    ovs = Some(unmarshall_upcall_return(section)?);
                 }
                 OvsDataType::RecvUpcall => {
-                    event = Some(unmarshall_recv(section)?);
+                    ovs = Some(unmarshall_recv(section)?);
                 }
                 OvsDataType::Operation => {
-                    event = Some(unmarshall_operation(section)?);
+                    ovs = Some(unmarshall_operation(section)?);
                 }
                 OvsDataType::ActionExec => {
-                    event = Some(self.unmarshall_exec(section)?);
+                    ovs = Some(self.unmarshall_exec(section)?);
                 }
                 OvsDataType::FlowLookup => {
                     event = Some(self.unmarshall_flow_lookup(section)?);
                 }
                 OvsDataType::ActionExecTrack => unmarshall_exec_track(
                     section,
-                    event
-                        .as_mut()
+                    ovs.as_mut()
                         .ok_or_else(|| anyhow!("received action track without action"))?,
                 )?,
                 OvsDataType::OutputAction => unmarshall_output(
                     section,
-                    event
-                        .as_mut()
+                    ovs.as_mut()
                         .ok_or_else(|| anyhow!("received action data without action"))?,
                 )?,
                 OvsDataType::RecircAction => unmarshall_recirc(
                     section,
-                    event
-                        .as_mut()
+                    ovs.as_mut()
                         .ok_or_else(|| anyhow!("received action data without action"))?,
                 )?,
                 OvsDataType::ConntrackAction => unmarshall_ct(
                     section,
-                    event
-                        .as_mut()
+                    ovs.as_mut()
                         .ok_or_else(|| anyhow!("received action data without action"))?,
                 )?,
                 OvsDataType::DropAction => unmarshall_drop(
                     section,
-                    event
-                        .as_mut()
+                    ovs.as_mut()
                         .ok_or_else(|| anyhow!("received action data without action"))?,
                 )?,
             };
         }
 
-        Ok(Box::new(
-            event.ok_or_else(|| anyhow!("Incomplete OVS event"))?,
-        ))
+        let ovs = ovs.ok_or_else(|| anyhow!("Incomplete OVS event"))?;
+        event.insert_section(SectionId::from_u8(ovs.id())?, Box::new(ovs))
     }
 }
 

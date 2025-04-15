@@ -386,10 +386,9 @@ pub(crate) fn parse_raw_event<'a>(
             .get_mut(&owner)
             .ok_or_else(|| anyhow!("Unknown factory {}", owner as u8))?;
 
-        let section = factory
-            .create(sections)
-            .map_err(|e| anyhow!("Factory {} failed to parse section: {e}", owner as u8))?;
-        event.insert_section(SectionId::from_u8(section.id())?, section)
+        factory
+            .create(sections, &mut event)
+            .map_err(|e| anyhow!("Factory {} failed to parse section: {e}", owner as u8))
     })?;
 
     Ok(event)
@@ -446,7 +445,7 @@ pub(crate) fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u3
 pub(crate) struct CommonEventFactory {}
 
 impl RawEventSectionFactory for CommonEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let mut common = CommonEvent::default();
 
         for section in raw_sections.iter() {
@@ -462,7 +461,7 @@ impl RawEventSectionFactory for CommonEventFactory {
             }
         }
 
-        Ok(Box::new(common))
+        event.insert_section(SectionId::from_u8(common.id())?, Box::new(common))
     }
 }
 
@@ -556,7 +555,7 @@ pub(crate) trait EventSectionFactory: RawEventSectionFactory {
 /// Event section factory helpers to convert from BPF raw events. Requires a
 /// per-object implementation.
 pub(crate) trait RawEventSectionFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>>;
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()>;
 }
 
 /// Identifier for factories. Should match their counterparts in the BPF side.
@@ -697,8 +696,8 @@ mod tests {
     struct TestEventFactory {}
 
     impl RawEventSectionFactory for TestEventFactory {
-        fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-            let mut event = TestEvent::default();
+        fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+            let mut test = TestEvent::default();
 
             for raw in raw_sections.iter() {
                 let len = raw.data.len();
@@ -709,21 +708,21 @@ mod tests {
                             bail!("Invalid section for data type 1");
                         }
 
-                        event.field0 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
+                        test.field0 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
                     }
                     DATA_TYPE_U128 => {
                         if len != 16 {
                             bail!("Invalid section for data type 2");
                         }
 
-                        event.field1 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
-                        event.field2 = Some(u64::from_ne_bytes(raw.data[8..16].try_into()?));
+                        test.field1 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
+                        test.field2 = Some(u64::from_ne_bytes(raw.data[8..16].try_into()?));
                     }
                     _ => bail!("Invalid data type"),
                 }
             }
 
-            Ok(Box::new(event))
+            event.insert_section(SectionId::from_u8(test.id())?, Box::new(test))
         }
     }
 
