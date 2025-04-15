@@ -312,23 +312,23 @@ impl SkbEventFactory {
 }
 
 impl RawEventSectionFactory for SkbEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let mut event = SkbEvent::default();
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+        let mut skb = SkbEvent::default();
 
         for section in raw_sections.iter() {
             match section.header.data_type as u32 {
-                SECTION_VLAN => event.vlan = Some(unmarshal_vlan(section)?),
-                SECTION_DEV => event.dev = unmarshal_dev(section)?,
-                SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
-                SECTION_META => event.meta = Some(unmarshal_meta(section)?),
-                SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
-                SECTION_GSO => event.gso = Some(unmarshal_gso(section)?),
-                SECTION_PACKET => unmarshal_packet(&mut event, section, self.report_eth)?,
+                SECTION_VLAN => skb.vlan = Some(unmarshal_vlan(section)?),
+                SECTION_DEV => skb.dev = unmarshal_dev(section)?,
+                SECTION_NS => skb.ns = Some(unmarshal_ns(section)?),
+                SECTION_META => skb.meta = Some(unmarshal_meta(section)?),
+                SECTION_DATA_REF => skb.data_ref = Some(unmarshal_data_ref(section)?),
+                SECTION_GSO => skb.gso = Some(unmarshal_gso(section)?),
+                SECTION_PACKET => unmarshal_packet(&mut skb, section, self.report_eth)?,
                 x => bail!("Unknown data type ({x})"),
             }
         }
 
-        Ok(Box::new(event))
+        event.insert_section(SectionId::from_u8(skb.id())?, Box::new(skb))
     }
 }
 

@@ -86,7 +86,7 @@ pub(crate) struct UserEventFactory {
 }
 
 impl RawEventSectionFactory for UserEventFactory {
-    fn create(&mut self, mut raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, mut raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         if raw_sections.len() != 1 {
             bail!("User event from BPF must be a single section")
         }
@@ -129,7 +129,7 @@ impl RawEventSectionFactory for UserEventFactory {
             .get_note_from_symbol(symbol)?
             .ok_or_else(|| anyhow!("Failed to get symbol information"))?;
 
-        Ok(Box::new(UserEvent {
+        let user = UserEvent {
             pid,
             tid,
             symbol: format!("{note}"),
@@ -144,6 +144,8 @@ impl RawEventSectionFactory for UserEventFactory {
                 _ => "unknown",
             }
             .to_string(),
-        }))
+        };
+
+        event.insert_section(SectionId::from_u8(user.id())?, Box::new(user))
     }
 }

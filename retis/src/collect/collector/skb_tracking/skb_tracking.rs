@@ -42,16 +42,18 @@ impl Collector for SkbTrackingCollector {
 pub(crate) struct SkbTrackingEventFactory {}
 
 impl RawEventSectionFactory for SkbTrackingEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         // Both raw event and actual event map 1:1 but we still want
         // to keep the bindings for consistency
         let raw = parse_single_raw_section::<skb_tracking_event>(&raw_sections)?;
 
-        Ok(Box::new(SkbTrackingEvent {
+        let track = SkbTrackingEvent {
             orig_head: raw.orig_head,
             timestamp: raw.timestamp,
             skb: raw.skb,
-        }))
+        };
+
+        event.insert_section(SectionId::from_u8(track.id())?, Box::new(track))
     }
 }
 
