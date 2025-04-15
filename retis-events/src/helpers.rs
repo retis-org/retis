@@ -1,51 +1,53 @@
 /// Networking utilities
+use retis_pnet::{ethernet::*, ip::*};
+
 use crate::event_type;
 
 /// Returns a translation of some ethertypes into a readable format.
-pub fn etype_str(etype: u16) -> Option<&'static str> {
+pub fn etype_str(etype: EtherType) -> Option<&'static str> {
     Some(match etype {
-        0x0800 => "IPv4",
-        0x0806 => "ARP",
-        0x6558 => "TEB",
-        0x8035 => "Reverse ARP",
-        0x809b => "Appletalk",
-        0x80f3 => "Appletalk ARP",
-        0x8100 => "802.1Q",
-        0x86dd => "IPv6",
-        0x880b => "PPP",
-        0x8847 => "MPLS unicast",
-        0x8848 => "MPLS multicast",
-        0x8863 => "PPPoE D",
-        0x8864 => "PPPoE S",
-        0x888e => "EAPOL",
-        0x88a8 => "802.1Q QinQ",
-        0x88e5 => "802.1AE MACsec",
-        0x88f7 => "PTP",
-        0x9100 => "802.1Q-9100",
+        EtherTypes::Ipv4 => "IPv4",
+        EtherTypes::Arp => "ARP",
+        EtherTypes::Teb => "TEB",
+        EtherTypes::Rarp => "Reverse ARP",
+        EtherTypes::AppleTalk => "Appletalk",
+        EtherTypes::Aarp => "Appletalk ARP",
+        EtherTypes::Vlan => "802.1Q",
+        EtherTypes::Ipv6 => "IPv6",
+        EtherTypes::Ppp => "PPP",
+        EtherTypes::Mpls => "MPLS unicast",
+        EtherTypes::MplsMcast => "MPLS multicast",
+        EtherTypes::PppoeDiscovery => "PPPoE D",
+        EtherTypes::PppoeSession => "PPPoE S",
+        EtherTypes::Eapol => "EAPOL",
+        EtherTypes::PBridge => "802.1Q-QinQ",
+        EtherTypes::Macsec => "802.1AE MACsec",
+        EtherTypes::Ptp => "PTP",
+        EtherTypes::QinQ => "802.1Q-9100",
         _ => return None,
     })
 }
 
 /// Returns a translation of some protocols into a readable format.
-pub(crate) fn protocol_str(protocol: u8) -> Option<&'static str> {
+pub(crate) fn protocol_str(protocol: IpNextHeaderProtocol) -> Option<&'static str> {
     Some(match protocol {
-        1 => "ICMP",
-        2 => "IGMP",
-        4 => "IPIP",
-        6 => "TCP",
-        17 => "UDP",
-        27 => "RDP",
-        33 => "DCCP",
-        41 => "IPv6",
-        47 => "GRE",
-        50 => "ESP",
-        51 => "AH",
-        58 => "ICMPv6",
-        89 => "OSPF",
-        112 => "VRRP",
-        115 => "L2TP",
-        132 => "SCTP",
-        143 => "Ethernet",
+        IpNextHeaderProtocols::Icmp => "ICMP",
+        IpNextHeaderProtocols::Igmp => "IGMP",
+        IpNextHeaderProtocols::Ipv4 => "IPIP",
+        IpNextHeaderProtocols::Tcp => "TCP",
+        IpNextHeaderProtocols::Udp => "UDP",
+        IpNextHeaderProtocols::Rdp => "RDP",
+        IpNextHeaderProtocols::Dccp => "DCCP",
+        IpNextHeaderProtocols::Ipv6 => "IPv6",
+        IpNextHeaderProtocols::Gre => "GRE",
+        IpNextHeaderProtocols::Esp => "ESP",
+        IpNextHeaderProtocols::Ah => "AH",
+        IpNextHeaderProtocols::Icmpv6 => "ICMPv6",
+        IpNextHeaderProtocols::OspfigP => "OSPF",
+        IpNextHeaderProtocols::Vrrp => "VRRP",
+        IpNextHeaderProtocols::L2tp => "L2TP",
+        IpNextHeaderProtocols::Sctp => "SCTP",
+        IpNextHeaderProtocols::Ethernet => "Ethernet",
         _ => return None,
     })
 }
