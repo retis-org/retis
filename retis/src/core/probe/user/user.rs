@@ -146,6 +146,7 @@ impl RawEventSectionFactory for UserEventFactory {
             .to_string(),
         };
 
-        event.insert_section(SectionId::from_u8(user.id())?, Box::new(user))
+        event.userspace = Some(user);
+        Ok(())
     }
 }

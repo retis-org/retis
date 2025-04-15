@@ -46,9 +46,9 @@ available. It is of type `EventFile`.
 ```python
 $ cat myscript.py
 for event in reader.events():
-    if "skb" in event and getattr(event["skb"], "tcp", None):
+    if event.skb and event.skb.tcp:
         print("TCP event with dport: {}".format(
-            event["skb"].tcp.dport))
+            event.skb.tcp.dport))
 
 $ retis python myscript.py
 ```

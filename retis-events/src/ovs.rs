@@ -7,7 +7,7 @@ use super::*;
 use crate::{event_section, event_type, Formatter};
 
 ///The OVS Event
-#[event_section(SectionId::Ovs)]
+#[event_section]
 #[serde(tag = "event_type")]
 #[derive(PartialEq)]
 pub enum OvsEvent {

@@ -68,7 +68,8 @@ impl RawEventSectionFactory for CtEventFactory {
             ct.parent = Some(self.unmarshal_ct(raw_section)?);
         }
 
-        event.insert_section(SectionId::from_u8(ct.id())?, Box::new(ct))
+        event.ct = Some(ct);
+        Ok(())
     }
 }
 

@@ -3,7 +3,7 @@ use std::fmt;
 use super::*;
 use crate::{event_section, Formatter};
 
-#[event_section(SectionId::Userspace)]
+#[event_section]
 pub struct UserEvent {
     /// Probe type: for now only "usdt" is supported.
     pub probe_type: String,
