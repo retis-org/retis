@@ -743,3 +743,39 @@ impl RawPacket {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DisplayFormat, FormatterConf};
+
+    #[test]
+    fn print_icmp_in_geneve() {
+        let mut buf = Vec::new();
+        BASE64_STANDARD.decode_vec(
+            "ukoiHKOOzikYufsvCABFAACGORIAAEAR2VIKACoBCgAqAkL5F8EAcmiGAABlWAAAAQAO2mLRzBfW99tozRgIAEUAAFRH90AAQAGIrwoAKwEKACsCCAA5rgUFAAE5cv5nAAAAAL+eAwAAAAAAEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nw==",
+            &mut buf,
+        ).unwrap();
+        let raw = RawPacket(buf);
+
+        assert_eq!(
+            &format!("{}", raw.display(&DisplayFormat::new(), &FormatterConf::new())),
+            "10.0.42.1.17145 > 10.0.42.2.6081 tos 0x0 ttl 64 id 14610 off 0 len 134 proto UDP (17) len 106 geneve [] vni 0x1 10.0.43.1 > 10.0.43.2 tos 0x0 ttl 64 id 18423 off 0 [DF] len 84 proto ICMP (1) type 8 code 0",
+        );
+    }
+
+    #[test]
+    fn print_tcp6_in_vlan() {
+        let mut buf = Vec::new();
+        BASE64_STANDARD.decode_vec(
+            "rrBKar+vnh09MZ47ht1gBvSKACgGQBERAAAAAAAAAAAAAAAAAAEREQAAAAAAAAAAAAAAAAAC22QAULIRwcAAAAAAoAL9ICJTAAACBAWgBAIIClP9HoIAAAAAAQMDBw==",
+            &mut buf,
+        ).unwrap();
+        let raw = RawPacket(buf);
+
+        assert_eq!(
+            &format!("{}", raw.display(&DisplayFormat::new().print_ll(true), &FormatterConf::new())),
+            "9e:1d:3d:31:9e:3b > ae:b0:4a:6a:bf:af ethertype IPv6 (0x86dd) 1111::1.56164 > 1111::2.80 ttl 64 label 0x6f48a len 40 proto TCP (6) flags [S] seq 2987508160 win 64800 [mss 1440,sackOK,TS val 1409097346 ecr 0,nop,wscale 7]"
+        );
+    }
+}
