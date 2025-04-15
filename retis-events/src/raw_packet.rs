@@ -99,7 +99,7 @@ impl RawPacket {
         format: &DisplayFormat,
         eth: &EthernetPacket,
     ) -> FmtResult<()> {
-        let etype = match helpers::etype_str(eth.get_ethertype().0) {
+        let etype = match helpers::etype_str(eth.get_ethertype()) {
             Some(etype) => etype,
             // We can report non-Ethernet packets, sanity check they look like
             // one. We could still get invalid ones, if the data at the right
@@ -200,7 +200,7 @@ impl RawPacket {
         )?;
 
         let ethertype = vlan.get_ethertype();
-        match helpers::etype_str(ethertype.0) {
+        match helpers::etype_str(ethertype) {
             Some(etype) => write!(f, " ethertype {etype} ({:#06x})", ethertype.0)?,
             None => write!(f, " ethertype ({:#06x})", ethertype.0)?,
         }
@@ -325,10 +325,10 @@ impl RawPacket {
             write!(f, " opts [{}]", opts.join(","))?;
         }
 
-        let protocol = ip.get_next_level_protocol().0;
+        let protocol = ip.get_next_level_protocol();
         match helpers::protocol_str(protocol) {
-            Some(proto) => write!(f, " proto {proto} ({protocol})")?,
-            None => write!(f, " proto ({protocol})")?,
+            Some(proto) => write!(f, " proto {proto} ({})", protocol.0)?,
+            None => write!(f, " proto ({})", protocol.0)?,
         }
 
         self.format_l4(
@@ -412,7 +412,7 @@ impl RawPacket {
             return Ok(());
         }
 
-        match helpers::protocol_str(protocol.0) {
+        match helpers::protocol_str(protocol) {
             Some(proto) => write!(f, " proto {proto} ({})", protocol.0)?,
             None => write!(f, " proto ({})", protocol.0)?,
         }
@@ -724,7 +724,7 @@ impl RawPacket {
 
         let protocol = geneve.get_protocol();
         if format.print_ll {
-            match helpers::etype_str(protocol.0) {
+            match helpers::etype_str(protocol) {
                 Some(etype) => write!(f, " proto {etype} ({:#06x})", protocol.0)?,
                 None => write!(f, " proto ({:#06x})", protocol.0)?,
             }
@@ -735,8 +735,8 @@ impl RawPacket {
         }
 
         write!(f, " ")?;
-        match protocol.0 {
-            0x6558 => match EthernetPacket::new(geneve.payload()) {
+        match protocol {
+            EtherTypes::Teb => match EthernetPacket::new(geneve.payload()) {
                 Some(eth) => self.format_ethernet(f, format, &eth),
                 None => Err(PacketFmtError::Truncated),
             },
