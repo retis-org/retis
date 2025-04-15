@@ -139,10 +139,11 @@ impl Profile {
     /// Find a profile
     pub(crate) fn find(name: &str) -> Result<Profile> {
         for path in get_profile_paths().iter().filter(|p| p.as_path().exists()) {
+            // Profile conflict is performed per-path to allow overriding
+            // global profiles in the $HOME location.
+            let mut found = None;
+
             for entry in path.read_dir()? {
-                // Profile conflict is performed per-path to allow overriding
-                // global profiles in the $HOME location.
-                let mut found = None;
                 let entry = entry?;
                 match Profile::from_file(entry.path()) {
                     Ok(mut profiles) => {
@@ -153,7 +154,7 @@ impl Profile {
                                 if found.is_some() {
                                     bail!(
                                         "Found two profiles with name '{name}' in {}",
-                                        entry.path().to_str().unwrap_or("unknown path")
+                                        path.to_str().unwrap_or("unknown path")
                                     );
                                 }
                                 found = Some(profile);
