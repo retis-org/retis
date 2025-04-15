@@ -135,6 +135,7 @@ impl Profile {
     pub(crate) fn api_version() -> Result<ApiVersion> {
         ApiVersion::parse(API_VERSION_STR)
     }
+
     /// Find a profile
     pub(crate) fn find(name: &str) -> Result<Profile> {
         for path in get_profile_paths().iter().filter(|p| p.as_path().exists()) {
@@ -143,7 +144,7 @@ impl Profile {
                 // global profiles in the $HOME location.
                 let mut found = None;
                 let entry = entry?;
-                match Profile::load(entry.path()) {
+                match Profile::from_file(entry.path()) {
                     Ok(mut profiles) => {
                         for profile in profiles.drain(..) {
                             if profile.name.eq(name) {
@@ -171,9 +172,9 @@ impl Profile {
         bail!("Profile with name {name} not found");
     }
 
-    /// Load a profile from a path.
+    /// Load profiles from a path.
     /// A file can contain multiple yaml objects so we return a list of objects.
-    pub(crate) fn load(path: PathBuf) -> Result<Vec<Profile>> {
+    pub(crate) fn from_file(path: PathBuf) -> Result<Vec<Profile>> {
         let mut result = Vec::new();
         let contents = read_to_string(path.clone())?;
         for document in serde_yaml::Deserializer::from_str(&contents) {
@@ -202,13 +203,12 @@ impl Profile {
     }
 
     /// Load a profile from a string.
-    #[cfg(test)]
     pub(crate) fn from_str(contents: &str) -> Result<Profile> {
         Ok(serde_yaml::from_str(contents)?)
     }
 
     /// Evaluate collect profiles and return the one that matches.
-    pub(crate) fn match_collect(&self) -> Result<Option<&SubcommandProfile>> {
+    fn match_collect(&self) -> Result<Option<&SubcommandProfile>> {
         if self.collect.is_empty() {
             return Ok(None);
         }
@@ -222,7 +222,7 @@ impl Profile {
     }
 
     /// Evaluate pcap profiles and return the one that matches.
-    pub(crate) fn match_pcap(&self) -> Result<Option<&SubcommandProfile>> {
+    fn match_pcap(&self) -> Result<Option<&SubcommandProfile>> {
         if self.pcap.is_empty() {
             return Ok(None);
         }
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn load_file() {
-        let p = &Profile::load(PathBuf::from("test_data/profiles/example.yaml")).unwrap()[0];
+        let p = &Profile::from_file(PathBuf::from("test_data/profiles/example.yaml")).unwrap()[0];
         assert_eq!(p.name, "example-profile");
         assert_eq!(p.version, ApiVersion::parse("1.0").unwrap());
     }

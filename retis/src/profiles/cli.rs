@@ -33,7 +33,7 @@ impl SubCommandParserRunner for ProfileCmd {
                 for path in get_profile_paths().iter().filter(|p| p.as_path().exists()) {
                     for entry in path.read_dir()? {
                         let entry = entry?;
-                        match Profile::load(entry.path()) {
+                        match Profile::from_file(entry.path()) {
                             Ok(mut profiles) => {
                                 if !profiles.is_empty() {
                                     println!("{}:", entry.path().to_str().unwrap_or("unknown"));
