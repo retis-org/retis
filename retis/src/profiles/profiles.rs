@@ -1,6 +1,12 @@
-use std::{collections::BTreeMap, env, ffi::OsString, fs::read_to_string, path::PathBuf};
+use std::{
+    collections::BTreeMap,
+    env,
+    ffi::OsString,
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 
@@ -135,45 +141,57 @@ impl Profile {
     pub(crate) fn api_version() -> Result<ApiVersion> {
         ApiVersion::parse(API_VERSION_STR)
     }
+
     /// Find a profile
     pub(crate) fn find(name: &str) -> Result<Profile> {
-        for path in get_profile_paths()?.iter().filter(|p| p.as_path().exists()) {
-            for entry in path.read_dir()? {
-                // Profile conflict is performed per-path to allow overriding
-                // global profiles in the $HOME location.
-                let mut found = None;
-                let entry = entry?;
-                match Profile::load(entry.path()) {
-                    Ok(mut profiles) => {
-                        for profile in profiles.drain(..) {
-                            if profile.name.eq(name) {
-                                // If we already found a profile this means we
-                                // have a name conflict.
-                                if found.is_some() {
-                                    bail!(
-                                        "Found two profiles with name '{name}' in {}",
-                                        entry.path().to_str().unwrap_or("unknown path")
-                                    );
-                                }
-                                found = Some(profile);
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        debug!("Skipping invalid file {}: {err}", entry.path().display())
-                    }
-                }
-                if let Some(profile) = found {
-                    return Ok(profile);
-                }
+        for path in get_profile_paths().iter().filter(|p| p.as_path().exists()) {
+            if let Some(profile) = Self::__find_from(path, name)? {
+                return Ok(profile);
             }
         }
         bail!("Profile with name {name} not found");
     }
 
-    /// Load a profile from a path.
+    /// Find a profile from a given path.
+    pub(crate) fn find_from(path: &Path, name: &str) -> Result<Profile> {
+        Self::__find_from(path, name)?.ok_or(anyhow!("Profile with name {name} not found"))
+    }
+
+    pub(crate) fn __find_from(path: &Path, name: &str) -> Result<Option<Profile>> {
+        // Profile conflict is performed per-path to allow overriding global
+        // profiles in the $HOME location.
+        let mut found = None;
+
+        for entry in path.read_dir()? {
+            let entry = entry?;
+            match Profile::from_file(entry.path()) {
+                Ok(mut profiles) => {
+                    for profile in profiles.drain(..) {
+                        if profile.name.eq(name) {
+                            // If we already found a profile this means we
+                            // have a name conflict.
+                            if found.is_some() {
+                                bail!(
+                                    "Found two profiles with name '{name}' in {}",
+                                    path.to_str().unwrap_or("unknown path")
+                                );
+                            }
+                            found = Some(profile);
+                        }
+                    }
+                }
+                Err(err) => {
+                    debug!("Skipping invalid file {}: {err}", entry.path().display())
+                }
+            }
+        }
+
+        Ok(found)
+    }
+
+    /// Load profiles from a path.
     /// A file can contain multiple yaml objects so we return a list of objects.
-    pub(crate) fn load(path: PathBuf) -> Result<Vec<Profile>> {
+    pub(crate) fn from_file(path: PathBuf) -> Result<Vec<Profile>> {
         let mut result = Vec::new();
         let contents = read_to_string(path.clone())?;
         for document in serde_yaml::Deserializer::from_str(&contents) {
@@ -202,13 +220,12 @@ impl Profile {
     }
 
     /// Load a profile from a string.
-    #[cfg(test)]
     pub(crate) fn from_str(contents: &str) -> Result<Profile> {
         Ok(serde_yaml::from_str(contents)?)
     }
 
     /// Evaluate collect profiles and return the one that matches.
-    pub(crate) fn match_collect(&self) -> Result<Option<&SubcommandProfile>> {
+    fn match_collect(&self) -> Result<Option<&SubcommandProfile>> {
         if self.collect.is_empty() {
             return Ok(None);
         }
@@ -222,7 +239,7 @@ impl Profile {
     }
 
     /// Evaluate pcap profiles and return the one that matches.
-    pub(crate) fn match_pcap(&self) -> Result<Option<&SubcommandProfile>> {
+    fn match_pcap(&self) -> Result<Option<&SubcommandProfile>> {
         if self.pcap.is_empty() {
             return Ok(None);
         }
@@ -296,7 +313,7 @@ impl Profile {
 }
 
 /// Return the list of paths to be used for profile lookup.
-pub(super) fn get_profile_paths() -> Result<Vec<PathBuf>> {
+pub(super) fn get_profile_paths() -> Vec<PathBuf> {
     // Paths are inspected in order so keep them ordered by (descending) priority.
     let mut paths = Vec::new();
     if cfg!(debug_assertions) {
@@ -306,8 +323,10 @@ pub(super) fn get_profile_paths() -> Result<Vec<PathBuf>> {
     if let Ok(home) = env::var("HOME") {
         paths.push(PathBuf::from(home).join(".config/retis/profiles/"));
     }
+    paths.push(PathBuf::from("/usr/share/retis/profiles/"));
+    // Kept for backward compatibility.
     paths.push(PathBuf::from("/etc/retis/profiles/"));
-    Ok(paths)
+    paths
 }
 
 #[cfg(test)]
@@ -316,7 +335,7 @@ mod tests {
 
     #[test]
     fn load_file() {
-        let p = &Profile::load(PathBuf::from("test_data/profiles/example.yaml")).unwrap()[0];
+        let p = &Profile::from_file(PathBuf::from("test_data/profiles/example.yaml")).unwrap()[0];
         assert_eq!(p.name, "example-profile");
         assert_eq!(p.version, ApiVersion::parse("1.0").unwrap());
     }

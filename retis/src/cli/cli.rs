@@ -2,7 +2,9 @@
 //!
 //! Cli module, providing tools for registering and accessing command line interface arguments
 //! as well as defining the subcommands that the tool supports.
-use std::{any::Any, convert::From, env, ffi::OsString, fmt::Debug, str::FromStr};
+use std::{
+    any::Any, convert::From, env, ffi::OsString, fmt::Debug, fs, path::PathBuf, str::FromStr,
+};
 
 use anyhow::{anyhow, bail, Result};
 use clap::{
@@ -159,9 +161,18 @@ pub(crate) struct MainConfig {
         long,
         short,
         value_delimiter = ',',
-        help = "Comma separated list of profile names to apply"
+        help = "Comma separated list of profiles to apply. Accepted values:
+- Profile names, in which case the profile should be in either
+  /usr/share/retis/profiles or in $HOME/.config/retis/profiles.
+- Path to a profile, in which case the file should contain a single profile."
     )]
-    pub(crate) profile: Vec<String>,
+    pub(crate) profile: Vec<PathBuf>,
+    #[arg(
+        long,
+        help = "Path to a directory with custom profiles. When used this overrides the
+default profile directories."
+    )]
+    pub(crate) profiles_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Default)]
@@ -219,7 +230,24 @@ impl RetisCli {
         }
 
         for name in main_config.profile.iter() {
-            let profile = Profile::find(name.as_str())?;
+            // Profile could be a path to a file or a profile name.
+            let profile = match fs::read_to_string(name) {
+                Ok(s) => match Profile::from_str(&s) {
+                    Ok(profile) => profile,
+                    Err(e) => bail!("Could not import profile: {e}"),
+                },
+                _ => {
+                    let name = match name.to_str() {
+                        Some(name) => name,
+                        None => bail!("Invalid profile name ({})", name.display()),
+                    };
+                    match &main_config.profiles_dir {
+                        Some(dir) => Profile::find_from(dir, name)?,
+                        None => Profile::find(name)?,
+                    }
+                }
+            };
+
             let mut extra_args = profile.cli_args(subcommand)?;
             args.append(&mut extra_args);
         }
