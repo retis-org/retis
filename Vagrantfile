@@ -46,9 +46,9 @@ end
 Vagrant.configure("2") do |config|
   config.vm.box_check_update = false
 
-  config.vm.define "x86_64-f41" do |fedora|
-    fedora.vm.box = "fedora-41-cloud"
-    fedora.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/releases/41/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
+  config.vm.define "x86_64-f42" do |fedora|
+    fedora.vm.box = "fedora-42-cloud"
+    fedora.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/releases/42/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
     fedora.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     fedora.vm.provision "shell", inline: <<-SHELL
