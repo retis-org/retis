@@ -1,3 +1,8 @@
+comment:
+  layout: "reach, diff, flags"
+  behavior: default
+  require_changes: true
+
 coverage:
   status:
     project:
