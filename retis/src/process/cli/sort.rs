@@ -59,6 +59,10 @@ pub(crate) struct Sort {
     /// Print the time as UTC.
     #[arg(long)]
     pub(super) utc: bool,
+
+    /// Print link-layer information from the packet.
+    #[arg(short = 'e')]
+    pub(super) print_ll: bool,
 }
 
 impl SubCommandParserRunner for Sort {
@@ -113,7 +117,8 @@ impl SubCommandParserRunner for Sort {
                     TimeFormat::UtcDate
                 } else {
                     TimeFormat::MonotonicTimestamp
-                });
+                })
+                .print_ll(self.print_ll);
 
             printers.push(PrintSeries::new(
                 Box::new(stdout()),

@@ -1,3 +1,4 @@
+import base64
 import json
 import signal
 import subprocess
@@ -6,6 +7,7 @@ import re
 
 from os import uname
 from os.path import dirname, abspath, join, getsize, exists
+from scapy.all import *
 from shutil import rmtree
 from tempfile import mkdtemp
 
@@ -271,10 +273,38 @@ def run_bg(cmd):
     return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
+def packet_to_json(raw_packet):
+    """Transforms a raw packet into a JSON represention of all its fields."""
+    p = Ether(base64.decodebytes(raw_packet.encode('ascii')))
+    res = {}
+    for line in p.show2(dump=True).split('\n'):
+        if '###' in line:
+            proto = line.strip('#[] ').lower()
+            res[proto] = {}
+        elif '=' in line:
+            key, val = line.split('=', 1)
+            res[proto][key.strip().lower()] = val.strip().lower()
+    return res
+
+
+def fixup_packet_events(events):
+    """Augment all events containing a raw packet with their parsed JSON
+    representation.
+    """
+    for e in events:
+        if not "skb" in e:
+            continue
+        if not "packet" in e['skb']:
+            continue
+        e['parsed_packet'] = packet_to_json(e['skb']['packet']['raw'])
+
+
 def assert_events_present(events, expected):
     """Asserts a list of expected events are present in the event list in the
     same order. The expected events can be specified as a subset of the event.
     """
+    fixup_packet_events(events)
+
     idx = 0
     aliases = {}
     for ex_idx, ex in enumerate(expected):
