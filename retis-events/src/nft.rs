@@ -4,7 +4,7 @@ use super::*;
 use crate::{event_section, Formatter};
 
 /// Nft event section
-#[event_section(SectionId::Nft)]
+#[event_section]
 #[derive(Default)]
 pub struct NftEvent {
     pub table_name: String,
