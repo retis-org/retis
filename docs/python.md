@@ -53,6 +53,16 @@ for event in reader.events():
 $ retis python myscript.py
 ```
 
+Python scripts can be stored in `$HOME/.config/retis/python` or
+`/usr/share/retis/python` and executed using their name:
+
+```text
+$ ls $HOME/.config/retis/python
+foo.py
+$ retis python foo
+...
+```
+
 If no script is provided, an interactive shell is created. Example:
 
 ```text

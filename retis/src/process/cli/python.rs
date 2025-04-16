@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::{arg, Parser};
 
 use crate::{cli::*, events::python_embed::shell_execute};
@@ -16,12 +16,53 @@ pub(crate) struct PythonCli {
         help = "File from which to read events"
     )]
     pub(super) input: PathBuf,
-    #[arg(help = "Python script to execute. Omit to drop into an interactive shell.")]
+    #[arg(
+        help = "Python script to execute. Omit to drop into an interactive shell.
+Alternatively scripts can be stored in $HOME/.config/retis/python and
+/usr/share/retis/python, in which case the file name only (without the .py
+extension) can be provided."
+    )]
     pub(super) script: Option<PathBuf>,
 }
 
 impl SubCommandParserRunner for PythonCli {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
-        shell_execute(self.input.clone(), self.script.as_ref())
+        let mut script_path = None;
+
+        if let Some(script) = &self.script {
+            match script.try_exists() {
+                Ok(true) => script_path = Some(script.clone()),
+                _ => {
+                    for path in get_python_paths() {
+                        let path = path.join(script).with_extension("py");
+                        match path.try_exists() {
+                            Ok(true) => {
+                                script_path = Some(path);
+                                break;
+                            }
+                            _ => continue,
+                        }
+                    }
+
+                    if script_path.is_none() {
+                        bail!("Python script named {} not found", script.display());
+                    }
+                }
+            }
+        }
+
+        shell_execute(self.input.clone(), script_path.as_ref())
     }
+}
+
+fn get_python_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if cfg!(debug_assertions) {
+        paths.push(PathBuf::from("retis/python/"));
+    }
+    if let Ok(home) = env::var("HOME") {
+        paths.push(PathBuf::from(home).join(".config/retis/python/"));
+    }
+    paths.push(PathBuf::from("/usr/share/retis/python/"));
+    paths
 }
