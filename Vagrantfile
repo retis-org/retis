@@ -65,7 +65,7 @@ Vagrant.configure("2") do |config|
 
     rawhide.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     rawhide.vm.provision "shell", inline: <<-SHELL
-       dnf install -y openvswitch
+       dnf install -y openvswitch iptables-legacy
     SHELL
 
     rawhide.vm.synced_folder ".", "/vagrant", type: "rsync"

@@ -29,8 +29,7 @@ pub(crate) struct Collect {
         value_delimiter=',',
         help = "Comma-separated list of collectors to enable.
 
-If this is not set and no profile is used (\"--profile\") all collectors are
-enabled unless a prerequisite is missing."
+If this is not set all collectors are enabled, unless a prerequisite is missing."
     )]
     pub(super) collectors: Option<Vec<String>>,
     // Use the plural in the struct but singular for the cli parameter as we're
