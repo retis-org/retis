@@ -166,7 +166,7 @@ pub(crate) struct MainConfig {
   /usr/share/retis/profiles or in $HOME/.config/retis/profiles.
 - Path to a profile, in which case the file should contain a single profile."
     )]
-    pub(crate) profile: Vec<String>,
+    pub(crate) profile: Vec<PathBuf>,
     #[arg(
         long,
         short = 'P',
@@ -237,7 +237,13 @@ impl RetisCli {
                     Ok(profile) => profile,
                     Err(e) => bail!("Could not import profile: {e}"),
                 },
-                _ => Profile::find(name.as_str(), main_config.extra_profiles_dir.as_ref())?,
+                _ => {
+                    let name = match name.to_str() {
+                        Some(name) => name,
+                        None => bail!("Invalid profile name ({})", name.display()),
+                    };
+                    Profile::find(name, main_config.extra_profiles_dir.as_ref())?
+                }
             };
 
             let mut extra_args = profile.cli_args(subcommand)?;
