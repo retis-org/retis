@@ -108,9 +108,6 @@ pub(crate) struct Collectors {
     tracking_config_map: Option<libbpf_rs::MapHandle>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
-    // Are we in "auto mode", aka. allowed to do parts of the collection
-    // configuration automatically?
-    auto_mode: bool,
     // Did we mount debugfs ourselves?
     mounted_debugfs: bool,
 }
@@ -129,7 +126,6 @@ impl Collectors {
             tracking_gc: None,
             tracking_config_map: None,
             events_factory: Arc::new(RetisEventsFactory::default()),
-            auto_mode: false,
             mounted_debugfs: false,
         })
     }
@@ -224,11 +220,6 @@ impl Collectors {
     pub(super) fn init(&mut self, main_config: &MainConfig, collect: &Collect) -> Result<()> {
         self.run.register_term_signals()?;
 
-        // Determine if auto mode is enabled:
-        // - No profile is used.
-        // - No collector was explicitly enabled.
-        self.auto_mode = main_config.profile.is_empty() && collect.collectors.is_none();
-
         // Check if we need to report stack traces in the events.
         if collect.stack || collect.probe_stack {
             self.probes
@@ -269,8 +260,8 @@ impl Collectors {
             // Check if the collector can run (prerequisites are met).
             if let Err(e) = c.can_run(collect) {
                 // Do not issue an error if the list of collectors was set by
-                // default, aka. auto-detect mode.
-                if self.auto_mode {
+                // default.
+                if collect.collectors.is_none() {
                     debug!("Cannot run collector {name}: {e}");
                     continue;
                 } else {
@@ -297,8 +288,9 @@ impl Collectors {
             self.collectors.insert(name.to_string(), c);
         }
 
-        //  If auto-mode is used, print the list of collectors that were started.
-        if self.auto_mode {
+        //  If the default set of collectors is used, print the list of those
+        //  started.
+        if collect.collectors.is_none() {
             info!(
                 "Collector(s) started: {}",
                 self.collectors
@@ -317,9 +309,16 @@ impl Collectors {
         }
         Self::setup_filters(self.probes.builder_mut()?, collect)?;
 
-        // If auto_mode is on and no probe is given, find the right set
-        // automagically.
-        if self.auto_mode && collect.probes.is_empty() {
+        // If no probe was explicitly set, find the right set automagically. In
+        // addition check:
+        // - No profile is used, this is to allow profiles to only use probes
+        //   added by collectors (e.g. by skb-drop) and for better expectations.
+        // - No collector is explicitly enabled, this is because collectors
+        //   might add probes and we could be interested in getting those only.
+        if main_config.profile.is_empty()
+            && collect.probes.is_empty()
+            && collect.collectors.is_none()
+        {
             let mut probes = if collect.probe_stack {
                 // If --probe-stack is used, use skb:consume_skb & skb:kfree_skb
                 // as a starting point (these should capture most if not all of
