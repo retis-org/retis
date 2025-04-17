@@ -152,8 +152,7 @@ $(EBPF_PROBES): OUT_NAME := PROBE
 $(EBPF_HOOKS):  OUT_NAME := HOOK
 $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	$(call out_console,$(OUT_NAME),building $@ ...)
-	BPF_CFLAGS="$(BPF_CFLAGS)" \
-	CFLAGS="$(INCLUDES) $(CFLAGS)" \
+	CFLAGS="$(BPF_CFLAGS) $(INCLUDES)" \
 	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@
 
 pylib:

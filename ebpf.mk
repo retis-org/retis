@@ -12,7 +12,7 @@ $(OUT_DIR):
 $(OBJS): | $(OUT_DIR)
 
 $(OUT_DIR)/%.o: %.c
-	$(CLANG) $(CFLAGS) $(BPF_CFLAGS) $(INCLUDES_EXTRA) -MMD -c -g -o $@ $<
+	$(CLANG) $(CFLAGS) $(INCLUDES_EXTRA) -MMD -c -g -o $@ $<
 	$(OBJCOPY) --strip-debug $@
 
 -include $(DEP)
