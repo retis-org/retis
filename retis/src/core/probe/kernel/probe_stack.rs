@@ -107,6 +107,7 @@ impl ProbeStack {
                     _ => return Ok(()),
                 };
 
+                probe.set_option(crate::core::probe::ProbeOption::NoStackTrace)?;
                 #[cfg(not(test))]
                 if let Err(e) = mgr.attach_generic_probe(&mut probe) {
                     warn!("Could not attach additional probe {probe}: {e}");

@@ -27,6 +27,7 @@ pub(crate) enum ProbeType {
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub(crate) enum ProbeOption {
     StackTrace,
+    NoStackTrace,
     NoGenericHook,
 }
 

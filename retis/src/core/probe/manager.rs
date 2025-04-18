@@ -20,11 +20,14 @@ use super::{
 };
 
 use super::{common::*, kernel::config::init_config_map};
-use crate::core::{
-    filters::{self, fixup_filter_load_fn, register_filter_handler, Filter},
-    kernel::Symbol,
-    probe::user::UsdtProbe,
-    user::proc::Process,
+use crate::{
+    bindings::common_defs_uapi::retis_global_config,
+    core::{
+        filters::{self, fixup_filter_load_fn, register_filter_handler, Filter},
+        kernel::Symbol,
+        probe::user::UsdtProbe,
+        user::proc::Process,
+    },
 };
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
@@ -112,11 +115,7 @@ impl ProbeManager {
             builder
                 .maps
                 .iter()
-                .try_for_each(|(name, fd)| p.reuse_map(name, *fd))?;
-            builder
-                .global_probes_options
-                .iter()
-                .try_for_each(|o| p.set_option(o.clone()))
+                .try_for_each(|(name, fd)| p.reuse_map(name, *fd))
         })?;
 
         // Set up filters and their handlers.
@@ -189,7 +188,20 @@ impl ProbeManager {
         {
             // Set the global config once all probes are installed, to avoid
             // inconsistencies.
-            let config = GlobalConfig { enabled: 1 };
+            let mut config = retis_global_config {
+                enabled: 1,
+                stack_trace: 0,
+            };
+
+            builder.global_probes_options.iter().try_for_each(|o| {
+                match o {
+                    ProbeOption::StackTrace => config.stack_trace = 1,
+                    _ => bail!("Unsupported global option"),
+                }
+
+                Ok(())
+            })?;
+
             let config = unsafe { plain::as_bytes(&config) };
             builder
                 .global_config_map
