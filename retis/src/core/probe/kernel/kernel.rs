@@ -8,7 +8,10 @@ use libbpf_rs::MapCore;
 
 use super::inspect::inspect_symbol;
 use crate::{
-    bindings::common_uapi::{kernel_event, retis_probe_config},
+    bindings::{
+        common_defs_uapi::{LOCAL_STACK_TRACE_OFF, LOCAL_STACK_TRACE_ON},
+        common_uapi::{kernel_event, retis_probe_config},
+    },
     core::{
         events::{
             parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
@@ -46,7 +49,10 @@ impl KernelProbe {
         #[allow(clippy::single_match)]
         options.iter().for_each(|o| match o {
             ProbeOption::StackTrace => {
-                config.stack_trace = 1;
+                config.stack_trace = LOCAL_STACK_TRACE_ON as u8;
+            }
+            ProbeOption::NoStackTrace => {
+                config.stack_trace = LOCAL_STACK_TRACE_OFF as u8;
             }
             _ => (),
         });

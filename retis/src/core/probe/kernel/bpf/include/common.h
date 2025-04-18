@@ -289,6 +289,14 @@ next_filter:
 	ctx->filters_ret |= (!!meta_filter(skb)) << RETIS_F_META_PASS_SH;
 }
 
+static __always_inline bool global_stack_trace_enabled() {
+	struct retis_global_config *cfg;
+	u8 key = 0;
+
+	cfg = bpf_map_lookup_elem(&global_config_map, &key);
+	return cfg && !!cfg->stack_trace;
+}
+
 /* The chaining function, which contains all our core probe logic. This is
  * called from each probe specific part after filling the common context and
  * just before returning.
@@ -370,7 +378,8 @@ static __always_inline int chain(struct retis_context *ctx)
 
 	k->symbol = ctx->ksym;
 	k->type = ctx->probe_type;
-	if (cfg->stack_trace)
+	if ((global_stack_trace_enabled() && cfg->stack_trace != LOCAL_STACK_TRACE_OFF) ||
+	    cfg->stack_trace == LOCAL_STACK_TRACE_ON)
 		k->stack_id = bpf_get_stackid(ctx->orig_ctx, &stack_map, BPF_F_FAST_STACK_CMP);
 	else
 		k->stack_id = -1;

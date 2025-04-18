@@ -544,7 +544,9 @@ impl Collectors {
         let (mut iccount, mut eccount) = (0, 0);
         let mut probe_stack = ProbeStack::new(
             collect.stack,
-            self.probes.runtime_mut()?.attached_probes(),
+            self.probes
+                .runtime_mut()?
+                .attached_probes_opt(ProbeOption::StackTrace),
             self.known_kernel_types.clone(),
         );
 
