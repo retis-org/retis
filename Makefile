@@ -1,6 +1,5 @@
 ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 LLC := llc
-CLANG := clang
 OBJCOPY := llvm-objcopy
 
 CARGO := cargo $(CARGO_OPTS)
@@ -31,7 +30,7 @@ BPF_CFLAGS := -target bpf \
               -D__TARGET_ARCH_$(BPF_ARCH) \
               -O2
 
-export CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
+export LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
 
 PRINT = printf
 CONTAINER_RUNTIME := podman

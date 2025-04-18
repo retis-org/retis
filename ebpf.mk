@@ -1,3 +1,5 @@
+CLANG ?= clang
+
 OUT_DIR := .out
 OBJS := $(patsubst %.c,$(OUT_DIR)/%.o,$(wildcard *.c))
 DEP := $(OBJS:%.o=%.d)
