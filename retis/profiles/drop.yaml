@@ -4,7 +4,7 @@ about: Drop monitor-like
 collect:
   - args:
       collectors: skb-drop,skb
-      stack: ~
+      probe: tp:skb:kfree_skb/stack
 pcap:
   - args:
       probe: tp:skb:kfree_skb
@@ -16,7 +16,7 @@ collect:
   - args:
       collectors: nft,skb
       nft_verdicts: drop
-      stack: ~
+      probe: kprobe:__nft_trace_packet/stack
 pcap:
   - args:
       probe: kprobe:__nft_trace_packet
