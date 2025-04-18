@@ -65,7 +65,6 @@ thiserror = "2.0"
 [build-dependencies]
 bindgen = "0.70"
 libbpf-cargo = "0.24"
-libbpf-sys = "1.5"
 memmap2 = "0.9"
 
 [dev-dependencies]
