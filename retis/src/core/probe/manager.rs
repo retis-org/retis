@@ -2,7 +2,7 @@
 #![cfg_attr(test, allow(unused_imports))]
 use std::{
     cmp,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     os::fd::{AsFd, AsRawFd, RawFd},
 };
 
@@ -167,7 +167,7 @@ impl ProbeManager {
             hooks: builder.generic_hooks.into_iter().collect(),
             generic_builders: HashMap::new(),
             targeted_builders: Vec::new(),
-            probes: HashSet::new(),
+            probes: HashMap::new(),
             filters: builder.filters,
         };
 
@@ -423,7 +423,7 @@ pub(crate) struct ProbeRuntimeManager {
     targeted_builders: Vec<Box<dyn ProbeBuilder>>,
     map_fds: Vec<(String, RawFd)>,
     hooks: Vec<Hook>,
-    probes: HashSet<String>,
+    probes: HashMap<String, Vec<ProbeOption>>,
     filters: Vec<Filter>,
 }
 
@@ -516,7 +516,11 @@ impl ProbeRuntimeManager {
     /// Attach a new targeted probe.
     #[cfg(not(test))]
     fn attach_targeted_probe(&mut self, probe: &mut Probe) -> Result<()> {
-        if !self.probes.insert(probe.key()) {
+        if self
+            .probes
+            .insert(probe.key(), probe.options.clone().into_iter().collect())
+            .is_some()
+        {
             bail!("A probe on {probe} is already attached");
         }
 
@@ -547,7 +551,11 @@ impl ProbeRuntimeManager {
     /// Attach a new generic probe.
     #[cfg(not(test))]
     pub(crate) fn attach_generic_probe(&mut self, probe: &mut Probe) -> Result<()> {
-        if !self.probes.insert(probe.key()) {
+        if self
+            .probes
+            .insert(probe.key(), probe.options.clone().into_iter().collect())
+            .is_some()
+        {
             bail!("A probe on {probe} is already attached");
         }
 
@@ -558,8 +566,23 @@ impl ProbeRuntimeManager {
     }
 
     /// Get the list of all currently attached probes.
-    pub(crate) fn attached_probes(&self) -> Vec<String> {
+    pub(crate) fn attached_probes(&self) -> Vec<(String, Vec<ProbeOption>)> {
         self.probes.clone().into_iter().collect()
+    }
+
+    /// Get the list of all currently attached probes with a specific option.
+    pub(crate) fn attached_probes_opt(&self, option: ProbeOption) -> Vec<String> {
+        self.probes
+            .clone()
+            .into_iter()
+            .filter_map(|(key, vec)| {
+                if vec.contains(&option) {
+                    Some(key.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Detach all probes.

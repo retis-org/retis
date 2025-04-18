@@ -23,6 +23,10 @@ pub(crate) struct ProbeStack {
     probes: HashSet<String>,
     /// Should the stack stay in the event?
     keep_stack: bool,
+    /// Local cache of functions that were already considered, probed or not
+    /// with local stack trace flags set.
+    /// Used to optimize the event processing.
+    stack_trace_probes: HashSet<String>,
     /// Set of kernel types known by collectors, so we only probe functions that
     /// can generate an event.
     known_kernel_types: HashSet<String>,
@@ -36,15 +40,16 @@ impl ProbeStack {
     ) -> Self {
         // Stack probe mode works with kprobes only and keeps track of the
         // function name.
-        let attached_probes = attached_probes
+        let filtered_probes = attached_probes
             .iter()
             .filter_map(|p| p.strip_prefix("kprobe:"))
             .map(|p| p.to_string())
             .collect::<Vec<String>>();
 
         Self {
-            probes: HashSet::from_iter(attached_probes),
+            probes: HashSet::from_iter(filtered_probes),
             keep_stack,
+            stack_trace_probes: HashSet::from_iter(attached_probes),
             known_kernel_types,
         }
     }
@@ -120,7 +125,13 @@ impl ProbeStack {
             Ok(())
         })?;
 
-        if !self.keep_stack {
+        let r#type = match kernel.probe_type.as_str() {
+            "raw_tracepoint" => "tp",
+            s => s,
+        };
+
+        let sym = format!("{}:{}", r#type, kernel.symbol);
+        if !self.keep_stack && !self.stack_trace_probes.contains(&sym) {
             kernel.stack_trace = None;
         }
 

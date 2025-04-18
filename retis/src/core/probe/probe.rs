@@ -31,6 +31,17 @@ pub(crate) enum ProbeOption {
     NoGenericHook,
 }
 
+impl TryFrom<&str> for ProbeOption {
+    type Error = anyhow::Error;
+
+    fn try_from(option: &str) -> Result<Self> {
+        Ok(match option {
+            "stack" => Self::StackTrace,
+            _ => bail!("{option} is an invalid probe option."),
+        })
+    }
+}
+
 /// Represents a probe we can install in a target (kernel, user space program,
 /// etc). It can be of various underlying types, which can be retrieved using
 /// `let r#type = probe.r#type();`
