@@ -117,7 +117,9 @@ and adding it to the event list as a new event section called `ovs-detrace`.
 Then, `retis sort` will combine this event with the `flow_tbl_lookup` event to show extra information
 of each flow hit.
 
-Queries to OVS are throttled to 20 requests per second.
+Queries to OVS are throttled to 20 requests per second by default. This threshold is configurable
+through the `--ovs-enrich-flows` flag.
+
 
 ### Example
 Let's see an example. Say we capture ICMP traffic going through OVS and store the events in a file

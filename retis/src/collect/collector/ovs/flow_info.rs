@@ -30,7 +30,6 @@ use crate::core::events::factory::RetisEventsFactory;
 use crate::events::*;
 use crate::helpers::signals::Running;
 
-const MAX_REQUESTS_PER_SEC: u64 = 20;
 const MAX_FLOW_AGE_SECS: u64 = 10;
 const CHANNEL_SIZE: usize = 100;
 const DEFAULT_TIMEOUT_MS: u64 = 500;
@@ -64,6 +63,8 @@ pub(crate) struct FlowEnricher {
     thread: Option<thread::JoinHandle<()>>,
     // Whether ofproto/detrace is supported
     detrace_supported: bool,
+    // Rate of requests
+    rate: u32,
 
     // Sender and receiver of the channel that is used to request enrichments
     sender: mpsc::SyncSender<EnrichRequest>,
@@ -71,7 +72,7 @@ pub(crate) struct FlowEnricher {
 }
 
 impl FlowEnricher {
-    pub(crate) fn new(events_factory: Arc<RetisEventsFactory>) -> Result<Self> {
+    pub(crate) fn new(events_factory: Arc<RetisEventsFactory>, rate: u32) -> Result<Self> {
         let (sender, receiver) = mpsc::sync_channel::<EnrichRequest>(CHANNEL_SIZE);
 
         let mut unixctl = OvsUnixCtl::new(Some(Duration::from_millis(500)))?;
@@ -92,6 +93,7 @@ impl FlowEnricher {
             sender,
             receiver: Some(receiver),
             detrace_supported,
+            rate,
         })
     }
 
@@ -115,6 +117,8 @@ impl FlowEnricher {
             .take()
             .ok_or_else(|| anyhow!("ovs-flow-enricher: unixctl not found"))?;
 
+        let min_request_time = Duration::from_millis((1000 / self.rate).into());
+
         self.thread = Some(
             thread::Builder::new()
                 .name("ovs-flow-enricher".into())
@@ -123,7 +127,6 @@ impl FlowEnricher {
                     let mut wait_time = Duration::from_millis(DEFAULT_TIMEOUT_MS);
                     let mut registry = FlowInfoRegistry::default();
 
-                    let min_request_time = Duration::from_millis(1000 / MAX_REQUESTS_PER_SEC);
 
                     let mut failed_requests: u64 = 0;
 
