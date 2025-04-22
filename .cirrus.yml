@@ -10,6 +10,7 @@ cargo_task_tempate: &cargo_task_template
   setup_script:
     - apt-get update
     - apt-get -y install llvm clang curl libelf-dev libpcap-dev python3-pip make jq
+    - ln -s /usr/include/asm-generic /usr/include/asm
     - rustup component add rustfmt
     - rustup component add clippy
     - rustup component add llvm-tools-preview

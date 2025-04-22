@@ -75,10 +75,7 @@ ifeq ($(NOVENDOR),)
     LIBBPF_INCLUDES := $(ROOT_DIR)/retis/src/.out
 endif
 
-# Taking errno.h from libc instead of linux headers.
-# TODO: Remove when we fix proper header dependencies.
-INCLUDES_ALL := $(abspath $(wildcard $(shell find retis/src -type d -path '*/bpf/include') \
-                                     /usr/include/x86_64-linux-gnu))
+INCLUDES_ALL := $(abspath $(wildcard $(shell find retis/src -type d -path '*/bpf/include')))
 INCLUDES_ALL += $(LIBBPF_INCLUDES)
 
 INCLUDES := $(addprefix -I, $(INCLUDES_ALL))

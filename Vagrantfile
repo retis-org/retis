@@ -144,6 +144,10 @@ Vagrant.configure("2") do |config|
 
       su vagrant -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy"
       python3 -m pip install pytest pyroute2 "scapy>=2.6.1"
+
+      # For some reason on Ubuntu (x86_64) the asm headers folder isn't setup
+      # as expected by the compiler.
+      ln -s /usr/include/asm-generic /usr/include/asm
     SHELL
 
     jammy.vm.synced_folder ".", "/vagrant", type: "rsync"
