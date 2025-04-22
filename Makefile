@@ -22,11 +22,12 @@ BPF_ARCH := $(if $($(ARCH)),$($(ARCH)),$(ARCH))
 
 BPF_CFLAGS := -target bpf \
               -Wall \
+              -Werror \
               -Wno-unused-value \
               -Wno-pointer-sign \
               -Wno-compare-distinct-pointer-types \
+              -Wno-unused-command-line-argument \
               -fno-stack-protector \
-              -Werror \
               -D__TARGET_ARCH_$(BPF_ARCH) \
               -O2
 
