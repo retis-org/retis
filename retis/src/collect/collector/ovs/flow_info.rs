@@ -272,6 +272,10 @@ struct FlowInfoRecord {
     last_used: SystemTime,
 }
 
+// Safety limit to keep memory under control. It's unlikely we come even close this limit
+// as time-based flow expiration should take care of keeping the cache and queue sizes low.
+const MAX_STORED_RECORDS: usize = 1024 * 1024 / 2 / std::mem::size_of::<FlowInfoRecord>();
+
 // The FlowInfoRegistry keeps track of events that are waiting to be enriched and which ones have
 // already been enriched. It acts both as a cache and as a queue.
 #[derive(Default)]
@@ -298,6 +302,11 @@ impl FlowInfoRegistry {
 
     // Add a request to the queue
     fn queue_add(&mut self, req: EnrichRequest) {
+        if self.queue.len() >= MAX_STORED_RECORDS {
+            warn!("ovs-flow-enricher: request queue grew beyond the hard limit, dropping request");
+            return;
+        }
+
         // Do not add cached requests.
         if self.cache_lookup(&req) {
             return;
@@ -333,6 +342,11 @@ impl FlowInfoRegistry {
     }
 
     fn cache_insert(&mut self, request: EnrichRequest, event: OvsFlowInfoEvent) {
+        if self.cache.len() >= MAX_STORED_RECORDS {
+            warn!("ovs-flow-enricher: request cache grew beyond the hard limit, dropping request");
+            return;
+        }
+
         self.cache.insert(
             request.ufid,
             FlowInfoRecord {
