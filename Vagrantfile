@@ -1,12 +1,15 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-# Common for all distros: install the stable Rust toolchain.
+# Common for all distros:
+# - Install the stable Rust toolchain.
+# - Install Python test dependencies.
 $bootstrap_common = <<SCRIPT
 su vagrant -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy"
+python3 -m pip install pytest pyroute2 "scapy>=2.6.1"
 SCRIPT
 
-# Common for all rhel-like distros
+# Common for all rhel-like distros.
 $bootstrap_rhel_common = <<SCRIPT
 set -euxo pipefail
 dnf install -y \
@@ -23,9 +26,6 @@ dnf install -y \
     make \
     jq \
     ethtool
-
-    python3 -m pip install pytest pyroute2
-    python3 -m pip install "scapy>=2.6.1"
 SCRIPT
 
 # CentOS mirror URL changed but the c8s image is no longer being built. We
@@ -148,8 +148,6 @@ Vagrant.configure("2") do |config|
           nftables \
           make \
           jq
-
-      python3 -m pip install pytest pyroute2 "scapy>=2.6.1"
 
       # For some reason on Ubuntu (x86_64) the asm headers folder isn't setup
       # as expected by the compiler.
