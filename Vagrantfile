@@ -1,15 +1,17 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# Common for all distros: install the stable Rust toolchain.
+$bootstrap_common = <<SCRIPT
+su vagrant -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy"
+SCRIPT
+
 # Common for all rhel-like distros
 $bootstrap_rhel_common = <<SCRIPT
 set -euxo pipefail
 dnf install -y \
-    rust \
-    cargo \
     clang \
     llvm \
-    rustfmt \
     elfutils-libelf-devel \
     zlib-devel \
     libpcap-devel \
@@ -50,7 +52,8 @@ Vagrant.configure("2") do |config|
     fedora.vm.box = "fedora-42-cloud"
     fedora.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/releases/42/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
-    fedora.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
+    fedora.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
+    fedora.vm.provision "common", type: "shell", inline: $bootstrap_common
     fedora.vm.provision "shell", inline: <<-SHELL
        dnf install -y openvswitch
     SHELL
@@ -62,7 +65,8 @@ Vagrant.configure("2") do |config|
     rawhide.vm.box = "fedora-rawhide-cloud"
     rawhide.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
-    rawhide.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
+    rawhide.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
+    rawhide.vm.provision "common", type: "shell", inline: $bootstrap_common
     rawhide.vm.provision "shell", inline: <<-SHELL
        dnf install -y openvswitch iptables-legacy
     SHELL
@@ -80,7 +84,8 @@ Vagrant.configure("2") do |config|
        dnf install -y python39
        alternatives --set python3 /usr/bin/python3.9
     SHELL
-    centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
+    centos.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
+    centos.vm.provision "common", type: "shell", inline: $bootstrap_common
     centos.vm.provision "shell", inline: <<-SHELL
        dnf install -y centos-release-nfv-openvswitch
        #{$fix_centos_repositories}!
@@ -94,7 +99,8 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-9-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/9-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
-    centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
+    centos.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
+    centos.vm.provision "common", type: "shell", inline: $bootstrap_common
     centos.vm.provision "shell", inline: <<-SHELL
        dnf install -y centos-release-nfv-openvswitch
        dnf install -y openvswitch3.1
@@ -111,7 +117,8 @@ Vagrant.configure("2") do |config|
     centos.vm.provision "shell", inline: <<-SHELL
        dnf config-manager --set-enabled crb
     SHELL
-    centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
+    centos.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
+    centos.vm.provision "common", type: "shell", inline: $bootstrap_common
     centos.vm.provision "shell", inline: <<-SHELL
        dnf install -y centos-release-nfv-openvswitch
        dnf install -y openvswitch3.5
@@ -142,13 +149,13 @@ Vagrant.configure("2") do |config|
           make \
           jq
 
-      su vagrant -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy"
       python3 -m pip install pytest pyroute2 "scapy>=2.6.1"
 
       # For some reason on Ubuntu (x86_64) the asm headers folder isn't setup
       # as expected by the compiler.
       ln -s /usr/include/asm-generic /usr/include/asm
     SHELL
+    jammy.vm.provision "common", type: "shell", inline: $bootstrap_common
 
     jammy.vm.synced_folder ".", "/vagrant", type: "rsync"
   end
