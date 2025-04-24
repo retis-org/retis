@@ -46,7 +46,7 @@ impl PrintEvent {
                 }
             }
             PrintEventFormat::Json => {
-                let mut event = serde_json::to_vec(&e.to_json()?)?;
+                let mut event = serde_json::to_vec(&e)?;
                 event.push(b'\n');
                 self.writer.write_all(&event)?;
             }
@@ -107,7 +107,7 @@ impl PrintSeries {
                 }
             }
             PrintEventFormat::Json => {
-                let mut event = serde_json::to_vec(&series.to_json()?)?;
+                let mut event = serde_json::to_vec(&series)?;
                 event.push(b'\n');
                 self.writer.write_all(&event)?;
             }

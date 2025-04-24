@@ -33,8 +33,6 @@
 
 #![allow(clippy::wrong_self_convention)]
 
-use anyhow::{anyhow, Result};
-
 use crate::{display::*, *};
 
 /// Full event. Internal representation
@@ -76,15 +74,6 @@ pub struct Event {
 impl Event {
     pub fn new() -> Event {
         Event::default()
-    }
-
-    /// Create an Event from a json string.
-    pub(crate) fn from_json(line: String) -> Result<Event> {
-        Ok(serde_json::from_str(line.as_str())?)
-    }
-
-    pub fn to_json(&self) -> Result<serde_json::Value> {
-        Ok(serde_json::to_value(self)?)
     }
 }
 
@@ -154,36 +143,11 @@ impl EventFmt for Event {
 }
 
 /// A set of sorted Events with the same tracking id.
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
 pub struct EventSeries {
     /// Events that comprise the Series.
     pub events: Vec<Event>,
-}
-
-impl EventSeries {
-    /// Encode the EventSeries into a json object.
-    pub fn to_json(&self) -> Result<serde_json::Value> {
-        let mut events = Vec::<serde_json::Value>::new();
-        self.events.iter().try_for_each(|e| -> Result<()> {
-            events.push(e.to_json()?);
-            Ok(())
-        })?;
-        Ok(serde_json::Value::Array(events))
-    }
-
-    /// Create an EventSeries from a json string.
-    pub(crate) fn from_json(line: String) -> Result<EventSeries> {
-        let mut series = EventSeries::default();
-
-        let mut series_js: Vec<serde_json::Value> = serde_json::from_str(line.as_str())
-            .map_err(|e| anyhow!("Failed to parse json series at line {line}: {e}"))?;
-
-        for obj in series_js.drain(..) {
-            let event = serde_json::from_value(obj)?;
-            series.events.push(event);
-        }
-        Ok(series)
-    }
 }
 
 #[cfg(feature = "test-events")]

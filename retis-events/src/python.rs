@@ -106,7 +106,10 @@ impl PyEvent {
     /// Returns a dictionary with all key<>data stored (recursively) in the
     /// event, eg. `e.raw()['skb']['dev']`.
     fn raw(&self, py: Python<'_>) -> PyResult<PyObject> {
-        Ok(to_pyobject(&self.0.borrow(py).to_json().unwrap(), py))
+        Ok(to_pyobject(
+            &serde_json::to_value(self.0.borrow(py).clone()).unwrap(),
+            py,
+        ))
     }
 
     /// Returns a string representation of the event
