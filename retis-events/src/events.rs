@@ -33,8 +33,6 @@
 
 #![allow(clippy::wrong_self_convention)]
 
-use std::any::Any;
-
 use anyhow::{anyhow, Result};
 
 use crate::{display::*, *};
@@ -152,54 +150,6 @@ impl EventFmt for Event {
 
         f.conf.reset_level();
         Ok(())
-    }
-}
-
-/// Event section, should map 1:1 with a SectionId. Requiring specific traits to
-/// be implemented helps handling those sections in the core directly without
-/// requiring all section to serialize and deserialize their part by hand
-/// (except for the special case of BPF section events as there is an n:1
-/// mapping there).
-///
-/// Please use `#[retis_derive::event_section]` to implement the common traits.
-///
-/// The underlying objects are free to hold their data in any way, although
-/// having a proper structure is encouraged as it allows easier consumption at
-/// post-processing. Those objects can also define their own specialized
-/// helpers.
-pub trait EventSection: EventSectionInternal + for<'a> EventDisplay<'a> + Send {}
-impl<T> EventSection for T where T: EventSectionInternal + for<'a> EventDisplay<'a> + Send {}
-
-/// EventSection helpers defined in the core for all events. Common definition
-/// needs Sized but that is a requirement for all EventSection.
-///
-/// There should not be a need to have per-object implementations for this.
-pub trait EventSectionInternal {
-    fn as_any(&self) -> &dyn Any;
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-    fn to_json(&self) -> serde_json::Value;
-    #[cfg(feature = "python")]
-    fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject;
-}
-
-// We need this as the value given as the input when deserializing something
-// into an event could be mapped to (), e.g. serde_json::Value::Null.
-impl EventSectionInternal for () {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn to_json(&self) -> serde_json::Value {
-        serde_json::Value::Null
-    }
-
-    #[cfg(feature = "python")]
-    fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-        py.None()
     }
 }
 

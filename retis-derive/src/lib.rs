@@ -17,37 +17,11 @@ pub fn event_section(
         #[crate::event_type]
         #input
 
-        impl EventSectionInternal for #ident {
-            fn as_any(&self) -> &dyn std::any::Any
-                where Self: Sized,
-            {
-                self
-            }
-
-            fn as_any_mut(&mut self) -> &mut dyn std::any::Any
-                where Self: Sized,
-            {
-                self
-            }
-
-            fn to_json(&self) -> serde_json::Value
-                where Self: serde::Serialize,
-            {
-                serde_json::json!(self)
-            }
-
-            #[cfg(feature = "python")]
-            fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-                use pyo3::IntoPyObject;
-                self.clone().into_pyobject(py).unwrap().into_any().unbind()
-            }
-        }
-
         #[cfg_attr(feature = "python", pyo3::pymethods)]
         #[cfg(feature = "python")]
         impl #ident {
             fn raw(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-                crate::python::to_pyobject(&self.to_json(), py)
+                crate::python::to_pyobject(&serde_json::json!(self), py)
             }
 
             fn show(&self) -> String {
