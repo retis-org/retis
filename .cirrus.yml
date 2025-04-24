@@ -109,7 +109,7 @@ functional_task:
     - name: Centos 8 Stream (x86_64)
       env:
         DISTRO: x86_64-c8s
-        TEST_EXTRA_ARGS: "--ignore=test_ovs.py --ignore=test_nft.py --ignore=test_pcap.py"
+        TEST_EXTRA_ARGS: "--ignore=test_ovs.py --ignore=test_nft.py"
         CARGO_CMD_OPTS: "--no-default-features"
     - name: Centos 9 Stream (x86_64)
       env:

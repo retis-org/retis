@@ -2,7 +2,6 @@
 # vi: set ft=ruby :
 
 # Common for all rhel-like distros
-# Installation of scapy 2.6.1 and above will fail on RHEL 8.
 $bootstrap_rhel_common = <<SCRIPT
 set -euxo pipefail
 dnf install -y \
@@ -65,7 +64,7 @@ Vagrant.configure("2") do |config|
 
     rawhide.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     rawhide.vm.provision "shell", inline: <<-SHELL
-       dnf install -y openvswitch
+       dnf install -y openvswitch iptables-legacy
     SHELL
 
     rawhide.vm.synced_folder ".", "/vagrant", type: "rsync"
@@ -78,6 +77,8 @@ Vagrant.configure("2") do |config|
     centos.vm.provision "shell", inline: <<-SHELL
        #{$fix_centos_repositories}!
        dnf config-manager --set-enabled powertools
+       dnf install -y python39
+       alternatives --set python3 /usr/bin/python3.9
     SHELL
     centos.vm.provision "common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "shell", inline: <<-SHELL
