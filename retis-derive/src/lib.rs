@@ -74,6 +74,7 @@ pub fn event_type(
         quote!(Debug),
         quote!(serde::Serialize),
         quote!(serde::Deserialize),
+        quote!(schemars::JsonSchema),
     ];
 
     if props.enum_is_simple {
