@@ -18,10 +18,12 @@ pub(crate) struct PythonCli {
     pub(super) input: PathBuf,
     #[arg(help = "Python script to execute. Omit to drop into an interactive shell.")]
     pub(super) script: Option<PathBuf>,
+    #[arg(help = "Arguments for the Python script (available in `sys.argv`).")]
+    pub(super) args: Vec<String>,
 }
 
 impl SubCommandParserRunner for PythonCli {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
-        shell_execute(self.input.clone(), self.script.as_ref())
+        shell_execute(self.input.clone(), self.script.as_ref(), &self.args)
     }
 }
