@@ -9,7 +9,7 @@ use clap::{arg, builder::PossibleValuesParser, Parser};
 use libbpf_rs::MapCore;
 use log::warn;
 
-use super::skb_hook;
+use super::{bpf::SkbEventFactory, skb_hook};
 use crate::{
     bindings::skb_hook_uapi::*,
     collect::{cli::Collect, Collector},
@@ -69,21 +69,26 @@ impl Collector for SkbCollector {
         args: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
+        section_factories: &mut SectionFactories,
     ) -> Result<()> {
         // Default list of sections. We set SECTION_PACKET even though it's not
         // checked in the BPF hook (raw packet is always reported).
         let mut sections: u64 = 1 << SECTION_PACKET;
+        let skb_factory: &mut SkbEventFactory = section_factories.get_mut(&FactoryId::Skb)?;
 
         for category in args.collector_args.skb.skb_sections.iter() {
             match category.as_str() {
-                "all" => sections |= !0_u64,
+                "all" => {
+                    sections |= !0_u64;
+                    skb_factory.report_eth(true);
+                }
                 "vlan" => sections |= 1 << SECTION_VLAN,
                 "dev" => sections |= 1 << SECTION_DEV,
                 "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
-                "eth" => (),
+                "eth" => skb_factory.report_eth(true),
                 "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
                     warn!(
                         "Use of '{}' in --skb-sections is depreacted (is now always set)",

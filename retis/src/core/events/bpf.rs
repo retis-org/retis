@@ -7,6 +7,7 @@ use std::{
     any,
     collections::HashMap,
     mem,
+    ops::{Deref, DerefMut},
     os::fd::{AsFd, AsRawFd, RawFd},
     sync::mpsc,
     thread,
@@ -381,6 +382,7 @@ pub(crate) fn parse_raw_event<'a>(
     let mut event = Event::new();
     raw_sections.drain().try_for_each(|(owner, sections)| {
         let factory = factories
+            .0
             .get_mut(&owner)
             .ok_or_else(|| anyhow!("Unknown factory {}", owner as u8))?;
 
@@ -545,7 +547,9 @@ unsafe impl Plain for BpfRawSectionHeader {}
 /// traits.
 pub(crate) trait EventSectionFactory: RawEventSectionFactory {
     #[allow(dead_code)]
-    fn id(&self) -> u8;
+    fn id() -> u8
+    where
+        Self: Sized;
     fn as_any_mut(&mut self) -> &mut dyn any::Any;
 }
 
@@ -590,8 +594,49 @@ impl FactoryId {
     }
 }
 
-/// Type alias to refer to the commonly used EventSectionFactory HashMap.
-pub(crate) type SectionFactories = HashMap<FactoryId, Box<dyn EventSectionFactory>>;
+/// Map of Section Factories.
+#[derive(Default)]
+pub(crate) struct SectionFactories(HashMap<FactoryId, Box<dyn EventSectionFactory>>);
+
+impl SectionFactories {
+    /// Create a new factory map.
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    /// Get a mutable factory by its FactoryId.
+    pub(crate) fn get_mut<T: EventSectionFactory + 'static>(
+        &mut self,
+        id: &FactoryId,
+    ) -> Result<&mut T> {
+        self.0
+            .get_mut(id)
+            .ok_or_else(|| anyhow!("Failed to find factory with id {:?}", id))?
+            .as_any_mut()
+            .downcast_mut::<T>()
+            .ok_or_else(|| {
+                anyhow!(
+                    "Failed downcast section factory at {:?} to factory with id {}",
+                    id,
+                    T::id()
+                )
+            })
+    }
+}
+
+impl Deref for SectionFactories {
+    type Target = HashMap<FactoryId, Box<dyn EventSectionFactory>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for SectionFactories {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 #[cfg(feature = "benchmark")]
 pub(crate) mod benchmark {
@@ -684,7 +729,7 @@ mod tests {
 
     #[test]
     fn parse_raw_event() {
-        let mut factories: SectionFactories = HashMap::new();
+        let mut factories = SectionFactories::new();
         factories.insert(FactoryId::Common, Box::<TestEventFactory>::default());
 
         // Empty event.

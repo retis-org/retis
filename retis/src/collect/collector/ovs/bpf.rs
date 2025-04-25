@@ -4,8 +4,10 @@
 
 use std::collections::HashMap;
 use std::net::Ipv6Addr;
+use std::sync::mpsc;
 
 use anyhow::{anyhow, bail, Result};
+use log::warn;
 
 use crate::{
     bindings::{
@@ -13,6 +15,7 @@ use crate::{
         kernel_exec_tp_uapi::{
             exec_ct, exec_drop, exec_event, exec_output, exec_recirc, exec_track_event,
         },
+        kernel_flow_tbl_lookup_ret_uapi::flow_lookup_ret_event,
         kernel_upcall_ret_uapi::upcall_ret_event,
         kernel_upcall_tp_uapi::upcall_event,
         ovs_operation_uapi::ovs_operation_event,
@@ -26,6 +29,8 @@ use crate::{
     events::*,
     helpers,
 };
+
+use super::flow_info;
 
 /// Event data types supported by the ovs module.
 #[derive(Debug, Eq, Hash, PartialEq)]
@@ -52,6 +57,8 @@ pub(crate) enum OvsDataType {
     ConntrackAction = 9,
     /// Explicit drop action.
     DropAction = 10,
+    /// Flow lookup
+    FlowLookup = 11,
 }
 
 impl OvsDataType {
@@ -69,6 +76,7 @@ impl OvsDataType {
             8 => RecircAction,
             9 => ConntrackAction,
             10 => DropAction,
+            11 => FlowLookup,
             x => bail!("Can't construct a OvsDataType from {}", x),
         })
     }
@@ -267,6 +275,7 @@ pub(super) fn unmarshall_upcall_return(raw_section: &BpfRawSection) -> Result<Ov
 #[derive(Default)]
 pub(crate) struct OvsEventFactory {
     ovs_actions: HashMap<u32, String>,
+    ufid_sender: Option<mpsc::SyncSender<flow_info::EnrichRequest>>,
 }
 
 impl OvsEventFactory {
@@ -277,7 +286,47 @@ impl OvsEventFactory {
         } else {
             parse_enum("ovs_action_attr", &["OVS_ACTION_ATTR_"])?
         };
-        Ok(OvsEventFactory { ovs_actions })
+        Ok(OvsEventFactory {
+            ovs_actions,
+            ufid_sender: None,
+        })
+    }
+
+    pub fn ufid_sender(&mut self, ufid_sender: mpsc::SyncSender<flow_info::EnrichRequest>) {
+        self.ufid_sender = Some(ufid_sender)
+    }
+
+    fn unmarshall_flow_lookup(&mut self, raw_section: &BpfRawSection) -> Result<OvsEvent> {
+        let raw = parse_raw_section::<flow_lookup_ret_event>(raw_section)?;
+        let ufid = Ufid::from(raw.ufid);
+        let flow = raw.flow as usize as u64;
+        let sf_acts = raw.sf_acts as usize as u64;
+
+        if flow != 0 {
+            if let Some(sender) = &self.ufid_sender {
+                match sender.try_send(flow_info::EnrichRequest::new(ufid, flow, sf_acts)) {
+                    Err(mpsc::TrySendError::Full(_)) => {
+                        warn!("Flow enrichment channel full, dropping enrichment request");
+                    }
+                    Err(mpsc::TrySendError::Disconnected(_)) => {
+                        warn!("Flow enrichment channel disconnected, dropping enrichment request");
+                    }
+                    Ok(_) => (),
+                }
+            }
+        }
+
+        Ok(OvsEvent::DpLookup {
+            flow_lookup: LookupEvent {
+                flow,
+                sf_acts,
+                ufid,
+                n_mask_hit: raw.n_mask_hit,
+                n_cache_hit: raw.n_cache_hit,
+                dpflow: String::default(),
+                ofpflows: Vec::default(),
+            },
+        })
     }
 
     fn unmarshall_exec(&self, raw_section: &BpfRawSection) -> Result<OvsEvent> {
@@ -361,6 +410,9 @@ impl RawEventSectionFactory for OvsEventFactory {
                 }
                 OvsDataType::ActionExec => {
                     event = Some(self.unmarshall_exec(section)?);
+                }
+                OvsDataType::FlowLookup => {
+                    event = Some(self.unmarshall_flow_lookup(section)?);
                 }
                 OvsDataType::ActionExecTrack => unmarshall_exec_track(
                     section,
