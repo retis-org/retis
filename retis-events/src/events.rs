@@ -35,9 +35,13 @@
 
 use crate::{display::*, *};
 
-/// Full event. Internal representation
+/// Retis event
+///
+/// The full event with all the optional sections. It serves as internal reprentation
+/// as well as being exposed externally in event files (json-serialized) and python bindings.
 #[derive(Default)]
 #[event_section]
+#[schemars(title = "Retis Metadata")]
 // For backwards compatibility reasons, we keep section names in kebab-case.
 #[serde(rename_all = "kebab-case")]
 pub struct Event {
