@@ -27,7 +27,19 @@ pub(crate) enum ProbeType {
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub(crate) enum ProbeOption {
     StackTrace,
+    NoStackTrace,
     NoGenericHook,
+}
+
+impl TryFrom<&str> for ProbeOption {
+    type Error = anyhow::Error;
+
+    fn try_from(option: &str) -> Result<Self> {
+        Ok(match option {
+            "stack" => Self::StackTrace,
+            _ => bail!("{option} is an invalid probe option."),
+        })
+    }
 }
 
 /// Represents a probe we can install in a target (kernel, user space program,

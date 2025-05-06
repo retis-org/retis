@@ -2,7 +2,7 @@
 #![cfg_attr(test, allow(unused_imports))]
 use std::{
     cmp,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     os::fd::{AsFd, AsRawFd, RawFd},
 };
 
@@ -20,11 +20,14 @@ use super::{
 };
 
 use super::{common::*, kernel::config::init_config_map};
-use crate::core::{
-    filters::{self, fixup_filter_load_fn, register_filter_handler, Filter},
-    kernel::Symbol,
-    probe::user::UsdtProbe,
-    user::proc::Process,
+use crate::{
+    bindings::common_defs_uapi::retis_global_config,
+    core::{
+        filters::{self, fixup_filter_load_fn, register_filter_handler, Filter},
+        kernel::Symbol,
+        probe::user::UsdtProbe,
+        user::proc::Process,
+    },
 };
 
 // Keep in sync with their BPF counterparts in bpf/include/common.h
@@ -112,11 +115,7 @@ impl ProbeManager {
             builder
                 .maps
                 .iter()
-                .try_for_each(|(name, fd)| p.reuse_map(name, *fd))?;
-            builder
-                .global_probes_options
-                .iter()
-                .try_for_each(|o| p.set_option(o.clone()))
+                .try_for_each(|(name, fd)| p.reuse_map(name, *fd))
         })?;
 
         // Set up filters and their handlers.
@@ -168,7 +167,7 @@ impl ProbeManager {
             hooks: builder.generic_hooks.into_iter().collect(),
             generic_builders: HashMap::new(),
             targeted_builders: Vec::new(),
-            probes: HashSet::new(),
+            probes: HashMap::new(),
             filters: builder.filters,
         };
 
@@ -189,7 +188,20 @@ impl ProbeManager {
         {
             // Set the global config once all probes are installed, to avoid
             // inconsistencies.
-            let config = GlobalConfig { enabled: 1 };
+            let mut config = retis_global_config {
+                enabled: 1,
+                stack_trace: 0,
+            };
+
+            builder.global_probes_options.iter().try_for_each(|o| {
+                match o {
+                    ProbeOption::StackTrace => config.stack_trace = 1,
+                    _ => bail!("Unsupported global option"),
+                }
+
+                Ok(())
+            })?;
+
             let config = unsafe { plain::as_bytes(&config) };
             builder
                 .global_config_map
@@ -411,7 +423,7 @@ pub(crate) struct ProbeRuntimeManager {
     targeted_builders: Vec<Box<dyn ProbeBuilder>>,
     map_fds: Vec<(String, RawFd)>,
     hooks: Vec<Hook>,
-    probes: HashSet<String>,
+    probes: HashMap<String, Vec<ProbeOption>>,
     filters: Vec<Filter>,
 }
 
@@ -504,7 +516,11 @@ impl ProbeRuntimeManager {
     /// Attach a new targeted probe.
     #[cfg(not(test))]
     fn attach_targeted_probe(&mut self, probe: &mut Probe) -> Result<()> {
-        if !self.probes.insert(probe.key()) {
+        if self
+            .probes
+            .insert(probe.key(), probe.options.clone().into_iter().collect())
+            .is_some()
+        {
             bail!("A probe on {probe} is already attached");
         }
 
@@ -535,7 +551,11 @@ impl ProbeRuntimeManager {
     /// Attach a new generic probe.
     #[cfg(not(test))]
     pub(crate) fn attach_generic_probe(&mut self, probe: &mut Probe) -> Result<()> {
-        if !self.probes.insert(probe.key()) {
+        if self
+            .probes
+            .insert(probe.key(), probe.options.clone().into_iter().collect())
+            .is_some()
+        {
             bail!("A probe on {probe} is already attached");
         }
 
@@ -546,8 +566,23 @@ impl ProbeRuntimeManager {
     }
 
     /// Get the list of all currently attached probes.
-    pub(crate) fn attached_probes(&self) -> Vec<String> {
+    pub(crate) fn attached_probes(&self) -> Vec<(String, Vec<ProbeOption>)> {
         self.probes.clone().into_iter().collect()
+    }
+
+    /// Get the list of all currently attached probes with a specific option.
+    pub(crate) fn attached_probes_opt(&self, option: ProbeOption) -> Vec<String> {
+        self.probes
+            .clone()
+            .into_iter()
+            .filter_map(|(key, vec)| {
+                if vec.contains(&option) {
+                    Some(key.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Detach all probes.

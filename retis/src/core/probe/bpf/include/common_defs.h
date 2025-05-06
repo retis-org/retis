@@ -24,18 +24,26 @@
 /* Keep in sync with its Rust counterpart in crate::core::probe */
 #define PROBE_MAX	1024
 
-/* Global probe configuration, shared between kernel and user probes. Please
- * keep in sync with its Rust counterpart in crate::core::probe::common.
- */
 struct retis_global_config {
+	/* Indicates everything is set so the collection can start. */
 	u8 enabled;
-};
+	/* Indicates stack traces must be generated for every probe.
+	 * Potentially valid for USDT probes as well, but
+	 * intentionally ignored.
+	 * It doesn't replace the per-probe configuration, but
+	 * predates it in precedence.
+	 */
+	u8 stack_trace;
+} __binding;
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, 1);
 	__type(key, u8);
 	__type(value, struct retis_global_config);
 } global_config_map SEC(".maps");
+
+BINDING_DEF(LOCAL_STACK_TRACE_ON, 1);
+BINDING_DEF(LOCAL_STACK_TRACE_OFF, 2)
 
 static __always_inline bool collection_enabled() {
 	struct retis_global_config *cfg;
