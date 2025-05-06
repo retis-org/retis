@@ -32,7 +32,7 @@ RUN dnf install -y \
     nftables
 
 COPY --from=builder /retis/target/release/retis /usr/bin/retis
-COPY --from=builder /retis/retis/profiles /etc/retis/profiles
+COPY --from=builder /retis/retis/profiles /usr/share/retis/profiles
 
 WORKDIR /data
 ENTRYPOINT ["/usr/bin/retis"]

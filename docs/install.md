@@ -108,12 +108,12 @@ $ make release
 $ ./target/release/retis --help
 ```
 
-Finally, profiles should be installed in either `/etc/retis/profiles` or
+Finally, profiles should be installed in either `/usr/share/retis/profiles` or
 `$HOME/.config/retis/profiles`.
 
 ```none
-$ mkdir -p /etc/retis/profiles
-$ cp retis/profiles/* /etc/retis/profiles
+$ mkdir -p /usr/share/retis/profiles
+$ cp retis/profiles/* /usr/share/retis/profiles
 ```
 
 #### Cross-compilation
