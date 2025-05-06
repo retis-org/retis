@@ -9,7 +9,18 @@ use crate::core::{
 #[repr(u8)]
 pub(crate) enum eBpfJmpOpExt {
     Bpf(BpfJmpOp),
-    Ne, // identifies bpf_sys::BPF_JNE
+    eBpf(eBpfJmpOp),
+}
+
+#[repr(u8)]
+pub(crate) enum eBpfJmpOp {
+    Lt = bpf_sys::BPF_JLT,
+    Le = bpf_sys::BPF_JLE,
+    GtS = bpf_sys::BPF_JSGT,
+    GeS = bpf_sys::BPF_JSGE,
+    LtS = bpf_sys::BPF_JSLT,
+    LeS = bpf_sys::BPF_JSLE,
+    Ne = bpf_sys::BPF_JNE,
 }
 
 #[repr(u8)]
@@ -164,6 +175,19 @@ impl eBpfInsn {
         Self::__ld(r#type, size as u8)
     }
 
+    pub(crate) fn ld64_imm(dst: BpfReg, imm: i64) -> [eBpfInsn; 2] {
+        [
+            Self::insn(
+                bpf_sys::BPF_LD | bpf_sys::BPF_DW | bpf_sys::BPF_IMM,
+                dst as u8,
+                0,
+                0,
+                (imm & 0xffffffff) as i32,
+            ),
+            Self::insn(0, 0, 0, 0, ((imm as u64) >> 32) as i32),
+        ]
+    }
+
     fn __st(r#type: StInfo, mem_size: u8) -> eBpfInsn {
         let mut immediate = 0;
         let mut src_reg = 0;
@@ -233,7 +257,7 @@ impl eBpfInsn {
     pub(crate) fn jmp(op: eBpfJmpOpExt, r#type: JmpInfo) -> eBpfInsn {
         let jop: u8 = match op {
             eBpfJmpOpExt::Bpf(o) => o as u8,
-            eBpfJmpOpExt::Ne => bpf_sys::BPF_JNE,
+            eBpfJmpOpExt::eBpf(ne) => ne as u8,
         };
 
         Self::__jmp(jop, r#type, bpf_sys::BPF_JMP)
@@ -242,7 +266,7 @@ impl eBpfInsn {
     pub(crate) fn jmp32(op: eBpfJmpOpExt, r#type: JmpInfo) -> eBpfInsn {
         let jop = match op {
             eBpfJmpOpExt::Bpf(o) => o as u8,
-            eBpfJmpOpExt::Ne => bpf_sys::BPF_JNE,
+            eBpfJmpOpExt::eBpf(ne) => ne as u8,
         };
 
         Self::__jmp(jop, r#type, bpf_sys::BPF_JMP32)
@@ -300,6 +324,26 @@ impl eBpfInsn {
             off,
             imm,
         }
+    }
+
+    pub(crate) fn set_off_raw(&mut self, o: i16) {
+        self.off = o;
+    }
+
+    pub(crate) fn set_code_raw(&mut self, c: u8) {
+        self.code = c;
+    }
+
+    pub(crate) fn set_dst_raw(&mut self, d: u8) {
+        self.dst = d;
+    }
+
+    pub(crate) fn set_src_raw(&mut self, s: u8) {
+        self.src = s;
+    }
+
+    pub(crate) fn set_imm_raw(&mut self, i: i32) {
+        self.imm = i;
     }
 
     pub(crate) fn to_vec(self) -> Vec<u8> {
