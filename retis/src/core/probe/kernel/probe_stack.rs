@@ -107,6 +107,10 @@ impl ProbeStack {
                     _ => return Ok(()),
                 };
 
+                mgr.global_options()
+                    .iter()
+                    .try_for_each(|o| probe.set_option(o.clone()))?;
+
                 #[cfg(not(test))]
                 if let Err(e) = mgr.attach_generic_probe(&mut probe) {
                     warn!("Could not attach additional probe {probe}: {e}");

@@ -169,6 +169,7 @@ impl ProbeManager {
             generic_builders: HashMap::new(),
             targeted_builders: Vec::new(),
             probes: HashSet::new(),
+            global_probes_options: builder.global_probes_options.into_iter().collect(),
             filters: builder.filters,
         };
 
@@ -412,6 +413,7 @@ pub(crate) struct ProbeRuntimeManager {
     map_fds: Vec<(String, RawFd)>,
     hooks: Vec<Hook>,
     probes: HashSet<String>,
+    global_probes_options: Vec<ProbeOption>,
     filters: Vec<Filter>,
 }
 
@@ -548,6 +550,11 @@ impl ProbeRuntimeManager {
     /// Get the list of all currently attached probes.
     pub(crate) fn attached_probes(&self) -> Vec<String> {
         self.probes.clone().into_iter().collect()
+    }
+
+    /// Get the list of all current global options.
+    pub(crate) fn global_options(&self) -> Vec<ProbeOption> {
+        self.global_probes_options.clone().into_iter().collect()
     }
 
     /// Detach all probes.
