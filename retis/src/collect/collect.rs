@@ -229,15 +229,13 @@ impl Collectors {
 
         // Generate an initial event with the startup section.
         self.events_factory.add_event(|event| {
-            event.insert_section(
-                SectionId::Startup,
-                Box::new(StartupEvent {
-                    retis_version: option_env!("RELEASE_VERSION")
-                        .unwrap_or("unspec")
-                        .to_string(),
-                    clock_monotonic_offset: monotonic_clock_offset()?,
-                }),
-            )
+            event.startup = Some(StartupEvent {
+                retis_version: option_env!("RELEASE_VERSION")
+                    .unwrap_or("unspec")
+                    .to_string(),
+                clock_monotonic_offset: monotonic_clock_offset()?,
+            });
+            Ok(())
         })?;
 
         let collectors = match &collect.collectors {
