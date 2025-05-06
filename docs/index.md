@@ -15,10 +15,10 @@ collectors can be enabled individually and will act on different parts of the
 networking stack to retrieve specific information. Currently supported
 collectors are [listed below](#collectors).
 
-Without arguments (specifically when `--profile` and `--collector are all unset)
-Retis will will try to load all collectors if their individual requirements are
-met (e.g. the `ovs` collector needs the OpenVSwitch kernel module to be loaded).
-If in addition no probe is specificed (`--probe` is unset) Retis will use a
+If no collector is explicitly enabled (`--collectors` is unset) Retis will try
+to load all collectors if their individual requirements are met (e.g. the `ovs`
+collector needs the OpenVSwitch kernel module to be loaded). If in addition no
+probe is specified (`--probe` is unset) and no profile is used, Retis will use a
 default set of probes (`net:netif_receive_skb` and `net:net_dev_start_xmit`).
 
 But collectors can be explicitly selected too (here if prerequisites are not met
