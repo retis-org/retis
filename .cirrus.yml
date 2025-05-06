@@ -10,6 +10,7 @@ cargo_task_tempate: &cargo_task_template
   setup_script:
     - apt-get update
     - apt-get -y install llvm clang curl libelf-dev libpcap-dev python3-pip make jq
+    - ln -s /usr/include/asm-generic /usr/include/asm
     - rustup component add rustfmt
     - rustup component add clippy
     - rustup component add llvm-tools-preview
@@ -98,9 +99,9 @@ functional_task:
   only_if: "$CIRRUS_PR != ''"
 
   matrix: &distro_matrix
-    - name: Fedora 41 (x86_64)
+    - name: Fedora 42 (x86_64)
       env:
-        DISTRO: x86_64-f41
+        DISTRO: x86_64-f42
         TEST_EXTRA_ARGS: "--ovs-track"
     - name: Fedora Rawhide (x86_64)
       env:
