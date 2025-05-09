@@ -24,7 +24,7 @@ use pcap_file::{
 use crate::{
     cli::*,
     core::{kernel::Symbol, probe::kernel::utils::*},
-    events::{file::FileEventsFactory, CommonEvent, KernelEvent, SkbEvent, *},
+    events::{file::FileEventsFactory, CommonEvent, KernelEvent, SkbEvent, TimeSpec, *},
     helpers::signals::Running,
 };
 
@@ -51,6 +51,8 @@ struct EventParser {
     ifaces: HashMap<u64, u32>,
     /// Statistics.
     stats: EventParserStats,
+    /// Time offset
+    ts_off: Option<TimeSpec>,
 }
 
 // Unwrap a Some(_) value or return from the function.
@@ -72,6 +74,7 @@ impl EventParser {
         Self {
             ifaces: HashMap::new(),
             stats: EventParserStats::default(),
+            ts_off: None,
         }
     }
 
@@ -150,7 +153,9 @@ impl EventParser {
         v.push(
             EnhancedPacketBlock {
                 interface_id: id,
-                timestamp: Duration::from_nanos(common.timestamp),
+                timestamp: Duration::from_nanos(i64::from(
+                    TimeSpec::new(0, common.timestamp as i64) + self.ts_off.unwrap_or_default(),
+                ) as u64),
                 original_len: packet.len,
                 data: Cow::Borrowed(&packet.packet.0),
                 options: vec![EnhancedPacketOption::Comment(Cow::Owned(format!(
@@ -313,6 +318,8 @@ where
                     for b in parsed_blocks {
                         writer_callback(&b)?;
                     }
+                } else if let Some(common) = event.get_section::<StartupEvent>(SectionId::Startup) {
+                    parser.ts_off = Some(common.clock_monotonic_offset);
                 }
             }
             None => break,
@@ -403,6 +410,7 @@ mod tests {
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
                                 "ifindex=10".to_string(),
                             )),
+                            InterfaceDescriptionOption::IfTsResol(9),
                         ],
                     }),
                     Block::EnhancedPacket(EnhancedPacketBlock {
@@ -415,7 +423,7 @@ mod tests {
                             46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
                         ]),
                         interface_id: 0,
-                        timestamp: Duration::from_nanos(30419169125909),
+                        timestamp: Duration::from_nanos(1742339565860167909),
                         original_len: 98,
                         options: vec![EnhancedPacketOption::Comment(Cow::Owned(
                             "probe=kretprobe:ovs_dp_upcall".to_string(),
@@ -431,6 +439,7 @@ mod tests {
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
                                 "ifindex=12".to_string(),
                             )),
+                            InterfaceDescriptionOption::IfTsResol(9),
                         ],
                     }),
                     Block::EnhancedPacket(EnhancedPacketBlock {
@@ -443,7 +452,7 @@ mod tests {
                             47, 48, 49, 50, 51, 52, 53, 54, 55,
                         ]),
                         interface_id: 1,
-                        timestamp: Duration::from_nanos(30419169372774),
+                        timestamp: Duration::from_nanos(1742339565860414774),
                         original_len: 98,
                         options: vec![EnhancedPacketOption::Comment(Cow::Owned(
                             "probe=kretprobe:ovs_dp_upcall".to_string(),
