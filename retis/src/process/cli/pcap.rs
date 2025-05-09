@@ -134,6 +134,7 @@ impl EventParser {
                                 0 => "Fake interface".to_string(),
                                 _ => format!("ifindex={}", ifindex),
                             })),
+                            InterfaceDescriptionOption::IfTsResol(9),
                         ],
                     }
                     .into_block(),
