@@ -73,6 +73,12 @@ impl From<TimeSpec> for DateTime<Utc> {
     }
 }
 
+impl From<TimeSpec> for i64 {
+    fn from(ts: TimeSpec) -> Self {
+        ts.sec * TimeSpec::NSECS_IN_SEC + ts.nsec
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::TimeSpec;
