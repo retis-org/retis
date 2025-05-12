@@ -123,8 +123,15 @@ aarch64. The target is defined using the `CARGO_BUILD_TARGET` environment
 variable, which is documented in the
 [Rust reference](https://doc.rust-lang.org/cargo/reference/config.html#buildtarget).
 
+When python support is built (it is enabled by default), `PYO3_CROSS_LIB_DIR=`
+needs to be set to the directory containing the target's libpython dynamic
+shared object. To disable Python support, use
+`CARGO_CMD_OPTS=--no-default-features`.
+
 ```none
-$ CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu make release
+$ CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu \
+      PYO3_CROSS_LIB_DIR=sysroot/usr/lib/python3.14 \
+      make release
 $ file ./target/aarch64-unknown-linux-gnu/release/retis
 [...] ARM aarch64, [...]
 ```

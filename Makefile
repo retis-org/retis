@@ -1,6 +1,5 @@
 ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 LLC := llc
-CLANG := clang
 OBJCOPY := llvm-objcopy
 
 CARGO := cargo $(CARGO_OPTS)
@@ -23,15 +22,16 @@ BPF_ARCH := $(if $($(ARCH)),$($(ARCH)),$(ARCH))
 
 BPF_CFLAGS := -target bpf \
               -Wall \
+              -Werror \
               -Wno-unused-value \
               -Wno-pointer-sign \
               -Wno-compare-distinct-pointer-types \
+              -Wno-unused-command-line-argument \
               -fno-stack-protector \
-              -Werror \
               -D__TARGET_ARCH_$(BPF_ARCH) \
               -O2
 
-export CLANG LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
+export LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
 
 PRINT = printf
 CONTAINER_RUNTIME := podman
@@ -75,10 +75,7 @@ ifeq ($(NOVENDOR),)
     LIBBPF_INCLUDES := $(ROOT_DIR)/retis/src/.out
 endif
 
-# Taking errno.h from libc instead of linux headers.
-# TODO: Remove when we fix proper header dependencies.
-INCLUDES_ALL := $(abspath $(wildcard $(shell find retis/src -type d -path '*/bpf/include') \
-                                     /usr/include/x86_64-linux-gnu))
+INCLUDES_ALL := $(abspath $(wildcard $(shell find retis/src -type d -path '*/bpf/include')))
 INCLUDES_ALL += $(LIBBPF_INCLUDES)
 
 INCLUDES := $(addprefix -I, $(INCLUDES_ALL))
@@ -152,9 +149,7 @@ $(EBPF_PROBES): OUT_NAME := PROBE
 $(EBPF_HOOKS):  OUT_NAME := HOOK
 $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 	$(call out_console,$(OUT_NAME),building $@ ...)
-	BPF_ARCH="$(BPF_ARCH)" \
-	BPF_CFLAGS="$(BPF_CFLAGS)" \
-	CFLAGS="$(INCLUDES) $(CFLAGS)" \
+	CFLAGS="$(BPF_CFLAGS) $(INCLUDES)" \
 	$(MAKE) -r -f $(ROOT_DIR)/ebpf.mk -C $@
 
 pylib:
