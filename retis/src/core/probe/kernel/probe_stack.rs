@@ -21,19 +21,13 @@ pub(crate) struct ProbeStack {
     /// Local cache of functions that were already considered, probed or not.
     /// Used to optimize the event processing.
     probes: HashSet<String>,
-    /// Should the stack stay in the event?
-    keep_stack: bool,
     /// Set of kernel types known by collectors, so we only probe functions that
     /// can generate an event.
     known_kernel_types: HashSet<String>,
 }
 
 impl ProbeStack {
-    pub(crate) fn new(
-        keep_stack: bool,
-        attached_probes: Vec<String>,
-        known_kernel_types: HashSet<String>,
-    ) -> Self {
+    pub(crate) fn new(attached_probes: Vec<String>, known_kernel_types: HashSet<String>) -> Self {
         // Stack probe mode works with kprobes only and keeps track of the
         // function name.
         let attached_probes = attached_probes
@@ -44,8 +38,22 @@ impl ProbeStack {
 
         Self {
             probes: HashSet::from_iter(attached_probes),
-            keep_stack,
             known_kernel_types,
+        }
+    }
+
+    fn keep_stack(&mut self, mgr: &mut ProbeRuntimeManager, evt: &KernelEvent) -> bool {
+        let r#type = match evt.probe_type.as_str() {
+            "raw_tracepoint" => "tp",
+            s => s,
+        };
+
+        let sym = format!("{}:{}", r#type, evt.symbol);
+
+        if let Some(opts) = mgr.get_probe_opts(&sym) {
+            opts.contains(&crate::core::probe::ProbeOption::ReportStack)
+        } else {
+            false
         }
     }
 
@@ -119,7 +127,7 @@ impl ProbeStack {
             Ok(())
         })?;
 
-        if !self.keep_stack {
+        if !self.keep_stack(mgr, kernel) {
             kernel.stack_trace = None;
         }
 

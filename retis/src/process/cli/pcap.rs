@@ -242,7 +242,7 @@ impl SubCommandParserRunner for Pcap {
         // The following unwrap() will never fail as Clap makes sure that either
         // list_probes is true, or probe is Some().
         let probe = self.cmd.probe.as_ref().unwrap();
-        let (probe_type, target) = parse_cli_probe(probe)?;
+        let (probe_type, target, _) = parse_cli_probe(probe)?;
         let symbol = Symbol::from_name_no_inspect(target);
 
         // Filtering logic.
