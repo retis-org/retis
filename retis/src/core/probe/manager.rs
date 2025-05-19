@@ -101,23 +101,11 @@ impl ProbeManager {
             _ => bail!("Probe manager is already at runtime state"),
         };
 
-        // Prepare all hooks:
-        // - Reuse global maps.
-        // - Set global options.
+        // Prepare hooks.
         builder
             .generic_hooks
             .iter_mut()
             .for_each(|h| h.maps.extend(builder.maps.clone()));
-        builder.probes.values_mut().try_for_each(|p| {
-            builder
-                .maps
-                .iter()
-                .try_for_each(|(name, fd)| p.reuse_map(name, *fd))?;
-            builder
-                .global_probes_options
-                .iter()
-                .try_for_each(|o| p.set_option(o.clone()))
-        })?;
 
         // Set up filters and their handlers.
         for filter in builder.filters.iter() {
@@ -169,6 +157,7 @@ impl ProbeManager {
             generic_builders: HashMap::new(),
             targeted_builders: Vec::new(),
             probes: HashSet::new(),
+            global_probes_options: builder.global_probes_options.into_iter().collect(),
             filters: builder.filters,
         };
 
@@ -412,6 +401,7 @@ pub(crate) struct ProbeRuntimeManager {
     map_fds: Vec<(String, RawFd)>,
     hooks: Vec<Hook>,
     probes: HashSet<String>,
+    global_probes_options: Vec<ProbeOption>,
     filters: Vec<Filter>,
 }
 
@@ -501,9 +491,20 @@ impl ProbeRuntimeManager {
         Ok(())
     }
 
+    /// Make the probe inherit the global options.
+    fn prepare_probe(&mut self, probe: &mut Probe) -> Result<()> {
+        self.map_fds
+            .iter()
+            .try_for_each(|(name, fd)| probe.reuse_map(name, *fd))?;
+        self.global_probes_options
+            .iter()
+            .try_for_each(|o| probe.set_option(o.clone()))
+    }
+
     /// Attach a new targeted probe.
     #[cfg(not(test))]
     fn attach_targeted_probe(&mut self, probe: &mut Probe) -> Result<()> {
+        self.prepare_probe(probe)?;
         if !self.probes.insert(probe.key()) {
             bail!("A probe on {probe} is already attached");
         }
@@ -535,6 +536,7 @@ impl ProbeRuntimeManager {
     /// Attach a new generic probe.
     #[cfg(not(test))]
     pub(crate) fn attach_generic_probe(&mut self, probe: &mut Probe) -> Result<()> {
+        self.prepare_probe(probe)?;
         if !self.probes.insert(probe.key()) {
             bail!("A probe on {probe} is already attached");
         }
