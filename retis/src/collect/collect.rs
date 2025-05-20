@@ -546,10 +546,7 @@ impl Collectors {
         }
 
         let (mut iccount, mut eccount) = (0, 0);
-        let mut probe_stack = ProbeStack::new(
-            self.probes.runtime_mut()?.attached_probes(),
-            self.known_kernel_types.clone(),
-        );
+        let mut probe_stack = ProbeStack::new(self.known_kernel_types.clone());
 
         use EventResult::*;
         while self.run.running() {
