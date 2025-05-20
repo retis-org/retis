@@ -3,7 +3,6 @@ name: generic
 about: Generic set of probes, meant to be used as a starting point for debugging sessions
 collect:
   - args:
-      skb_sections: dev
       probe:
         - tp:net:netif_receive_skb
         - tp:net:netif_rx
