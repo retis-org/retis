@@ -24,26 +24,23 @@ pub(crate) struct SkbCollectorArgs {
     #[arg(
         long,
         value_parser=PossibleValuesParser::new([
-            "all", "eth", "vlan", "dev", "ns", "meta", "dataref", "gso",
+            "all", "eth", "vlan", "meta", "dataref", "gso",
             // Below values are deprecated.
-            "arp", "ip", "tcp", "udp", "icmp", "packet",
+            "arp", "ip", "tcp", "udp", "icmp", "packet", "dev", "ns",
         ]),
         value_delimiter=',',
-        default_value="dev",
         help = "Comma separated list of extra information to collect from skbs.
 
 Supported values:
 - eth:     include Ethernet information (src, dst, etype).
 - vlan:    include 802.1Q VLAN information (id, pcp, dei, acceleration)
-- dev:     include network device information.
-- ns:      include network namespace information.
 - meta:    include skb metadata information (len, data_len, hash, etc).
 - dataref: include data & refcnt information (cloned, users, data refs, etc).
 - gso:     include generic segmentation offload (GSO) information.
 - all:     all of the above.
 
 The following values are now always retrieved and their use is deprecated:
-packet, arp, ip, tcp, udp, icmp."
+packet, arp, ip, tcp, udp, icmp, dev, ns."
     )]
     pub(crate) skb_sections: Vec<String>,
 }
@@ -72,19 +69,17 @@ impl Collector for SkbCollector {
     ) -> Result<()> {
         // Default list of sections. We set SECTION_PACKET even though it's not
         // checked in the BPF hook (raw packet is always reported).
-        let mut sections: u64 = 1 << SECTION_PACKET;
+        let mut sections: u64 = 1 << SECTION_PACKET | 1 << SECTION_DEV | 1 << SECTION_NS;
 
         for category in args.collector_args.skb.skb_sections.iter() {
             match category.as_str() {
                 "all" => sections |= !0_u64,
                 "vlan" => sections |= 1 << SECTION_VLAN,
-                "dev" => sections |= 1 << SECTION_DEV,
-                "ns" => sections |= 1 << SECTION_NS,
                 "meta" => sections |= 1 << SECTION_META,
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
                 "eth" => (),
-                "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
+                "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" | "dev" | "ns" => {
                     warn!(
                         "Use of '{}' in --skb-sections is depreacted (is now always set)",
                         category.as_str(),
