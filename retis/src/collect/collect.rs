@@ -221,10 +221,15 @@ impl Collectors {
         self.run.register_term_signals()?;
 
         // Check if we need to report stack traces in the events.
-        if collect.stack || collect.probe_stack {
+        if collect.stack {
             self.probes
                 .builder_mut()?
-                .set_probe_opt(probe::ProbeOption::StackTrace)?;
+                .set_probe_opt(probe::ProbeOption::ReportStack)?;
+        }
+        if collect.probe_stack {
+            self.probes
+                .builder_mut()?
+                .set_probe_opt(probe::ProbeOption::ProbeStack)?;
         }
 
         // Generate an initial event with the startup section.
@@ -542,7 +547,6 @@ impl Collectors {
 
         let (mut iccount, mut eccount) = (0, 0);
         let mut probe_stack = ProbeStack::new(
-            collect.stack,
             self.probes.runtime_mut()?.attached_probes(),
             self.known_kernel_types.clone(),
         );

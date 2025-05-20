@@ -45,7 +45,7 @@ impl KernelProbe {
 
         #[allow(clippy::single_match)]
         options.iter().for_each(|o| match o {
-            ProbeOption::StackTrace => {
+            ProbeOption::ProbeStack | ProbeOption::ReportStack => {
                 config.stack_trace = 1;
             }
             _ => (),
