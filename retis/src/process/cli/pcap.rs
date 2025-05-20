@@ -109,17 +109,17 @@ impl EventParser {
                 (0, "?")
             }
         };
-        let netns = match skb.ns.as_ref() {
-            Some(ns) => ns.netns,
+        let (netns_cookie, netns_inum) = match skb.ns.as_ref() {
+            Some(ns) => (ns.cookie, ns.inum),
             None => {
                 self.stats.missing_ns += 1;
-                0
+                (None, 0)
             }
         };
 
         // If we see this iface for the first time, add a description block.
         let mut v = Vec::new();
-        let key: u64 = ((netns as u64) << 32) | ifindex as u64;
+        let key: u64 = ((netns_inum as u64) << 32) | ifindex as u64;
         let id = match self.ifaces.contains_key(&key) {
             // Unwrap if contains is true.
             true => *self.ifaces.get(&key).unwrap(),
@@ -129,10 +129,13 @@ impl EventParser {
                         linktype: DataLink::ETHERNET,
                         snaplen: 0xffff,
                         options: vec![
-                            InterfaceDescriptionOption::IfName(Cow::Owned(format!(
-                                "{} ({})",
-                                ifname, netns
-                            ))),
+                            InterfaceDescriptionOption::IfName(Cow::Owned(
+                                if let Some(cookie) = netns_cookie {
+                                    format!("{ifname} ns {:#x}/{netns_inum}", cookie)
+                                } else {
+                                    format!("{ifname} ns {netns_inum}")
+                                },
+                            )),
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(match ifindex {
                                 0 => "Fake interface".to_string(),
                                 _ => format!("ifindex={}", ifindex),
@@ -405,7 +408,7 @@ mod tests {
                         snaplen: 65535,
                         options: vec![
                             InterfaceDescriptionOption::IfName(Cow::Owned(
-                                "veth-ns01-ovs (4026531840)".to_string(),
+                                "veth-ns01-ovs ns 0x1/4026531840".to_string(),
                             )),
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
                                 "ifindex=10".to_string(),
@@ -434,7 +437,7 @@ mod tests {
                         snaplen: 65535,
                         options: vec![
                             InterfaceDescriptionOption::IfName(Cow::Owned(
-                                "veth-ns02-ovs (4026531840)".to_string(),
+                                "veth-ns02-ovs ns 0x1/4026531840".to_string(),
                             )),
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
                                 "ifindex=12".to_string(),
