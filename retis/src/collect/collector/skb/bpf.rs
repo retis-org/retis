@@ -4,20 +4,23 @@
 //!
 //! Please keep this file in sync with its BPF counterpart in bpf/skb_hook.bpf.c
 
-use anyhow::bail;
 use std::str;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
+use btf_rs::Type;
 use pnet_packet::{
     arp::ArpPacket, ethernet::*, icmp::IcmpPacket, icmpv6::Icmpv6Packet, ip::*, ipv4::*, ipv6::*,
     tcp::TcpPacket, udp::UdpPacket, Packet,
 };
 
 use crate::{
-    bindings::if_vlan_uapi::*,
-    bindings::skb_hook_uapi::*,
-    core::events::{
-        parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
+    bindings::{if_vlan_uapi::*, skb_hook_uapi::*},
+    core::{
+        events::{
+            parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+            RawEventSectionFactory,
+        },
+        inspect::inspector,
     },
     event_section_factory,
     events::{
@@ -150,10 +153,16 @@ pub(super) fn unmarshal_dev(raw_section: &BpfRawSection) -> Result<Option<SkbDev
     Ok(Some(event))
 }
 
-pub(super) fn unmarshal_ns(raw_section: &BpfRawSection) -> Result<SkbNsEvent> {
+pub(super) fn unmarshal_ns(
+    raw_section: &BpfRawSection,
+    cookie_support: bool,
+) -> Result<SkbNsEvent> {
     let raw = parse_raw_section::<skb_netns_event>(raw_section)?;
 
-    Ok(SkbNsEvent { netns: raw.netns })
+    Ok(SkbNsEvent {
+        cookie: Some(raw.cookie).filter(|_| cookie_support),
+        inum: raw.inum,
+    })
 }
 
 pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent> {
@@ -303,9 +312,32 @@ fn unmarshal_l4(
 pub(crate) struct SkbEventFactory {
     // Should we report the Ethernet header.
     pub(super) report_eth: bool,
+    // Does the kernel support net cookies?
+    net_cookie: bool,
 }
 
 impl SkbEventFactory {
+    pub(crate) fn new() -> Result<Self> {
+        let mut net_cookie = false;
+        if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name("net") {
+            if let Some((btf, Type::Struct(r#struct))) =
+                types.iter().find(|(_, t)| matches!(t, Type::Struct(_)))
+            {
+                for member in r#struct.members.iter() {
+                    let name = btf.resolve_name(member)?;
+                    if name == "net_cookie" {
+                        net_cookie = true;
+                    }
+                }
+            }
+        }
+
+        Ok(Self {
+            net_cookie,
+            ..Default::default()
+        })
+    }
+
     pub(crate) fn report_eth(&mut self, on: bool) {
         self.report_eth = on;
     }
@@ -319,7 +351,7 @@ impl RawEventSectionFactory for SkbEventFactory {
             match section.header.data_type as u32 {
                 SECTION_VLAN => event.vlan = Some(unmarshal_vlan(section)?),
                 SECTION_DEV => event.dev = unmarshal_dev(section)?,
-                SECTION_NS => event.ns = Some(unmarshal_ns(section)?),
+                SECTION_NS => event.ns = Some(unmarshal_ns(section, self.net_cookie)?),
                 SECTION_META => event.meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => event.data_ref = Some(unmarshal_data_ref(section)?),
                 SECTION_GSO => event.gso = Some(unmarshal_gso(section)?),

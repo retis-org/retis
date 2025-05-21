@@ -23,7 +23,7 @@ pub(crate) fn section_factories() -> Result<SectionFactories> {
         Box::<SkbTrackingEventFactory>::default(),
     );
     factories.insert(FactoryId::SkbDrop, Box::new(SkbDropEventFactory::new()?));
-    factories.insert(FactoryId::Skb, Box::<SkbEventFactory>::default());
+    factories.insert(FactoryId::Skb, Box::new(SkbEventFactory::new()?));
     factories.insert(FactoryId::Ovs, Box::new(OvsEventFactory::new()?));
     factories.insert(FactoryId::Nft, Box::<NftEventFactory>::default());
     factories.insert(FactoryId::Ct, Box::new(CtEventFactory::new()?));
