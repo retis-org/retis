@@ -4,6 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs::OpenOptions,
     io::{self, BufWriter},
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::Arc,
     time::Duration,
@@ -108,8 +109,8 @@ pub(crate) struct Collectors {
     tracking_config_map: Option<libbpf_rs::MapHandle>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
-    // Did we mount debugfs ourselves?
-    mounted_debugfs: bool,
+    // Did we mount tracefs/debugfs ourselves? If so, contains the target dir.
+    mounted: Option<PathBuf>,
 }
 
 impl Collectors {
@@ -126,7 +127,7 @@ impl Collectors {
             tracking_gc: None,
             tracking_config_map: None,
             events_factory: Arc::new(RetisEventsFactory::default()),
-            mounted_debugfs: false,
+            mounted: None,
         })
     }
 
@@ -187,33 +188,53 @@ impl Collectors {
             bail!("Retis needs to be run as root when --allow-system-changes is used");
         }
 
-        // Mount debugfs if not already mounted (and if we can). This is
+        // Mount tracefs if not already mounted (and if we can). This is
         // especially useful when running Retis in namespaces and containers.
         if collect.allow_system_changes {
-            const DEBUGFS_TARGET: &str = "/sys/kernel/debug";
-
-            let err = mount(
-                None::<&std::path::Path>,
-                std::path::Path::new(DEBUGFS_TARGET),
-                Some("debugfs"),
-                MsFlags::empty(),
-                None::<&str>,
-            );
-
-            match err {
-                Ok(_) => {
-                    debug!("Mounted debugfs to {DEBUGFS_TARGET}");
-                    self.mounted_debugfs = true;
+            if let Some(mounted) = Self::try_mount("tracefs", "/sys/kernel/tracing") {
+                if mounted {
+                    self.mounted = Some(PathBuf::from("/sys/kernel/tracing"));
                 }
-                Err(errno) => match errno {
-                    Errno::EBUSY => debug!("Debugfs is already mounted to {DEBUGFS_TARGET}"),
-                    _ => warn!("Could not mount debugfs to {DEBUGFS_TARGET}: {errno}"),
-                },
+            } else if let Some(mounted) = Self::try_mount("debugfs", "/sys/kernel/debug") {
+                if mounted {
+                    self.mounted = Some(PathBuf::from("/sys/kernel/debug"));
+                }
             }
         }
 
         // Check prerequisites.
         collection_prerequisites()
+    }
+
+    /// Try mounting a filesystem to a target directory. Returns:
+    /// - Some(true) if the filesystem was mounted.
+    /// - Some(false) if a filesystem is already mounted in the target.
+    /// - None otherwise.
+    fn try_mount(fs: &str, target: &str) -> Option<bool> {
+        let err = mount(
+            None::<&std::path::Path>,
+            Path::new(target),
+            Some(fs),
+            MsFlags::empty(),
+            None::<&str>,
+        );
+
+        match err {
+            Ok(_) => {
+                debug!("Mounted {fs} to {target}");
+                Some(true)
+            }
+            Err(errno) => match errno {
+                Errno::EBUSY => {
+                    debug!("{fs} is already mounted to {target}");
+                    Some(false)
+                }
+                _ => {
+                    warn!("Could not mount {fs} to {target}: {errno}");
+                    None
+                }
+            },
+        }
     }
 
     /// Initialize all collectors by calling their `init()` function.
@@ -477,10 +498,10 @@ impl Collectors {
         debug!("Stopping events");
         self.factory.stop()?;
 
-        // If we mounted debugfs, unmount it.
-        if self.mounted_debugfs {
-            debug!("Unmounting debugfs");
-            umount("/sys/kernel/debug")?;
+        // If we mounted a fs, unmount it.
+        if let Some(ref path) = self.mounted {
+            debug!("Unmounting {}", path.display());
+            umount(path)?;
         }
 
         Ok(())

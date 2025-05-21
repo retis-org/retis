@@ -45,6 +45,10 @@ if [[ -z $kconfig_map ]]; then
 	echo "You can place your configuration file in the current directory and use the '--kconf' option"
 fi
 
+# Find tracefs; keep mounting debugfs for older RETIS_TAG.
+[ -d /sys/kernel/tracing ] && tracefs="-v /sys/kernel/tracing:/sys/kernel/tracing:ro"
+[ -d /sys/kernel/debug ] && debugfs="-v /sys/kernel/debug:/sys/kernel/debug:ro"
+
 # Map local config if exist.
 local_conf=$HOME/.config/retis
 [ -d $local_conf ] && local_conf="-v $local_conf:/root/.config/retis:ro" || local_conf=""
@@ -59,7 +63,7 @@ exec $runtime run $extra_args $term_opts --privileged --rm --pid=host \
       -e PAGER -e NOPAGER -e TERM -e LC_ALL="C.UTF-8" \
       --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
-      -v /sys/kernel/debug:/sys/kernel/debug:ro \
+      $tracefs $debugfs \
       -v $(pwd):/data:rw \
       $kconfig_legacy_map $kconfig_map \
       $local_conf \

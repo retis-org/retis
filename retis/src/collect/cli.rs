@@ -136,8 +136,9 @@ Notes:
         help = r#"Allow the tool to setup all the system changes needed to make the tracing
 fully operational:
 
-- Mounting debugfs to /sys/kernel/debug if not already mounted. If Retis mounted debugfs it
-  will unmount it when stopped.
+- Mounting tracefs to /sys/kernel/tracing if not already mounted. If Retis mounted tracefs it
+  will unmount it when stopped. On older kernels it might mount (and unmount) debugfs to
+  /sys/kernel/debug instead.
 
 - In the case the nft collector is used, creating a dummy table called "Retis_Table"
   as the following:

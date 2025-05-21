@@ -5,9 +5,9 @@
 - By default Retis does not modify the system (e.g. load kernel modules, mount
   filesystems, change the configuration, add a firewalling rule). This is done
   on purpose but might mean some prerequisites will be missing if not added
-  manually. The only notable examples are the `nft` module and the `debugfs`.
+  manually. The only notable examples are the `nft` module and `tracefs`.
   The former requires a specific nft rule to be inserted. If that rule is not
-  there, no nft event will be reported. The latter, `debugfs`, although not
+  there, no nft event will be reported. The latter, `tracefs`, although not
   mandatory, is preferable to have it mounted as it is accessed by Retis to
   better determine traceable events and functions.
   To allow Retis to modify the system, use the `--allow-system-changes` option
