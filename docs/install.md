@@ -132,7 +132,7 @@ $ file ./target/aarch64-unknown-linux-gnu/release/retis
 ### Running as non-root
 
 Retis can run as non-root if it has the right capabilities. Note that doing this
-alone often means `debugfs` won't be available as it's usually owned by `root`
+alone often means `tracefs` won't be available as it's usually owned by `root`
 only and Retis won't be able to fully filter probes.
 
 ```none

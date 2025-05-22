@@ -35,11 +35,11 @@ impl Symbol {
     /// Create a new symbol given its name. We'll try hard to induce its type,
     /// using different techniques depending on what is available.
     pub(crate) fn from_name(name: &str) -> Result<Symbol> {
-        let mut debugfs = false;
+        let mut tracefs = false;
 
         // First try to see if the symbol is a traceable event.
         if let Some(traceable) = inspector()?.kernel.is_event_traceable(name) {
-            debugfs = true;
+            tracefs = true;
             if traceable {
                 return Symbol::Event(name.to_string()).check();
             }
@@ -51,12 +51,12 @@ impl Symbol {
                 return Symbol::Func(name.to_string()).check();
             }
         } else {
-            debugfs = false;
+            tracefs = false;
         }
 
-        // We had access to debugfs for inducing the symbol type and we didn't
+        // We had access to tracefs for inducing the symbol type and we didn't
         // find anything. The symbol isn't traceable.
-        if debugfs {
+        if tracefs {
             bail!("Symbol {} does not exist or isn't traceable", name);
         }
 

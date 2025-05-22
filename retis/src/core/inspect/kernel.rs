@@ -48,8 +48,14 @@ impl KernelInspector {
             match cfg!(test) || cfg!(feature = "benchmark") {
                 false => (
                     "/proc/kallsyms".to_owned(),
-                    "/sys/kernel/debug/tracing/available_events".to_owned(),
-                    "/sys/kernel/debug/tracing/available_filter_functions".to_owned(),
+                    match fs::metadata("/sys/kernel/tracing/available_events") {
+                        Ok(_) => "/sys/kernel/tracing/available_events".to_owned(),
+                        _ => "/sys/kernel/debug/tracing/available_events".to_owned(),
+                    },
+                    match fs::metadata("/sys/kernel/tracing/available_filter_functions") {
+                        Ok(_) => "/sys/kernel/tracing/available_filter_functions".to_owned(),
+                        _ => "/sys/kernel/debug/tracing/available_filter_functions".to_owned(),
+                    },
                     "/proc/modules".to_owned(),
                 ),
                 true => (
@@ -106,7 +112,7 @@ impl KernelInspector {
 
         if inspector.traceable_funcs.is_none() || inspector.traceable_events.is_none() {
             warn!(
-                "Could not access files in /sys/kernel/debug/tracing: consider mounting debugfs, if not a permissions issue"
+                "Could not access files in tracefs: consider mounting it, if not a permissions issue"
             );
         }
 
@@ -338,11 +344,10 @@ impl KernelInspector {
     /// supported, e.g. "skb:*", "*:kfree_skb" or "*skb*".
     pub(crate) fn matching_events(&self, target: &str) -> Result<Vec<String>> {
         Self::match_in_set(
-            self
-                .traceable_events
-                .as_ref()
-                .ok_or_else(|| anyhow!("Could not get matching events as Retis can't access files in /sys/kernel/debug/tracing"))?,
-                target
+            self.traceable_events.as_ref().ok_or_else(|| {
+                anyhow!("Could not get matching events as Retis can't access files in tracefs")
+            })?,
+            target,
         )
     }
 
@@ -350,11 +355,10 @@ impl KernelInspector {
     /// supported, e.g. "tcp_v6_*".
     pub(crate) fn matching_functions(&self, target: &str) -> Result<Vec<String>> {
         Self::match_in_set(
-            self
-                .traceable_funcs
-                .as_ref()
-                .ok_or_else(|| anyhow!("Could not get matching functions as Retis can't access files in /sys/kernel/debug/tracing"))?,
-                target
+            self.traceable_funcs.as_ref().ok_or_else(|| {
+                anyhow!("Could not get matching functions as Retis can't access files in tracefs")
+            })?,
+            target,
         )
     }
 }
