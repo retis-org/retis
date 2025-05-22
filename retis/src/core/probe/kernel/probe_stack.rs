@@ -18,28 +18,14 @@ use crate::{
 /// Probe-stack consume stack traces and add additional probes for compatible
 /// functions found there.
 pub(crate) struct ProbeStack {
-    /// Local cache of functions that were already considered, probed or not.
-    /// Used to optimize the event processing.
-    probes: HashSet<String>,
     /// Set of kernel types known by collectors, so we only probe functions that
     /// can generate an event.
     known_kernel_types: HashSet<String>,
 }
 
 impl ProbeStack {
-    pub(crate) fn new(attached_probes: Vec<String>, known_kernel_types: HashSet<String>) -> Self {
-        // Stack probe mode works with kprobes only and keeps track of the
-        // function name.
-        let attached_probes = attached_probes
-            .iter()
-            .filter_map(|p| p.strip_prefix("kprobe:"))
-            .map(|p| p.to_string())
-            .collect::<Vec<String>>();
-
-        Self {
-            probes: HashSet::from_iter(attached_probes),
-            known_kernel_types,
-        }
+    pub(crate) fn new(known_kernel_types: HashSet<String>) -> Self {
+        Self { known_kernel_types }
     }
 
     fn keep_stack(&mut self, mgr: &mut ProbeRuntimeManager, evt: &KernelEvent) -> bool {
@@ -77,49 +63,55 @@ impl ProbeStack {
                 _ => return Ok(()),
             };
 
-            if self.probes.insert(func.to_string()) {
-                // Filter out functions not having a BTF representation.
-                let types = inspector()?.kernel.btf.resolve_types_by_name(func);
-                if types.is_err()
-                    || !types
-                        .unwrap()
-                        .iter()
-                        .any(|(_, t)| matches!(t, Type::Func(_)))
-                {
-                    return Ok(());
-                }
-
-                let symbol = match Symbol::from_name(func) {
-                    Ok(symbol) => symbol,
-                    _ => return Ok(()),
-                };
-
-                // Filter out symbols not operating on a type we can retrieve
-                // data from.
-                if !self
-                    .known_kernel_types
-                    .iter()
-                    .any(|t| match symbol.parameter_offset(t) {
-                        Ok(ret) => ret.is_some(),
-                        _ => false,
-                    })
-                {
-                    return Ok(());
-                }
-
-                let mut probe = match Probe::kprobe(symbol) {
-                    Ok(probe) => probe,
-                    _ => return Ok(()),
-                };
-
-                #[cfg(not(test))]
-                if let Err(e) = mgr.attach_generic_probe(&mut probe) {
-                    warn!("Could not attach additional probe {probe}: {e}");
-                    return Ok(());
-                }
-
-                debug!("Added probe to {}", func);
+            if mgr
+                .attached_probes()
+                .iter()
+                .any(|p| p == &format!("kprobe:{func}"))
+            {
+                return Ok(());
             }
+
+            // Filter out functions not having a BTF representation.
+            let types = inspector()?.kernel.btf.resolve_types_by_name(func);
+            if types.is_err()
+                || !types
+                    .unwrap()
+                    .iter()
+                    .any(|(_, t)| matches!(t, Type::Func(_)))
+            {
+                return Ok(());
+            }
+
+            let symbol = match Symbol::from_name(func) {
+                Ok(symbol) => symbol,
+                _ => return Ok(()),
+            };
+
+            // Filter out symbols not operating on a type we can retrieve
+            // data from.
+            if !self
+                .known_kernel_types
+                .iter()
+                .any(|t| match symbol.parameter_offset(t) {
+                    Ok(ret) => ret.is_some(),
+                    _ => false,
+                })
+            {
+                return Ok(());
+            }
+
+            let mut probe = match Probe::kprobe(symbol) {
+                Ok(probe) => probe,
+                _ => return Ok(()),
+            };
+
+            #[cfg(not(test))]
+            if let Err(e) = mgr.attach_generic_probe(&mut probe) {
+                warn!("Could not attach additional probe {probe}: {e}");
+                return Ok(());
+            }
+
+            debug!("Added probe to {}", func);
 
             Ok(())
         })?;
