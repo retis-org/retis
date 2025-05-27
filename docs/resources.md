@@ -2,6 +2,9 @@
 
 ## Presentations
 
+- [Challenges and limitations of debugging increasingly complex virtualized
+  networks with Retis](https://www.youtube.com/watch?v=AR5d3gM9zH4) at Netdev
+  0x19 (2025).
 - [Tracing packets in OVS: an update on Retis](https://www.youtube.com/watch?v=K0ldVsWkLJw)
   at Open vSwitch and OVN 2024 Fall Conference.
 - [Tracing packets in the kernel OVS datapath with Retis](https://www.youtube.com/watch?v=1PmkNuJx4w4)
