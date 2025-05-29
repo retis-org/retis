@@ -221,7 +221,7 @@ impl fmt::Display for Probe {
             ProbeType::Kprobe(symbol) => write!(f, "kprobe:{symbol}"),
             ProbeType::Kretprobe(symbol) => write!(f, "kretprobe:{symbol}"),
             ProbeType::RawTracepoint(symbol) => write!(f, "tp:{symbol}"),
-            ProbeType::Usdt(symbol) => write!(f, "usdt {symbol}"),
+            ProbeType::Usdt(symbol) => write!(f, "usdt:{symbol}"),
         }
     }
 }

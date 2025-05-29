@@ -39,7 +39,7 @@ If this is not set all collectors are enabled, unless a prerequisite is missing.
         short,
         long,
         help = "Add a probe on the given target. Can be used multiple times. Probes should
-follow the [TYPE:]TARGET pattern.
+follow the [TYPE:]TARGET[/OPTIONS] pattern.
 
 When TYPE is not specified it is set to 'kprobe', except if a single ':' is found in TARGET
 in which case 'raw_tracepoint' is set instead. Those default types might evolve over time.
@@ -51,6 +51,10 @@ Valid TYPEs:
 
 Wildcards (*) can be used, eg. \"kprobe:tcp_*\" or \"tp:skb:*\".
 
+OPTIONS can be used to configure probes on a per-probe basis. Options are a list of keywords
+separated by '/' (e.g. TARGET/opt1/opt2). Valid OPTIONS:
+- stack: enables stack traces retrieval (same as \"--stack\", on a per-probe basis).
+
 If this is not set, no profile is used (\"--profile\") and no collector is
 explicitly enabled (\"--collector\"); \"net:netif_receive_skb\" and
 \"net:net_dev_start_xmit\" are automatically used. Also note the
@@ -58,7 +62,8 @@ explicitly enabled (\"--collector\"); \"net:netif_receive_skb\" and
 
 Examples:
   --probe tp:skb:kfree_skb --probe kprobe:consume_skb
-  --probe skb:kfree_skb --probe consume_skb"
+  --probe skb:kfree_skb --probe consume_skb
+  -p skb:kfree_skb/stack -p consume_skb"
     )]
     pub(super) probes: Vec<String>,
     #[arg(
