@@ -24,7 +24,7 @@ use pcap_file::{
 use crate::{
     cli::*,
     core::{kernel::Symbol, probe::kernel::utils::*},
-    events::{file::FileEventsFactory, CommonEvent, KernelEvent, SkbEvent, TimeSpec, *},
+    events::{file::FileEventsFactory, *},
     helpers::signals::Running,
 };
 
@@ -83,10 +83,12 @@ impl EventParser {
         // Having a common & a kernel section is mandatory for now, seeing a
         // filtered event w/o one of those is bogus.
         let common = event
-            .get_section::<CommonEvent>(SectionId::Common)
+            .common
+            .as_ref()
             .ok_or_else(|| anyhow!("No common section in event"))?;
         let kernel = event
-            .get_section::<KernelEvent>(SectionId::Kernel)
+            .kernel
+            .as_ref()
             .ok_or_else(|| anyhow!("No skb section in event"))?;
 
         self.stats.processed += 1;
@@ -94,10 +96,7 @@ impl EventParser {
         // The skb & packet sections are mandatory for us to generate PCAP
         // events, but they might not be present in some filtered events. Stats
         // are kept here to inform the user.
-        let skb = some_or_return!(
-            event.get_section::<SkbEvent>(SectionId::Skb),
-            self.stats.missing_skb
-        );
+        let skb = some_or_return!(&event.skb, self.stats.missing_skb);
         let packet = some_or_return!(skb.packet.as_ref(), self.stats.missing_packet);
 
         // The dev & ns sections are best to have but not mandatory to generate
@@ -306,7 +305,7 @@ where
     while run.running() {
         match factory.next_event()? {
             Some(event) => {
-                if let Some(kernel) = event.get_section::<KernelEvent>(SectionId::Kernel) {
+                if let Some(kernel) = &event.kernel {
                     // Check the event is matching the requested symbol.
                     if !filter(&kernel.probe_type, &kernel.symbol) {
                         continue;
@@ -318,7 +317,7 @@ where
                     for b in parsed_blocks {
                         writer_callback(&b)?;
                     }
-                } else if let Some(common) = event.get_section::<StartupEvent>(SectionId::Startup) {
+                } else if let Some(common) = event.startup {
                     parser.ts_off = Some(common.clock_monotonic_offset);
                 }
             }
@@ -350,22 +349,19 @@ fn list_probes(input: &Path) -> Result<Vec<String>> {
         match factory.next_event()? {
             None => break,
             Some(event) => {
-                if let Some(kernel) = event.get_section::<KernelEvent>(SectionId::Kernel) {
+                if let Some(kernel) = event.kernel {
                     let probe_name = format!("{}:{}", kernel.probe_type, kernel.symbol);
                     if probe_set.contains(&probe_name) {
                         continue;
                     }
                     // Having a common section is mandatory for now, seeing a
                     // filtered event w/o one of those is bogus.
-                    if event
-                        .get_section::<CommonEvent>(SectionId::Common)
-                        .is_none()
-                    {
+                    if event.common.is_none() {
                         continue;
                     }
                     // The skb & packet sections are mandatory for us to generate PCAP
                     // events, but they might not be present in some filtered events.
-                    match event.get_section::<SkbEvent>(SectionId::Skb) {
+                    match event.skb {
                         None => {}
                         Some(skb) => {
                             if skb.packet.as_ref().is_some() {
@@ -467,10 +463,7 @@ mod tests {
                 "test_data/test_events_packets_invalid_ct.json",
                 "",
                 "",
-                Err(anyhow!(
-                    "Failed to create EventSection for owner ct from \
-                json: missing field `ct_status`"
-                )),
+                Err(anyhow!("missing field `ct_status` at line 1 column 404")),
                 Vec::<Block>::new(),
             ),
             // No packet data provided.
@@ -572,12 +565,14 @@ mod tests {
             // Both for list-probes and for generating the actual pcap.
             (
                 "test_data/test_events_packets_invalid_ct.json",
-                Err(anyhow!("Failed to create EventSection for owner ct from json: missing field `ct_status`")),
+                Err(anyhow!("missing field `ct_status` at line 1 column 404")),
             ),
             // Completely missing probe section.
             (
                 "test_data/test_events_bench_no_probes.json",
-                Err(anyhow!("Could not find any compatible probe in provided data set")),
+                Err(anyhow!(
+                    "Could not find any compatible probe in provided data set"
+                )),
             ),
             // Garbage data.
             (
