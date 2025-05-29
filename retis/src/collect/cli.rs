@@ -196,9 +196,7 @@ impl SubCommandParserRunner for Collect {
         let mut collectors = Collectors::new()?;
 
         collectors.check(self)?;
-        collectors.init(main_config, self)?;
-
-        collectors.start(self)?;
+        collectors.config(self, main_config)?;
 
         // Starts a loop.
         collectors.process(self)?;

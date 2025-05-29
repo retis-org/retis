@@ -6,11 +6,13 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::{arg, Parser};
 use libbpf_rs::MapCore;
+use log::warn;
 
-use super::hooks;
+use super::{bpf::OvsEventFactory, flow_info::FlowEnricher, hooks};
+
 use crate::{
     bindings::{
         ovs_common_uapi::{execute_actions_ctx, upcall_context},
@@ -47,6 +49,22 @@ pub(crate) struct OvsCollectorArgs {
 See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions."
     )]
     ovs_track: bool,
+    #[arg(
+        long,
+        default_value = "false",
+        help = "Enable OpenvSwitch datapath flow enrichment via unixctl command.
+Requires OpenvSwitch >= 3.4"
+    )]
+    ovs_enrich_flows: bool,
+    #[arg(
+        long,
+        default_value = "20",
+        value_name = "REQUESTS_PER_SEC",
+        help = "If '--ovs-enrich-flows' flag is set, rate-limit the number of requests
+to OpenvSwitch daemon to the specified number of requests per second. Note that
+increasing the rate might have an impact on the running OpenvSwitch daemon."
+    )]
+    ovs_enrich_rate: u32,
 }
 
 #[derive(Default)]
@@ -63,6 +81,8 @@ pub(crate) struct OvsCollector {
     /* Batch tracking maps. */
     upcall_batches: Option<libbpf_rs::MapHandle>,
     pid_to_batch: Option<libbpf_rs::MapHandle>,
+
+    flow_enricher: Option<FlowEnricher>,
 }
 
 impl Collector for OvsCollector {
@@ -96,9 +116,17 @@ impl Collector for OvsCollector {
         &mut self,
         cli: &Collect,
         probes: &mut ProbeBuilderManager,
-        _: Arc<RetisEventsFactory>,
+        retis_factory: Arc<RetisEventsFactory>,
+        section_factories: &mut SectionFactories,
     ) -> Result<()> {
-        self.track = cli.collector_args.ovs.ovs_track;
+        let args = &cli.collector_args.ovs;
+
+        self.track = args.ovs_track;
+
+        if args.ovs_enrich_flows {
+            self.init_flow_enricher(retis_factory, section_factories, args.ovs_enrich_rate)?;
+        }
+
         self.inflight_upcalls_map = Some(Self::create_inflight_upcalls_map()?);
 
         // Create tracking maps and add USDT hooks.
@@ -110,7 +138,7 @@ impl Collector for OvsCollector {
         // Upcall related hooks:
         self.add_upcall_hooks(probes)?;
         // Exec related hooks
-        self.add_exec_hooks(probes)?;
+        self.add_processing_hooks(probes)?;
 
         Ok(())
     }
@@ -119,14 +147,21 @@ impl Collector for OvsCollector {
         if let Some(gc) = &mut self.gc {
             gc.start(self.running.clone())?;
         }
+        if let Some(enricher) = &mut self.flow_enricher {
+            enricher.start(self.running.clone())?;
+        }
         Ok(())
     }
 
     fn stop(&mut self) -> Result<()> {
+        #[cfg(not(test))]
+        self.running.terminate();
+
         if let Some(gc) = &mut self.gc {
-            #[cfg(not(test))]
-            self.running.terminate();
             gc.join()?;
+        }
+        if let Some(enricher) = &mut self.flow_enricher {
+            enricher.join()?;
         }
         Ok(())
     }
@@ -243,7 +278,7 @@ impl OvsCollector {
                 nhandlers as u32,
                 &opts,
             )
-            .or_else(|e| bail!("Could not create the upcall_batches map: {}", e))?,
+            .or_else(|e| bail!("Could not create the pid_to_batch map: {}", e))?,
         );
 
         /* Populate pid_to_batch map. */
@@ -295,7 +330,7 @@ impl OvsCollector {
     }
 
     /// Add exec hooks.
-    fn add_exec_hooks(&mut self, probes: &mut ProbeBuilderManager) -> Result<()> {
+    fn add_processing_hooks(&mut self, probes: &mut ProbeBuilderManager) -> Result<()> {
         let inflight_exec_map = Self::create_inflight_exec_map()?;
 
         // ovs_execute_actions kprobe
@@ -323,6 +358,36 @@ impl OvsCollector {
         let mut probe =
             Probe::raw_tracepoint(Symbol::from_name("openvswitch:ovs_do_execute_action")?)?;
         probe.add_hook(exec_action_hook)?;
+        probes.register_probe(probe)?;
+
+        // ovs_dp_process_packet kprobe
+        let mut ovs_dp_process_packet_hook = Hook::from(hooks::kernel_process_packet::DATA);
+        ovs_dp_process_packet_hook
+            .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        let mut probe = Probe::kprobe(Symbol::from_name("ovs_dp_process_packet")?)?;
+        probe.set_option(ProbeOption::NoGenericHook)?;
+        probe.add_hook(ovs_dp_process_packet_hook)?;
+        probes.register_probe(probe)?;
+
+        // ovs_flow_tbl_lookup_stats kprobe
+        let mut ovs_flow_tbl_lookup_stats = Hook::from(hooks::kernel_tbl_lookup::DATA);
+        ovs_flow_tbl_lookup_stats
+            .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        let mut probe = Probe::kprobe(Symbol::from_name("ovs_flow_tbl_lookup_stats")?)?;
+        probe.set_option(ProbeOption::NoGenericHook)?;
+        probe.add_hook(ovs_flow_tbl_lookup_stats)?;
+        probes.register_probe(probe)?;
+
+        // ovs_flow_tbl_lookup_stats kretprobe
+        let mut ovs_flow_tbl_lookup_stats = Hook::from(hooks::kernel_tbl_lookup_ret::DATA);
+        ovs_flow_tbl_lookup_stats
+            .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        let mut ovs_flow_tbl_lookup_stats_ctx = Hook::from(hooks::kernel_tbl_lookup_ctx::DATA);
+        ovs_flow_tbl_lookup_stats_ctx
+            .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
+        let mut probe = Probe::kretprobe(Symbol::from_name("ovs_flow_tbl_lookup_stats")?)?;
+        probe.add_hook(ovs_flow_tbl_lookup_stats)?;
+        probe.set_ctx_hook(ovs_flow_tbl_lookup_stats_ctx)?;
         probes.register_probe(probe)?;
 
         self.inflight_exec_map = Some(inflight_exec_map);
@@ -403,6 +468,31 @@ impl OvsCollector {
             .interval(OVS_TRACKING_GC_INTERVAL)
             .limit(TRACKING_OLD_LIMIT),
         );
+        Ok(())
+    }
+
+    fn init_flow_enricher(
+        &mut self,
+        retis_factory: Arc<RetisEventsFactory>,
+        section_factories: &mut SectionFactories,
+        rate: u32,
+    ) -> Result<()> {
+        let flow_enricher = FlowEnricher::new(retis_factory, rate)
+            .context("Failed to connect to OVS via unixctl")?;
+
+        if !flow_enricher.detrace_supported() {
+            warn!(
+                "Running OpenvSwitch does not support 'ofproto/detrace', only datapath flows will be enriched"
+            );
+        }
+
+        let ovs_section_factory: &mut OvsEventFactory =
+            section_factories.get_mut(&FactoryId::Ovs)?;
+
+        ovs_section_factory.ufid_sender(flow_enricher.sender().clone());
+
+        self.flow_enricher = Some(flow_enricher);
+
         Ok(())
     }
 }

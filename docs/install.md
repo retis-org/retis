@@ -49,6 +49,8 @@ $ RETIS_IMAGE=my-registry.example.com/retis ./retis_in_container.sh --help
 ```
 
 `PAGER` and `NOPAGER` environment variables work the same way as with the Retis binary.
+`OVS_RUNDIR` environment variable can also be specified if the default one
+(/var/run/openvswitch) does not point to OVS's runtime directory.
 
 ### COPR
 

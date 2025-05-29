@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use log::{debug, info, warn};
 use nix::{errno::Errno, mount::*, unistd::Uid};
 
@@ -24,9 +24,9 @@ use super::{
 use crate::{
     bindings::packet_filter_uapi,
     cli::{CliDisplayFormat, MainConfig},
-    collect::collector::{section_factories, skb::SkbEventFactory},
+    collect::collector::section_factories,
     core::{
-        events::{BpfEventsFactory, EventResult, FactoryId, RetisEventsFactory},
+        events::{BpfEventsFactory, EventResult, RetisEventsFactory, SectionFactories},
         filters::{
             filters::{BpfFilter, Filter},
             meta::filter::FilterMeta,
@@ -85,7 +85,8 @@ pub(crate) trait Collector {
         &mut self,
         collect: &Collect,
         probes: &mut ProbeBuilderManager,
-        events_factory: Arc<RetisEventsFactory>,
+        retis_factory: Arc<RetisEventsFactory>,
+        section_factories: &mut SectionFactories,
     ) -> Result<()>;
     /// Start the collector.
     fn start(&mut self) -> Result<()> {
@@ -237,10 +238,11 @@ impl Collectors {
         }
     }
 
-    /// Initialize all collectors by calling their `init()` function.
-    pub(super) fn init(&mut self, main_config: &MainConfig, collect: &Collect) -> Result<()> {
-        self.run.register_term_signals()?;
-
+    fn init_collectors(
+        &mut self,
+        section_factories: &mut SectionFactories,
+        collect: &Collect,
+    ) -> Result<()> {
         // Check if we need to report stack traces in the events.
         if collect.stack {
             self.probes
@@ -252,19 +254,6 @@ impl Collectors {
                 .builder_mut()?
                 .set_probe_opt(probe::ProbeOption::ProbeStack)?;
         }
-
-        // Generate an initial event with the startup section.
-        self.events_factory.add_event(|event| {
-            event.insert_section(
-                SectionId::Startup,
-                Box::new(StartupEvent {
-                    retis_version: option_env!("RELEASE_VERSION")
-                        .unwrap_or("unspec")
-                        .to_string(),
-                    clock_monotonic_offset: monotonic_clock_offset()?,
-                }),
-            )
-        })?;
 
         let collectors = match &collect.collectors {
             Some(collectors) => collectors.iter().map(|c| c.as_ref()).collect::<Vec<&str>>(),
@@ -295,13 +284,13 @@ impl Collectors {
                 }
             }
 
-            if let Err(e) = c.init(
+            c.init(
                 collect,
                 self.probes.builder_mut()?,
                 Arc::clone(&self.events_factory),
-            ) {
-                bail!("Could not initialize collector {name}: {e}");
-            }
+                section_factories,
+            )
+            .context(format!("Could not initialize the {name} collector"))?;
 
             // If the collector provides known kernel types, meaning we have a
             // dynamic collector, retrieve and store them for later processing.
@@ -326,15 +315,35 @@ impl Collectors {
                     .join(", ")
             );
         }
+        Ok(())
+    }
 
+    // Generate an initial event with the startup section.
+    fn initial_event(&mut self) -> Result<()> {
+        self.events_factory.add_event(|event| {
+            event.insert_section(
+                SectionId::Startup,
+                Box::new(StartupEvent {
+                    retis_version: option_env!("RELEASE_VERSION")
+                        .unwrap_or("unspec")
+                        .to_string(),
+                    clock_monotonic_offset: monotonic_clock_offset()?,
+                }),
+            )
+        })
+    }
+
+    fn config_filters(&mut self, collect: &Collect) -> Result<()> {
         // Initialize tracking & filters.
         if !cfg!(test) && self.known_kernel_types.contains("struct sk_buff *") {
             let (gc, map) = init_tracking(self.probes.builder_mut()?)?;
             self.tracking_gc = Some(gc);
             self.tracking_config_map = Some(map);
         }
-        Self::setup_filters(self.probes.builder_mut()?, collect)?;
+        Self::setup_filters(self.probes.builder_mut()?, collect)
+    }
 
+    fn register_probes(&mut self, collect: &Collect, main_config: &MainConfig) -> Result<()> {
         // If no probe was explicitly set, find the right set automagically. In
         // addition check:
         // - No profile is used, this is to allow profiles to only use probes
@@ -394,36 +403,14 @@ impl Collectors {
         collect.probes.iter().try_for_each(|p| -> Result<()> {
             probe_from_cli(p, filter)?
                 .drain(..)
-                .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
-            Ok(())
-        })?;
-
-        Ok(())
+                .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))
+        })
     }
 
     /// Start the event retrieval for all collectors by calling
     /// their `start()` function.
-    pub(super) fn start(&mut self, collect: &Collect) -> Result<()> {
-        // Create factories.
-        #[cfg_attr(test, allow(unused_mut))]
-        let mut section_factories = section_factories()?;
-
-        // Configure factories based on collectors config.
-        if let Some(skb_factory) = section_factories.get_mut(&FactoryId::Skb) {
-            skb_factory
-                .as_any_mut()
-                .downcast_mut::<SkbEventFactory>()
-                .ok_or_else(|| anyhow!("Failed to downcast SkbEventFactory"))?
-                .report_eth(
-                    collect
-                        .collector_args
-                        .skb
-                        .skb_sections
-                        .iter()
-                        .any(|s| s == "all" || s == "eth"),
-                );
-        }
-
+    #[cfg_attr(test, allow(unused_mut))]
+    fn start_collectors(&mut self, mut section_factories: SectionFactories) -> Result<()> {
         #[cfg(not(test))]
         {
             let sm = init_stack_map()?;
@@ -436,17 +423,10 @@ impl Collectors {
             self.probes
                 .builder_mut()?
                 .reuse_map("log_map", self.factory.log_map_fd())?;
-            match section_factories.get_mut(&FactoryId::Kernel) {
-                Some(kernel_factory) => {
-                    kernel_factory
-                        .as_any_mut()
-                        .downcast_mut::<KernelEventFactory>()
-                        .ok_or_else(|| anyhow!("Failed to downcast KernelEventFactory"))?
-                        .stack_map = Some(sm)
-                }
 
-                None => bail!("Can't get kernel section factory"),
-            }
+            section_factories
+                .get_mut::<KernelEventFactory>(&crate::core::events::FactoryId::Kernel)?
+                .stack_map = Some(sm);
         }
 
         if let Some(gc) = &mut self.tracking_gc {
@@ -462,13 +442,27 @@ impl Collectors {
 
         for (name, c) in &mut self.collectors {
             debug!("Starting collector {name}");
-            if c.start().is_err() {
-                warn!("Could not start collector {name}");
+            if let Err(e) = c.start() {
+                warn!("Could not start collector {name}: {e}");
             }
         }
 
         // Start factory
         self.factory.start(section_factories)?;
+
+        Ok(())
+    }
+
+    /// Configure collection.
+    pub(super) fn config(&mut self, collect: &Collect, main_config: &MainConfig) -> Result<()> {
+        let mut section_factories = section_factories()?;
+
+        self.run.register_term_signals()?;
+        self.initial_event()?;
+        self.init_collectors(&mut section_factories, collect)?;
+        self.config_filters(collect)?;
+        self.register_probes(collect, main_config)?;
+        self.start_collectors(section_factories)?;
 
         Ok(())
     }
