@@ -32,6 +32,7 @@ nav:
 
 markdown_extensions:
   - footnotes
+  - pymdownx.snippets
 
 theme: readthedocs
 plugins:
