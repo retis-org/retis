@@ -74,4 +74,5 @@ use events_uapi::retis_log_event;
 
 unsafe impl plain::Plain for retis_log_event {}
 
+pub(crate) mod meta_filter_uapi;
 pub(crate) mod packet_filter_uapi;

@@ -2,11 +2,11 @@
 use std::{collections::HashMap, sync::Mutex};
 
 use anyhow::{bail, Result};
-use log::{error, warn};
+use log::error;
 use once_cell::sync::Lazy;
 
 use crate::{
-    bindings::packet_filter_uapi,
+    bindings::{meta_filter_uapi, packet_filter_uapi},
     core::{
         bpf_sys,
         filters::packets::{
@@ -17,15 +17,13 @@ use crate::{
     },
 };
 
-use super::meta::filter::FilterMeta;
-
 #[derive(Clone)]
 pub(crate) struct BpfFilter(pub(crate) Vec<u8>);
 
 #[derive(Clone)]
 pub(crate) enum Filter {
     Packet(packet_filter_uapi::filter_type, BpfFilter),
-    Meta(FilterMeta),
+    Meta(meta_filter_uapi::meta_filter_type, BpfFilter),
 }
 
 static FM: Lazy<Mutex<HashMap<u32, Filter>>> = Lazy::new(|| Mutex::new(HashMap::new()));
@@ -74,13 +72,7 @@ fn get_default_filter() -> Vec<u8> {
 fn retrieve_filter(code: u32) -> Vec<libbpf_sys::bpf_insn> {
     let f = if let Some(f) = get_filter(code) {
         match f {
-            Filter::Packet(_, bf) => bf.0,
-            _ => {
-                warn!(
-                    "Found invalid type while retrieving the filter, defaulting to match all ..."
-                );
-                get_default_filter()
-            }
+            Filter::Packet(_, bf) | Filter::Meta(_, bf) => bf.0,
         }
     } else {
         get_default_filter()
@@ -112,7 +104,11 @@ pub(crate) unsafe extern "C" fn fixup_filter_load_fn(
     opts: *mut libbpf_sys::bpf_prog_load_opts,
     _cookie: ::std::os::raw::c_long,
 ) -> std::os::raw::c_int {
-    let filter_types = [packet_filter_uapi::L2, packet_filter_uapi::L3];
+    let filter_types = [
+        packet_filter_uapi::L2,
+        packet_filter_uapi::L3,
+        meta_filter_uapi::META,
+    ];
     let mut pseudo_calls: Vec<usize> = Vec::new();
     let mut placeholder_calls: Vec<(usize, _)> = Vec::new();
 

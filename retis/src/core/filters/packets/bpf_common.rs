@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use anyhow::{bail, Result};
+
 use crate::core::bpf_sys;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -11,6 +13,7 @@ pub(crate) enum BpfAluOp {
     Or = bpf_sys::BPF_OR,
     Lsh = bpf_sys::BPF_LSH,
     Rsh = bpf_sys::BPF_RSH,
+    Arsh = bpf_sys::BPF_ARSH,
     Xor = bpf_sys::BPF_XOR,
     Mul = bpf_sys::BPF_MUL,
     Div = bpf_sys::BPF_DIV,
@@ -34,6 +37,20 @@ pub(crate) enum BpfSize {
     Half = bpf_sys::BPF_H,
     Word = bpf_sys::BPF_W,
     Double = bpf_sys::BPF_DW,
+}
+
+impl TryFrom<u8> for BpfSize {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u8) -> Result<Self> {
+        match value {
+            1 => Ok(BpfSize::Byte),
+            2 => Ok(BpfSize::Half),
+            4 => Ok(BpfSize::Word),
+            8 => Ok(BpfSize::Double),
+            _ => bail!("Invalid size"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]

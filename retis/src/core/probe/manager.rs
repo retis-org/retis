@@ -110,21 +110,8 @@ impl ProbeManager {
         // Set up filters and their handlers.
         for filter in builder.filters.iter() {
             match filter {
-                Filter::Packet(magic, _) => {
+                Filter::Packet(magic, _) | Filter::Meta(magic, _) => {
                     filters::register_filter(*magic, filter)?;
-                }
-                #[allow(unused_variables)]
-                Filter::Meta(ops) =>
-                {
-                    #[cfg(not(test))]
-                    for (p, op) in ops.0.iter().enumerate() {
-                        let pos = u32::try_from(p)?.to_ne_bytes();
-                        builder.meta_map.update(
-                            &pos,
-                            unsafe { plain::as_bytes(op) },
-                            libbpf_rs::MapFlags::ANY,
-                        )?;
-                    }
                 }
             }
         }
@@ -208,9 +195,6 @@ pub(crate) struct ProbeBuilderManager {
     /// Dynamic probes requires a map that provides extra information at runtime. This is that map.
     #[cfg(not(test))]
     config_map: libbpf_rs::MapHandle,
-    /// Global map used to pass meta filter actions.
-    #[cfg(not(test))]
-    meta_map: libbpf_rs::MapHandle,
     /// Global per-probe map used to report counters.
     #[cfg(not(test))]
     counters_map: libbpf_rs::MapHandle,
@@ -232,8 +216,6 @@ impl ProbeBuilderManager {
             #[cfg(not(test))]
             config_map: init_config_map()?,
             #[cfg(not(test))]
-            meta_map: filters::meta::filter::init_meta_map()?,
-            #[cfg(not(test))]
             counters_map: init_counters_map()?,
         };
 
@@ -246,12 +228,6 @@ impl ProbeBuilderManager {
         #[cfg(not(test))]
         mgr.maps
             .insert("config_map".to_string(), mgr.config_map.as_fd().as_raw_fd());
-
-        #[cfg(not(test))]
-        mgr.maps.insert(
-            "filter_meta_map".to_string(),
-            mgr.meta_map.as_fd().as_raw_fd(),
-        );
 
         #[cfg(not(test))]
         mgr.maps.insert(
@@ -479,7 +455,6 @@ impl ProbeRuntimeManager {
                 } else {
                     Vec::new()
                 },
-                self.filters.clone(),
                 None,
             )?;
 
@@ -520,12 +495,7 @@ impl ProbeRuntimeManager {
             hooks.extend(self.hooks.clone());
         }
 
-        builder.init(
-            self.map_fds.clone(),
-            hooks,
-            self.filters.clone(),
-            probe.ctx_hook.clone(),
-        )?;
+        builder.init(self.map_fds.clone(), hooks, probe.ctx_hook.clone())?;
 
         Self::attach_probe(
             &mut builder,

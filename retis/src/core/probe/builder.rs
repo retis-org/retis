@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 
-use crate::core::{filters::Filter, probe::*};
+use crate::core::probe::*;
 
 /// Trait representing the interface used to create and handle probes. We use a
 /// trait here as we're supporting various attach types.
@@ -26,7 +26,6 @@ pub(super) trait ProbeBuilder {
         &mut self,
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
-        filters: Vec<Filter>,
         ctx_hook: Option<Hook>,
     ) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
