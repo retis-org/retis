@@ -74,25 +74,12 @@ These filters can match against any subfield of the `sk_buff` and subsequent
 inner data structures.
 Meta filtering also automatically follows struct pointers, so indirect access to
 structures pointed by an `sk_buff` field is possible.
-A filter expression is represented by the pseudo EBNF grammar below:
+A filter expression is represented by this [pest](https://pest.rs/) grammar below:
 
-```none
-EXPR ::= LHS ' ' OP_RHS | LHS
-OP_RHS ::= OP ' ' RHS_NUM | EQ_NE ' ' RHS_STR
-LHS ::= 'sk_buff' MEMBER
-MEMBER ::= NEXTIDENT MEMBER | NEXTIDENT
-NEXTIDENT ::= '.' IDENT (':' MASK (':' IDENT)?)?
-IDENT ::= #'[a-zA-Z_][a-zA-Z0-9_]*'
-OP ::= EQ_NE | '<' | '<=' | '>' | '>='
-EQ_NE ::= '==' | '!='
-MASK ::= ('~')? MASK_NUM
-MASK_NUM ::= HEX | DEC | BIN
-RHS_STR ::= '"' ASCII '"' | '\'' ASCII '\''
-ASCII ::= #'[:ascii:]*'
-RHS_NUM ::= HEX | ('-')? DEC
-HEX ::= #'0x[a-fA-F0-9]+'
-DEC ::= #'[0-9]+'
-BIN ::= #'0b[0-1]+'
+```
+--8<--
+retis/src/core/filters/meta/meta.pest
+--8<--
 ```
 
 An example of a simple filter that respect a previous definition is:
@@ -110,6 +97,84 @@ The relational operators are:
 4. `>` and `>=` for *greater than* and *greater than or equal to*
 5. if `op` and `rhs` are omitted in `term`, a *not equal to* zero numeric comparison is assumed
 
+The boolean operators are:
+
+1. `&&` with its alternate syntax `and` resulting true if both left and right conditions are `true`, `false` otherwise (conjunction)
+2. `||` with its alternate syntax `or` resulting true if at least one between left and right conditions are `true`, `false` otherwise (disjunction)
+
+
+Boolean operators have the same precedence, meaning in absence of
+explicit syntax, they are considered left-associative.
+In order to define different associativity in the expression, parentheses are available.
+Parentheses **MUST** be well-formed and can **arbitrarily** change the assiociativity of the
+operators and so the way the expression is evaluated.
+
+For example, the following expression:
+
+```none
+$ retis collect -m 'sk_buff.pkt_type == 0x0 || sk_buff.mark == 0x100 && sk_buff.cloned'
+```
+
+logically results in:
+
+```none
+0: if sk_buff.pkt_type == 0 goto 4
+1: goto 2
+2: if sk_buff.mark == 256 goto 4
+3: goto 7
+4: if sk_buff.cloned != 0 goto 6
+5: goto 7
+6: true
+7: false
+```
+
+which is semantically equivalent to:
+
+```none
+$ retis collect -m '(sk_buff.pkt_type == 0x0 || sk_buff.mark == 0x100) && sk_buff.cloned'
+```
+
+conversely, the following:
+
+```none
+$ retis collect -m 'sk_buff.pkt_type == 0x0 || (sk_buff.mark == 0x100 && sk_buff.cloned)'
+```
+
+results in:
+
+```none
+0: if sk_buff.pkt_type == 0 goto 6
+1: goto 2
+2: if sk_buff.mark == 256 goto 4
+3: goto 7
+4: if sk_buff.cloned != 0 goto 6
+5: goto 7
+6: true
+7: false
+
+```
+
+There's **no limit** to the use of paretheses and boolean operators, but a
+short-circuit evaluation strategy is applied, so it's highly suggested
+to define the expression accordingly in order to avoid unnecessary
+runtime overhead.
+
+At the moment, only numeric and string comparisons are supported.
+The right-hand side (`rhs`) of numeric matches must be expressed as
+literal and can be represented in either base 10, base 16 if
+starting with `0x` prefix, or base 2 if starting with `0b` prefix.
+
+An example of equivalent numeric expressions with different bases are:
+
+```none
+sk_buff.mark == 16
+sk_buff.mark == 0x10
+sk_buff.mark == 0b10000
+```
+
+All the relational operators support numbers (both unsigned in any base
+and signed in base 10). The usage of negative numbers is only allowed against
+signed members.
 Bitfields are supported as well (both signed and unsigned) and they
 are treated as regular numbers.
 For numeric comparisons, an additional bitwise AND operation can be
@@ -181,6 +246,3 @@ $ retis collect -f 'tcp port 443' -m 'sk_buff.dev.name == "eth0"'
 
 The above options will be concatenated, meaning that both filters must match
 in order to have a match and generate events for packets.
-
-Meta filtering has some known limitations, in particular only one
-field at the time can be matched.
