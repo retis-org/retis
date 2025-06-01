@@ -13,7 +13,7 @@ use std::os::fd::{AsFd, AsRawFd, RawFd};
 use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::{OpenSkel, Skel};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
+use crate::core::{probe::builder::*, probe::*, workaround::*};
 
 mod kretprobe_bpf {
     include!("bpf/.out/kretprobe.skel.rs");
@@ -35,7 +35,6 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
         &mut self,
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
-        filters: Vec<Filter>,
         ctx_hook: Option<Hook>,
     ) -> Result<()> {
         if self.skel.is_some() {
@@ -46,12 +45,6 @@ impl<'a> ProbeBuilder for KretprobeBuilder<'a> {
 
         skel.maps.rodata_data.nhooks = hooks.len() as u32;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
-
-        filters.iter().for_each(|f| {
-            if let Filter::Meta(m) = f {
-                skel.maps.rodata_data.nmeta = m.0.len() as u32
-            }
-        });
 
         reuse_map_fds(skel.open_object_mut(), &map_fds)?;
 
@@ -131,9 +124,7 @@ mod tests {
         );
 
         let mut builder = KretprobeBuilder::new();
-        assert!(builder
-            .init(Vec::new(), Vec::new(), Vec::new(), None)
-            .is_ok());
+        assert!(builder.init(Vec::new(), Vec::new(), None).is_ok());
         assert!(builder
             .attach(
                 &Probe::kretprobe(Symbol::from_name("tcp_sendmsg").expect("symbol should exist"))

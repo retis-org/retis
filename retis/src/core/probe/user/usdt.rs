@@ -4,7 +4,6 @@ use anyhow::{anyhow, bail, Result};
 use libbpf_rs::skel::{OpenSkel, Skel};
 
 use crate::core::{
-    filters::Filter,
     probe::{builder::*, Hook, Probe, ProbeType},
     workaround::*,
 };
@@ -31,7 +30,6 @@ impl<'a> ProbeBuilder for UsdtBuilder<'a> {
         &mut self,
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
-        _filters: Vec<Filter>,
         _ctx_hook: Option<Hook>,
     ) -> Result<()> {
         self.map_fds = map_fds;
@@ -93,9 +91,7 @@ mod tests {
         let p = Process::from_pid(std::process::id() as i32).unwrap();
 
         // It's for now, the probes below won't do much.
-        assert!(builder
-            .init(Vec::new(), Vec::new(), Vec::new(), None)
-            .is_ok());
+        assert!(builder.init(Vec::new(), Vec::new(), None).is_ok());
         assert!(builder
             .attach(&Probe::usdt(UsdtProbe::new(&p, "test_builder::usdt").unwrap()).unwrap())
             .is_ok());

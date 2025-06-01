@@ -22,7 +22,7 @@ use super::{
     },
 };
 use crate::{
-    bindings::packet_filter_uapi,
+    bindings::{meta_filter_uapi, packet_filter_uapi},
     cli::{CliDisplayFormat, MainConfig},
     collect::collector::section_factories,
     core::{
@@ -172,7 +172,10 @@ impl Collectors {
         if let Some(f) = &collect.meta_filter {
             let fb =
                 FilterMeta::from_string(f.to_string()).map_err(|e| anyhow!("meta filter: {e}"))?;
-            probes.register_filter(Filter::Meta(fb))?;
+            probes.register_filter(Filter::Meta(
+                meta_filter_uapi::META,
+                BpfFilter(fb.to_bytes()),
+            ))?;
         }
 
         Ok(())
