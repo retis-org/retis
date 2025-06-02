@@ -55,6 +55,13 @@ pub enum OvsEvent {
         #[serde(flatten)]
         action_execute: ActionEvent,
     },
+
+    /// Flow lookup event. It indicates the datapath has successfully perfomed a lookup for a key.
+    #[serde(rename = "flow_lookup")]
+    DpLookup {
+        #[serde(flatten)]
+        flow_lookup: LookupEvent,
+    },
 }
 
 impl EventFmt for OvsEvent {
@@ -67,6 +74,7 @@ impl EventFmt for OvsEvent {
             RecvUpcall { recv_upcall } => recv_upcall,
             Operation { flow_operation } => flow_operation,
             Action { action_execute } => action_execute,
+            DpLookup { flow_lookup } => flow_lookup,
         };
 
         disp.event_fmt(f, format)
@@ -108,6 +116,71 @@ impl EventFmt for UpcallEvent {
             self.port,
             self.cpu
         )
+    }
+}
+
+/// OVS lookup event
+#[event_type]
+#[derive(Default, PartialEq)]
+pub struct LookupEvent {
+    /// flow pointer
+    pub flow: u64,
+    /// actions pointer
+    pub sf_acts: u64,
+    /// Flow UFID.
+    pub ufid: Ufid,
+    /// Number of mask hashtables that were looked up.
+    pub n_mask_hit: u32,
+    /// Number of cache matches that occurred during the lookup.
+    pub n_cache_hit: u32,
+    /// datapath flow string
+    pub dpflow: String,
+    /// openflow flows
+    pub ofpflows: Vec<String>,
+}
+
+impl EventFmt for LookupEvent {
+    fn event_fmt(&self, f: &mut Formatter, d: &DisplayFormat) -> fmt::Result {
+        let sep = if d.multiline { "\n" } else { " " };
+
+        if self.flow == 0 {
+            return write!(
+                f,
+                "flow miss mask {} cache {}",
+                self.n_mask_hit, self.n_cache_hit,
+            );
+        }
+
+        write!(
+            f,
+            "flow hit ufid {} mask {} cache {} flow {:x} sf_acts {:x}",
+            self.ufid, self.n_mask_hit, self.n_cache_hit, self.flow, self.sf_acts,
+        )?;
+        if !self.dpflow.is_empty() {
+            write!(f, "{sep}odpflow {}", self.dpflow)?;
+        }
+        if !self.ofpflows.is_empty() {
+            write!(f, "{sep}openflow{sep}")?;
+            if d.multiline {
+                f.conf.inc_level(4)
+            }
+            write!(f, "{}", self.ofpflows.join(sep))?;
+            if d.multiline {
+                f.conf.reset_level();
+            }
+        }
+        Ok(())
+    }
+}
+
+impl LookupEvent {
+    /// Return a FlowId that represents a unique flow fingerprint.
+    pub fn flow_id(&self) -> FlowId {
+        FlowId {
+            ufid: self.ufid,
+            flow: self.flow,
+            sf_acts: self.sf_acts,
+        }
     }
 }
 
@@ -538,6 +611,121 @@ pub struct OvsActionCtNat {
     pub max_port: Option<u16>,
 }
 
+#[event_type]
+#[derive(Copy, Default, PartialEq, Eq, Hash)]
+pub struct Ufid(pub u32, pub u32, pub u32, pub u32);
+
+#[cfg(feature = "python")]
+#[cfg_attr(feature = "python", pyo3::pymethods)]
+impl Ufid {
+    // Unfortunately we don't have a good way of customizing __repr__ yet, see
+    // https://github.com/retis-org/retis/issues/443.
+    fn show(&self) -> String {
+        format!("{}", self)
+    }
+}
+
+impl From<[u32; 4]> for Ufid {
+    fn from(parts: [u32; 4]) -> Self {
+        Ufid(parts[0], parts[1], parts[2], parts[3])
+    }
+}
+
+impl TryFrom<&str> for Ufid {
+    type Error = anyhow::Error;
+    /// Creates a Ufid from a string.
+    ///
+    /// Format is the same as UUID_v4:
+    /// "01234567-89ab-cdef-0123-456789abcdef"
+    fn try_from(ufid_str: &str) -> Result<Ufid> {
+        let mut parts: [u32; 4] = [0; 4];
+        match ufid_str.split('-').collect::<Vec<&str>>()[..] {
+            [p0, p1, p2, p3, p45] => {
+                if p45.len() != 12 {
+                    bail!("invalid Ufid string {}", ufid_str);
+                }
+                let p4 = &p45[..4];
+                let p5 = &p45[4..];
+                parts[0] = u32::from_str_radix(p0, 16)?;
+                parts[1] = (u32::from_str_radix(p1, 16)? << 16) | u32::from_str_radix(p2, 16)?;
+                parts[2] = (u32::from_str_radix(p3, 16)? << 16) | u32::from_str_radix(p4, 16)?;
+                parts[3] = u32::from_str_radix(p5, 16)?;
+            }
+            _ => bail!("invalid Ufid string {}", ufid_str),
+        }
+        Ok(Ufid::from(parts))
+    }
+}
+
+impl fmt::Display for Ufid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:08x}-{:04x}-{:04x}-{:04x}-{:04x}{:08x}",
+            self.0,
+            self.1 >> 16,
+            self.1 & 0xffff,
+            self.2 >> 16,
+            self.2 & 0xffff,
+            self.3
+        )
+    }
+}
+
+/// The OVS flow information event
+#[event_section(SectionId::OvsFlowInfo)]
+pub struct OvsFlowInfoEvent {
+    /// Unique FLow ID
+    pub ufid: Ufid,
+    /// Flow pointer
+    pub flow: u64,
+    /// Actions pointer
+    pub sf_acts: u64,
+    /// Datapath flow string
+    pub dpflow: String,
+    /// Openflow flows
+    pub ofpflows: Vec<String>,
+}
+
+impl EventFmt for OvsFlowInfoEvent {
+    fn event_fmt(&self, f: &mut Formatter, d: &DisplayFormat) -> fmt::Result {
+        write!(f, "ufid:{} {}", self.ufid, self.dpflow)?;
+        if d.multiline {
+            write!(f, "\nopenflow:")?;
+            f.conf.inc_level(4);
+            write!(f, "{}", self.ofpflows.join("\n"))?;
+            f.conf.reset_level();
+        } else {
+            write!(f, " openflow: {}", self.ofpflows.join(" "))?;
+        }
+        Ok(())
+    }
+}
+
+/// The uniqueness of a flow can only be guaranteed if, apart from the ufid,
+/// both "flow" and "sf_acts" pointers are the same. This struct combines these
+/// fields for easier comparisons.
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct FlowId {
+    /// Flow UFID
+    ufid: Ufid,
+    /// Flow pointer
+    flow: u64,
+    /// Actions pointer
+    sf_acts: u64,
+}
+
+impl OvsFlowInfoEvent {
+    /// Return a FlowId that represents a unique flow fingerprint.
+    pub fn flow_id(&self) -> FlowId {
+        FlowId {
+            ufid: self.ufid,
+            flow: self.flow,
+            sf_acts: self.sf_acts,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -669,6 +857,14 @@ mod tests {
                 .map_err(|e| anyhow!("Failed to convert json '{event_json}' to event: {e}"))?;
             assert_eq!(&parsed, event);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_ufid() -> Result<()> {
+        let ufid_str = "177746cc-5e95-4c23-8d40-96d5bee7c6eb";
+        let ufid = Ufid::try_from(ufid_str)?;
+        assert_eq!(format!("{}", ufid), ufid_str);
         Ok(())
     }
 }

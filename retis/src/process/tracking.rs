@@ -133,6 +133,11 @@ impl AddTracking {
                         self.process_skb(event)?;
                     }
                 },
+                DpLookup {
+                    flow_lookup: _lookup,
+                } => {
+                    self.process_skb(event)?;
+                }
             }
         } else {
             // It's not an OVS event, try skb-only tracking.

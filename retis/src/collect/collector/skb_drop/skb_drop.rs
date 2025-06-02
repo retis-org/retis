@@ -72,6 +72,7 @@ impl Collector for SkbDropCollector {
         _: &Collect,
         probes: &mut ProbeBuilderManager,
         _: Arc<RetisEventsFactory>,
+        _: &mut SectionFactories,
     ) -> Result<()> {
         let mut probe = Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb")?)?;
         let hook = Hook::from(skb_drop_hook::DATA);

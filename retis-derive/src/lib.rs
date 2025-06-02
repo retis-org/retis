@@ -165,7 +165,7 @@ pub fn event_section_factory(
         }
 
         impl EventSectionFactory for #ident {
-            fn id(&self) -> u8 {
+            fn id() -> u8 {
                 Self::FACTORY_ID
             }
 
