@@ -20,6 +20,9 @@ s390x := s390
 # Mappings takes precedence over custom ARCH
 BPF_ARCH := $(if $($(ARCH)),$($(ARCH)),$(ARCH))
 
+BPF_CFLAGS_PAHOLE := \
+	-Wno-gnu-variable-sized-type-not-at-end
+
 BPF_CFLAGS := -target bpf \
               -Wall \
               -Werror \
@@ -27,6 +30,7 @@ BPF_CFLAGS := -target bpf \
               -Wno-pointer-sign \
               -Wno-compare-distinct-pointer-types \
               -Wno-unused-command-line-argument \
+              $(BPF_CFLAGS_PAHOLE) \
               -fno-stack-protector \
               -D__TARGET_ARCH_$(BPF_ARCH) \
               -O2
