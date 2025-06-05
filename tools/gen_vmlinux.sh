@@ -1,21 +1,20 @@
 #!/bin/bash
-set -e
+set -xe
 
 # Script generating a minimal vmlinux.h header to be included in the eBPF part.
 # The goal is to have all required information to probe information from kernel
 # data structures.
+#
+# We using DWARF information instead of BTF to generate such header, as it
+# contains more detailed information such as alignment requirements.
 
 PAHOLE="${PAHOLE:-pahole} -q"
+MODS_DIR=/usr/lib/modules/$(uname -r)
 
 # Modules containing types we need (in addition to the base kernel).
-modules="
-	openvswitch
-	nf_tables
-"
-
-for mod in $modules; do
-	modprobe $mod
-done
+module_paths="$MODS_DIR/vmlinuz \
+	$MODS_DIR/kernel/net/openvswitch/openvswitch.ko.xz \
+	$MODS_DIR/kernel/net/netfilter/nf_tables.ko.xz"
 
 # List of types we use in the eBPF part (for probing mostly), excluding sk_buff
 # (always included below).
@@ -104,12 +103,12 @@ cat <<EOF > vmlinux.h
 
 EOF
 
-$PAHOLE /sys/kernel/btf/* --compile -C $classes >> vmlinux.h
+$PAHOLE $module_paths --compile -C $classes >> vmlinux.h
 
 for e in $enums_vmlinux; do
 	# Not using --compile here to avoid redefinition of types. If any type is a
 	# prerequisite here, add it to $types.
-	$PAHOLE /sys/kernel/btf/vmlinux --contains_enumerator=$e >> vmlinux.h
+	$PAHOLE $MODS_DIR/vmlinuz --contains_enumerator=$e >> vmlinux.h
 	echo -e ";\n" >> vmlinux.h
 done
 
