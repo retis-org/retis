@@ -5,12 +5,18 @@
 //! in two parts, the Rust code (here) and the eBPF one
 //! (bpf/raw_tracepoint.bpf.c and its auto-generated part in bpf/.out/).
 
-use std::os::fd::{AsFd, AsRawFd, RawFd};
+use std::{
+    collections::HashMap,
+    os::fd::{AsFd, AsRawFd, RawFd},
+};
 
 use anyhow::{anyhow, bail, Result};
-use libbpf_rs::skel::{OpenSkel, Skel};
+use libbpf_rs::{
+    skel::{OpenSkel, Skel},
+    RawTracepointOpts,
+};
 
-use crate::core::{filters::Filter, probe::builder::*, probe::*, workaround::*};
+use crate::core::{filters::Filter, inspect, probe::builder::*, probe::*, workaround::*};
 
 mod raw_tracepoint_bpf {
     include!("bpf/.out/raw_tracepoint.skel.rs");
@@ -19,17 +25,29 @@ use raw_tracepoint_bpf::*;
 
 #[derive(Default)]
 pub(crate) struct RawTracepointBuilder<'a> {
+    skels: HashMap<u32, SkelStorage<RawTracepointSkel<'a>>>,
+    legacy_skels: Vec<SkelStorage<RawTracepointSkel<'a>>>,
+    cookie_support: bool,
+    probes: HashMap<u32, Vec<Probe>>,
     hooks: Vec<Hook>,
     filters: Vec<Filter>,
     ctx_hook: Option<Hook>,
     links: Vec<libbpf_rs::Link>,
-    skel: Option<SkelStorage<RawTracepointSkel<'a>>>,
     map_fds: Vec<(String, RawFd)>,
 }
 
 impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
-    fn new() -> RawTracepointBuilder<'a> {
-        RawTracepointBuilder::default()
+    fn new() -> Result<RawTracepointBuilder<'a>> {
+        let cookie_support = Self::cookie_support()?;
+        log::debug!(
+            "Raw tracepoint builder {} cookie support",
+            if cookie_support { "with" } else { "without" }
+        );
+
+        Ok(Self {
+            cookie_support,
+            ..Default::default()
+        })
     }
 
     fn init(
@@ -47,22 +65,71 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
         Ok(())
     }
 
-    fn attach(&mut self, probe: &Probe) -> Result<()> {
-        let mut skel = OpenSkelStorage::new::<RawTracepointSkelBuilder>()?;
-
-        let probe = match probe.r#type() {
-            ProbeType::RawTracepoint(probe) => probe,
+    fn add_probe(&mut self, probe: Probe) -> Result<()> {
+        let nargs = match probe.r#type() {
+            ProbeType::RawTracepoint(probe) => probe.symbol.nargs()?,
             _ => bail!("Wrong probe type {}", probe),
         };
 
-        skel.maps.rodata_data.ksym = probe.symbol.addr()?;
-        skel.maps.rodata_data.nargs = probe.symbol.nargs()?;
-        skel.maps.rodata_data.nhooks = self.hooks.len() as u32;
-        skel.maps.rodata_data.log_level = log::max_level() as u8;
+        let probes = self.probes.entry(nargs).or_default();
+        probes.push(probe);
+
+        Ok(())
+    }
+
+    fn attach(&mut self) -> Result<()> {
+        let tmp = std::mem::take(&mut self.probes);
+
+        for (nargs, probes) in tmp {
+            match self.cookie_support {
+                true => self.attach_raw_tracepoints(nargs, &probes)?,
+                false => self.attach_raw_tracepoints_no_cookie(&probes)?,
+            }
+        }
+
+        Ok(())
+    }
+
+    fn detach(&mut self) -> Result<()> {
+        self.links.drain(..);
+        Ok(())
+    }
+}
+
+impl<'a> RawTracepointBuilder<'a> {
+    // Checks whether the underlying kernel supports setting/retrieving cookies
+    // in raw tracepoints.
+    fn cookie_support() -> Result<bool> {
+        Ok(inspect::inspector()?
+            .kernel
+            .btf
+            .resolve_types_by_name("bpf_get_attach_cookie_tracing")
+            .is_ok())
+    }
+
+    fn init_skel(
+        &mut self,
+        nargs: u32,
+        ksym: Option<u64>,
+    ) -> Result<SkelStorage<RawTracepointSkel<'a>>> {
+        let mut skel = OpenSkelStorage::new::<RawTracepointSkelBuilder>()?;
+
+        let rodata = skel
+            .maps
+            .rodata_data
+            .as_deref_mut()
+            .ok_or_else(|| anyhow!("Can't access eBPF rodata: not memory mapped"))?;
+        rodata.nargs = nargs;
+        rodata.nhooks = self.hooks.len() as u32;
+        rodata.log_level = log::max_level() as u8;
+
+        if let Some(ksym) = ksym {
+            rodata.ksym = ksym;
+        }
 
         self.filters.iter().for_each(|f| {
             if let Filter::Meta(m) = f {
-                skel.maps.rodata_data.nmeta = m.0.len() as u32
+                rodata.nmeta = m.0.len() as u32
             }
         });
 
@@ -83,14 +150,61 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
             self.links.push(replace_ctx_hook(fd, ctx_hook)?);
         }
 
-        self.links
-            .push(prog.attach_raw_tracepoint(probe.symbol.attach_name())?);
-        self.skel = Some(skel);
+        Ok(skel)
+    }
+
+    fn attach_raw_tracepoints(&mut self, nargs: u32, probes: &[Probe]) -> Result<()> {
+        #[allow(clippy::map_entry)] // Fixes double mutable refs.
+        if !self.skels.contains_key(&nargs) {
+            let new = self.init_skel(nargs, None)?;
+            self.skels.insert(nargs, new);
+        }
+
+        // Unwrap as we just made sure we have a corresponding skel.
+        let skel = self.skels.get_mut(&nargs).unwrap();
+        let prog = skel
+            .object()
+            .progs_mut()
+            .find(|p| p.name() == "probe_raw_tracepoint")
+            .ok_or_else(|| anyhow!("Couldn't get program"))?;
+
+        for probe in probes {
+            let symbol = match probe.r#type() {
+                ProbeType::RawTracepoint(probe) => &probe.symbol,
+                _ => bail!("Wrong probe type {}", probe),
+            };
+
+            let opts = RawTracepointOpts {
+                cookie: symbol.addr()?,
+                ..Default::default()
+            };
+
+            self.links
+                .push(prog.attach_raw_tracepoint_with_opts(symbol.attach_name(), opts)?);
+        }
+
         Ok(())
     }
 
-    fn detach(&mut self) -> Result<()> {
-        self.links.drain(..);
+    fn attach_raw_tracepoints_no_cookie(&mut self, probes: &[Probe]) -> Result<()> {
+        for probe in probes {
+            let symbol = match probe.r#type() {
+                ProbeType::RawTracepoint(probe) => &probe.symbol,
+                _ => bail!("Wrong probe type {}", probe),
+            };
+
+            let skel = self.init_skel(symbol.nargs()?, Some(symbol.addr()?))?;
+            let prog = skel
+                .object()
+                .progs_mut()
+                .find(|p| p.name() == "probe_raw_tracepoint")
+                .ok_or_else(|| anyhow!("Couldn't get program"))?;
+
+            self.links
+                .push(prog.attach_raw_tracepoint(symbol.attach_name())?);
+            self.legacy_skels.push(skel);
+        }
+
         Ok(())
     }
 }
@@ -116,17 +230,20 @@ mod tests {
             Some(fixup_filter_load_fn),
         );
 
-        let mut builder = RawTracepointBuilder::new();
+        let mut builder = RawTracepointBuilder::new().unwrap();
 
         // It's for now, the probes below won't do much.
         assert!(builder
             .init(Vec::new(), Vec::new(), Vec::new(), None)
             .is_ok());
         assert!(builder
-            .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
+            .add_probe(Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
             .is_ok());
         assert!(builder
-            .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:consume_skb").unwrap()).unwrap())
+            .add_probe(
+                Probe::raw_tracepoint(Symbol::from_name("skb:consume_skb").unwrap()).unwrap()
+            )
             .is_ok());
+        assert!(builder.attach().is_ok());
     }
 }
