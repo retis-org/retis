@@ -250,25 +250,22 @@ FILTER(l2)
 FILTER(l3)
 FILTER(meta)
 
-static __always_inline void filter(struct retis_context *ctx)
+static __always_inline u32 filter(struct sk_buff *skb)
 {
 	struct retis_packet_filter_ctx fctx = {};
-	struct sk_buff *skb;
+	u32 filters_ret = 0;
 	char *head;
 
-	skb = retis_get_sk_buff(ctx);
 	if (!skb)
-		return;
+		return 0;
 	/* Special case the packet filtering logic if the skb is already
 	 * tracked. This helps in may ways, including:
 	 * - Performances.
 	 * - Following packet transformations.
 	 * - Filtering packets when the whole data isn't available anymore.
 	 */
-	if (skb_is_tracked(skb)) {
-		ctx->filters_ret |= RETIS_ALL_FILTERS;
-		return;
-	}
+	if (skb_is_tracked(skb))
+		return RETIS_ALL_FILTERS;
 
 	head = (char *)BPF_CORE_READ(skb, head);
 	fctx.len = BPF_CORE_READ(skb, len);
@@ -281,23 +278,25 @@ static __always_inline void filter(struct retis_context *ctx)
 	 */
 	if (is_mac_data_valid(skb)) {
 		fctx.data = head + BPF_CORE_READ(skb, mac_header);
-		ctx->filters_ret |=
+		filters_ret |=
 			!!filter_l2(&fctx) << RETIS_F_PACKET_PASS_SH;
 		goto next_filter;
 	}
 
 	if (!is_network_data_valid(skb))
-		return;
+		goto ret;
 
 	fctx.data = head + BPF_CORE_READ(skb, network_header);
 	/* L3 filter can be a nop, meaning the criteria are not enough to
 	 * express a match in terms of L3 only.
 	 */
-	ctx->filters_ret |=
+	filters_ret |=
 		!!filter_l3(&fctx) << RETIS_F_PACKET_PASS_SH;
 
 next_filter:
-	ctx->filters_ret |= (!!filter_meta(skb)) << RETIS_F_META_PASS_SH;
+	filters_ret |= !!meta_filter(skb) << RETIS_F_META_PASS_SH;
+ret:
+	return filters_ret;
 }
 
 /* The chaining function, which contains all our core probe logic. This is
@@ -316,6 +315,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct kernel_event *k;
+	struct sk_buff *skb;
 	int ret;
 
 	/* Check if the collection is enabled, otherwise bail out. Once we have
@@ -337,7 +337,10 @@ static __always_inline int chain(struct retis_context *ctx)
 	if (ret)
 		log_warning("ctx extension failed: %d", ret);
 
-	filter(ctx);
+
+	skb = retis_get_sk_buff(ctx);
+	if (skb)
+		ctx->filters_ret = filter(skb);
 
 	/* Track the skb. Note that this is done *after* filtering! If no skb is
 	 * available this is a no-op.
