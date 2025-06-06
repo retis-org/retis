@@ -12,7 +12,7 @@ use crate::{
         kernel::Symbol,
         probe::{Probe, ProbeOption, ProbeRuntimeManager},
     },
-    events::{Event, KernelEvent, SectionId},
+    events::{Event, KernelEvent},
 };
 
 /// Probe-stack consume stack traces and add additional probes for compatible
@@ -48,7 +48,7 @@ impl ProbeStack {
         mgr: &mut ProbeRuntimeManager,
         event: &mut Event,
     ) -> Result<()> {
-        let kernel = match event.get_section_mut::<KernelEvent>(SectionId::Kernel) {
+        let kernel = match &mut event.kernel {
             Some(kernel) => kernel,
             None => return Ok(()),
         };

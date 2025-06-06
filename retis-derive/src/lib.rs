@@ -3,7 +3,7 @@ use syn::{parse_macro_input, Fields, Ident, Item, ItemStruct};
 
 #[proc_macro_attribute]
 pub fn event_section(
-    args: proc_macro::TokenStream,
+    _args: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
     let input: Item = parse_macro_input!(item);
@@ -13,51 +13,15 @@ pub fn event_section(
         _ => panic!("event types must be enums or structs"),
     };
 
-    let id: syn::Expr = syn::parse(args).expect("Invalid event id");
-
     let output = quote! {
         #[crate::event_type]
         #input
-
-        impl #ident {
-            pub(crate) const SECTION_ID: u8 = #id as u8;
-        }
-
-        impl EventSectionInternal for #ident {
-            fn id(&self) -> u8 {
-                Self::SECTION_ID
-            }
-
-            fn as_any(&self) -> &dyn std::any::Any
-                where Self: Sized,
-            {
-                self
-            }
-
-            fn as_any_mut(&mut self) -> &mut dyn std::any::Any
-                where Self: Sized,
-            {
-                self
-            }
-
-            fn to_json(&self) -> serde_json::Value
-                where Self: serde::Serialize,
-            {
-                serde_json::json!(self)
-            }
-
-            #[cfg(feature = "python")]
-            fn to_py(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-                use pyo3::IntoPyObject;
-                self.clone().into_pyobject(py).unwrap().into_any().unbind()
-            }
-        }
 
         #[cfg_attr(feature = "python", pyo3::pymethods)]
         #[cfg(feature = "python")]
         impl #ident {
             fn raw(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-                crate::python::to_pyobject(&self.to_json(), py)
+                crate::python::to_pyobject(&serde_json::json!(self), py)
             }
 
             fn show(&self) -> String {
