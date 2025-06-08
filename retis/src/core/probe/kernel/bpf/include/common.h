@@ -132,7 +132,7 @@ const volatile u32 nhooks = 0;
  * it. Credits to the XDP dispatcher.
  */
 #define HOOK(x)									\
-	__attribute__ ((noinline))						\
+	__noinline								\
 	int hook##x(struct retis_context *ctx, struct retis_raw_event *event) {	\
 		volatile int ret = 0;						\
 		if (!ctx || !event)						\
@@ -152,7 +152,7 @@ HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
 
-__attribute__ ((noinline))
+__noinline
 int ctx_hook(struct retis_context *ctx)
 {
 	volatile int ret = 0;

@@ -5,8 +5,9 @@
 #include <user_common.h>
 
 /* Hook placeholder */
-__attribute__ ((noinline))
-int hook0(struct user_ctx *ctx, struct retis_raw_event *event) {
+__noinline
+int hook0(struct user_ctx *ctx, struct retis_raw_event *event)
+{
 	volatile int ret = 0;
 	if (!ctx || !event)
 		return 0;
