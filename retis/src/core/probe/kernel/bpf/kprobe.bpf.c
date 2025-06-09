@@ -46,10 +46,8 @@ int probe_kprobe(struct pt_regs *ctx)
 		context.ksym = kprobe_get_func_ip(ctx);
 
 	if (kretprobe) {
-		u64 tgid = bpf_get_current_pid_tgid();
-
 		/* Store the current context and let the kretprobe run the hooks. */
-		if (bpf_map_update_elem(&kretprobe_context, &tgid, &context,
+		if (bpf_map_update_elem(&kretprobe_context, &context.stack_base, &context,
 					BPF_NOEXIST))
 			return -1;
 
@@ -77,22 +75,22 @@ static __always_inline void kretprobe_get_regs(struct retis_regs *regs,
 SEC("kprobe/retprobe")
 int probe_kretprobe(struct pt_regs *ctx)
 {
+	u64 stack_base = get_stack_base(ctx, KERNEL_PROBE_KRETPROBE);
 	struct retis_context context = {};
 	struct retis_context *kprobe_ctx;
-	u64 tid = bpf_get_current_pid_tgid();
 
 	/* Look if the matching kprobe has left a context for us to pick up. */
-	kprobe_ctx = bpf_map_lookup_elem(&kretprobe_context, &tid);
+	kprobe_ctx = bpf_map_lookup_elem(&kretprobe_context, &stack_base);
 	if (!kprobe_ctx)
 		return 0;
 
-	bpf_map_delete_elem(&kretprobe_context, &tid);
+	bpf_map_delete_elem(&kretprobe_context, &stack_base);
 
 	context.timestamp = bpf_ktime_get_ns();
 	context.ksym = kprobe_ctx->ksym;
 	context.probe_type = KERNEL_PROBE_KRETPROBE;
 	context.orig_ctx = ctx;
-	context.stack_base = get_stack_base(ctx, context.probe_type);
+	context.stack_base = stack_base;
 
 	kretprobe_get_regs(&context.regs, &kprobe_ctx->regs, ctx);
 
