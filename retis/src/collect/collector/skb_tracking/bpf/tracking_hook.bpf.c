@@ -7,6 +7,7 @@
 struct skb_tracking_event {
 	u64 orig_head;
 	u64 timestamp;
+	u64 stack_id;
 	u64 skb;
 } __binding;
 
@@ -29,6 +30,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 
 	e->orig_head = ti->orig_head;
 	e->timestamp = ti->timestamp;
+	e->stack_id = ti->stack_ref;
 	e->skb = (u64)skb;
 
 	return 0;

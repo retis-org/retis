@@ -50,6 +50,7 @@ impl RawEventSectionFactory for SkbTrackingEventFactory {
         Ok(Box::new(SkbTrackingEvent {
             orig_head: raw.orig_head,
             timestamp: raw.timestamp,
+            stack_id: raw.stack_id,
             skb: raw.skb,
         }))
     }

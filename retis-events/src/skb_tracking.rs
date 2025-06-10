@@ -23,6 +23,8 @@ pub struct SkbTrackingEvent {
     pub orig_head: u64,
     /// Timestamp of when the tracking logic first saw the packet.
     pub timestamp: u64,
+    /// Tracking stack base address.
+    pub stack_id: u64,
     /// Socket buffer (`skb`) address of the current packet.
     pub skb: u64,
 }
@@ -49,7 +51,13 @@ impl SkbTrackingEvent {
 
 impl EventFmt for SkbTrackingEvent {
     fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
-        write!(f, "#{:x} (skb {:x})", self.tracking_id(), self.skb)
+        write!(
+            f,
+            "#{:x} (skb {:x} context {:x})",
+            self.tracking_id(),
+            self.skb,
+            self.stack_id
+        )
     }
 }
 

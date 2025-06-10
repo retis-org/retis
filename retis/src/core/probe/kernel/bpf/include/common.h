@@ -17,6 +17,7 @@
 /* Kernel section of the event data. */
 struct kernel_event {
 	u64 symbol;
+	u64 stack_ref;
 	long stack_id;
 	/* values from enum kernel_probe_type */
 	u8 type;
@@ -355,7 +356,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
 	 * to allocate and fill an event to drop it later on.
 	 */
-	if (nhooks == 0)
+	if (nhooks == 0 && skb)
 		goto exit;
 
 	event = get_event();
@@ -389,6 +390,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	else
 		k->stack_id = -1;
 
+	k->stack_ref = ctx->stack_base;
 	pass_threshold = get_event_size(event);
 	barrier_var(pass_threshold);
 
@@ -418,7 +420,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	CALL_HOOK(8)
 	CALL_HOOK(9)
 
-	if (get_event_size(event) > pass_threshold)
+	if (get_event_size(event) > pass_threshold || !skb)
 		send_event(event);
 	else
 discard_event:
