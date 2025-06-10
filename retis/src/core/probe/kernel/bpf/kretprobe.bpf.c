@@ -4,7 +4,7 @@
 
 #include <common.h>
 
-#define MAX_INFLIGHT_PROBES 20
+#define MAX_INFLIGHT_PROBES 128
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_INFLIGHT_PROBES);
