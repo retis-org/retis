@@ -4,16 +4,16 @@
 /* Hook for kprobe:ovs_execute_actions. */
 DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	u32 queue_id;
-	u64 tid = bpf_get_current_pid_tgid();
 	struct execute_actions_ctx ectx = {};
 	struct execute_actions_ctx *pectx;
 	struct sk_buff *skb;
+	u64 sb = ctx->stack_base;
 
 	skb = retis_get_sk_buff(ctx);
 	if (!skb)
 		return 0;
 
-	pectx = bpf_map_lookup_elem(&inflight_exec, &tid);
+	pectx = bpf_map_lookup_elem(&inflight_exec, &sb);
 	if (!pectx)
 		pectx = &ectx;
 
@@ -35,7 +35,7 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	}
 
 	if ((pectx == &ectx) &&
-	    !bpf_map_update_elem(&inflight_exec, &tid, pectx, BPF_ANY))
+	    !bpf_map_update_elem(&inflight_exec, &sb, pectx, BPF_ANY))
 		return 0;
 
 	return 0;

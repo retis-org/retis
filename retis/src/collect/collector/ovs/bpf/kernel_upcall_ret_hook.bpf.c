@@ -9,13 +9,13 @@ struct upcall_ret_event {
 
 /* Hook for kretprobe:ovs_dp_upcall */
 DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
-	struct upcall_context *uctx;
 	struct upcall_ret_event *ret;
-	u64 tid = bpf_get_current_pid_tgid();
+	struct upcall_context *uctx;
+	u64 sb = ctx->stack_base;
 
-	uctx = bpf_map_lookup_elem(&inflight_upcalls, &tid);
+	uctx = bpf_map_lookup_elem(&inflight_upcalls, &sb);
 	if (uctx) {
-		bpf_map_delete_elem(&inflight_upcalls, &tid);
+		bpf_map_delete_elem(&inflight_upcalls, &sb);
 		ret = get_event_section(event, COLLECTOR_OVS,
 					OVS_DP_UPCALL_RETURN,
 					sizeof(*ret));

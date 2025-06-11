@@ -3,8 +3,8 @@
 
 /* Hook for kprobe:ovs_dp_process_packet. */
 DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
-	u64 tid = bpf_get_current_pid_tgid();
 	struct execute_actions_ctx ectx = {};
+	u64 sb = ctx->stack_base;
 
 	ectx.skb = retis_get_sk_buff(ctx);
 	if (!ectx.skb) {
@@ -12,7 +12,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 		return 0;
 	}
 
-	if (!bpf_map_update_elem(&inflight_exec, &tid, &ectx, BPF_ANY))
+	if (!bpf_map_update_elem(&inflight_exec, &sb, &ectx, BPF_ANY))
 		return 0;
 
 	return 0;
