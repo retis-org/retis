@@ -580,7 +580,7 @@ def test_ovs_detrace_sanity(two_port_ovs):
         assert len(e["ovs-detrace"].get("ofpflows", [])) > 0
 
 
-def test_ovs_detrace_throtle(two_port_ovs):
+def test_ovs_detrace_throttle(two_port_ovs):
     """Tests that OVS is not queried more than expected."""
     ovs, ns = two_port_ovs
 
