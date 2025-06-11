@@ -4,13 +4,13 @@
 
 /* Hook for extending the skb context in flow_tbl_lookup kretprobe */
 DEFINE_CTX_HOOK(
-	u64 tid = bpf_get_current_pid_tgid();
 	struct execute_actions_ctx *ectx;
+	u64 sb = ctx->stack_base;
 
 	if (retis_arg_valid(ctx, sk_buff))
 		return 0;
 
-	ectx = bpf_map_lookup_elem(&inflight_exec, &tid);
+	ectx = bpf_map_lookup_elem(&inflight_exec, &sb);
 	if (!ectx)
 		return 0;
 
