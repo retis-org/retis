@@ -145,6 +145,8 @@ impl RawEventSectionFactory for KernelEventFactory {
         #[cfg(not(test))]
         self.unmarshal_stackid(&mut event, raw.stack_id as i32)?;
 
+        event.stack_ref = raw.stack_ref;
+
         Ok(Box::new(event))
     }
 }
@@ -165,6 +167,7 @@ pub(crate) mod benchmark {
                 symbol: Symbol::from_name("openvswitch:ovs_do_execute_action")?.addr()?,
                 type_: 2, // Raw tracepoint.
                 stack_id: -1,
+                stack_ref: 0xf00d,
             };
             build_raw_section(out, FactoryId::Kernel as u8, 0, &mut as_u8_vec(&data));
             Ok(())

@@ -23,6 +23,7 @@ int probe_kprobe(struct pt_regs *ctx)
 	context.ksym = kprobe_get_func_ip(ctx);
 	context.probe_type = KERNEL_PROBE_KPROBE;
 	context.orig_ctx = ctx;
+	context.stack_base = get_stack_base(ctx, context.probe_type);
 	get_regs(&context.regs, ctx);
 
 	return chain(&context);

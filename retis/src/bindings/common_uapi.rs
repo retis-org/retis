@@ -21,6 +21,7 @@ pub struct retis_probe_offsets {
 #[derive(Debug, Default, Copy, Clone)]
 pub struct kernel_event {
     pub symbol: u64_,
+    pub stack_ref: u64_,
     pub stack_id: ::std::os::raw::c_long,
     pub type_: u8_,
 }

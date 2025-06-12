@@ -18,4 +18,5 @@ pub struct tracking_info {
     pub timestamp: u64_,
     pub last_seen: u64_,
     pub orig_head: u64_,
+    pub stack_ref: u64_,
 }

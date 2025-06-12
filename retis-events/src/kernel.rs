@@ -12,13 +12,14 @@ pub struct KernelEvent {
     /// Probe type: one of "kprobe", "kretprobe" or "raw_tracepoint".
     pub probe_type: String,
     pub stack_trace: Option<StackTrace>,
+    pub stack_ref: u64,
 }
 
 impl EventFmt for KernelEvent {
     fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(
             f,
-            "[{}] {}",
+            "[{}] {} ({:x})",
             match self.probe_type.as_str() {
                 "raw_tracepoint" => "tp",
                 "kprobe" => "k",
@@ -26,6 +27,7 @@ impl EventFmt for KernelEvent {
                 _ => "invalid",
             },
             self.symbol,
+            self.stack_ref,
         )?;
 
         Ok(())

@@ -28,6 +28,7 @@ pub(super) trait ProbeBuilder {
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
         ctx_hook: Option<Hook>,
+        stack_sz: u32,
     ) -> Result<()>;
     /// Attach a probe to a given target (function, tracepoint, etc).
     fn attach(&mut self, probe: &Probe) -> Result<()>;
