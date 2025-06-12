@@ -33,6 +33,7 @@ impl<'a> ProbeBuilder for UsdtBuilder<'a> {
         hooks: Vec<Hook>,
         _filters: Vec<Filter>,
         _ctx_hook: Option<Hook>,
+        _stack_sz: u32,
     ) -> Result<()> {
         self.map_fds = map_fds;
         if hooks.len() > 1 {
@@ -94,7 +95,7 @@ mod tests {
 
         // It's for now, the probes below won't do much.
         assert!(builder
-            .init(Vec::new(), Vec::new(), Vec::new(), None)
+            .init(Vec::new(), Vec::new(), Vec::new(), None, 0)
             .is_ok());
         assert!(builder
             .attach(&Probe::usdt(UsdtProbe::new(&p, "test_builder::usdt").unwrap()).unwrap())

@@ -33,6 +33,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
         ctx_hook: Option<Hook>,
+        stack_sz: u32,
     ) -> Result<()> {
         if self.skel.is_some() {
             bail!("Kprobe builder already initialized");
@@ -41,6 +42,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         let mut skel = OpenSkelStorage::new::<KprobeSkelBuilder>()?;
 
         skel.maps.rodata_data.nhooks = hooks.len() as u32;
+        skel.maps.rodata_data.THREAD_SIZE = stack_sz;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
 
         filters.iter().for_each(|f| {
@@ -119,7 +121,7 @@ mod tests {
         let mut builder = KprobeBuilder::new();
 
         assert!(builder
-            .init(Vec::new(), Vec::new(), Vec::new(), None)
+            .init(Vec::new(), Vec::new(), Vec::new(), None, 0)
             .is_ok());
         assert!(builder
             .attach(&Probe::kprobe(Symbol::from_name("kfree_skb_reason").unwrap()).unwrap())

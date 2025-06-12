@@ -159,6 +159,7 @@ impl ProbeManager {
             probes: HashMap::new(),
             global_probes_options: builder.global_probes_options.into_iter().collect(),
             filters: builder.filters,
+            stack_sz: get_thread_size()?,
         };
 
         // Install probes.
@@ -403,6 +404,7 @@ pub(crate) struct ProbeRuntimeManager {
     probes: HashMap<String, Vec<ProbeOption>>,
     global_probes_options: Vec<ProbeOption>,
     filters: Vec<Filter>,
+    stack_sz: u32,
 }
 
 impl ProbeRuntimeManager {
@@ -481,6 +483,7 @@ impl ProbeRuntimeManager {
                 },
                 self.filters.clone(),
                 None,
+                self.stack_sz,
             )?;
 
             builders.insert(p.type_key(), builder);
@@ -525,6 +528,7 @@ impl ProbeRuntimeManager {
             hooks,
             self.filters.clone(),
             probe.ctx_hook.clone(),
+            self.stack_sz,
         )?;
 
         Self::attach_probe(

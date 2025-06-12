@@ -25,6 +25,7 @@ pub(crate) struct RawTracepointBuilder<'a> {
     links: Vec<libbpf_rs::Link>,
     skel: Option<SkelStorage<RawTracepointSkel<'a>>>,
     map_fds: Vec<(String, RawFd)>,
+    stack_sz: u32,
 }
 
 impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
@@ -38,11 +39,13 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
         hooks: Vec<Hook>,
         filters: Vec<Filter>,
         ctx_hook: Option<Hook>,
+        stack_sz: u32,
     ) -> Result<()> {
         self.map_fds = map_fds;
         self.hooks = hooks;
         self.filters = filters;
         self.ctx_hook = ctx_hook;
+        self.stack_sz = stack_sz;
 
         Ok(())
     }
@@ -58,6 +61,7 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
         skel.maps.rodata_data.ksym = probe.symbol.addr()?;
         skel.maps.rodata_data.nargs = probe.symbol.nargs()?;
         skel.maps.rodata_data.nhooks = self.hooks.len() as u32;
+        skel.maps.rodata_data.THREAD_SIZE = self.stack_sz;
         skel.maps.rodata_data.log_level = log::max_level() as u8;
 
         self.filters.iter().for_each(|f| {
@@ -120,7 +124,7 @@ mod tests {
 
         // It's for now, the probes below won't do much.
         assert!(builder
-            .init(Vec::new(), Vec::new(), Vec::new(), None)
+            .init(Vec::new(), Vec::new(), Vec::new(), None, 0)
             .is_ok());
         assert!(builder
             .attach(&Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
