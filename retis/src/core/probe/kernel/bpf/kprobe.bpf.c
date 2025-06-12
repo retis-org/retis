@@ -34,6 +34,7 @@ int probe_kprobe(struct pt_regs *ctx)
 	context.timestamp = bpf_ktime_get_ns();
 	context.probe_type = KERNEL_PROBE_KPROBE;
 	context.orig_ctx = ctx;
+	context.stack_base = get_stack_base(ctx, context.probe_type);
 	kprobe_get_regs(&context.regs, ctx);
 
 	/* Check if cookies can be set and retrieved from kprobes, otherwise
@@ -91,6 +92,7 @@ int probe_kretprobe(struct pt_regs *ctx)
 	context.ksym = kprobe_ctx->ksym;
 	context.probe_type = KERNEL_PROBE_KRETPROBE;
 	context.orig_ctx = ctx;
+	context.stack_base = get_stack_base(ctx, context.probe_type);
 
 	kretprobe_get_regs(&context.regs, &kprobe_ctx->regs, ctx);
 
