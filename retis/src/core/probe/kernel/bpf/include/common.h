@@ -12,10 +12,12 @@
 #include <packet_filter.h>
 #include <meta_filter.h>
 #include <skb_tracking.h>
+#include <stack_tracking.h>
 
 /* Kernel section of the event data. */
 struct kernel_event {
 	u64 symbol;
+	u64 stack_ref;
 	long stack_id;
 	/* values from enum kernel_probe_type */
 	u8 type;
@@ -124,7 +126,7 @@ const volatile u32 nhooks = 0;
  * it. Credits to the XDP dispatcher.
  */
 #define HOOK(x)									\
-	__attribute__ ((noinline))						\
+	__noinline								\
 	int hook##x(struct retis_context *ctx, struct retis_raw_event *event) {	\
 		volatile int ret = 0;						\
 		if (!ctx || !event)						\
@@ -144,7 +146,7 @@ HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
 
-__attribute__ ((noinline))
+__noinline
 int ctx_hook(struct retis_context *ctx)
 {
 	volatile int ret = 0;
@@ -239,25 +241,22 @@ static __noinline unsigned int filter_##x(void *ctx)				\
 FILTER(l2)
 FILTER(l3)
 
-static __always_inline void filter(struct retis_context *ctx)
+static __always_inline u32 filter(struct sk_buff *skb)
 {
 	struct retis_packet_filter_ctx fctx = {};
-	struct sk_buff *skb;
+	u32 filters_ret = 0;
 	char *head;
 
-	skb = retis_get_sk_buff(ctx);
 	if (!skb)
-		return;
+		return 0;
 	/* Special case the packet filtering logic if the skb is already
 	 * tracked. This helps in may ways, including:
 	 * - Performances.
 	 * - Following packet transformations.
 	 * - Filtering packets when the whole data isn't available anymore.
 	 */
-	if (skb_is_tracked(skb)) {
-		ctx->filters_ret |= RETIS_ALL_FILTERS;
-		return;
-	}
+	if (skb_is_tracked(skb))
+		return RETIS_ALL_FILTERS;
 
 	head = (char *)BPF_CORE_READ(skb, head);
 	fctx.len = BPF_CORE_READ(skb, len);
@@ -270,23 +269,25 @@ static __always_inline void filter(struct retis_context *ctx)
 	 */
 	if (is_mac_data_valid(skb)) {
 		fctx.data = head + BPF_CORE_READ(skb, mac_header);
-		ctx->filters_ret |=
+		filters_ret |=
 			!!filter_l2(&fctx) << RETIS_F_PACKET_PASS_SH;
 		goto next_filter;
 	}
 
 	if (!is_network_data_valid(skb))
-		return;
+		goto ret;
 
 	fctx.data = head + BPF_CORE_READ(skb, network_header);
 	/* L3 filter can be a nop, meaning the criteria are not enough to
 	 * express a match in terms of L3 only.
 	 */
-	ctx->filters_ret |=
+	filters_ret |=
 		!!filter_l3(&fctx) << RETIS_F_PACKET_PASS_SH;
 
 next_filter:
-	ctx->filters_ret |= (!!meta_filter(skb)) << RETIS_F_META_PASS_SH;
+	filters_ret |= !!meta_filter(skb) << RETIS_F_META_PASS_SH;
+ret:
+	return filters_ret;
 }
 
 /* The chaining function, which contains all our core probe logic. This is
@@ -305,6 +306,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct kernel_event *k;
+	struct sk_buff *skb;
 	int ret;
 
 	/* Check if the collection is enabled, otherwise bail out. Once we have
@@ -326,7 +328,11 @@ static __always_inline int chain(struct retis_context *ctx)
 	if (ret)
 		log_warning("ctx extension failed: %d", ret);
 
-	filter(ctx);
+	skb = retis_get_sk_buff(ctx);
+	if (skb)
+		ctx->filters_ret = filter(skb);
+	else if (!stack_is_tracked(ctx->stack_base))
+		return 0;
 
 	/* Track the skb. Note that this is done *after* filtering! If no skb is
 	 * available this is a no-op.
@@ -337,11 +343,20 @@ static __always_inline int chain(struct retis_context *ctx)
 	 */
 	if (RETIS_TRACKABLE(ctx->filters_ret))
 		track_skb_start(ctx);
+	else if (skb)
+		/* Terminate any potentially existing entry not
+		 * associated with a tracked skb. Blind termination
+		 * approach is supposed to be more performing in the
+		 * worst case and will lead to a simple lookup failure
+		 * in most cases. This acts as packet path garbage
+		 * collection (e.g. skb_tracking stale entry hanging).
+		 */
+		track_stack_end(ctx->stack_base);
 
 	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
 	 * to allocate and fill an event to drop it later on.
 	 */
-	if (nhooks == 0)
+	if (nhooks == 0 && skb)
 		goto exit;
 
 	event = get_event();
@@ -375,6 +390,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	else
 		k->stack_id = -1;
 
+	k->stack_ref = ctx->stack_base;
 	pass_threshold = get_event_size(event);
 	barrier_var(pass_threshold);
 
@@ -404,7 +420,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	CALL_HOOK(8)
 	CALL_HOOK(9)
 
-	if (get_event_size(event) > pass_threshold)
+	if (get_event_size(event) > pass_threshold || !skb)
 		send_event(event);
 	else
 discard_event:

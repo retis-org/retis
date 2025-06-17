@@ -7,5 +7,6 @@ pub type u64_ = __u64;
 pub struct skb_tracking_event {
     pub orig_head: u64_,
     pub timestamp: u64_,
+    pub stack_id: u64_,
     pub skb: u64_,
 }

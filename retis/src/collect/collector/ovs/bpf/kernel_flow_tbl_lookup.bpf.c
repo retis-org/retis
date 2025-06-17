@@ -3,10 +3,10 @@
 
 /* Hook for kprobe:ovs_flow_tbl_lookup_stats */
 DEFINE_HOOK_RAW(
-	u64 tid = bpf_get_current_pid_tgid();
 	struct execute_actions_ctx *ectx;
+	u64 sb = ctx->stack_base;
 
-	ectx = bpf_map_lookup_elem(&inflight_exec, &tid);
+	ectx = bpf_map_lookup_elem(&inflight_exec, &sb);
 	if (!ectx) {
 		return 0;
 	}

@@ -4,7 +4,7 @@
 
 #include <common.h>
 
-#define MAX_INFLIGHT_PROBES 20
+#define MAX_INFLIGHT_PROBES 128
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
 	__uint(max_entries, MAX_INFLIGHT_PROBES);
@@ -43,19 +43,20 @@ int probe_kretprobe_kretprobe(struct pt_regs *ctx)
 {
 	struct retis_context context = {};
 	struct retis_context *kprobe_ctx;
-	u64 tid = bpf_get_current_pid_tgid();
+	u64 stack_base = get_stack_base(ctx, KERNEL_PROBE_KPROBE);
 
 	/* Look if the matching kprobe has left a context for us to pick up. */
-	kprobe_ctx = bpf_map_lookup_elem(&kretprobe_context, &tid);
-	if (!kprobe_ctx) {
+	kprobe_ctx = bpf_map_lookup_elem(&kretprobe_context, &stack_base);
+	if (!kprobe_ctx)
 		return 0;
-	}
-	bpf_map_delete_elem(&kretprobe_context, &tid);
+
+	bpf_map_delete_elem(&kretprobe_context, &stack_base);
 
 	context.timestamp = bpf_ktime_get_ns();
 	context.ksym = kprobe_ctx->ksym;
 	context.probe_type = KERNEL_PROBE_KRETPROBE;
 	context.orig_ctx = ctx;
+	context.stack_base = stack_base;
 
 	kretprobe_get_regs(&context.regs, &kprobe_ctx->regs, ctx);
 
@@ -66,16 +67,16 @@ SEC("kprobe/retprobe")
 int probe_kretprobe_kprobe(struct pt_regs *ctx)
 {
 	struct retis_context context = {};
-	u64 tid = bpf_get_current_pid_tgid();
+	u64 stack_base = get_stack_base(ctx, KERNEL_PROBE_KPROBE);
 
 	context.timestamp = bpf_ktime_get_ns();
 	context.ksym = kprobe_get_func_ip(ctx);
 	kprobe_get_regs(&context.regs, ctx);
 
 	/* Store the current context and let the kretprobe run the hooks. */
-	if (!bpf_map_update_elem(&kretprobe_context, &tid, &context, BPF_NOEXIST)) {
+	if (!bpf_map_update_elem(&kretprobe_context, &stack_base, &context, BPF_NOEXIST))
 		return -1;
-	}
+
 	return 0;
 }
 
