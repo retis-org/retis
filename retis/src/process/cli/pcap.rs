@@ -135,10 +135,6 @@ impl EventParser {
             .common
             .as_ref()
             .ok_or_else(|| anyhow!("No common section in event"))?;
-        let kernel = event
-            .kernel
-            .as_ref()
-            .ok_or_else(|| anyhow!("No skb section in event"))?;
 
         self.stats.processed += 1;
 
@@ -203,6 +199,8 @@ impl EventParser {
             }
         };
 
+        let format = DisplayFormat::new().multiline(true);
+
         // Add the packet itself.
         v.push(
             EnhancedPacketBlock {
@@ -214,8 +212,8 @@ impl EventParser {
                 data: Cow::Borrowed(&packet.data.0),
                 options: vec![
                     EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned(format!(
-                        "probe={}:{}",
-                        &kernel.probe_type, &kernel.symbol
+                        "{}",
+                        event.display(&format, &FormatterConf::new())
                     )))),
                     EnhancedPacketOption::Common(CommonOption::CustomUtf8Copiable(
                         CustomUtf8Option {
@@ -486,16 +484,14 @@ mod tests {
                         timestamp: Duration::from_nanos(1742339565860167909),
                         original_len: 98,
                         options: vec![
-                            EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned(
-                                "probe=kretprobe:ovs_dp_upcall".to_string(),
-                            ))),
+                            EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned("30419169125909 (6) [ping] 11330 [kr] ovs_dp_upcall #1baa83c42ba1ffff8e95c3b67c00 (skb ffff8e95d3009100)\n  192.168.125.10 > 192.168.125.11 tos 0x0 ttl 64 id 41977 off 0 [DF] len 84 proto ICMP (1) type 8 code 0\n  ns 0x1/4026531840 if 10 (veth-ns01-ovs) rxif 10\n  skb [csum none hash 0x7e2c5976 len 98 priority 0 users 1 dataref 1]\n  upcall_ret (6/30419169098548) ret 0".to_string()))),
                             EnhancedPacketOption::Common(CommonOption::CustomUtf8Copiable(
                                 CustomUtf8Option {
                                     pen: RETIS_PEN,
                                     value: Cow::Owned(String::from(
                                         r#"{"common":{"timestamp":30419169125909,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"packet":{"len":98,"capture_len":98,"data":"+ly9jswBpsIRcVlFCABFAABUo/lAAEABG0nAqH0KwKh9CwgAQFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="},"skb":{"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":1,"inum":4026531840},"dev":{"name":"veth-ns01-ovs","ifindex":10,"rx_ifindex":10},"ovs":{"event_type":"upcall_return","upcall_ts":30419169098548,"upcall_cpu":6,"ret":0}}"#,
                                     )),
-                                },
+                                }
                             )),
                         ],
                     }),
@@ -525,8 +521,7 @@ mod tests {
                         timestamp: Duration::from_nanos(1742339565860414774),
                         original_len: 98,
                         options: vec![
-                            EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned(
-                                "probe=kretprobe:ovs_dp_upcall".to_string(),
+                            EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned("30419169372774 (6) [handler8] 985/995 [kr] ovs_dp_upcall #1baa83c8a025ffff8e95c3b67c00 (skb ffff8e95d3009200)\n  192.168.125.11 > 192.168.125.10 tos 0x0 ttl 64 id 19491 off 0 len 84 proto ICMP (1) type 0 code 0\n  ns 0x1/4026531840 if 12 (veth-ns02-ovs) rxif 12\n  skb [csum none hash 0x7e2c5976 len 98 priority 0 users 1 dataref 1]\n  upcall_ret (6/30419169364667) ret 0".to_string()
                             ))),
                             EnhancedPacketOption::Common(CommonOption::CustomUtf8Copiable(
                                 CustomUtf8Option {
@@ -534,7 +529,7 @@ mod tests {
                                     value: Cow::Owned(String::from(
                                         r#"{"common":{"timestamp":30419169372774,"smp_id":6,"task":{"pid":985,"tgid":995,"comm":"handler8"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169353765,"skb":18446619372874142208},"packet":{"len":98,"capture_len":98,"data":"psIRcVlF+ly9jswBCABFAABUTCMAAEABsx/AqH0LwKh9CgAASFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="},"skb":{"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2753213483,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":1,"inum":4026531840},"dev":{"name":"veth-ns02-ovs","ifindex":12,"rx_ifindex":12},"ovs":{"event_type":"upcall_return","upcall_ts":30419169364667,"upcall_cpu":6,"ret":0}}"#,
                                     )),
-                                },
+                                }
                             )),
                         ],
                     }),
