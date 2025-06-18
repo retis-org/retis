@@ -126,10 +126,6 @@ impl EventParser {
             .common
             .as_ref()
             .ok_or_else(|| anyhow!("No common section in event"))?;
-        let kernel = event
-            .kernel
-            .as_ref()
-            .ok_or_else(|| anyhow!("No skb section in event"))?;
 
         self.stats.processed += 1;
 
@@ -193,6 +189,8 @@ impl EventParser {
             }
         };
 
+        let format = DisplayFormat::new().multiline(true);
+
         // Add the packet itself.
         v.push(
             EnhancedPacketBlock {
@@ -204,8 +202,8 @@ impl EventParser {
                 data: Cow::Borrowed(&packet.packet.0),
                 options: vec![
                     EnhancedPacketOption::Comment(Cow::Owned(format!(
-                        "probe={}:{}",
-                        &kernel.probe_type, &kernel.symbol
+                        "{}",
+                        event.display(&format, &FormatterConf::new())
                     ))),
                     EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
                         code: 2988, // Custom Option containing a UTF-8 string.
@@ -477,9 +475,7 @@ mod tests {
                         timestamp: Duration::from_nanos(1742339565860167909),
                         original_len: 98,
                         options: vec![
-                            EnhancedPacketOption::Comment(Cow::Owned(
-                                "probe=kretprobe:ovs_dp_upcall".to_string(),
-                            )),
+                            EnhancedPacketOption::Comment(Cow::Owned("30419169125909 (6) [ping] 11330 [kr] ovs_dp_upcall #1baa83c42ba1ffff8e95c3b67c00 (skb ffff8e95d3009100)\n  ns 4026531840 if 10 (veth-ns01-ovs) rxif 10 a6:c2:11:71:59:45 > fa:5c:bd:8e:cc:01 ethertype IPv4 (0x0800) 192.168.125.10 > 192.168.125.11 ttl 64 tos 0x0 id 41977 off 0 [DF] len 84 proto ICMP (1) type 8 code 0 skb [csum none hash 0x7e2c5976 len 98 priority 0 users 1 dataref 1]\n  upcall_ret (6/30419169098548) ret 0".to_string())),
                             EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
                                 code: 2988,
                                 pen: RETIS_PEN,
@@ -515,8 +511,7 @@ mod tests {
                         timestamp: Duration::from_nanos(1742339565860414774),
                         original_len: 98,
                         options: vec![
-                            EnhancedPacketOption::Comment(Cow::Owned(
-                                "probe=kretprobe:ovs_dp_upcall".to_string(),
+                            EnhancedPacketOption::Comment(Cow::Owned("30419169372774 (6) [handler8] 985/995 [kr] ovs_dp_upcall #1baa83c8a025ffff8e95c3b67c00 (skb ffff8e95d3009200)\n  ns 4026531840 if 12 (veth-ns02-ovs) rxif 12 fa:5c:bd:8e:cc:01 > a6:c2:11:71:59:45 ethertype IPv4 (0x0800) 192.168.125.11 > 192.168.125.10 ttl 64 tos 0x0 id 19491 off 0 len 84 proto ICMP (1) type 0 code 0 skb [csum none hash 0x7e2c5976 len 98 priority 0 users 1 dataref 1]\n  upcall_ret (6/30419169364667) ret 0".to_string()
                             )),
                             EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
                                 code: 2988,
