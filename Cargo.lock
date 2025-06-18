@@ -961,12 +961,12 @@ dependencies = [
 
 [[package]]
 name = "pcap-file"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fc1f139757b058f9f37b76c48501799d12c9aa0aa4c0d4c980b062ee925d1b2"
+version = "3.0.0-rc1"
+source = "git+https://github.com/amorenoz/pcap-file.git?branch=custom-blocks#e6ed2f6e555452a1c78790fd28d4135f8fbfb399"
 dependencies = [
  "byteorder_slice",
  "derive-into-owned",
+ "once_cell",
  "thiserror 1.0.69",
 ]
 

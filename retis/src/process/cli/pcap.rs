@@ -2,24 +2,28 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fs::{File, OpenOptions},
+    io::Write,
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use anyhow::{anyhow, bail, Result};
 use clap::{arg, Args, Parser};
-use log::{info, warn};
+use log::warn;
 use pcap_file::{
     pcapng::{
         blocks::{
+            custom::CustomCopiable,
             enhanced_packet::{EnhancedPacketBlock, EnhancedPacketOption},
             interface_description::{InterfaceDescriptionBlock, InterfaceDescriptionOption},
+            opt_common::CustomUtf8Option,
             Block,
         },
         PcapNgBlock, PcapNgWriter,
     },
-    DataLink,
+    DataLink, PcapError,
 };
+use schemars::{schema_for, Schema};
 
 use crate::{
     cli::*,
@@ -53,6 +57,8 @@ struct EventParser {
     stats: EventParserStats,
     /// Time offset
     ts_off: Option<TimeSpec>,
+    /// Whether the header was written
+    wrote_header: bool,
 }
 
 // Unwrap a Some(_) value or return from the function.
@@ -68,6 +74,39 @@ macro_rules! some_or_return {
     };
 }
 
+// TODO: Register with IANA?
+const RETIS_PEN: u32 = 70000;
+
+/// Custom block containing the JSON-Schema of events.
+struct SchemaBlock {
+    schema: Schema,
+}
+
+impl SchemaBlock {
+    fn new() -> Result<Self> {
+        Ok(SchemaBlock {
+            schema: schema_for!(Event),
+        })
+    }
+}
+
+impl CustomCopiable<'_> for SchemaBlock {
+    const PEN: u32 = RETIS_PEN;
+
+    fn write_to<W: Write>(&self, writer: &mut W) -> Result<(), PcapError> {
+        let bytes = serde_json::to_vec(&self.schema)
+            .map_err(|_| PcapError::InvalidField("Invalid schema block"))?;
+        writer.write_all(&bytes[..])?;
+        Ok(())
+    }
+
+    fn from_slice(slice: &[u8]) -> Result<Option<Self>, PcapError> {
+        let schema: Schema = serde_json::from_slice(slice)
+            .map_err(|_| PcapError::InvalidField("Invalid schema block"))?;
+        Ok(Some(SchemaBlock { schema }))
+    }
+}
+
 impl EventParser {
     /// Creates a new EventParser from a PcapNgWriter<W: Write>.
     fn new() -> Self {
@@ -75,6 +114,7 @@ impl EventParser {
             ifaces: HashMap::new(),
             stats: EventParserStats::default(),
             ts_off: None,
+            wrote_header: false,
         }
     }
 
@@ -116,8 +156,13 @@ impl EventParser {
             }
         };
 
-        // If we see this iface for the first time, add a description block.
         let mut v = Vec::new();
+        if !self.wrote_header {
+            v.push(SchemaBlock::new()?.into_custom_block()?.into_block());
+            self.wrote_header = true;
+        }
+
+        // If we see this iface for the first time, add a description block.
         let key: u64 = ((netns as u64) << 32) | ifindex as u64;
         let id = match self.ifaces.contains_key(&key) {
             // Unwrap if contains is true.
@@ -157,10 +202,17 @@ impl EventParser {
                 ) as u64),
                 original_len: packet.len,
                 data: Cow::Borrowed(&packet.packet.0),
-                options: vec![EnhancedPacketOption::Comment(Cow::Owned(format!(
-                    "probe={}:{}",
-                    &kernel.probe_type, &kernel.symbol
-                )))],
+                options: vec![
+                    EnhancedPacketOption::Comment(Cow::Owned(format!(
+                        "probe={}:{}",
+                        &kernel.probe_type, &kernel.symbol
+                    ))),
+                    EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
+                        code: 2988, // Custom Option containing a UTF-8 string.
+                        pen: RETIS_PEN,
+                        value: Cow::Owned(serde_json::to_string(&event)?),
+                    }),
+                ],
             }
             .into_owned()
             .into_block(),
@@ -172,8 +224,6 @@ impl EventParser {
     /// Report parser statistics. Should be called after processing was
     /// completed.
     fn report_stats(&self) {
-        info!("{} event(s) were processed", self.stats.processed);
-
         if self.stats.missing_skb != 0 {
             warn!(
                 "{} event(s) were skipped because of missing skb information",
@@ -396,6 +446,11 @@ mod tests {
                 "ovs_dp_upcall",
                 Ok(()),
                 vec![
+                    SchemaBlock::new()
+                        .expect("Failed to create SchemaBlock")
+                        .into_custom_block()
+                        .expect("Failed to convert SchemaBlock into block")
+                        .into_block(),
                     Block::InterfaceDescription(InterfaceDescriptionBlock {
                         linktype: DataLink::ETHERNET,
                         snaplen: 65535,
@@ -421,9 +476,18 @@ mod tests {
                         interface_id: 0,
                         timestamp: Duration::from_nanos(1742339565860167909),
                         original_len: 98,
-                        options: vec![EnhancedPacketOption::Comment(Cow::Owned(
-                            "probe=kretprobe:ovs_dp_upcall".to_string(),
-                        ))],
+                        options: vec![
+                            EnhancedPacketOption::Comment(Cow::Owned(
+                                "probe=kretprobe:ovs_dp_upcall".to_string(),
+                            )),
+                            EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
+                                code: 2988,
+                                pen: RETIS_PEN,
+                                value: Cow::Owned(String::from(
+                                    r#"{"common":{"timestamp":30419169125909,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"skb":{"eth":{"etype":2048,"src":"a6:c2:11:71:59:45","dst":"fa:5c:bd:8e:cc:01"},"ip":{"saddr":"192.168.125.10","daddr":"192.168.125.11","v4":{"tos":0,"id":41977,"flags":2,"offset":0},"protocol":1,"len":84,"ttl":64,"ecn":0},"icmp":{"type":8,"code":0},"dev":{"name":"veth-ns01-ovs","ifindex":10,"rx_ifindex":10},"ns":{"netns":4026531840},"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1},"packet":{"len":98,"capture_len":98,"packet":"+ly9jswBpsIRcVlFCABFAABUo/lAAEABG0nAqH0KwKh9CwgAQFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="}},"ovs":{"event_type":"upcall_return","upcall_ts":30419169098548,"upcall_cpu":6,"ret":0}}"#,
+                                )),
+                            }),
+                        ],
                     }),
                     Block::InterfaceDescription(InterfaceDescriptionBlock {
                         linktype: DataLink::ETHERNET,
@@ -450,9 +514,18 @@ mod tests {
                         interface_id: 1,
                         timestamp: Duration::from_nanos(1742339565860414774),
                         original_len: 98,
-                        options: vec![EnhancedPacketOption::Comment(Cow::Owned(
-                            "probe=kretprobe:ovs_dp_upcall".to_string(),
-                        ))],
+                        options: vec![
+                            EnhancedPacketOption::Comment(Cow::Owned(
+                                "probe=kretprobe:ovs_dp_upcall".to_string(),
+                            )),
+                            EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
+                                code: 2988,
+                                pen: RETIS_PEN,
+                                value: Cow::Owned(String::from(
+                                    r#"{"common":{"timestamp":30419169372774,"smp_id":6,"task":{"pid":985,"tgid":995,"comm":"handler8"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169353765,"skb":18446619372874142208},"skb":{"eth":{"etype":2048,"src":"fa:5c:bd:8e:cc:01","dst":"a6:c2:11:71:59:45"},"ip":{"saddr":"192.168.125.11","daddr":"192.168.125.10","v4":{"tos":0,"id":19491,"flags":0,"offset":0},"protocol":1,"len":84,"ttl":64,"ecn":0},"icmp":{"type":0,"code":0},"dev":{"name":"veth-ns02-ovs","ifindex":12,"rx_ifindex":12},"ns":{"netns":4026531840},"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2753213483,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1},"packet":{"len":98,"capture_len":98,"packet":"psIRcVlF+ly9jswBCABFAABUTCMAAEABsx/AqH0LwKh9CgAASFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="}},"ovs":{"event_type":"upcall_return","upcall_ts":30419169364667,"upcall_cpu":6,"ret":0}}"#,
+                                )),
+                            }),
+                        ],
                     }),
                 ],
             ),
