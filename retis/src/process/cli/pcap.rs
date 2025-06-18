@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
-use clap::{arg, Args, Parser};
+use clap::{arg, Parser};
 use log::warn;
 use pcap_file::{
     pcapng::{
@@ -253,8 +253,6 @@ impl EventParser {
 #[derive(Parser, Debug, Default)]
 #[command(name = "pcap")]
 pub(crate) struct Pcap {
-    #[command(flatten)]
-    cmd: PcapCmd,
     #[arg(
         short,
         long,
@@ -264,15 +262,12 @@ pub(crate) struct Pcap {
     pub(super) out: Option<PathBuf>,
     #[arg(default_value = "retis.data", help = "File from which to read events")]
     pub(super) input: PathBuf,
-}
-#[derive(Args, Debug, Default)]
-#[group(required = true, multiple = false)]
-pub(crate) struct PcapCmd {
     #[arg(short, long, help = "List probes that are available in the input file")]
     pub(super) list_probes: bool,
     #[arg(
         short,
         long,
+        conflicts_with = "list_probes",
         help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern.
 See `retis collect --help` for more details on the probe format"
     )]
@@ -281,23 +276,26 @@ See `retis collect --help` for more details on the probe format"
 
 impl SubCommandParserRunner for Pcap {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
-        if self.cmd.list_probes {
+        if self.list_probes {
             let probes = list_probes(self.input.as_path())?;
             probes.iter().for_each(|p| println!("{p}"));
             return Ok(());
         }
         // The following unwrap() will never fail as Clap makes sure that either
         // list_probes is true, or probe is Some().
-        let probe = self.cmd.probe.as_ref().unwrap();
-        let (probe_type, target, _) = parse_cli_probe(probe)?;
-        let symbol = Symbol::from_name_no_inspect(target);
+        let filter: &dyn Fn(&str, &str) -> bool = if let Some(probe) = self.probe.as_ref() {
+            let (probe_type, target, _) = parse_cli_probe(probe)?;
+            let symbol = Symbol::from_name_no_inspect(target);
 
-        // Filtering logic.
-        let filter = |r#type: &str, name: &str| -> bool {
-            if name == symbol.name() && r#type == probe_type.to_str() {
-                return true;
+            // Filtering logic.
+            &move |r#type: &str, name: &str| -> bool {
+                if name == symbol.name() && r#type == probe_type.to_str() {
+                    return true;
+                }
+                false
             }
-            false
+        } else {
+            &|_t: &str, _n: &str| -> bool { true }
         };
 
         let mut writer: Option<PcapNgWriter<File>> = None;
