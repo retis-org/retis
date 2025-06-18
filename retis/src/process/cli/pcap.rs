@@ -42,17 +42,13 @@ struct EventParserStats {
     missing_skb: u32,
     /// Events w/o a packet section (skipped).
     missing_packet: u32,
-    /// Events w/o a dev section (fake one was used instead).
-    missing_dev: u32,
-    /// Events w/o a netns section (fake one was used instead).
-    missing_ns: u32,
 }
 
 /// Events parser: handles the logic to convert our events to the PCAP format
 /// that is represented by the internal writer.
 struct EventParser {
-    /// Known network interfaces and their PCAP id: netns|ifindex -> pcap id.
-    ifaces: HashMap<u64, u32>,
+    /// Fake network interfaces and their PCAP ids.
+    ifaces: HashMap<String, u32>,
     /// Statistics.
     stats: EventParserStats,
     /// Time offset
@@ -135,21 +131,13 @@ impl EventParser {
         let skb = some_or_return!(&event.skb, self.stats.missing_skb);
         let packet = some_or_return!(skb.packet.as_ref(), self.stats.missing_packet);
 
-        // The dev & ns sections are best to have but not mandatory to generate
-        // an event. If not found, fake them.
-        let (ifindex, ifname) = match skb.dev.as_ref() {
-            Some(dev) => (dev.ifindex, dev.name.as_str()),
-            None => {
-                self.stats.missing_dev += 1;
-                (0, "?")
-            }
-        };
-        let netns = match skb.ns.as_ref() {
-            Some(ns) => ns.netns,
-            None => {
-                self.stats.missing_ns += 1;
-                0
-            }
+        // Use a fake ifname based on probe.
+        let ifname = if let Some(kernel) = &event.kernel {
+            format!("{}/{}", kernel.probe_type, kernel.symbol)
+        } else if let Some(user) = &event.userspace {
+            format!("{}/{}", user.probe_type, user.symbol)
+        } else {
+            bail!("no kernel or userspace sections");
         };
 
         let mut v = Vec::new();
@@ -159,24 +147,19 @@ impl EventParser {
         }
 
         // If we see this iface for the first time, add a description block.
-        let key: u64 = ((netns as u64) << 32) | ifindex as u64;
-        let id = match self.ifaces.contains_key(&key) {
+        let id = match self.ifaces.contains_key(&ifname) {
             // Unwrap if contains is true.
-            true => *self.ifaces.get(&key).unwrap(),
+            true => *self.ifaces.get(&ifname).unwrap(),
             false => {
                 v.push(
                     InterfaceDescriptionBlock {
                         linktype: DataLink::ETHERNET,
                         snaplen: 0xffff,
                         options: vec![
-                            InterfaceDescriptionOption::IfName(Cow::Owned(format!(
-                                "{} ({})",
-                                ifname, netns
-                            ))),
-                            InterfaceDescriptionOption::IfDescription(Cow::Owned(match ifindex {
-                                0 => "Fake interface".to_string(),
-                                _ => format!("ifindex={}", ifindex),
-                            })),
+                            InterfaceDescriptionOption::IfName(Cow::Owned(ifname.clone())),
+                            InterfaceDescriptionOption::IfDescription(Cow::Owned(
+                                "Fake interface based on retis probe".to_string(),
+                            )),
                             InterfaceDescriptionOption::IfTsResol(9),
                         ],
                     }
@@ -184,7 +167,7 @@ impl EventParser {
                 );
 
                 let id = self.ifaces.len() as u32;
-                self.ifaces.insert(key, id);
+                self.ifaces.insert(ifname, id);
                 id
             }
         };
@@ -232,18 +215,6 @@ impl EventParser {
             warn!(
                 "{} event(s) were skipped because of missing raw packet",
                 self.stats.missing_packet
-            );
-        }
-        if self.stats.missing_dev != 0 {
-            warn!(
-                "{} event(s) are using a fake net device (no device information was found)",
-                self.stats.missing_dev
-            );
-        }
-        if self.stats.missing_ns != 0 {
-            warn!(
-                "{} event(s) are using a fake netns (no netns information was found)",
-                self.stats.missing_ns
             );
         }
     }
