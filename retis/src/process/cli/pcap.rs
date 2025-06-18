@@ -51,14 +51,17 @@ struct EventParserStats {
 /// Events parser: handles the logic to convert our events to the PCAP format
 /// that is represented by the internal writer.
 struct EventParser {
-    /// Known network interfaces and their PCAP id: netns|ifindex -> pcap id.
-    ifaces: HashMap<u64, u32>,
+    /// Known network interfaces and their PCAP ids: key -> pcap id.
+    /// "key" depends on whether probe_as_iface is set.
+    ifaces: HashMap<String, u32>,
     /// Statistics.
     stats: EventParserStats,
     /// Time offset
     ts_off: Option<TimeSpec>,
     /// Whether the header was written
     wrote_header: bool,
+    /// Whether to use probes as fake interfaces
+    probe_as_iface: bool,
 }
 
 // Unwrap a Some(_) value or return from the function.
@@ -118,13 +121,86 @@ enum SchemaBlockError {
 
 impl EventParser {
     /// Creates a new EventParser from a PcapNgWriter<W: Write>.
-    fn new() -> Self {
+    fn new(probe_as_iface: bool) -> Self {
         Self {
             ifaces: HashMap::new(),
             stats: EventParserStats::default(),
             ts_off: None,
             wrote_header: false,
+            probe_as_iface,
         }
+    }
+
+    /// Extract interface information from the event based on configuration,
+    /// adding any necessary block and updating internal cache accordingly.
+    fn process_interface(&mut self, event: &Event, blocks: &mut Vec<Block<'_>>) -> Result<u32> {
+        let iface: String;
+        let key: String;
+        let desc: String;
+
+        if self.probe_as_iface {
+            iface = if let Some(kernel) = &event.kernel {
+                format!("{}/{}", kernel.probe_type, kernel.symbol)
+            } else if let Some(user) = &event.userspace {
+                format!("{}/{}", user.probe_type, user.symbol)
+            } else {
+                bail!("no kernel or userspace sections");
+            };
+            key = iface.clone();
+            desc = format!("Fake interface for probe {}", iface);
+        } else {
+            let (ifindex, ifname) = match &event.dev {
+                Some(dev) => {
+                    desc = format!("ifindex={}", dev.ifindex);
+                    (dev.ifindex, dev.name.as_str())
+                }
+                None => {
+                    desc = "Fake Interface".to_string();
+                    self.stats.missing_dev += 1;
+                    (0, "?")
+                }
+            };
+            match &event.netns {
+                Some(ns) => {
+                    if let Some(cookie) = ns.cookie {
+                        iface = format!("{ifname} ns {:#x}/{}", cookie, ns.inum);
+                    } else {
+                        iface = format!("{ifname} ns {}", ns.inum);
+                    }
+                    key = format!("{}/{ifindex}", ns.inum);
+                }
+                None => {
+                    iface = ifname.to_string();
+                    key = format!("0/{ifindex}");
+                    self.stats.missing_ns += 1;
+                }
+            }
+        }
+
+        // If we see this iface for the first time, add a description block.
+        let id = match self.ifaces.contains_key(&key) {
+            // Unwrap if contains is true.
+            true => *self.ifaces.get(&key).unwrap(),
+            false => {
+                blocks.push(
+                    InterfaceDescriptionBlock {
+                        linktype: DataLink::ETHERNET,
+                        snaplen: 0xffff,
+                        options: vec![
+                            InterfaceDescriptionOption::IfName(iface.into()),
+                            InterfaceDescriptionOption::IfDescription(desc.into()),
+                            InterfaceDescriptionOption::IfTsResol(9),
+                        ],
+                    }
+                    .into_block(),
+                );
+
+                let id = self.ifaces.len() as u32;
+                self.ifaces.insert(key, id);
+                id
+            }
+        };
+        Ok(id)
     }
 
     /// Parse & process a single Retis event.
@@ -143,61 +219,15 @@ impl EventParser {
         // inform the user.
         let packet = some_or_return!(&event.packet, self.stats.missing_packet);
 
-        // The dev & ns sections are best to have but not mandatory to generate
-        // an event. If not found, fake them.
-        let (ifindex, ifname) = match &event.dev {
-            Some(dev) => (dev.ifindex, dev.name.as_str()),
-            None => {
-                self.stats.missing_dev += 1;
-                (0, "?")
-            }
-        };
-        let (netns_cookie, netns_inum) = match &event.netns {
-            Some(ns) => (ns.cookie, ns.inum),
-            None => {
-                self.stats.missing_ns += 1;
-                (None, 0)
-            }
-        };
+        let mut v = Vec::new();
 
         // If we see this iface for the first time, add a description block.
-        let mut v = Vec::new();
         if !self.wrote_header {
             v.push(SchemaBlock::new()?.into_custom_block()?.into_block());
             self.wrote_header = true;
         }
-        let key: u64 = ((netns_inum as u64) << 32) | ifindex as u64;
-        let id = match self.ifaces.contains_key(&key) {
-            // Unwrap if contains is true.
-            true => *self.ifaces.get(&key).unwrap(),
-            false => {
-                v.push(
-                    InterfaceDescriptionBlock {
-                        linktype: DataLink::ETHERNET,
-                        snaplen: 0xffff,
-                        options: vec![
-                            InterfaceDescriptionOption::IfName(Cow::Owned(
-                                if let Some(cookie) = netns_cookie {
-                                    format!("{ifname} ns {cookie:#x}/{netns_inum}")
-                                } else {
-                                    format!("{ifname} ns {netns_inum}")
-                                },
-                            )),
-                            InterfaceDescriptionOption::IfDescription(Cow::Owned(match ifindex {
-                                0 => "Fake interface".to_string(),
-                                _ => format!("ifindex={ifindex}"),
-                            })),
-                            InterfaceDescriptionOption::IfTsResol(9),
-                        ],
-                    }
-                    .into_block(),
-                );
 
-                let id = self.ifaces.len() as u32;
-                self.ifaces.insert(key, id);
-                id
-            }
-        };
+        let id = self.process_interface(event, &mut v)?;
 
         let format = DisplayFormat::new().multiline(true);
 
@@ -330,7 +360,7 @@ impl SubCommandParserRunner for Pcap {
         handle_events(
             self.input.as_path(),
             &filter,
-            &mut EventParser::new(),
+            &mut EventParser::new(self.probe.is_none()),
             write_block,
         )?;
         Ok(())
@@ -530,12 +560,96 @@ mod tests {
                     }),
                 ],
             ),
+            // Valid data with no probe filter
+            (
+                "test_data/test_events_packets.json",
+                "",
+                "",
+                Ok(()),
+                vec![
+                    SchemaBlock::new()
+                        .expect("Failed to create SchemaBlock")
+                        .into_custom_block()
+                        .expect("Failed to convert SchemaBlock into block")
+                        .into_block(),
+                    Block::InterfaceDescription(InterfaceDescriptionBlock {
+                        linktype: DataLink::ETHERNET,
+                        snaplen: 65535,
+                        options: vec![
+                            InterfaceDescriptionOption::IfName(Cow::Owned(
+                                "raw_tracepoint/net:net_dev_start_xmit".to_string(),
+                            )),
+                            InterfaceDescriptionOption::IfDescription(Cow::Owned(
+                                "Fake interface for probe raw_tracepoint/net:net_dev_start_xmit".to_string(),
+                            )),
+                            InterfaceDescriptionOption::IfTsResol(9),
+                        ],
+                    }),
+                    Block::EnhancedPacket(EnhancedPacketBlock {
+                        data: Cow::Borrowed(&[
+                            250, 92, 189, 142, 204, 1, 166, 194, 17, 113, 89, 69, 8, 0, 69, 0, 0,
+                            84, 163, 249, 64, 0, 64, 1, 27, 73, 192, 168, 125, 10, 192, 168, 125,
+                            11, 8, 0, 64, 90, 113, 76, 0, 1, 237, 253, 217, 103, 0, 0, 0, 0, 179,
+                            31, 13, 0, 0, 0, 0, 0, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+                            28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
+                            46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+                        ]),
+                        interface_id: 0,
+                        timestamp: Duration::from_nanos(1742339565860103793),
+                        original_len: 98,
+                        options: vec![
+                            EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned("30419169061793 (6) [ping] 11330 [tp] net:net_dev_start_xmit #1baa83c42ba1ffff8e95c3b67c00 (skb ffff8e95d3009100)\n  192.168.125.10 > 192.168.125.11 tos 0x0 ttl 64 id 41977 off 0 [DF] len 84 proto ICMP (1) type 8 code 0\n  ns 0x3/4026532741 if 11 (veth-ns01)\n  skb [csum none len 98 priority 0 users 1 dataref 1]\n  ct_state NEW status 0x8 icmp orig [192.168.125.10 > 192.168.125.11 type 8 code 0 id 29004] reply [192.168.125.11 > 192.168.125.10 type 0 code 0 id 29004] zone 0 mark 0".to_string()))),
+                            EnhancedPacketOption::Common(CommonOption::CustomUtf8Copiable(CustomUtf8Option {
+                                pen: RETIS_PEN,
+                                value: Cow::Owned(String::from(
+                            r#"{"common":{"timestamp":30419169061793,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"net:net_dev_start_xmit","probe_type":"raw_tracepoint"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"packet":{"len":98,"capture_len":98,"data":"+ly9jswBpsIRcVlFCABFAABUo/lAAEABG0nAqH0KwKh9CwgAQFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="},"skb":{"meta":{"len":98,"data_len":0,"hash":0,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":3,"inum":4026532741},"dev":{"name":"veth-ns01","ifindex":11},"ct":{"state":"new","zone_id":0,"zone_dir":"Default","orig":{"ip":{"src":"192.168.125.10","dst":"192.168.125.11","version":"v4"},"proto":{"icmp":{"code":0,"type":8,"id":29004}}},"reply":{"ip":{"src":"192.168.125.11","dst":"192.168.125.10","version":"v4"},"proto":{"icmp":{"code":0,"type":0,"id":29004}}},"mark":0,"ct_status":8}}"#)),
+                            })),
+                        ],
+                    }),
+                    Block::InterfaceDescription(InterfaceDescriptionBlock {
+                        linktype: DataLink::ETHERNET,
+                        snaplen: 65535,
+                        options: vec![
+                            InterfaceDescriptionOption::IfName(Cow::Owned(
+                                "raw_tracepoint/net:netif_receive_skb".to_string(),
+                            )),
+                            InterfaceDescriptionOption::IfDescription(Cow::Owned(
+                                "Fake interface for probe raw_tracepoint/net:netif_receive_skb".to_string(),
+                            )),
+                            InterfaceDescriptionOption::IfTsResol(9),
+                        ],
+                    }),
+                    Block::EnhancedPacket(EnhancedPacketBlock {
+                        data: Cow::Borrowed(&[
+                            250, 92, 189, 142, 204, 1, 166, 194, 17, 113, 89, 69, 8, 0, 69, 0, 0,
+                            84, 163, 249, 64, 0, 64, 1, 27, 73, 192, 168, 125, 10, 192, 168, 125,
+                            11, 8, 0, 64, 90, 113, 76, 0, 1, 237, 253, 217, 103, 0, 0, 0, 0, 179,
+                            31, 13, 0, 0, 0, 0, 0, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
+                            28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
+                            46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+                        ]),
+                        interface_id: 1,
+                        timestamp: Duration::from_nanos(1742339565860124348),
+                        original_len: 98,
+                        options: vec![
+                            EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned("30419169082348 (6) [ping] 11330 [tp] net:netif_receive_skb #1baa83c42ba1ffff8e95c3b67c00 (skb ffff8e95d3009100)\n  192.168.125.10 > 192.168.125.11 tos 0x0 ttl 64 id 41977 off 0 [DF] len 84 proto ICMP (1) type 8 code 0\n  ns 0x1/4026531840 if 10 (veth-ns01-ovs)\n  skb [csum none len 84 priority 0 users 1 dataref 1]".to_string()
+                            ))),
+                            EnhancedPacketOption::Common(CommonOption::CustomUtf8Copiable(CustomUtf8Option {
+                                pen: RETIS_PEN,
+                                value: Cow::Owned(String::from(
+                                    r#"{"common":{"timestamp":30419169082348,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"net:netif_receive_skb","probe_type":"raw_tracepoint"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"packet":{"len":98,"capture_len":98,"data":"+ly9jswBpsIRcVlFCABFAABUo/lAAEABG0nAqH0KwKh9CwgAQFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="},"skb":{"meta":{"len":84,"data_len":0,"hash":0,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":1,"inum":4026531840},"dev":{"name":"veth-ns01-ovs","ifindex":10}}"#
+                                )),
+                            })),
+                        ],
+                    }),
+                ],
+            ),
             // No packet data provided.
             (
                 "test_data/test_events_bench.json",
                 "",
                 "",
-                Err(anyhow!("Probe not found in the events")),
+                Ok(()),
                 Vec::<Block>::new(),
             ),
             // Completely missing probe section.
@@ -563,7 +677,9 @@ mod tests {
         {
             // Filtering logic.
             let filter = |r#type: &str, name: &str| -> bool {
-                if name == filter_symbol && r#type == filter_probe_type {
+                if filter_symbol.is_empty()
+                    || (name == filter_symbol && r#type == filter_probe_type)
+                {
                     return true;
                 }
                 false
@@ -577,12 +693,15 @@ mod tests {
             match handle_events(
                 Path::new(file_path),
                 &filter,
-                &mut EventParser::new(),
+                &mut EventParser::new(filter_symbol.is_empty()),
                 write_blocks,
             ) {
                 Ok(v) => match expected_res {
                     Ok(expected_v) => {
                         assert_eq!(v, expected_v);
+                        if filter_symbol.is_empty() {
+                            blocks = blocks[0..expected_blocks.len()].into()
+                        }
                         assert_eq!(blocks, expected_blocks);
                     }
                     Err(expected_e) => {
