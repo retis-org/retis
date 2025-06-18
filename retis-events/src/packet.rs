@@ -16,12 +16,12 @@ use {
 
 use super::*;
 
-/// Raw packet and related metadata.
+/// Packet section. Contains the raw packet and related metadata.
 #[event_section(SectionId::Packet)]
 pub struct PacketEvent {
-    /// Length of the packet.
+    /// Packet length.
     pub len: u32,
-    /// Lenght of the capture. <= len.
+    /// Capture length. <= len.
     pub capture_len: u32,
     /// Raw packet data.
     pub data: RawPacket,

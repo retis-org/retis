@@ -3,14 +3,15 @@ use std::fmt;
 use super::*;
 use crate::{event_section, event_type, Formatter};
 
+/// Kernel section.
 #[event_section(SectionId::Kernel)]
 #[derive(Default)]
 pub struct KernelEvent {
-    /// Kernel symbol name associated with the event (i.e. which probe generated
-    /// the event).
+    /// Symbol name. I.e: which probe generated the event.
     pub symbol: String,
-    /// Probe type: one of "kprobe", "kretprobe" or "raw_tracepoint".
+    /// Probe type. One of "kprobe", "kretprobe" or "raw_tracepoint".
     pub probe_type: String,
+    /// Stack trace.
     pub stack_trace: Option<StackTrace>,
 }
 

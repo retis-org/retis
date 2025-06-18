@@ -3,20 +3,20 @@ use std::fmt;
 use super::*;
 use crate::{event_section, Formatter};
 
+/// Userspace section
 #[event_section]
 pub struct UserEvent {
-    /// Probe type: for now only "usdt" is supported.
+    /// Probe type. For now only "usdt" is supported.
     pub probe_type: String,
-    /// Symbol name associated with the event (i.e. which probe generated the
-    /// event).
+    /// Symbol name. I.e. which probe generated the event.
     pub symbol: String,
-    /// Instruction pointer: address of the symbol associted with the event.
+    /// Instruction pointer. Address of the symbol associted with the event.
     pub ip: u64,
-    /// Path of the binary associated with the event.
+    /// Binary path.
     pub path: String,
-    /// Process id.
+    /// Process ID.
     pub pid: i32,
-    /// Thread id.
+    /// Thread ID.
     pub tid: i32,
 }
 

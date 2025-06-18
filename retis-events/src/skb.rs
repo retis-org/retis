@@ -5,17 +5,17 @@ use retis_pnet::ethernet::EtherType;
 use super::*;
 use crate::{event_section, event_type, Formatter};
 
-/// Skb event section.
+/// Skb section.
 #[event_section]
 #[derive(Default)]
 pub struct SkbEvent {
-    /// VLAN acceleration tag fields, if any.
+    /// VLAN acceleration.
     pub vlan_accel: Option<SkbVlanAccelEvent>,
-    /// Skb metadata, if any.
+    /// Metadata.
     pub meta: Option<SkbMetaEvent>,
-    /// Skb data-related and refcnt information, if any.
+    /// Data and refcnt information.
     pub data_ref: Option<SkbDataRefEvent>,
-    /// GSO information.
+    /// GSO.
     pub gso: Option<SkbGsoEvent>,
 }
 
@@ -132,14 +132,14 @@ pub struct SkbEthEvent {
     pub dst: String,
 }
 
-/// VLAN acceleration fields.
+/// VLAN acceleration.
 #[event_type]
 pub struct SkbVlanAccelEvent {
     /// Tag protocol identifier.
     pub proto: u16,
-    /// Priority Code Point, also called CoS.
+    /// Priority Code Point. Also called CoS.
     pub pcp: u8,
-    /// Drop eligible indicator.
+    /// Drop Eligible Indicator (DEI).
     pub dei: bool,
     /// VLAN ID.
     pub vid: u16,
@@ -230,8 +230,11 @@ pub struct SkbTcpEvent {
     pub sport: u16,
     /// Destination port.
     pub dport: u16,
+    /// Sequence number.
     pub seq: u32,
+    /// Acknowledgment number.
     pub ack_seq: u32,
+    /// Window size.
     pub window: u16,
     /// Data offset.
     pub doff: u8,
@@ -246,52 +249,58 @@ pub struct SkbUdpEvent {
     pub sport: u16,
     /// Destination port.
     pub dport: u16,
-    /// Length from the UDP header.
+    /// Length. From the UDP header.
     pub len: u16,
 }
 
 /// ICMP fields.
 #[event_type]
 pub struct SkbIcmpEvent {
+    /// Type.
     pub r#type: u8,
+    /// Code.
     pub code: u8,
 }
 
 /// ICMPv6 fields.
 #[event_type]
 pub struct SkbIcmpV6Event {
+    /// Type.
     pub r#type: u8,
+    /// Code.
     pub code: u8,
 }
 
 /// Skb metadata & releated fields.
 #[event_type]
 pub struct SkbMetaEvent {
-    /// Total number of bytes in the packet.
+    /// Total packet length.
     pub len: u32,
-    /// Total number of bytes in the page buffer area.
+    /// Total length in the page buffer area.
     pub data_len: u32,
-    /// Packet hash (!= hash of the packet data).
+    /// Packet hash.
     pub hash: u32,
     /// Checksum status.
     pub ip_summed: u8,
-    /// Packet checksum (ip_summed == CHECKSUM_COMPLETE) or checksum
+    /// Packet checksum.
+    /// (ip_summed == CHECKSUM_COMPLETE) or checksum
     /// (start << 16)|offset (ip_summed == CHECKSUM_PARTIAL).
     pub csum: u32,
-    /// Checksum level (ip_summed == CHECKSUM_PARTIAL)
+    /// Checksum level.
+    /// (ip_summed == CHECKSUM_PARTIAL)
     pub csum_level: u8,
     /// QoS priority.
     pub priority: u32,
 }
 
-/// Skb data & refcnt fields.
+/// Skb data & refcnt.
 #[event_type]
 pub struct SkbDataRefEvent {
     /// Payload reference only.
     pub nohdr: bool,
-    /// Is the skb a clone?
+    /// Is skb a clone?
     pub cloned: bool,
-    /// Skb fast clone information.
+    /// Skb fast clone.
     pub fclone: u8,
     /// Users count.
     pub users: u8,
@@ -302,14 +311,14 @@ pub struct SkbDataRefEvent {
 /// GSO information.
 #[event_type]
 pub struct SkbGsoEvent {
-    /// GSO flags, see `SKBFL_*` in include/linux/skbuff.h
+    /// GSO flags. See `SKBFL_*` in include/linux/skbuff.h
     pub flags: u8,
-    /// Number of fragments in `skb_shared_info->frags`.
+    /// Number of fragments. Value of `skb_shared_info->frags`.
     pub frags: u8,
     /// GSO size.
     pub size: u32,
     /// Number of GSO segments.
     pub segs: u32,
-    /// GSO type, see `SKB_GSO_*` in include/linux/skbuff.h
+    /// GSO type. See `SKB_GSO_*` in include/linux/skbuff.h
     pub r#type: u32,
 }

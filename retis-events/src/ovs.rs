@@ -6,12 +6,12 @@ use serde::{de::Error as Derror, ser::Error as Serror, Deserialize, Deserializer
 use super::*;
 use crate::{event_section, event_type, Formatter};
 
-///The OVS Event
+/// OpenvSwitch section.
 #[event_section]
 #[serde(tag = "event_type")]
 #[derive(PartialEq)]
 pub enum OvsEvent {
-    /// Upcall event. It indicates the begining of an upcall. An upcall can have multiple enqueue
+    /// Upcall. It indicates the begining of an upcall. An upcall can have multiple enqueue
     /// events.
     #[serde(rename = "upcall")]
     Upcall {
@@ -19,7 +19,7 @@ pub enum OvsEvent {
         upcall: UpcallEvent,
     },
 
-    /// Upcall enqueue event. It indicates a packet (fragment) is enqueued for userspace
+    /// Upcall enqueue. It indicates a packet (fragment) is enqueued for userspace
     /// processing.
     #[serde(rename = "upcall_enqueue")]
     UpcallEnqueue {
@@ -27,21 +27,21 @@ pub enum OvsEvent {
         upcall_enqueue: UpcallEnqueueEvent,
     },
 
-    /// Upcall return event. It indicates an upcall has ended.
+    /// Upcall return. It indicates an upcall has ended.
     #[serde(rename = "upcall_return")]
     UpcallReturn {
         #[serde(flatten)]
         upcall_return: UpcallReturnEvent,
     },
 
-    /// Receive upcall event. It indicates userspace has received an upcall.
+    /// Receive upcall. It indicates userspace has received an upcall.
     #[serde(rename = "recv_upcall")]
     RecvUpcall {
         #[serde(flatten)]
         recv_upcall: RecvUpcallEvent,
     },
 
-    /// Operation event. It indicates userspace has executed a flow operation on an upcalled
+    /// Flow Operation. It indicates userspace has executed a flow operation on an upcalled
     /// packet.
     #[serde(rename = "flow_operation")]
     Operation {
@@ -49,14 +49,14 @@ pub enum OvsEvent {
         flow_operation: OperationEvent,
     },
 
-    /// Action execution event. It indicates the datapath has executed an action on a packet.
+    /// Action execution. It indicates the datapath has executed an action on a packet.
     #[serde(rename = "action_execute")]
     Action {
         #[serde(flatten)]
         action_execute: ActionEvent,
     },
 
-    /// Flow lookup event. It indicates the datapath has successfully perfomed a lookup for a key.
+    /// Flow lookup. It indicates the datapath has successfully perfomed a lookup for a key.
     #[serde(rename = "flow_lookup")]
     DpLookup {
         #[serde(flatten)]
@@ -91,19 +91,19 @@ fn fmt_upcall_cmd(cmd: u8) -> &'static str {
     }
 }
 
-/// OVS upcall event
+/// Upcall start.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 pub struct UpcallEvent {
-    /// Upcall command. Holds OVS_PACKET_CMD:
+    /// Command. Holds OVS_PACKET_CMD:
     ///   OVS_PACKET_CMD_UNSPEC   = 0
     ///   OVS_PACKET_CMD_MISS     = 1
     ///   OVS_PACKET_CMD_ACTION   = 2
     ///   OVS_PACKET_CMD_EXECUTE  = 3
     pub cmd: u8,
-    /// Upcall port.
+    /// Port.
     pub port: u32,
-    /// Cpu ID
+    /// CPU ID.
     pub cpu: u32,
 }
 
@@ -119,13 +119,13 @@ impl EventFmt for UpcallEvent {
     }
 }
 
-/// OVS lookup event
+/// Flow lookup.
 #[event_type]
 #[derive(Default, PartialEq)]
 pub struct LookupEvent {
-    /// flow pointer
+    /// Flow pointer.
     pub flow: u64,
-    /// actions pointer
+    /// Actions pointer.
     pub sf_acts: u64,
     /// Flow UFID.
     pub ufid: Ufid,
@@ -133,9 +133,9 @@ pub struct LookupEvent {
     pub n_mask_hit: u32,
     /// Number of cache matches that occurred during the lookup.
     pub n_cache_hit: u32,
-    /// datapath flow string
+    /// Datapath flow string.
     pub dpflow: String,
-    /// openflow flows
+    /// Openflow flows.
     pub ofpflows: Vec<String>,
 }
 
@@ -184,22 +184,22 @@ impl LookupEvent {
     }
 }
 
-/// Upcall enqueue event.
+/// Upcall enqueue.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 pub struct UpcallEnqueueEvent {
     /// Return code. Any value different from zero indicates the upcall enqueue
     /// failed probably indicating a packet drop.
     pub ret: i32,
-    /// Upcall command executed.
+    /// Command executed.
     pub cmd: u8,
-    /// Upcall port id.
+    /// Port id.
     pub port: u32,
-    /// Timestamp of the associated UpcallEvent.
+    /// Upcall timestamp.
     pub upcall_ts: u64,
-    /// CPU id of the associated UpcallEvent.
+    /// Upcall CPU ID.
     pub upcall_cpu: u32,
-    /// Enqueue id used for tracking.
+    /// Tracking ID.
     pub queue_id: u32,
 }
 
@@ -217,12 +217,15 @@ impl EventFmt for UpcallEnqueueEvent {
     }
 }
 
-/// Upcall return event
+/// Upcall return.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 pub struct UpcallReturnEvent {
+    /// Upcall timestamp.
     pub upcall_ts: u64,
+    /// Upcall CPU ID.
     pub upcall_cpu: u32,
+    /// Return value.
     pub ret: i32,
 }
 
@@ -236,22 +239,22 @@ impl EventFmt for UpcallReturnEvent {
     }
 }
 
-/// Operation event.
+/// Flow Operation.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 #[repr(C)]
 pub struct OperationEvent {
-    /// Operation type ("put" or "exec")
+    /// Type. "put" or "exec"
     #[serde(
         deserialize_with = "OperationEvent::deserialize_op",
         serialize_with = "OperationEvent::serialize_op"
     )]
     pub op_type: u8,
-    /// Queue id used for tracking
+    /// Tracking ID.
     pub queue_id: u32,
-    /// Timestamp of the begining of batch
+    /// Batch timestamp. When the batch started.
     pub batch_ts: u64,
-    /// Index within the batch
+    /// Batch index. Position within the upcall batch.
     pub batch_idx: u8,
 }
 
@@ -299,21 +302,21 @@ impl EventFmt for OperationEvent {
     }
 }
 
-/// OVS Receive Event
+/// Upcall received.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 pub struct RecvUpcallEvent {
-    /// Type of upcall
+    /// Type.
     pub r#type: u32,
-    /// Packet size
+    /// Packet size.
     pub pkt_size: u32,
-    /// Key size
+    /// Key size.
     pub key_size: u64,
-    /// Queue id used for tracking
+    /// Tracking ID.
     pub queue_id: u32,
-    /// Timestamp of the begining of batch
+    /// Batch timestamp. When the batch started.
     pub batch_ts: u64,
-    /// Index within the batch
+    /// Batch index. Position within the upcall batch.
     pub batch_idx: u8,
 }
 
@@ -328,17 +331,17 @@ impl EventFmt for RecvUpcallEvent {
     }
 }
 
-/// OVS output action data.
+/// Action execution.
 #[event_type]
 #[derive(Default, PartialEq)]
 pub struct ActionEvent {
-    /// Action to be executed.
+    /// Action-specific data.
     #[serde(flatten)]
     pub action: Option<OvsAction>,
-    /// Recirculation id.
+    /// Recirculation ID.
     pub recirc_id: u32,
-    /// Queue id used for tracking. None if not tracking or if the output event did not come from
-    /// an upcall.
+    /// Tracking ID. None if not tracking or if the output event did
+    /// not come from an upcall.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub queue_id: Option<u32>,
 }
@@ -454,6 +457,7 @@ impl EventFmt for ActionEvent {
 #[derive(PartialEq)]
 pub struct OvsDummyAction;
 
+// OVS action.
 #[event_type]
 #[serde(tag = "action")]
 #[derive(PartialEq)]
@@ -517,19 +521,19 @@ pub enum OvsAction {
     Drop { reason: u32 },
 }
 
-/// OVS output action data.
+/// Output action.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 pub struct OvsActionOutput {
-    /// Output port.
+    /// Port.
     pub port: u32,
 }
 
-/// OVS recirc action data.
+/// Recirc action.
 #[event_type]
 #[derive(Copy, Default, PartialEq)]
 pub struct OvsActionRecirc {
-    /// Recirculation id.
+    /// Recirculation ID.
     pub id: u32,
 }
 
@@ -547,13 +551,13 @@ pub const R_OVS_CT_NAT_RANGE_PROTO_RANDOM: u32 = 1 << 9;
 pub const R_OVS_CT_NAT_RANGE_PERSISTENT: u32 = 1 << 10;
 pub const R_OVS_CT_NAT_RANGE_PROTO_RANDOM_FULLY: u32 = 1 << 11;
 
-/// OVS conntrack action data.
+/// Conntrack action.
 #[event_type]
 #[derive(Default, PartialEq)]
 pub struct OvsActionCt {
-    /// Flags
+    /// Flags.
     pub flags: u32,
-    /// Conntrack zone
+    /// Zone ID.
     pub zone_id: u16,
     /// NAT
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -595,19 +599,20 @@ pub enum NatDirection {
     #[serde(rename = "dst")]
     Dst,
 }
-/// OVS NAT action data.
+
+/// NAT action.
 #[event_type]
 #[derive(Default, PartialEq)]
 pub struct OvsActionCtNat {
-    /// NAT direction, if any
+    /// NAT direction.
     pub dir: Option<NatDirection>,
-    /// Minimum address in address range, if any
+    /// Minimum address.
     pub min_addr: Option<String>,
-    /// Maximum address in address range, if any
+    /// Maximum address.
     pub max_addr: Option<String>,
-    /// Minimum port in port range, if any
+    /// Minimum port.
     pub min_port: Option<u16>,
-    /// Maximum port in port range, if any
+    /// Maximum port.
     pub max_port: Option<u16>,
 }
 
@@ -672,18 +677,18 @@ impl fmt::Display for Ufid {
     }
 }
 
-/// The OVS flow information event
+/// Flow event.
 #[event_section]
 pub struct OvsFlowInfoEvent {
-    /// Unique FLow ID
+    /// Unique FLow ID.
     pub ufid: Ufid,
-    /// Flow pointer
+    /// Flow pointer.
     pub flow: u64,
-    /// Actions pointer
+    /// Actions pointer.
     pub sf_acts: u64,
-    /// Datapath flow string
+    /// Datapath flow.
     pub dpflow: String,
-    /// Openflow flows
+    /// Openflow flows.
     pub ofpflows: Vec<String>,
 }
 

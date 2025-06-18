@@ -2,10 +2,14 @@ use std::fmt;
 
 use crate::*;
 
+/// Machine information.
 #[event_type]
 pub struct MachineInfo {
+    /// Kernel release.
     pub kernel_release: String,
+    /// Kernel version.
     pub kernel_version: String,
+    /// Hardware name.
     pub hardware_name: String,
 }
 
@@ -37,27 +41,27 @@ impl EventFmt for StartupEvent {
     }
 }
 
-/// Information about a given task.
+/// Task information.
 #[event_type]
 #[derive(Default)]
 pub struct TaskEvent {
-    /// Process id.
+    /// Process ID.
     pub pid: i32,
-    /// Thread group id.
+    /// Thread group ID.
     pub tgid: i32,
-    /// Name of the current task.
+    /// Task name.
     pub comm: String,
 }
 
-/// Common event section.
+/// Common section.
 #[event_section]
 #[derive(Default)]
 pub struct CommonEvent {
-    /// Timestamp of when the event was generated.
+    /// Timestamp.
     pub timestamp: u64,
-    /// SMP processor id.
+    /// SMP processor ID.
     pub smp_id: Option<u32>,
-    /// Information about the task linked to the event.
+    /// Linux task.
     pub task: Option<TaskEvent>,
 }
 

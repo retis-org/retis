@@ -3,17 +3,25 @@ use std::{fmt, str};
 use super::*;
 use crate::{event_section, Formatter};
 
-/// Nft event section
+/// Nftables section.
 #[event_section]
 #[derive(Default)]
 pub struct NftEvent {
+    /// Table name.
     pub table_name: String,
+    /// Chain name.
     pub chain_name: String,
+    /// Verdict.
     pub verdict: String,
+    /// Verdict chain name.
     pub verdict_chain_name: Option<String>,
+    /// Table handle.
     pub table_handle: i64,
+    /// Chain handle.
     pub chain_handle: i64,
+    /// Rule handle.
     pub rule_handle: Option<i64>,
+    /// Policy.
     pub policy: bool,
 }
 

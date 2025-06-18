@@ -49,7 +49,7 @@ pub struct Event {
     pub common: Option<CommonEvent>,
     /// Kernel section.
     pub kernel: Option<KernelEvent>,
-    /// Userpace section.
+    /// Userspace section.
     pub userspace: Option<UserEvent>,
     /// Tracking section.
     pub tracking: Option<TrackingInfo>,
@@ -69,11 +69,11 @@ pub struct Event {
     pub ovs: Option<OvsEvent>,
     /// OVS-detrace section.
     pub ovs_detrace: Option<OvsFlowInfoEvent>,
-    /// Nft section
+    /// Nft section.
     pub nft: Option<NftEvent>,
-    /// Ct section
+    /// Ct section.
     pub ct: Option<CtEvent>,
-    /// Startup event
+    /// Startup event.
     pub startup: Option<StartupEvent>,
 
     #[cfg(feature = "test-events")]

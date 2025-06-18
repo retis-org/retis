@@ -3,13 +3,13 @@ use std::fmt;
 use super::*;
 use crate::{event_section, Formatter};
 
-/// Skb drop event section.
+/// Skb drop section.
 #[event_section]
 pub struct SkbDropEvent {
-    /// Sub-system who generated the below drop reason. None for core reasons.
+    /// Sub-system. None for core reasons.
     pub subsys: Option<String>,
-    /// Reason why a packet was freed/dropped. Only reported from specific
-    /// functions. See `enum skb_drop_reason` in the kernel.
+    /// Reason. Only reported from specific functions.
+    /// See `enum skb_drop_reason` in the kernel.
     pub drop_reason: String,
 }
 

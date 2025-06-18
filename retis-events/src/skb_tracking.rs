@@ -8,7 +8,7 @@ use std::{
 use super::*;
 use crate::{event_section, Formatter};
 
-/// Tracking event section.
+/// Tracking section.
 /// For more information of how the tracking logic is designed and how it can be
 /// used, please see `collect::collector::skb_tracking` documentation.
 ///
@@ -18,12 +18,13 @@ use crate::{event_section, Formatter};
 #[derive(Default, Copy, PartialEq)]
 #[repr(C)]
 pub struct SkbTrackingEvent {
-    /// Head of buffer (`skb->head`) when the packet was first seen by the
-    /// tracking logic.
+    /// Head of buffer. Value of (`skb->head`) when the packet was first seen
+    /// by the tracking logic.
     pub orig_head: u64,
-    /// Timestamp of when the tracking logic first saw the packet.
+    /// First timestamp. Timestamp of when the tracking logic first saw the
+    /// packet.
     pub timestamp: u64,
-    /// Socket buffer (`skb`) address of the current packet.
+    /// Socket buffer. (`skb`) address of the current packet.
     pub skb: u64,
 }
 
