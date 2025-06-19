@@ -9,8 +9,6 @@ use crate::{event_section, event_type, Formatter};
 pub struct SkbEvent {
     /// VLAN acceleration tag fields, if any.
     pub vlan_accel: Option<SkbVlanAccelEvent>,
-    /// Net device data, if any.
-    pub dev: Option<SkbDevEvent>,
     /// Net namespace data, if any.
     pub ns: Option<SkbNsEvent>,
     /// Skb metadata, if any.
@@ -32,20 +30,6 @@ impl EventFmt for SkbEvent {
                 write!(f, "ns {:#x}/{}", cookie, ns.inum)?;
             } else {
                 write!(f, "ns {}", ns.inum)?;
-            }
-        }
-
-        if let Some(dev) = &self.dev {
-            space.write(f)?;
-
-            if dev.ifindex > 0 {
-                write!(f, "if {}", dev.ifindex)?;
-                if !dev.name.is_empty() {
-                    write!(f, " ({})", dev.name)?;
-                }
-            }
-            if let Some(rx_ifindex) = dev.rx_ifindex {
-                write!(f, " rxif {rx_ifindex}")?;
             }
         }
 
@@ -135,7 +119,6 @@ impl EventFmt for SkbEvent {
 
     fn can_format(&self, format: &DisplayFormat) -> bool {
         (self.vlan_accel.is_some() && format.print_ll)
-            || self.dev.is_some()
             || self.ns.is_some()
             || self.meta.is_some()
             || self.data_ref.is_some()
@@ -282,18 +265,6 @@ pub struct SkbIcmpEvent {
 pub struct SkbIcmpV6Event {
     pub r#type: u8,
     pub code: u8,
-}
-
-/// Network device fields.
-#[event_type]
-#[derive(Default)]
-pub struct SkbDevEvent {
-    /// Net device name associated with the packet, from `skb->dev->name`.
-    pub name: String,
-    /// Net device ifindex associated with the packet, from `skb->dev->ifindex`.
-    pub ifindex: u32,
-    /// Index if the net device the packet arrived on, from `skb->skb_iif`.
-    pub rx_ifindex: Option<u32>,
 }
 
 /// Network namespace fields.

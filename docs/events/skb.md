@@ -20,12 +20,6 @@ ns [{unique id}/]{inum}
   looking at `/proc/<pid>/ns/net` or `/run/netns` (when using `iproute2` for the
   latter).
 
-## Net device
-
-```none
-if {interface index} ({interface name}) rxif {rx interface index}
-```
-
 ## VLAN hardware acceleration
 
 In the Linux kernel the VLAN data can be part of the metadata instead of inside

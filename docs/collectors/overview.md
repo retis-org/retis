@@ -99,3 +99,11 @@ to choose which Netfilter verdicts will be reported in events. By default it
 reports only `drop` and `accept` verdicts.
 
 The `nft` collector produces the [nft](../events/nft.md) event section.
+
+## Network device
+
+The `dev` collector provides information about network devices, either if a
+`struct net_device` is available as part of a probe arguments or through a
+`struct sk_buff` and its reference.
+
+The `dev` collector produces the [dev](../events/dev.md) event section.

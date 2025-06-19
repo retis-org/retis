@@ -100,15 +100,15 @@ impl EventParser {
 
         // The dev & ns sections are best to have but not mandatory to generate
         // an event. If not found, fake them.
-        let (ifindex, ifname, netns_cookie, netns_inum) = match &event.skb {
+        let (ifindex, ifname) = match &event.dev {
+            Some(dev) => (dev.ifindex, dev.name.as_str()),
+            None => {
+                self.stats.missing_dev += 1;
+                (0, "?")
+            }
+        };
+        let (netns_cookie, netns_inum) = match &event.skb {
             Some(skb) => {
-                let (ifindex, ifname) = match skb.dev.as_ref() {
-                    Some(dev) => (dev.ifindex, dev.name.as_str()),
-                    None => {
-                        self.stats.missing_dev += 1;
-                        (0, "?")
-                    }
-                };
                 let (netns_cookie, netns_inum) = match skb.ns.as_ref() {
                     Some(ns) => (ns.cookie, ns.inum),
                     None => {
@@ -116,9 +116,9 @@ impl EventParser {
                         (None, 0)
                     }
                 };
-                (ifindex, ifname, netns_cookie, netns_inum)
+                (netns_cookie, netns_inum)
             }
-            None => (0, "?", None, 0),
+            None => (None, 0),
         };
 
         // If we see this iface for the first time, add a description block.

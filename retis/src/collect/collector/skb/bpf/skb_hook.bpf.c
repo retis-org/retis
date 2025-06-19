@@ -15,7 +15,6 @@
 enum skb_sections {
 	SECTION_PACKET = 1,
 	SECTION_VLAN,
-	SECTION_DEV,
 	SECTION_NS,
 	SECTION_META,
 	SECTION_DATA_REF,
@@ -35,13 +34,6 @@ struct {
 	__type(value, struct skb_config);
 } skb_config_map SEC(".maps");
 
-BINDING_DEF(IFNAMSIZ, 16)
-
-struct skb_netdev_event {
-	u8 dev_name[IFNAMSIZ];
-	u32 ifindex;
-	u32 iif;
-} __binding;
 struct skb_netns_event {
 	u64 cookie;
 	u32 inum;
@@ -225,22 +217,6 @@ static __always_inline int process_skb(struct retis_context *ctx,
 
 	/* Always retrieve the raw packet */
 	process_packet(event, skb);
-
-	if (cfg->sections & BIT(SECTION_DEV) && dev) {
-		int ifindex = BPF_CORE_READ(dev, ifindex);
-
-		if (ifindex > 0) {
-			struct skb_netdev_event *e =
-				get_event_section(event, COLLECTOR_SKB,
-						  SECTION_DEV, sizeof(*e));
-			if (!e)
-				return 0;
-
-			bpf_probe_read(e->dev_name, IFNAMSIZ, dev->name);
-			e->ifindex = ifindex;
-			e->iif = BPF_CORE_READ(skb, skb_iif);
-		}
-	}
 
 	if (cfg->sections & BIT(SECTION_NS)) {
 		struct skb_netns_event *e;

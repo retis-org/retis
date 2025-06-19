@@ -549,8 +549,9 @@ pub(crate) enum FactoryId {
     Ovs = 7,
     Nft = 8,
     Ct = 9,
+    Dev = 10,
     // TODO: use std::mem::variant_count once in stable.
-    _MAX = 10,
+    _MAX = 11,
 }
 
 impl FactoryId {
@@ -567,6 +568,7 @@ impl FactoryId {
             7 => Ovs,
             8 => Nft,
             9 => Ct,
+            10 => Dev,
             x => bail!("Can't construct a FactoryId from {}", x),
         })
     }

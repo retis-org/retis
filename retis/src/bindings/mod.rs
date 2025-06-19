@@ -69,6 +69,8 @@ pub(crate) mod ovs_common_uapi;
 pub(crate) mod ovs_operation_uapi;
 pub(crate) mod user_recv_upcall_uapi;
 
+pub(crate) mod dev_hook_uapi;
+
 pub(crate) mod events_uapi;
 use events_uapi::retis_log_event;
 

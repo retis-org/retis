@@ -6,7 +6,7 @@ def test_meta_filter_string(two_ns_simple):
     retis = Retis()
     retis.collect(
         "-c",
-        "skb",
+        "skb,dev",
         "-f",
         "icmp and host 10.0.42.2",
         "-m",
@@ -19,10 +19,8 @@ def test_meta_filter_string(two_ns_simple):
 
     expected_events = [
         {
-            "skb": {
-                "dev": {
-                    "name": "veth01",
-                },
+            "dev": {
+                "name": "veth01",
             },
             "parsed_packet": {
                 "ip": {
@@ -55,7 +53,7 @@ def test_meta_filter_number(two_ns_simple):
     retis = Retis()
     retis.collect(
         "-c",
-        "skb",
+        "skb,dev",
         "-f",
         "icmp and host 10.0.42.2",
         "-m",
@@ -68,10 +66,8 @@ def test_meta_filter_number(two_ns_simple):
 
     expected_events = [
         {
-            "skb": {
-                "dev": {
-                    "name": "veth01",
-                },
+            "dev": {
+                "name": "veth01",
             },
             "parsed_packet": {
                 "ip": {
