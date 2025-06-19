@@ -58,6 +58,8 @@ pub struct Event {
     pub packet: Option<PacketEvent>,
     /// Skb section.
     pub skb: Option<SkbEvent>,
+    /// Net device section.
+    pub dev: Option<DevEvent>,
     /// OVS section.
     pub ovs: Option<OvsEvent>,
     /// OVS-detrace section.
@@ -123,6 +125,7 @@ impl EventFmt for Event {
 
         /* Format the rest of the optional fields. */
         [
+            self.dev.as_ref().map(|f| f as &dyn EventDisplay),
             self.packet.as_ref().map(|f| f as &dyn EventDisplay),
             self.skb.as_ref().map(|f| f as &dyn EventDisplay),
             self.ovs.as_ref().map(|f| f as &dyn EventDisplay),

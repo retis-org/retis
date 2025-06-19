@@ -33,8 +33,8 @@ The `skb` collector has a single specific argument, `--skb-sections`. This is
 used to choose which parts of the `skb` metadata to retrieve and
 export in the events. See the `retis collect --help` for a detailed description.
 
-The `skb` collector produces the [skb](../events/skb.md) and
-[packet](../events/packet.md) event sections.
+The `skb` collector produces the [skb](../events/skb.md),
+[packet](../events/packet.md) and [dev](../events/dev.md) event sections.
 
 ## Skb tracking
 
@@ -99,3 +99,11 @@ to choose which Netfilter verdicts will be reported in events. By default it
 reports only `drop` and `accept` verdicts.
 
 The `nft` collector produces the [nft](../events/nft.md) event section.
+
+## Network device
+
+The `dev` collector provides information about network devices, either if a
+`struct net_device` is available as part of a probe arguments or through a
+`struct sk_buff` and its reference.
+
+The `dev` collector produces the [dev](../events/dev.md) event section.
