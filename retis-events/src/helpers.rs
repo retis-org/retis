@@ -78,7 +78,7 @@ impl U128 {
 /// Represents a raw packet. Stored internally as a `Vec<u8>`.
 /// We don't use #[event_type] as we're implementing serde::Serialize and
 /// serde::Deserialize manually.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, schemars::JsonSchema)]
 #[cfg_attr(feature = "python", derive(pyo3::IntoPyObject))]
 pub struct RawPacket(pub Vec<u8>);
 

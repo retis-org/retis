@@ -79,7 +79,7 @@ macro_rules! raw_to_string_opt {
 /// The return value of EventFactory::next_event()
 pub(crate) enum EventResult {
     /// The Factory was able to create a new event.
-    Event(Event),
+    Event(Box<Event>),
     /// The timeout went off but a new attempt to retrieve an event might succeed.
     Timeout,
 }
@@ -295,11 +295,11 @@ impl BpfEventsFactory {
 
         Ok(match timeout {
             Some(timeout) => match rxc.recv_timeout(timeout) {
-                Ok(event) => EventResult::Event(event),
+                Ok(event) => EventResult::Event(Box::new(event)),
                 Err(mpsc::RecvTimeoutError::Timeout) => EventResult::Timeout,
                 Err(e) => return Err(anyhow!(e)),
             },
-            None => EventResult::Event(rxc.recv()?),
+            None => EventResult::Event(Box::new(rxc.recv()?)),
         })
     }
 }
@@ -386,10 +386,9 @@ pub(crate) fn parse_raw_event<'a>(
             .get_mut(&owner)
             .ok_or_else(|| anyhow!("Unknown factory {}", owner as u8))?;
 
-        let section = factory
-            .create(sections)
-            .map_err(|e| anyhow!("Factory {} failed to parse section: {e}", owner as u8))?;
-        event.insert_section(SectionId::from_u8(section.id())?, section)
+        factory
+            .create(sections, &mut event)
+            .map_err(|e| anyhow!("Factory {} failed to parse section: {e}", owner as u8))
     })?;
 
     Ok(event)
@@ -446,7 +445,7 @@ pub(crate) fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u3
 pub(crate) struct CommonEventFactory {}
 
 impl RawEventSectionFactory for CommonEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let mut common = CommonEvent::default();
 
         for section in raw_sections.iter() {
@@ -462,7 +461,8 @@ impl RawEventSectionFactory for CommonEventFactory {
             }
         }
 
-        Ok(Box::new(common))
+        event.common = Some(common);
+        Ok(())
     }
 }
 
@@ -495,7 +495,7 @@ impl BpfEventsFactory {
         Ok(())
     }
     pub(crate) fn next_event(&mut self, _: Option<Duration>) -> Result<EventResult> {
-        Ok(EventResult::Event(Event::new()))
+        Ok(EventResult::Event(Box::new(Event::new())))
     }
     pub(crate) fn stop(&mut self) -> Result<()> {
         Ok(())
@@ -556,7 +556,7 @@ pub(crate) trait EventSectionFactory: RawEventSectionFactory {
 /// Event section factory helpers to convert from BPF raw events. Requires a
 /// per-object implementation.
 pub(crate) trait RawEventSectionFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>>;
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()>;
 }
 
 /// Identifier for factories. Should match their counterparts in the BPF side.
@@ -697,8 +697,8 @@ mod tests {
     struct TestEventFactory {}
 
     impl RawEventSectionFactory for TestEventFactory {
-        fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-            let mut event = TestEvent::default();
+        fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+            let mut test = TestEvent::default();
 
             for raw in raw_sections.iter() {
                 let len = raw.data.len();
@@ -709,21 +709,22 @@ mod tests {
                             bail!("Invalid section for data type 1");
                         }
 
-                        event.field0 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
+                        test.field0 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
                     }
                     DATA_TYPE_U128 => {
                         if len != 16 {
                             bail!("Invalid section for data type 2");
                         }
 
-                        event.field1 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
-                        event.field2 = Some(u64::from_ne_bytes(raw.data[8..16].try_into()?));
+                        test.field1 = Some(u64::from_ne_bytes(raw.data[0..8].try_into()?));
+                        test.field2 = Some(u64::from_ne_bytes(raw.data[8..16].try_into()?));
                     }
                     _ => bail!("Invalid data type"),
                 }
             }
 
-            Ok(Box::new(event))
+            event.test = Some(test);
+            Ok(())
         }
     }
 
@@ -751,13 +752,13 @@ mod tests {
         assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event with a single empty section. Section is ignored.
-        let data = [4, 0, SectionId::Common as u8, DATA_TYPE_U64, 0, 0];
+        let data = [4, 0, FactoryId::Common as u8, DATA_TYPE_U64, 0, 0];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with a section too large. Section is ignored.
-        let data = [4, 0, SectionId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
+        let data = [4, 0, FactoryId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
-        let data = [6, 0, SectionId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
+        let data = [6, 0, FactoryId::Common as u8, DATA_TYPE_U64, 4, 0, 42, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with a section having an invalid owner.
@@ -767,20 +768,20 @@ mod tests {
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event with an invalid data type.
-        let data = [4, 0, SectionId::Common as u8, 0, 1, 0, 42];
+        let data = [4, 0, FactoryId::Common as u8, 0, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
-        let data = [4, 0, SectionId::Common as u8, 255, 1, 0, 42];
+        let data = [4, 0, FactoryId::Common as u8, 255, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_ok());
 
         // Valid event but invalid section (too small).
-        let data = [5, 0, SectionId::Common as u8, DATA_TYPE_U64, 1, 0, 42];
+        let data = [5, 0, FactoryId::Common as u8, DATA_TYPE_U64, 1, 0, 42];
         assert!(super::parse_raw_event(&data, &mut factories).is_err());
 
         // Valid event, single section.
         let data = [
             12,
             0,
-            SectionId::Common as u8,
+            FactoryId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -794,7 +795,7 @@ mod tests {
             0,
         ];
         let event = super::parse_raw_event(&data, &mut factories).unwrap();
-        let section = event.get_section::<TestEvent>(SectionId::Common).unwrap();
+        let section = event.test.unwrap();
         assert!(section.field0 == Some(42));
 
         // Valid event, multiple sections.
@@ -802,7 +803,7 @@ mod tests {
             44,
             0,
             // Section 1
-            SectionId::Common as u8,
+            FactoryId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -815,7 +816,7 @@ mod tests {
             0,
             0,
             // Section 2
-            SectionId::Common as u8,
+            FactoryId::Common as u8,
             DATA_TYPE_U64,
             8,
             0,
@@ -828,7 +829,7 @@ mod tests {
             0,
             0,
             // Section 3
-            SectionId::Common as u8,
+            FactoryId::Common as u8,
             DATA_TYPE_U128,
             16,
             0,
@@ -850,7 +851,7 @@ mod tests {
             0,
         ];
         let event = super::parse_raw_event(&data, &mut factories).unwrap();
-        let section = event.get_section::<TestEvent>(SectionId::Common).unwrap();
+        let section = event.test.unwrap();
         assert!(section.field1 == Some(42));
         assert!(section.field2 == Some(1337));
     }

@@ -28,8 +28,8 @@ impl PrintEvent {
     pub(crate) fn process_one(&mut self, e: &Event) -> Result<()> {
         match self.format {
             PrintEventFormat::Text(ref mut format) => {
-                if let Some(common) = e.get_section::<StartupEvent>(SectionId::Startup) {
-                    format.monotonic_offset = Some(common.clock_monotonic_offset);
+                if let Some(startup) = &e.startup {
+                    format.monotonic_offset = Some(startup.clock_monotonic_offset);
                 }
 
                 let mut event = format!("{}", e.display(format, &FormatterConf::new()));
@@ -46,7 +46,7 @@ impl PrintEvent {
                 }
             }
             PrintEventFormat::Json => {
-                let mut event = serde_json::to_vec(&e.to_json())?;
+                let mut event = serde_json::to_vec(&e)?;
                 event.push(b'\n');
                 self.writer.write_all(&event)?;
             }
@@ -81,8 +81,8 @@ impl PrintSeries {
                 let mut first = true;
 
                 for event in series.events.iter() {
-                    if let Some(common) = event.get_section::<StartupEvent>(SectionId::Startup) {
-                        format.monotonic_offset = Some(common.clock_monotonic_offset);
+                    if let Some(startup) = &event.startup {
+                        format.monotonic_offset = Some(startup.clock_monotonic_offset);
                     }
 
                     content.push_str(&format!("{}", event.display(format, &fconf)));
@@ -107,7 +107,7 @@ impl PrintSeries {
                 }
             }
             PrintEventFormat::Json => {
-                let mut event = serde_json::to_vec(&series.to_json())?;
+                let mut event = serde_json::to_vec(&series)?;
                 event.push(b'\n');
                 self.writer.write_all(&event)?;
             }

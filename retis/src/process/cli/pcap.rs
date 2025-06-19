@@ -2,29 +2,33 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fs::{File, OpenOptions},
+    io::Write,
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use anyhow::{anyhow, bail, Result};
-use clap::{arg, Args, Parser};
-use log::{info, warn};
+use clap::{arg, Parser};
+use log::warn;
 use pcap_file::{
     pcapng::{
         blocks::{
+            custom::CustomCopiable,
             enhanced_packet::{EnhancedPacketBlock, EnhancedPacketOption},
             interface_description::{InterfaceDescriptionBlock, InterfaceDescriptionOption},
+            opt_common::CustomUtf8Option,
             Block,
         },
         PcapNgBlock, PcapNgWriter,
     },
-    DataLink,
+    DataLink, PcapError,
 };
+use schemars::{schema_for, Schema};
 
 use crate::{
     cli::*,
     core::{kernel::Symbol, probe::kernel::utils::*},
-    events::{file::FileEventsFactory, CommonEvent, KernelEvent, SkbEvent, TimeSpec, *},
+    events::{file::FileEventsFactory, *},
     helpers::signals::Running,
 };
 
@@ -38,21 +42,19 @@ struct EventParserStats {
     missing_skb: u32,
     /// Events w/o a packet section (skipped).
     missing_packet: u32,
-    /// Events w/o a dev section (fake one was used instead).
-    missing_dev: u32,
-    /// Events w/o a netns section (fake one was used instead).
-    missing_ns: u32,
 }
 
 /// Events parser: handles the logic to convert our events to the PCAP format
 /// that is represented by the internal writer.
 struct EventParser {
-    /// Known network interfaces and their PCAP id: netns|ifindex -> pcap id.
-    ifaces: HashMap<u64, u32>,
+    /// Fake network interfaces and their PCAP ids.
+    ifaces: HashMap<String, u32>,
     /// Statistics.
     stats: EventParserStats,
     /// Time offset
     ts_off: Option<TimeSpec>,
+    /// Whether the header was written
+    wrote_header: bool,
 }
 
 // Unwrap a Some(_) value or return from the function.
@@ -68,6 +70,39 @@ macro_rules! some_or_return {
     };
 }
 
+// TODO: Register with IANA?
+const RETIS_PEN: u32 = 70000;
+
+/// Custom block containing the JSON-Schema of events.
+struct SchemaBlock {
+    schema: Schema,
+}
+
+impl SchemaBlock {
+    fn new() -> Result<Self> {
+        Ok(SchemaBlock {
+            schema: schema_for!(Event),
+        })
+    }
+}
+
+impl CustomCopiable<'_> for SchemaBlock {
+    const PEN: u32 = RETIS_PEN;
+
+    fn write_to<W: Write>(&self, writer: &mut W) -> Result<(), PcapError> {
+        let bytes = serde_json::to_vec(&self.schema)
+            .map_err(|_| PcapError::InvalidField("Invalid schema block"))?;
+        writer.write_all(&bytes[..])?;
+        Ok(())
+    }
+
+    fn from_slice(slice: &[u8]) -> Result<Option<Self>, PcapError> {
+        let schema: Schema = serde_json::from_slice(slice)
+            .map_err(|_| PcapError::InvalidField("Invalid schema block"))?;
+        Ok(Some(SchemaBlock { schema }))
+    }
+}
+
 impl EventParser {
     /// Creates a new EventParser from a PcapNgWriter<W: Write>.
     fn new() -> Self {
@@ -75,6 +110,7 @@ impl EventParser {
             ifaces: HashMap::new(),
             stats: EventParserStats::default(),
             ts_off: None,
+            wrote_header: false,
         }
     }
 
@@ -83,60 +119,47 @@ impl EventParser {
         // Having a common & a kernel section is mandatory for now, seeing a
         // filtered event w/o one of those is bogus.
         let common = event
-            .get_section::<CommonEvent>(SectionId::Common)
+            .common
+            .as_ref()
             .ok_or_else(|| anyhow!("No common section in event"))?;
-        let kernel = event
-            .get_section::<KernelEvent>(SectionId::Kernel)
-            .ok_or_else(|| anyhow!("No skb section in event"))?;
 
         self.stats.processed += 1;
 
         // The skb & packet sections are mandatory for us to generate PCAP
         // events, but they might not be present in some filtered events. Stats
         // are kept here to inform the user.
-        let skb = some_or_return!(
-            event.get_section::<SkbEvent>(SectionId::Skb),
-            self.stats.missing_skb
-        );
+        let skb = some_or_return!(&event.skb, self.stats.missing_skb);
         let packet = some_or_return!(skb.packet.as_ref(), self.stats.missing_packet);
 
-        // The dev & ns sections are best to have but not mandatory to generate
-        // an event. If not found, fake them.
-        let (ifindex, ifname) = match skb.dev.as_ref() {
-            Some(dev) => (dev.ifindex, dev.name.as_str()),
-            None => {
-                self.stats.missing_dev += 1;
-                (0, "?")
-            }
-        };
-        let netns = match skb.ns.as_ref() {
-            Some(ns) => ns.netns,
-            None => {
-                self.stats.missing_ns += 1;
-                0
-            }
+        // Use a fake ifname based on probe.
+        let ifname = if let Some(kernel) = &event.kernel {
+            format!("{}/{}", kernel.probe_type, kernel.symbol)
+        } else if let Some(user) = &event.userspace {
+            format!("{}/{}", user.probe_type, user.symbol)
+        } else {
+            bail!("no kernel or userspace sections");
         };
 
-        // If we see this iface for the first time, add a description block.
         let mut v = Vec::new();
-        let key: u64 = ((netns as u64) << 32) | ifindex as u64;
-        let id = match self.ifaces.contains_key(&key) {
+        if !self.wrote_header {
+            v.push(SchemaBlock::new()?.into_custom_block()?.into_block());
+            self.wrote_header = true;
+        }
+
+        // If we see this iface for the first time, add a description block.
+        let id = match self.ifaces.contains_key(&ifname) {
             // Unwrap if contains is true.
-            true => *self.ifaces.get(&key).unwrap(),
+            true => *self.ifaces.get(&ifname).unwrap(),
             false => {
                 v.push(
                     InterfaceDescriptionBlock {
                         linktype: DataLink::ETHERNET,
                         snaplen: 0xffff,
                         options: vec![
-                            InterfaceDescriptionOption::IfName(Cow::Owned(format!(
-                                "{} ({})",
-                                ifname, netns
-                            ))),
-                            InterfaceDescriptionOption::IfDescription(Cow::Owned(match ifindex {
-                                0 => "Fake interface".to_string(),
-                                _ => format!("ifindex={}", ifindex),
-                            })),
+                            InterfaceDescriptionOption::IfName(Cow::Owned(ifname.clone())),
+                            InterfaceDescriptionOption::IfDescription(Cow::Owned(
+                                "Fake interface based on retis probe".to_string(),
+                            )),
                             InterfaceDescriptionOption::IfTsResol(9),
                         ],
                     }
@@ -144,10 +167,12 @@ impl EventParser {
                 );
 
                 let id = self.ifaces.len() as u32;
-                self.ifaces.insert(key, id);
+                self.ifaces.insert(ifname, id);
                 id
             }
         };
+
+        let format = DisplayFormat::new().multiline(true);
 
         // Add the packet itself.
         v.push(
@@ -158,10 +183,17 @@ impl EventParser {
                 ) as u64),
                 original_len: packet.len,
                 data: Cow::Borrowed(&packet.packet.0),
-                options: vec![EnhancedPacketOption::Comment(Cow::Owned(format!(
-                    "probe={}:{}",
-                    &kernel.probe_type, &kernel.symbol
-                )))],
+                options: vec![
+                    EnhancedPacketOption::Comment(Cow::Owned(format!(
+                        "{}",
+                        event.display(&format, &FormatterConf::new())
+                    ))),
+                    EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
+                        code: 2988, // Custom Option containing a UTF-8 string.
+                        pen: RETIS_PEN,
+                        value: Cow::Owned(serde_json::to_string(&event)?),
+                    }),
+                ],
             }
             .into_owned()
             .into_block(),
@@ -173,8 +205,6 @@ impl EventParser {
     /// Report parser statistics. Should be called after processing was
     /// completed.
     fn report_stats(&self) {
-        info!("{} event(s) were processed", self.stats.processed);
-
         if self.stats.missing_skb != 0 {
             warn!(
                 "{} event(s) were skipped because of missing skb information",
@@ -187,18 +217,6 @@ impl EventParser {
                 self.stats.missing_packet
             );
         }
-        if self.stats.missing_dev != 0 {
-            warn!(
-                "{} event(s) are using a fake net device (no device information was found)",
-                self.stats.missing_dev
-            );
-        }
-        if self.stats.missing_ns != 0 {
-            warn!(
-                "{} event(s) are using a fake netns (no netns information was found)",
-                self.stats.missing_ns
-            );
-        }
     }
 }
 
@@ -206,8 +224,6 @@ impl EventParser {
 #[derive(Parser, Debug, Default)]
 #[command(name = "pcap")]
 pub(crate) struct Pcap {
-    #[command(flatten)]
-    cmd: PcapCmd,
     #[arg(
         short,
         long,
@@ -217,15 +233,12 @@ pub(crate) struct Pcap {
     pub(super) out: Option<PathBuf>,
     #[arg(default_value = "retis.data", help = "File from which to read events")]
     pub(super) input: PathBuf,
-}
-#[derive(Args, Debug, Default)]
-#[group(required = true, multiple = false)]
-pub(crate) struct PcapCmd {
     #[arg(short, long, help = "List probes that are available in the input file")]
     pub(super) list_probes: bool,
     #[arg(
         short,
         long,
+        conflicts_with = "list_probes",
         help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern.
 See `retis collect --help` for more details on the probe format"
     )]
@@ -234,23 +247,26 @@ See `retis collect --help` for more details on the probe format"
 
 impl SubCommandParserRunner for Pcap {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
-        if self.cmd.list_probes {
+        if self.list_probes {
             let probes = list_probes(self.input.as_path())?;
             probes.iter().for_each(|p| println!("{p}"));
             return Ok(());
         }
         // The following unwrap() will never fail as Clap makes sure that either
         // list_probes is true, or probe is Some().
-        let probe = self.cmd.probe.as_ref().unwrap();
-        let (probe_type, target, _) = parse_cli_probe(probe)?;
-        let symbol = Symbol::from_name_no_inspect(target);
+        let filter: &dyn Fn(&str, &str) -> bool = if let Some(probe) = self.probe.as_ref() {
+            let (probe_type, target, _) = parse_cli_probe(probe)?;
+            let symbol = Symbol::from_name_no_inspect(target);
 
-        // Filtering logic.
-        let filter = |r#type: &str, name: &str| -> bool {
-            if name == symbol.name() && r#type == probe_type.to_str() {
-                return true;
+            // Filtering logic.
+            &move |r#type: &str, name: &str| -> bool {
+                if name == symbol.name() && r#type == probe_type.to_str() {
+                    return true;
+                }
+                false
             }
-            false
+        } else {
+            &|_t: &str, _n: &str| -> bool { true }
         };
 
         let mut writer: Option<PcapNgWriter<File>> = None;
@@ -306,7 +322,7 @@ where
     while run.running() {
         match factory.next_event()? {
             Some(event) => {
-                if let Some(kernel) = event.get_section::<KernelEvent>(SectionId::Kernel) {
+                if let Some(kernel) = &event.kernel {
                     // Check the event is matching the requested symbol.
                     if !filter(&kernel.probe_type, &kernel.symbol) {
                         continue;
@@ -318,7 +334,7 @@ where
                     for b in parsed_blocks {
                         writer_callback(&b)?;
                     }
-                } else if let Some(common) = event.get_section::<StartupEvent>(SectionId::Startup) {
+                } else if let Some(common) = event.startup {
                     parser.ts_off = Some(common.clock_monotonic_offset);
                 }
             }
@@ -350,22 +366,19 @@ fn list_probes(input: &Path) -> Result<Vec<String>> {
         match factory.next_event()? {
             None => break,
             Some(event) => {
-                if let Some(kernel) = event.get_section::<KernelEvent>(SectionId::Kernel) {
+                if let Some(kernel) = event.kernel {
                     let probe_name = format!("{}:{}", kernel.probe_type, kernel.symbol);
                     if probe_set.contains(&probe_name) {
                         continue;
                     }
                     // Having a common section is mandatory for now, seeing a
                     // filtered event w/o one of those is bogus.
-                    if event
-                        .get_section::<CommonEvent>(SectionId::Common)
-                        .is_none()
-                    {
+                    if event.common.is_none() {
                         continue;
                     }
                     // The skb & packet sections are mandatory for us to generate PCAP
                     // events, but they might not be present in some filtered events.
-                    match event.get_section::<SkbEvent>(SectionId::Skb) {
+                    match event.skb {
                         None => {}
                         Some(skb) => {
                             if skb.packet.as_ref().is_some() {
@@ -400,6 +413,11 @@ mod tests {
                 "ovs_dp_upcall",
                 Ok(()),
                 vec![
+                    SchemaBlock::new()
+                        .expect("Failed to create SchemaBlock")
+                        .into_custom_block()
+                        .expect("Failed to convert SchemaBlock into block")
+                        .into_block(),
                     Block::InterfaceDescription(InterfaceDescriptionBlock {
                         linktype: DataLink::ETHERNET,
                         snaplen: 65535,
@@ -425,9 +443,16 @@ mod tests {
                         interface_id: 0,
                         timestamp: Duration::from_nanos(1742339565860167909),
                         original_len: 98,
-                        options: vec![EnhancedPacketOption::Comment(Cow::Owned(
-                            "probe=kretprobe:ovs_dp_upcall".to_string(),
-                        ))],
+                        options: vec![
+                            EnhancedPacketOption::Comment(Cow::Owned("30419169125909 (6) [ping] 11330 [kr] ovs_dp_upcall #1baa83c42ba1ffff8e95c3b67c00 (skb ffff8e95d3009100)\n  ns 4026531840 if 10 (veth-ns01-ovs) rxif 10 a6:c2:11:71:59:45 > fa:5c:bd:8e:cc:01 ethertype IPv4 (0x0800) 192.168.125.10 > 192.168.125.11 ttl 64 tos 0x0 id 41977 off 0 [DF] len 84 proto ICMP (1) type 8 code 0 skb [csum none hash 0x7e2c5976 len 98 priority 0 users 1 dataref 1]\n  upcall_ret (6/30419169098548) ret 0".to_string())),
+                            EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
+                                code: 2988,
+                                pen: RETIS_PEN,
+                                value: Cow::Owned(String::from(
+                                    r#"{"common":{"timestamp":30419169125909,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"skb":{"eth":{"etype":2048,"src":"a6:c2:11:71:59:45","dst":"fa:5c:bd:8e:cc:01"},"ip":{"saddr":"192.168.125.10","daddr":"192.168.125.11","v4":{"tos":0,"id":41977,"flags":2,"offset":0},"protocol":1,"len":84,"ttl":64,"ecn":0},"icmp":{"type":8,"code":0},"dev":{"name":"veth-ns01-ovs","ifindex":10,"rx_ifindex":10},"ns":{"netns":4026531840},"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1},"packet":{"len":98,"capture_len":98,"packet":"+ly9jswBpsIRcVlFCABFAABUo/lAAEABG0nAqH0KwKh9CwgAQFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="}},"ovs":{"event_type":"upcall_return","upcall_ts":30419169098548,"upcall_cpu":6,"ret":0}}"#,
+                                )),
+                            }),
+                        ],
                     }),
                     Block::InterfaceDescription(InterfaceDescriptionBlock {
                         linktype: DataLink::ETHERNET,
@@ -454,9 +479,17 @@ mod tests {
                         interface_id: 1,
                         timestamp: Duration::from_nanos(1742339565860414774),
                         original_len: 98,
-                        options: vec![EnhancedPacketOption::Comment(Cow::Owned(
-                            "probe=kretprobe:ovs_dp_upcall".to_string(),
-                        ))],
+                        options: vec![
+                            EnhancedPacketOption::Comment(Cow::Owned("30419169372774 (6) [handler8] 985/995 [kr] ovs_dp_upcall #1baa83c8a025ffff8e95c3b67c00 (skb ffff8e95d3009200)\n  ns 4026531840 if 12 (veth-ns02-ovs) rxif 12 fa:5c:bd:8e:cc:01 > a6:c2:11:71:59:45 ethertype IPv4 (0x0800) 192.168.125.11 > 192.168.125.10 ttl 64 tos 0x0 id 19491 off 0 len 84 proto ICMP (1) type 0 code 0 skb [csum none hash 0x7e2c5976 len 98 priority 0 users 1 dataref 1]\n  upcall_ret (6/30419169364667) ret 0".to_string()
+                            )),
+                            EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
+                                code: 2988,
+                                pen: RETIS_PEN,
+                                value: Cow::Owned(String::from(
+                                    r#"{"common":{"timestamp":30419169372774,"smp_id":6,"task":{"pid":985,"tgid":995,"comm":"handler8"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169353765,"skb":18446619372874142208},"skb":{"eth":{"etype":2048,"src":"fa:5c:bd:8e:cc:01","dst":"a6:c2:11:71:59:45"},"ip":{"saddr":"192.168.125.11","daddr":"192.168.125.10","v4":{"tos":0,"id":19491,"flags":0,"offset":0},"protocol":1,"len":84,"ttl":64,"ecn":0},"icmp":{"type":0,"code":0},"dev":{"name":"veth-ns02-ovs","ifindex":12,"rx_ifindex":12},"ns":{"netns":4026531840},"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2753213483,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1},"packet":{"len":98,"capture_len":98,"packet":"psIRcVlF+ly9jswBCABFAABUTCMAAEABsx/AqH0LwKh9CgAASFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="}},"ovs":{"event_type":"upcall_return","upcall_ts":30419169364667,"upcall_cpu":6,"ret":0}}"#,
+                                )),
+                            }),
+                        ],
                     }),
                 ],
             ),
@@ -467,10 +500,7 @@ mod tests {
                 "test_data/test_events_packets_invalid_ct.json",
                 "",
                 "",
-                Err(anyhow!(
-                    "Failed to create EventSection for owner ct from \
-                json: missing field `ct_status`"
-                )),
+                Err(anyhow!("missing field `ct_status` at line 1 column 404")),
                 Vec::<Block>::new(),
             ),
             // No packet data provided.
@@ -572,12 +602,14 @@ mod tests {
             // Both for list-probes and for generating the actual pcap.
             (
                 "test_data/test_events_packets_invalid_ct.json",
-                Err(anyhow!("Failed to create EventSection for owner ct from json: missing field `ct_status`")),
+                Err(anyhow!("missing field `ct_status` at line 1 column 404")),
             ),
             // Completely missing probe section.
             (
                 "test_data/test_events_bench_no_probes.json",
-                Err(anyhow!("Could not find any compatible probe in provided data set")),
+                Err(anyhow!(
+                    "Could not find any compatible probe in provided data set"
+                )),
             ),
             // Garbage data.
             (

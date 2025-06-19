@@ -50,12 +50,12 @@ impl EventSorter {
     /// Adds an event to the EventSorter.
     pub(crate) fn add(&mut self, event: Event) {
         // Store FlowInfoEvents.
-        if let Some(flow_info) = event.get_section::<OvsFlowInfoEvent>(SectionId::OvsFlowInfo) {
+        if let Some(flow_info) = event.ovs_detrace.as_ref() {
             self.flow_info
                 .insert(flow_info.flow_id(), flow_info.clone());
         }
 
-        match event.get_section::<TrackingInfo>(SectionId::Tracking) {
+        match &event.tracking {
             Some(track) => match self.series.get_mut(track) {
                 Some(series) => {
                     series.push(event);
@@ -88,7 +88,8 @@ impl EventSorter {
                     .untracked
                     .front()
                     .unwrap()
-                    .get_section::<CommonEvent>(SectionId::Common)
+                    .common
+                    .as_ref()
                     .map(|c| c.timestamp)
                     .ok_or_else(|| anyhow!("malformed event: no common section"))?
             {
@@ -122,7 +123,7 @@ impl EventSorter {
                         // after the Lookup one.
                         series
                             .iter_mut()
-                            .filter_map(|e| e.get_section_mut::<OvsEvent>(SectionId::Ovs))
+                            .filter_map(|e| e.ovs.as_mut())
                             .for_each(|o| self.enrich_ovs_lookup(o));
                         Some(series)
                     }
