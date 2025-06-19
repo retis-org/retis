@@ -119,6 +119,16 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 	 * tracking info.
 	 */
 	if (!ti) {
+		/* If running from a kretprobe, the skb could have been freed
+		 * already. Do not add new tracking info.
+		 *
+		 * In some cases this could lead to an event from a kretprobe
+		 * not being linked to later ones, if the skb was first seen
+		 * there.
+		 */
+		if (ctx->probe_type == KERNEL_PROBE_KRETPROBE)
+			return 0;
+
 		/* Tracking info doesn't exist and we don't want to add one,
 		 * nothing more we can do here.
 		 */

@@ -47,9 +47,9 @@ int probe_kretprobe_kretprobe(struct pt_regs *ctx)
 
 	/* Look if the matching kprobe has left a context for us to pick up. */
 	kprobe_ctx = bpf_map_lookup_elem(&kretprobe_context, &tid);
-	if (!kprobe_ctx) {
+	if (!kprobe_ctx)
 		return 0;
-	}
+
 	bpf_map_delete_elem(&kretprobe_context, &tid);
 
 	context.timestamp = bpf_ktime_get_ns();
@@ -73,9 +73,9 @@ int probe_kretprobe_kprobe(struct pt_regs *ctx)
 	kprobe_get_regs(&context.regs, ctx);
 
 	/* Store the current context and let the kretprobe run the hooks. */
-	if (!bpf_map_update_elem(&kretprobe_context, &tid, &context, BPF_NOEXIST)) {
+	if (bpf_map_update_elem(&kretprobe_context, &tid, &context, BPF_NOEXIST))
 		return -1;
-	}
+
 	return 0;
 }
 
