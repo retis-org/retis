@@ -3,7 +3,7 @@ name: dropmon
 about: Drop monitor-like
 collect:
   - args:
-      collectors: skb-drop,skb
+      collectors: skb-drop,skb,dev
       probe: tp:skb:kfree_skb/stack
 pcap:
   - args:
@@ -14,7 +14,7 @@ name: nft-dropmon
 about: Drop monitor-like for netfilter (needs `--allow-system-changes` or compatible configuration; see `retis collect --help`)
 collect:
   - args:
-      collectors: nft,skb
+      collectors: nft,skb,dev
       nft_verdicts: drop
       probe: kprobe:__nft_trace_packet/stack
 pcap:
