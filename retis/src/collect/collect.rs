@@ -17,7 +17,7 @@ use nix::{errno::Errno, mount::*, unistd::Uid};
 use super::{
     cli::Collect,
     collector::{
-        ct::CtCollector, dev::DevCollector, nft::NftCollector, ovs::OvsCollector,
+        ct::CtCollector, dev::DevCollector, nft::NftCollector, ns::NsCollector, ovs::OvsCollector,
         skb::SkbCollector, skb_drop::SkbDropCollector, skb_tracking::SkbTrackingCollector,
     },
 };
@@ -260,7 +260,16 @@ impl Collectors {
 
         let collectors = match &collect.collectors {
             Some(collectors) => collectors.iter().map(|c| c.as_ref()).collect::<Vec<&str>>(),
-            None => vec!["skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct", "dev"],
+            None => vec![
+                "skb-tracking",
+                "skb",
+                "skb-drop",
+                "ovs",
+                "nft",
+                "ct",
+                "dev",
+                "ns",
+            ],
         };
 
         // Try initializing all collectors.
@@ -273,6 +282,7 @@ impl Collectors {
                 "nft" => Box::new(NftCollector::new()?),
                 "ct" => Box::new(CtCollector::new()?),
                 "dev" => Box::new(DevCollector::new()?),
+                "ns" => Box::new(NsCollector::new()?),
                 _ => bail!("Unknown collector {name}"),
             };
 
