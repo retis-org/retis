@@ -109,10 +109,10 @@ pub(super) fn unmarshal_gso(raw_section: &BpfRawSection) -> Result<SkbGsoEvent> 
     })
 }
 
-pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<SkbPacketEvent> {
+pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<PacketEvent> {
     let raw = parse_raw_section::<skb_packet_event>(raw_section)?;
 
-    Ok(SkbPacketEvent {
+    Ok(PacketEvent {
         len: raw.len,
         capture_len: raw.capture_len,
         raw: RawPacket(raw.packet[..(raw.capture_len as usize)].to_vec()),
@@ -157,7 +157,7 @@ impl RawEventSectionFactory for SkbEventFactory {
                 SECTION_META => skb.meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => skb.data_ref = Some(unmarshal_data_ref(section)?),
                 SECTION_GSO => skb.gso = Some(unmarshal_gso(section)?),
-                SECTION_PACKET => skb.packet = Some(unmarshal_packet(section)?),
+                SECTION_PACKET => event.packet = Some(unmarshal_packet(section)?),
                 x => bail!("Unknown data type ({x})"),
             }
         }

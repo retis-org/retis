@@ -93,27 +93,32 @@ impl EventParser {
 
         self.stats.processed += 1;
 
-        // The skb & packet sections are mandatory for us to generate PCAP
-        // events, but they might not be present in some filtered events. Stats
-        // are kept here to inform the user.
-        let skb = some_or_return!(&event.skb, self.stats.missing_skb);
-        let packet = some_or_return!(skb.packet.as_ref(), self.stats.missing_packet);
+        // The packet section is mandatory for us to generate PCAP events, but
+        // it might not be present in some filtered events. Stats are kept to
+        // inform the user.
+        let packet = some_or_return!(&event.packet, self.stats.missing_packet);
 
         // The dev & ns sections are best to have but not mandatory to generate
         // an event. If not found, fake them.
-        let (ifindex, ifname) = match skb.dev.as_ref() {
-            Some(dev) => (dev.ifindex, dev.name.as_str()),
-            None => {
-                self.stats.missing_dev += 1;
-                (0, "?")
+        let (ifindex, ifname, netns_cookie, netns_inum) = match &event.skb {
+            Some(skb) => {
+                let (ifindex, ifname) = match skb.dev.as_ref() {
+                    Some(dev) => (dev.ifindex, dev.name.as_str()),
+                    None => {
+                        self.stats.missing_dev += 1;
+                        (0, "?")
+                    }
+                };
+                let (netns_cookie, netns_inum) = match skb.ns.as_ref() {
+                    Some(ns) => (ns.cookie, ns.inum),
+                    None => {
+                        self.stats.missing_ns += 1;
+                        (None, 0)
+                    }
+                };
+                (ifindex, ifname, netns_cookie, netns_inum)
             }
-        };
-        let (netns_cookie, netns_inum) = match skb.ns.as_ref() {
-            Some(ns) => (ns.cookie, ns.inum),
-            None => {
-                self.stats.missing_ns += 1;
-                (None, 0)
-            }
+            None => (0, "?", None, 0),
         };
 
         // If we see this iface for the first time, add a description block.
@@ -362,16 +367,14 @@ fn list_probes(input: &Path) -> Result<Vec<String>> {
                     if event.common.is_none() {
                         continue;
                     }
-                    // The skb & packet sections are mandatory for us to generate PCAP
-                    // events, but they might not be present in some filtered events.
-                    match event.skb {
-                        None => {}
-                        Some(skb) => {
-                            if skb.packet.as_ref().is_some() {
-                                probe_set.insert(probe_name);
-                            }
-                        }
+                    // The packet section is mandatory for us to generate PCAP
+                    // events, but it might not be present in some filtered
+                    // events.
+                    if event.packet.is_none() {
+                        continue;
                     }
+
+                    probe_set.insert(probe_name);
                 }
             }
         }
