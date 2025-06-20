@@ -34,7 +34,8 @@ used to choose which parts of the `skb` metadata to retrieve and
 export in the events. See the `retis collect --help` for a detailed description.
 
 The `skb` collector produces the [skb](../events/skb.md),
-[packet](../events/packet.md) and [dev](../events/dev.md) event sections.
+[packet](../events/packet.md), [dev](../events/dev.md) and
+[netns](../events/netns.md) event sections.
 
 ## Skb tracking
 
@@ -107,3 +108,10 @@ The `dev` collector provides information about network devices, either if a
 `struct sk_buff` and its reference.
 
 The `dev` collector produces the [dev](../events/dev.md) event section.
+
+## Namespace
+
+The `ns` collector retrieves information about namespaces, currently only
+network namespaces.
+
+The `ns` collector produces the [netns](../events/netns.md) event section.

@@ -23,6 +23,7 @@ nav:
         - skb-tracking: events/skb_tracking.md
         - skb-drop: events/skb_drop.md
         - dev: events/dev.md
+        - netns: events/netns.md
         - ovs: events/ovs.md
         - ct: events/ct.md
         - nft: events/nft.md

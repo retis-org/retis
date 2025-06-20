@@ -17,7 +17,7 @@ use nix::{errno::Errno, mount::*, unistd::Uid};
 use super::{
     cli::Collect,
     collector::{
-        ct::CtCollector, dev::DevCollector, nft::NftCollector, ovs::OvsCollector,
+        ct::CtCollector, dev::DevCollector, nft::NftCollector, ns::NsCollector, ovs::OvsCollector,
         skb::SkbCollector, skb_drop::SkbDropCollector, skb_tracking::SkbTrackingCollector,
     },
 };
@@ -263,7 +263,16 @@ impl Collectors {
                 .iter()
                 .map(|c| c.as_ref())
                 .collect::<HashSet<_>>(),
-            None => HashSet::from(["skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct", "dev"]),
+            None => HashSet::from([
+                "skb-tracking",
+                "skb",
+                "skb-drop",
+                "ovs",
+                "nft",
+                "ct",
+                "dev",
+                "ns",
+            ]),
         };
 
         // Try initializing all collectors.
@@ -276,6 +285,7 @@ impl Collectors {
                 "nft" => Box::new(NftCollector::new()?),
                 "ct" => Box::new(CtCollector::new()?),
                 "dev" => Box::new(DevCollector::new()?),
+                "ns" => Box::new(NsCollector::new()?),
                 _ => bail!("Unknown collector {name}"),
             };
 
