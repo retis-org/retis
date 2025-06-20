@@ -37,8 +37,7 @@ Supported values:
 - gso:     include generic segmentation offload (GSO) information.
 - all:     all of the above.
 
-The packet and ns sections, as well as the VLAN offloading metadata are always
-retrieved.
+The packet section as well as the VLAN offloading metadata are always retrieved.
 
 The following values are ignored and no event section will be generated as the
 corresponding data is part of the raw packet: eth, arp, ip, tcp, udp, icmp."
@@ -73,7 +72,7 @@ impl Collector for SkbCollector {
         // checked in the BPF hook (raw packet is always reported) and
         // SECTION_VLAN (that's the offloaded VLAN data) as when non-offloaded
         // we'll get VLAN info from the packet and that would be inconsistent.
-        let mut sections: u64 = 1 << SECTION_PACKET | 1 << SECTION_VLAN | 1 << SECTION_NS;
+        let mut sections: u64 = 1 << SECTION_PACKET | 1 << SECTION_VLAN;
 
         for category in args.collector_args.skb.skb_sections.iter() {
             match category.as_str() {
@@ -82,13 +81,13 @@ impl Collector for SkbCollector {
                 "dataref" => sections |= 1 << SECTION_DATA_REF,
                 "gso" => sections |= 1 << SECTION_GSO,
                 "eth" => (),
-                "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" | "ns" => {
+                "packet" | "arp" | "ip" | "tcp" | "udp" | "icmp" => {
                     warn!(
                         "Use of '{}' in --skb-sections is depreacted",
                         category.as_str(),
                     );
                 }
-                "dev" => {
+                "dev" | "ns" => {
                     warn!(
                         "Use of '{}' in --skb-sections is depreacted: it is now a collector",
                         category.as_str(),

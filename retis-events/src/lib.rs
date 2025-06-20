@@ -27,6 +27,8 @@ pub mod kernel;
 pub use kernel::*;
 pub mod nft;
 pub use nft::*;
+pub mod ns;
+pub use ns::*;
 pub mod ovs;
 pub use ovs::*;
 pub mod packet;

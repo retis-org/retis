@@ -11,6 +11,7 @@ pub(crate) use collector::*;
 pub(crate) mod ct;
 pub(crate) mod dev;
 pub(crate) mod nft;
+pub(crate) mod ns;
 pub(crate) mod ovs;
 pub(crate) mod skb;
 pub(crate) mod skb_drop;

@@ -5,32 +5,15 @@
 //! Please keep this file in sync with its BPF counterpart in bpf/skb_hook.bpf.c
 
 use anyhow::{bail, Result};
-use btf_rs::Type;
 
 use crate::{
     bindings::{if_vlan_uapi::*, skb_hook_uapi::*},
-    core::{
-        events::{
-            parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
-            RawEventSectionFactory,
-        },
-        inspect::inspector,
+    core::events::{
+        parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
     },
     event_section_factory,
     events::*,
 };
-
-pub(super) fn unmarshal_ns(
-    raw_section: &BpfRawSection,
-    cookie_support: bool,
-) -> Result<SkbNsEvent> {
-    let raw = parse_raw_section::<skb_netns_event>(raw_section)?;
-
-    Ok(SkbNsEvent {
-        cookie: Some(raw.cookie).filter(|_| cookie_support),
-        inum: raw.inum,
-    })
-}
 
 pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent> {
     let raw = parse_raw_section::<skb_meta_event>(raw_section)?;
@@ -90,31 +73,9 @@ pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<PacketEven
     })
 }
 
+#[derive(Default)]
 #[event_section_factory(FactoryId::Skb)]
-pub(crate) struct SkbEventFactory {
-    // Does the kernel support net cookies?
-    net_cookie: bool,
-}
-
-impl SkbEventFactory {
-    pub(crate) fn new() -> Result<Self> {
-        let mut net_cookie = false;
-        if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name("net") {
-            if let Some((btf, Type::Struct(r#struct))) =
-                types.iter().find(|(_, t)| matches!(t, Type::Struct(_)))
-            {
-                for member in r#struct.members.iter() {
-                    let name = btf.resolve_name(member)?;
-                    if name == "net_cookie" {
-                        net_cookie = true;
-                    }
-                }
-            }
-        }
-
-        Ok(Self { net_cookie })
-    }
-}
+pub(crate) struct SkbEventFactory {}
 
 impl RawEventSectionFactory for SkbEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
@@ -124,9 +85,6 @@ impl RawEventSectionFactory for SkbEventFactory {
             match section.header.data_type as u32 {
                 SECTION_VLAN => {
                     skb.get_or_insert_default().vlan_accel = Some(unmarshal_vlan(section)?)
-                }
-                SECTION_NS => {
-                    skb.get_or_insert_default().ns = Some(unmarshal_ns(section, self.net_cookie)?)
                 }
                 SECTION_META => skb.get_or_insert_default().meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => {
@@ -149,19 +107,6 @@ pub(crate) mod benchmark {
 
     use super::*;
     use crate::{benchmark::helpers::*, core::events::FactoryId};
-
-    impl RawSectionBuilder for skb_netns_event {
-        fn build_raw(out: &mut Vec<u8>) -> Result<()> {
-            let data = Self::default();
-            build_raw_section(
-                out,
-                FactoryId::Skb as u8,
-                SECTION_NS as u8,
-                &mut as_u8_vec(&data),
-            );
-            Ok(())
-        }
-    }
 
     impl RawSectionBuilder for skb_packet_event {
         fn build_raw(out: &mut Vec<u8>) -> Result<()> {

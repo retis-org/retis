@@ -107,18 +107,12 @@ impl EventParser {
                 (0, "?")
             }
         };
-        let (netns_cookie, netns_inum) = match &event.skb {
-            Some(skb) => {
-                let (netns_cookie, netns_inum) = match skb.ns.as_ref() {
-                    Some(ns) => (ns.cookie, ns.inum),
-                    None => {
-                        self.stats.missing_ns += 1;
-                        (None, 0)
-                    }
-                };
-                (netns_cookie, netns_inum)
+        let (netns_cookie, netns_inum) = match &event.netns {
+            Some(ns) => (ns.cookie, ns.inum),
+            None => {
+                self.stats.missing_ns += 1;
+                (None, 0)
             }
-            None => (None, 0),
         };
 
         // If we see this iface for the first time, add a description block.
@@ -469,7 +463,7 @@ mod tests {
                 "test_data/test_events_packets_invalid_ct.json",
                 "",
                 "",
-                Err(anyhow!("missing field `ct_status` at line 1 column 1073")),
+                Err(anyhow!("missing field `ct_status` at line 1 column 1076")),
                 Vec::<Block>::new(),
             ),
             // No packet data provided.
@@ -569,7 +563,7 @@ mod tests {
             // Both for list-probes and for generating the actual pcap.
             (
                 "test_data/test_events_packets_invalid_ct.json",
-                Err(anyhow!("missing field `ct_status` at line 1 column 1073")),
+                Err(anyhow!("missing field `ct_status` at line 1 column 1076")),
             ),
             // Completely missing probe section.
             (
