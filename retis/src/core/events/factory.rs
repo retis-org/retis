@@ -26,20 +26,17 @@ impl RetisEventsFactory {
     }
 
     /// Add a new event. The provided closure accepts an event whose
-    /// `SectionId::Common` section has already been initialized and is expected
+    /// `common` section has already been initialized and is expected
     /// to add additional sections to it.
     pub(crate) fn add_event<F>(&self, f: F) -> Result<()>
     where
         F: Fn(&mut Event) -> Result<()>,
     {
         let mut event = Event::new();
-        event.insert_section(
-            SectionId::Common,
-            Box::new(CommonEvent {
-                timestamp: monotonic_timestamp()?,
-                ..Default::default()
-            }),
-        )?;
+        event.common = Some(CommonEvent {
+            timestamp: monotonic_timestamp()?,
+            ..Default::default()
+        });
 
         f(&mut event)?;
         self.queue.lock().unwrap().push_front(event);

@@ -29,8 +29,8 @@ pub(crate) struct CtEventFactory {
 }
 
 impl RawEventSectionFactory for CtEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let mut event = CtEvent {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+        let mut ct = CtEvent {
             state: {
                 let raw = parse_raw_section::<ct_meta_event>(
                     raw_sections
@@ -65,10 +65,11 @@ impl RawEventSectionFactory for CtEventFactory {
             .iter()
             .find(|s| s.header.data_type as u32 == SECTION_PARENT_CONN)
         {
-            event.parent = Some(self.unmarshal_ct(raw_section)?);
+            ct.parent = Some(self.unmarshal_ct(raw_section)?);
         }
 
-        Ok(Box::new(event))
+        event.ct = Some(ct);
+        Ok(())
     }
 }
 

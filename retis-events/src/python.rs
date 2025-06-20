@@ -3,12 +3,12 @@
 //! This module contains python bindings for retis events so that they can
 //! be inspected in post-processing tools written in python.
 
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, ffi::CString, path::PathBuf};
 
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError},
     prelude::*,
-    types::{PyBool, PyList},
+    types::{IntoPyDict, PyBool, PyList},
 };
 
 use super::*;
@@ -54,7 +54,7 @@ use super::*;
 ///   if 15 (p1_p) 2001:db8:dead::1.20 > 2001:db8:dead::2.80 ttl 64 len 20 proto TCP (6) flags [S] seq 0 win 8192
 /// ```
 #[pyclass(name = "Event")]
-pub struct PyEvent(Event);
+pub struct PyEvent(Py<Event>);
 
 // We need this to make it a pyclass.
 //
@@ -62,8 +62,8 @@ pub struct PyEvent(Event);
 unsafe impl Sync for PyEvent {}
 
 impl PyEvent {
-    pub(crate) fn new(event: Event) -> Self {
-        Self(event)
+    pub(crate) fn new(py: Python<'_>, event: Event) -> PyResult<Self> {
+        Ok(Self(Py::new(py, event)?))
     }
 }
 
@@ -71,50 +71,67 @@ impl PyEvent {
 impl PyEvent {
     /// Controls how the PyEvent is represented, eg. what is the output of
     /// `print(e)`.
-    fn __repr__<'a>(&'a self, py: Python<'a>) -> String {
-        let raw = self.raw(py);
-        let dict: &Bound<'_, PyAny> = raw.bind(py);
-        dict.repr().unwrap().to_string()
+    fn __repr__<'a>(&'a self, py: Python<'a>) -> PyResult<String> {
+        Ok(self.raw(py)?.to_string())
     }
 
-    /// Allows to use the object as a dictionary, eg. `e['skb']`.
+    /// Allows to use the object as a dictionary, e.g. `e['skb']`.
+    /// The use of direct attribute access is prefered, e.g: `e.skb`.
     fn __getitem__<'a>(&'a self, py: Python<'a>, attr: &str) -> PyResult<Py<PyAny>> {
-        if let Ok(id) = SectionId::from_str(attr) {
-            if let Some(section) = self.0.get(id) {
-                return Ok(section.to_py(py));
-            }
+        let item = self
+            .__getattr__(py, attr)
+            .map_err(|_| PyKeyError::new_err(attr.to_string()))?;
+
+        if item.is_none(py) {
+            Err(PyKeyError::new_err(attr.to_string()))
+        } else {
+            Ok(item)
         }
-        Err(PyKeyError::new_err(attr.to_string()))
     }
 
-    /// Allows to check if a section is present inthe event, e.g: `'skb' in e`
-    fn __contains__<'a>(&'a self, _py: Python<'a>, attr: &str) -> PyResult<bool> {
-        if let Ok(id) = SectionId::from_str(attr) {
-            if self.0.get(id).is_some() {
-                return Ok(true);
-            }
-        }
-        Ok(false)
+    /// Return a section or None if it's not present.
+    fn __getattr__<'a>(&'a self, py: Python<'a>, attr: &str) -> PyResult<Py<PyAny>> {
+        // For backwards compatibility reasons, we allow accessing sections in kebab-case.
+        self.0.getattr(py, attr.replace("-", "_"))
+    }
+
+    /// Allows to check if a section is present in the event, e.g: `'skb' in e`.
+    /// Prefer using __getattr__ directly, i.e: `if e.skb is not None`
+    fn __contains__<'a>(&'a self, py: Python<'a>, attr: &str) -> PyResult<bool> {
+        Ok(self.__getattr__(py, attr).is_ok_and(|x| !x.is_none(py)))
     }
 
     /// Returns internal data as a dictionary
     ///
     /// Returns a dictionary with all key<>data stored (recursively) in the
     /// event, eg. `e.raw()['skb']['dev']`.
-    fn raw(&self, py: Python<'_>) -> PyObject {
-        to_pyobject(&self.0.to_json(), py)
+    fn raw(&self, py: Python<'_>) -> PyResult<PyObject> {
+        Ok(to_pyobject(
+            &serde_json::to_value(self.0.borrow(py).clone()).unwrap(),
+            py,
+        ))
     }
 
     /// Returns a string representation of the event
-    fn show(&self) -> String {
+    fn show(&self, py: Python<'_>) -> String {
         let format = crate::DisplayFormat::new().multiline(true);
-        format!("{}", self.0.display(&format, &crate::FormatterConf::new()))
+        format!(
+            "{}",
+            self.0
+                .borrow(py)
+                .display(&format, &crate::FormatterConf::new())
+        )
     }
 
     /// Returns a list of existing section names.
     pub fn sections(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
-        let sections: Vec<&str> = self.0.sections().map(|s| s.to_str()).collect();
-        PyList::new(py, sections).unwrap().extract()
+        let globals = [("event", self.0.bind(py))].into_py_dict(py)?;
+
+        Ok(py.eval(
+            &CString::new("[v for v in dir(event) if not callable(v) and getattr(event,v) and not v.startswith('__')]")?,
+            Some(&globals),
+            None,
+        )?.downcast_into()?.unbind())
     }
 }
 
@@ -148,7 +165,7 @@ impl PyEventSeries {
     pub(crate) fn new(py: Python<'_>, mut series: EventSeries) -> PyResult<Self> {
         let mut events = Vec::new();
         series.events.drain(..).try_for_each(|e| -> PyResult<()> {
-            events.push(Py::new(py, PyEvent::new(e))?);
+            events.push(Py::new(py, PyEvent::new(py, e)?)?);
             Ok(())
         })?;
         Ok(Self { events, idx: 0 })
@@ -167,7 +184,9 @@ impl PyEventSeries {
             .ok_or_else(|| PyRuntimeError::new_err("Malformed Series with < 1 events"))?
             .try_borrow(py)?
             .0
-            .get_section::<CommonEvent>(SectionId::Common)
+            .try_borrow(py)?
+            .common
+            .as_ref()
             .unwrap()
             .timestamp;
         Ok(format!(
@@ -246,7 +265,7 @@ impl PyEventReader {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
         {
             Some(event) => {
-                let pyevent: Bound<'_, PyEvent> = Bound::new(py, PyEvent::new(event))?;
+                let pyevent: Bound<'_, PyEvent> = Bound::new(py, PyEvent::new(py, event)?)?;
                 Ok(Some(pyevent.into_any().into()))
             }
             None => Ok(None),

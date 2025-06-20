@@ -54,7 +54,7 @@ impl FileEventsFactory {
         match self.reader.read_line(&mut line) {
             Err(e) => Err(e.into()),
             Ok(0) => Ok(None),
-            Ok(_) => Ok(Some(Event::from_json(line)?)),
+            Ok(_) => Ok(Some(serde_json::from_str(line.as_str())?)),
         }
     }
 
@@ -70,7 +70,7 @@ impl FileEventsFactory {
         match self.reader.read_line(&mut line) {
             Err(e) => Err(e.into()),
             Ok(0) => Ok(None),
-            Ok(_) => Ok(Some(EventSeries::from_json(line)?)),
+            Ok(_) => Ok(Some(serde_json::from_str(line.as_str())?)),
         }
     }
 
@@ -111,7 +111,7 @@ mod tests {
 
         let mut events = Vec::new();
         while let Some(event) = fact.next_event().unwrap() {
-            println!("event: {:#?}", event.to_json());
+            println!("event: {:#?}", serde_json::json!(event));
             events.push(event)
         }
         assert!(events.len() == 4);

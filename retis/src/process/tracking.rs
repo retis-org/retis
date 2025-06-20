@@ -52,7 +52,7 @@ impl AddTracking {
 
     /// Process one event adding TrackingInfo section.
     pub(crate) fn process_one(&mut self, event: &mut Event) -> Result<()> {
-        if let Some(ovs) = event.get_section::<OvsEvent>(SectionId::Ovs) {
+        if let Some(ovs) = &event.ovs {
             use OvsEvent::*;
             match ovs {
                 Upcall { upcall } => {
@@ -64,7 +64,8 @@ impl AddTracking {
                         // Store a reference to the TrackingInfo in upcall map. That way, it will be used
                         // for all nested enqueue events.
                         let ts = event
-                            .get_section::<CommonEvent>(SectionId::Common)
+                            .common
+                            .as_ref()
                             .map(|c| c.timestamp)
                             .ok_or_else(|| anyhow!("malformed event: no common section"))?;
                         let key = UpcallKey { ts, cpu };
@@ -121,9 +122,7 @@ impl AddTracking {
 
                         // Add an entry in the skb tracking table so that futre non-ovs events also
                         // get the tracking id from the original (upcalled) packet.
-                        if let Some(skb) =
-                            event.get_section::<SkbTrackingEvent>(SectionId::SkbTracking)
-                        {
+                        if let Some(skb) = event.skb_tracking {
                             self.skb_tracking.insert(skb.tracking_id(), info.clone());
                         }
 
@@ -149,12 +148,12 @@ impl AddTracking {
     // Insert TrackingInformation to an event.
     fn insert_info(event: &mut Event, info: &Arc<Mutex<TrackingInfo>>) -> Result<()> {
         let info = info.lock().unwrap().clone();
-        if let Some(info_section) = event.get_section::<TrackingInfo>(SectionId::Tracking) {
+        if let Some(info_section) = &event.tracking {
             if *info_section != info {
                 bail!("Event already has info section {info_section:?} and does not match computed {info:?}")
             }
         } else {
-            event.insert_section(SectionId::Tracking, Box::new(info))?;
+            event.tracking = Some(info);
         }
 
         Ok(())
@@ -163,7 +162,7 @@ impl AddTracking {
     // Add tracking information to an event based on skb-tracking id if it exists.
     // Returns the TrackingInformation pointer if skb-tracking information was available.
     fn process_skb(&mut self, event: &mut Event) -> Result<Option<Arc<Mutex<TrackingInfo>>>> {
-        if let Some(skb) = event.get_section::<SkbTrackingEvent>(SectionId::SkbTracking) {
+        if let Some(skb) = &event.skb_tracking {
             let tracking_id = skb.tracking_id();
             let info = match self.skb_tracking.get(&tracking_id) {
                 Some(info) => {

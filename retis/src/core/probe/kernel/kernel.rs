@@ -120,12 +120,12 @@ impl KernelEventFactory {
 }
 
 impl RawEventSectionFactory for KernelEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let raw = parse_single_raw_section::<kernel_event>(&raw_sections)?;
-        let mut event = KernelEvent::default();
+        let mut kernel = KernelEvent::default();
 
         let symbol_addr = raw.symbol;
-        event.symbol = match self.symbols_cache.get(&symbol_addr) {
+        kernel.symbol = match self.symbols_cache.get(&symbol_addr) {
             Some(name) => name.clone(),
             None => {
                 let name = Symbol::from_addr(symbol_addr)?.name();
@@ -134,7 +134,7 @@ impl RawEventSectionFactory for KernelEventFactory {
             }
         };
 
-        event.probe_type = match raw.type_ {
+        kernel.probe_type = match raw.type_ {
             0 => "kprobe",
             1 => "kretprobe",
             2 => "raw_tracepoint",
@@ -143,9 +143,10 @@ impl RawEventSectionFactory for KernelEventFactory {
         .to_string();
 
         #[cfg(not(test))]
-        self.unmarshal_stackid(&mut event, raw.stack_id as i32)?;
+        self.unmarshal_stackid(&mut kernel, raw.stack_id as i32)?;
 
-        Ok(Box::new(event))
+        event.kernel = Some(kernel);
+        Ok(())
     }
 }
 

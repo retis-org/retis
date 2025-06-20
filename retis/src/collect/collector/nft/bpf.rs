@@ -34,16 +34,16 @@ pub(super) const VERD_MAX: u64 = VERD_REPEAT;
 pub(crate) struct NftEventFactory {}
 
 impl RawEventSectionFactory for NftEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>) -> Result<Box<dyn EventSection>> {
-        let mut event = NftEvent::default();
+    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+        let mut nft = NftEvent::default();
         let raw = parse_single_raw_section::<nft_event>(&raw_sections)?;
 
-        event.table_name = raw_to_string!(&raw.table_name)?;
-        event.chain_name = raw_to_string!(&raw.chain_name)?;
-        event.table_handle = raw.t_handle;
-        event.chain_handle = raw.c_handle;
-        event.policy = raw.policy == 1;
-        event.rule_handle = match raw.r_handle {
+        nft.table_name = raw_to_string!(&raw.table_name)?;
+        nft.chain_name = raw_to_string!(&raw.chain_name)?;
+        nft.table_handle = raw.t_handle;
+        nft.chain_handle = raw.c_handle;
+        nft.policy = raw.policy == 1;
+        nft.rule_handle = match raw.r_handle {
             -1 => None,
             _ => Some(raw.r_handle),
         };
@@ -62,13 +62,14 @@ impl RawEventSectionFactory for NftEventFactory {
             5 => "stop",
             _ => "unknown",
         }
-        .clone_into(&mut event.verdict);
+        .clone_into(&mut nft.verdict);
 
         // Destination chain is only valid for NFT_JUMP/NFT_GOTO.
         if raw.verdict as i32 == -3 || raw.verdict as i32 == -4 {
-            event.verdict_chain_name = raw_to_string_opt!(&raw.verdict_chain_name)?;
+            nft.verdict_chain_name = raw_to_string_opt!(&raw.verdict_chain_name)?;
         }
 
-        Ok(Box::new(event))
+        event.nft = Some(nft);
+        Ok(())
     }
 }
