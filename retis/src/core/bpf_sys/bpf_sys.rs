@@ -125,7 +125,7 @@ mod tests {
             BpfSize::Half,
         ));
         ebpf.add(eBpfInsn::jmp(
-            eBpfJmpOpExt::Ne,
+            eBpfJmpOpExt::eBpf(eBpfJmpOp::Ne),
             JmpInfo::Imm {
                 dst: BpfReg::R2,
                 off: 2,

@@ -1,0 +1,30 @@
+program = _{ SOI ~ expr ~ EOI }
+expr = { primary ~ (infix ~ primary)* }
+infix = { and | or }
+and = { "and" | "&&" }
+or = { "or" | "||" }
+primary = { term | "(" ~ expr ~ ")" }
+term = { lhs ~ (op ~ rhs)? }
+op = { "==" | "!=" | ">=" | "<=" | ">" | "<" }
+
+lhs = { "sk_buff" ~ ("." ~ ident?)+ }
+ident = { uident ~ ident_modifiers? }
+ident_modifiers = { ":" ~ mask ~ (":" ~ uident)? }
+mask =   { not? ~ (hex | bin | dec) }
+hex = @{ "0x" ~ ('0'..'9' | 'a'..'f' | 'A'..'F')+ }
+bin = @{ "0b" ~ ("0" | "1")+ }
+dec = @{ ASCII_DIGIT+ }
+not = @{ "~" }
+uident = @{ so_ident ~ re_ident }
+so_ident = _{ ('a'..'z' | 'A'..'Z' | "_") }
+re_ident = _{ (so_ident | "_")* }
+
+rhs = { num | string }
+num = @{ hex | bin | ext_dec }
+ext_dec = @{ (neg)? ~ ASCII_DIGIT+ }
+neg = @{ "-" }
+string = @{ PUSH("\"" | "'") ~ any_string+ ~ POP }
+any_string = { (!PEEK ~ ANY)+ }
+
+WHITESPACE   =   _{ " " | "\t" }
+EOF          =   _{ EOI | ";" }

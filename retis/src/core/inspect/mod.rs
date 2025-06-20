@@ -15,6 +15,7 @@ pub(crate) static BASE_TEST_DIR: &str = match (cfg!(test), cfg!(feature = "bench
 };
 
 mod btf;
+pub(crate) use btf::BtfInfo;
 pub(crate) mod check;
 mod kernel;
 pub(crate) mod kernel_version;
