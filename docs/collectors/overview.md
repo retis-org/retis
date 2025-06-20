@@ -107,3 +107,10 @@ The `dev` collector provides information about network devices, either if a
 `struct sk_buff` and its reference.
 
 The `dev` collector produces the [dev](../events/dev.md) event section.
+
+## Namespace
+
+The `ns` collector retrieves information about namespaces, currently only
+network namespaces.
+
+The `ns` collector produces the [netns](../events/netns.md) event section.
