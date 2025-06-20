@@ -107,18 +107,12 @@ impl EventParser {
                 (0, "?")
             }
         };
-        let (netns_cookie, netns_inum) = match &event.skb {
-            Some(skb) => {
-                let (netns_cookie, netns_inum) = match skb.ns.as_ref() {
-                    Some(ns) => (ns.cookie, ns.inum),
-                    None => {
-                        self.stats.missing_ns += 1;
-                        (None, 0)
-                    }
-                };
-                (netns_cookie, netns_inum)
+        let (netns_cookie, netns_inum) = match &event.netns {
+            Some(ns) => (ns.cookie, ns.inum),
+            None => {
+                self.stats.missing_ns += 1;
+                (None, 0)
             }
-            None => (None, 0),
         };
 
         // If we see this iface for the first time, add a description block.
