@@ -59,16 +59,16 @@ pub(crate) fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u3
     Ok(values)
 }
 
-/// Parses a struct and returns its field names.
-pub(crate) fn parse_struct(r#struct: &str) -> Result<Vec<String>> {
-    let mut fields = Vec::new();
+/// Parses a struct and returns its field (bit) offsets and names.
+pub(crate) fn parse_struct(r#struct: &str) -> Result<HashMap<u32, String>> {
+    let mut fields = HashMap::new();
 
     if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(r#struct) {
         if let Some((btf, Type::Struct(r#enum))) =
             types.iter().find(|(_, t)| matches!(t, Type::Struct(_)))
         {
             for member in r#enum.members.iter() {
-                fields.push(btf.resolve_name(member)?);
+                fields.insert(member.bit_offset(), btf.resolve_name(member)?);
             }
         }
     }

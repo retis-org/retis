@@ -6,7 +6,7 @@ use crate::{
     bindings::{
         common_uapi::kernel_event,
         ct_uapi::*,
-        dev_hook_uapi::*,
+        dev_common_uapi::*,
         events_uapi::{common_event, common_task_event},
         kernel_exec_tp_uapi::exec_event,
         skb_hook_uapi::*,

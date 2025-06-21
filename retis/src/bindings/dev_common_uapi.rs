@@ -2,8 +2,11 @@
 
 pub type __u8 = ::std::os::raw::c_uchar;
 pub type __u32 = ::std::os::raw::c_uint;
-pub type u8_ = __u8;
 pub type u32_ = __u32;
+pub type u8_ = __u8;
+pub const SECTION_DEV: dev_sections = 1;
+pub const SECTION_CORE_STAT: dev_sections = 2;
+pub type dev_sections = ::std::os::raw::c_uint;
 pub const IFNAMSIZ: enum_IFNAMSIZ = 16;
 pub type enum_IFNAMSIZ = ::std::os::raw::c_uint;
 #[repr(C)]
@@ -12,4 +15,9 @@ pub struct dev_event {
     pub dev_name: [u8_; 16usize],
     pub ifindex: u32_,
     pub iif: u32_,
+}
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct dev_core_stat_event {
+    pub offset: u32_,
 }
