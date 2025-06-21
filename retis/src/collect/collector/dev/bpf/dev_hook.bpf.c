@@ -3,14 +3,7 @@
 #include <bpf/bpf_endian.h>
 
 #include <common.h>
-
-BINDING_DEF(IFNAMSIZ, 16)
-
-struct dev_event {
-	u8 dev_name[IFNAMSIZ];
-	u32 ifindex;
-	u32 iif;
-} __binding;
+#include <dev_common.h>
 
 DEFINE_HOOK_RAW(
 	struct sk_buff *skb;
@@ -38,7 +31,7 @@ DEFINE_HOOK_RAW(
 	if (!ifindex)
 		return 0;
 
-	e = get_event_section(event, COLLECTOR_DEV, 1, sizeof(*e));
+	e = get_event_section(event, COLLECTOR_DEV, SECTION_DEV, sizeof(*e));
 	if (!e)
 		return 0;
 

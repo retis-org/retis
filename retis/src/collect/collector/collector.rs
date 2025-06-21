@@ -27,7 +27,7 @@ pub(crate) fn section_factories() -> Result<SectionFactories> {
     factories.insert(FactoryId::Ovs, Box::new(OvsEventFactory::new()?));
     factories.insert(FactoryId::Nft, Box::<NftEventFactory>::default());
     factories.insert(FactoryId::Ct, Box::new(CtEventFactory::new()?));
-    factories.insert(FactoryId::Dev, Box::<DevEventFactory>::default());
+    factories.insert(FactoryId::Dev, Box::new(DevEventFactory::new()?));
 
     Ok(factories)
 }

@@ -160,7 +160,7 @@ impl KprobeBuilder<'_> {
             .any(|variant| variant == "BPF_TRACE_KPROBE_MULTI");
         let multi_cookies = inspect::parse_struct("bpf_kprobe_multi_link")?
             .iter()
-            .any(|field| field == "cookies");
+            .any(|(_, field)| field == "cookies");
 
         if multi && multi_cookies {
             return Ok(KprobeMulti);
