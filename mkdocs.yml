@@ -18,6 +18,7 @@ nav:
     - Event sections:
         - Introduction: events/intro.md
         - Core sections: events/core.md
+        - packet: events/packet.md
         - skb: events/skb.md
         - skb-tracking: events/skb_tracking.md
         - skb-drop: events/skb_drop.md
