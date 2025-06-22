@@ -54,6 +54,8 @@ pub struct Event {
     pub skb_tracking: Option<SkbTrackingEvent>,
     /// Skb drop section.
     pub skb_drop: Option<SkbDropEvent>,
+    /// Packet section.
+    pub packet: Option<PacketEvent>,
     /// Skb section.
     pub skb: Option<SkbEvent>,
     /// OVS section.
@@ -121,6 +123,7 @@ impl EventFmt for Event {
 
         /* Format the rest of the optional fields. */
         [
+            self.packet.as_ref().map(|f| f as &dyn EventDisplay),
             self.skb.as_ref().map(|f| f as &dyn EventDisplay),
             self.ovs.as_ref().map(|f| f as &dyn EventDisplay),
             self.ovs_detrace.as_ref().map(|f| f as &dyn EventDisplay),

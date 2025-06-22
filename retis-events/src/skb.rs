@@ -1,7 +1,5 @@
 use std::fmt;
 
-use pyo3::*;
-
 use super::*;
 use crate::{event_section, event_type, Formatter};
 
@@ -21,11 +19,9 @@ pub struct SkbEvent {
     pub data_ref: Option<SkbDataRefEvent>,
     /// GSO information.
     pub gso: Option<SkbGsoEvent>,
-    /// Raw packet and related metadata.
-    pub packet: Option<SkbPacketEvent>,
 
     // Sections below are kept for backward compatibility but aren't used
-    // anymore. Use the `SkbPacketEvent` event section instead.
+    // anymore. Use the `PacketEvent` event section instead.
     pub eth: Option<SkbEthEvent>,
     pub arp: Option<SkbArpEvent>,
     pub ip: Option<SkbIpEvent>,
@@ -142,18 +138,6 @@ impl EventFmt for SkbEvent {
             }
 
             write!(f, "size {}]", gso.size)?;
-        }
-
-        // Do not format any section other than packet information after this.
-
-        if let Some(packet) = &self.packet {
-            if format.multiline && space.used() {
-                writeln!(f)?;
-                space.reset();
-            }
-
-            space.write(f)?;
-            packet.raw.event_fmt(f, format)?;
         }
 
         Ok(())
@@ -373,25 +357,4 @@ pub struct SkbGsoEvent {
     pub segs: u32,
     /// GSO type, see `SKB_GSO_*` in include/linux/skbuff.h
     pub r#type: u32,
-}
-
-/// Raw packet and related metadata extracted from skbs.
-#[event_type]
-pub struct SkbPacketEvent {
-    /// Length of the packet.
-    pub len: u32,
-    /// Lenght of the capture. <= len.
-    pub capture_len: u32,
-    /// Raw packet data.
-    #[serde(alias = "packet")] // Backward compatiblity.
-    pub raw: RawPacket,
-}
-
-#[allow(dead_code)]
-#[cfg_attr(feature = "python", pymethods)]
-impl SkbPacketEvent {
-    /// Forward the `to_scapy` method down to the RawPacket.
-    fn to_scapy(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.raw.to_scapy(py)
-    }
 }
