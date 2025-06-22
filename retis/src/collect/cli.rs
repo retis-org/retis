@@ -107,6 +107,16 @@ defaults to \"retis.data\"."
     pub(super) out: Option<PathBuf>,
     #[arg(
         long,
+        value_name = "LIMIT",
+        help = "Rotate the output file (see `--out`) once a given limit is reached.
+The rotation limit can be:
+- A size: <LIMIT> is in bytes and should be suffixed with a size unit (MB, GB).
+  The file names will be <OUT>.X, with X being a number starting at 0 and increasing
+  over time. e.g. '--out-rotate 64MB'."
+    )]
+    pub(super) out_rotate: Option<String>,
+    #[arg(
+        long,
         help = "Write the events to stdout even if --out is used.",
         default_value = "false"
     )]
