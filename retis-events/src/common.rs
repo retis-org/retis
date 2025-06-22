@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{helpers::time::*, *};
+use crate::{file::rotate::RotationPolicy, helpers::time::*, *};
 
 /// Machine information.
 #[event_type]
@@ -25,24 +25,39 @@ pub struct StartupEvent {
     pub clock_monotonic_offset: TimeSpec,
     /// Machine information retrieved while collecting events.
     pub machine: MachineInfo,
+    /// Information about the split file, if any.
+    pub split_file: Option<SplitFile>,
 }
 
 impl EventFmt for StartupEvent {
-    fn event_fmt(&self, f: &mut Formatter, d: &DisplayFormat) -> fmt::Result {
-        let sep = if d.multiline { "\n" } else { " " };
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
+        let sep = if format.multiline { "\n" } else { " " };
 
-        write!(f, "Retis version {}", self.retis_version)?;
-
-        write!(f, "{sep}Command line {}", self.cmdline)?;
-
+        write!(f, "collected with Retis {}", self.retis_version)?;
         write!(
             f,
-            "{sep}Machine info {} {} {}",
+            "{sep}on machine {} {} {}",
             self.machine.kernel_release, self.machine.kernel_version, self.machine.hardware_name
         )?;
 
-        Ok(())
+        if let Some(split) = &self.split_file {
+            write!(f, "{sep}file id {}", split.id)?;
+        }
+
+        write!(f, "{sep}cmdline {}", self.cmdline)
     }
+}
+
+/// Split-file information
+///
+/// Information about a partial event file generated while splitting the full
+/// collection into multiple files.
+#[event_type]
+pub struct SplitFile {
+    /// Split file id in the set of split files; first one is "0".
+    pub id: u32,
+    /// Rotation policy used when generating files.
+    pub policy: RotationPolicy,
 }
 
 /// Task information.
