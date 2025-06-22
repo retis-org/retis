@@ -4,6 +4,7 @@
 //! events.
 
 pub mod file;
+pub mod file_rotate;
 pub mod time;
 pub mod types;
 
