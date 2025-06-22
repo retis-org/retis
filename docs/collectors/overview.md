@@ -33,7 +33,8 @@ The `skb` collector has a single specific argument, `--skb-sections`. This is
 used to choose which parts of the `skb` metadata to retrieve and
 export in the events. See the `retis collect --help` for a detailed description.
 
-The `skb` collector produces the [skb](../events/skb.md) event section.
+The `skb` collector produces the [skb](../events/skb.md) and
+[packet](../events/packet.md) event sections.
 
 ## Skb tracking
 

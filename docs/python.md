@@ -155,7 +155,7 @@ $ retis python
 >>> events = reader.events()
 >>> e = next(events) # Skip startup event
 >>> e = next(events)
->>> p = e.skb.packet.to_scapy()
+>>> p = e.packet.to_scapy()
 >>> print(p.summary())
 Ether / IP / TCP 1.1.1.1:https > 10.0.0.42:12345 A
 >>> if IP in p:
@@ -177,16 +177,16 @@ using the builtin interpreter).
 from scapy.all import *
 ```
 
-The raw packet can also be accessed as a bytes string or as bytes, for low-level
-access or for using in other packet-parsing libraries:
+The raw packet data can also be accessed as a bytes string or as bytes, for
+low-level access or for using in other packet-parsing libraries:
 
 ```python
-e.skb.packet.raw          # Bytes string
-bytes(e.skb.packet.raw)   # bytes
+e.packet.data          # Bytes string
+bytes(e.packet.data)   # bytes
 
 # Manual implementation of to_scapy().
 from scapy.layers.l2 import Ether
-Ether(bytes(e.skb.packet.raw))
+Ether(bytes(e.packet.data))
 ```
 
 ## Available helpers
@@ -200,8 +200,8 @@ With the top-level event:
 ['ct', 'skb-tracking', 'common', 'skb', 'kernel']
 >>> event.raw().keys()  # Makes the event and all its sub-sections a real dict.
 dict_keys(['skb-tracking', 'kernel', 'common', 'ct', 'skb'])
->>> event.raw()['skb'].keys()
-dict_keys(['dev', 'packet'])
+>>> event.raw()['common'].keys()
+dict_keys(['timestamp'])
 ```
 
 With the top-level event and all sections:
@@ -232,6 +232,6 @@ False
 With the `packet` sub-section in the `skb` section:
 
 ```text
->>> event.skb.packet.to_scapy()
+>>> event.packet.to_scapy()
 ...
 ```

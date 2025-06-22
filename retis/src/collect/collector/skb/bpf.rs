@@ -109,13 +109,13 @@ pub(super) fn unmarshal_gso(raw_section: &BpfRawSection) -> Result<SkbGsoEvent> 
     })
 }
 
-pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<SkbPacketEvent> {
+pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<PacketEvent> {
     let raw = parse_raw_section::<skb_packet_event>(raw_section)?;
 
-    Ok(SkbPacketEvent {
+    Ok(PacketEvent {
         len: raw.len,
         capture_len: raw.capture_len,
-        raw: RawPacket(raw.packet[..(raw.capture_len as usize)].to_vec()),
+        data: RawPacket(raw.packet[..(raw.capture_len as usize)].to_vec()),
     })
 }
 
@@ -147,22 +147,28 @@ impl SkbEventFactory {
 
 impl RawEventSectionFactory for SkbEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
-        let mut skb = SkbEvent::default();
+        let mut skb: Option<SkbEvent> = None;
 
         for section in raw_sections.iter() {
             match section.header.data_type as u32 {
-                SECTION_VLAN => skb.vlan_accel = Some(unmarshal_vlan(section)?),
-                SECTION_DEV => skb.dev = unmarshal_dev(section)?,
-                SECTION_NS => skb.ns = Some(unmarshal_ns(section, self.net_cookie)?),
-                SECTION_META => skb.meta = Some(unmarshal_meta(section)?),
-                SECTION_DATA_REF => skb.data_ref = Some(unmarshal_data_ref(section)?),
-                SECTION_GSO => skb.gso = Some(unmarshal_gso(section)?),
-                SECTION_PACKET => skb.packet = Some(unmarshal_packet(section)?),
+                SECTION_VLAN => {
+                    skb.get_or_insert_default().vlan_accel = Some(unmarshal_vlan(section)?)
+                }
+                SECTION_DEV => skb.get_or_insert_default().dev = unmarshal_dev(section)?,
+                SECTION_NS => {
+                    skb.get_or_insert_default().ns = Some(unmarshal_ns(section, self.net_cookie)?)
+                }
+                SECTION_META => skb.get_or_insert_default().meta = Some(unmarshal_meta(section)?),
+                SECTION_DATA_REF => {
+                    skb.get_or_insert_default().data_ref = Some(unmarshal_data_ref(section)?)
+                }
+                SECTION_GSO => skb.get_or_insert_default().gso = Some(unmarshal_gso(section)?),
+                SECTION_PACKET => event.packet = Some(unmarshal_packet(section)?),
                 x => bail!("Unknown data type ({x})"),
             }
         }
 
-        event.skb = Some(skb);
+        event.skb = skb;
         Ok(())
     }
 }

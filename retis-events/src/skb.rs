@@ -1,8 +1,5 @@
 use std::fmt;
 
-#[cfg(feature = "python")]
-use pyo3::*;
-
 use super::*;
 use crate::{event_section, event_type, Formatter};
 
@@ -22,8 +19,6 @@ pub struct SkbEvent {
     pub data_ref: Option<SkbDataRefEvent>,
     /// GSO information.
     pub gso: Option<SkbGsoEvent>,
-    /// Raw packet and related metadata.
-    pub packet: Option<SkbPacketEvent>,
 }
 
 impl EventFmt for SkbEvent {
@@ -133,18 +128,6 @@ impl EventFmt for SkbEvent {
             }
 
             write!(f, "size {}]", gso.size)?;
-        }
-
-        // Do not format any section other than packet information after this.
-
-        if let Some(packet) = &self.packet {
-            if format.multiline && space.used() {
-                writeln!(f)?;
-                space.reset();
-            }
-
-            space.write(f)?;
-            packet.raw.event_fmt(f, format)?;
         }
 
         Ok(())
@@ -364,25 +347,4 @@ pub struct SkbGsoEvent {
     pub segs: u32,
     /// GSO type, see `SKB_GSO_*` in include/linux/skbuff.h
     pub r#type: u32,
-}
-
-/// Raw packet and related metadata extracted from skbs.
-#[event_type]
-pub struct SkbPacketEvent {
-    /// Length of the packet.
-    pub len: u32,
-    /// Lenght of the capture. <= len.
-    pub capture_len: u32,
-    /// Raw packet data.
-    pub raw: RawPacket,
-}
-
-#[allow(dead_code)]
-#[cfg(feature = "python")]
-#[cfg_attr(feature = "python", pymethods)]
-impl SkbPacketEvent {
-    /// Forward the `to_scapy` method down to the RawPacket.
-    fn to_scapy(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.raw.to_scapy(py)
-    }
 }
