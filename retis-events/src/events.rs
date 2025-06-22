@@ -125,10 +125,20 @@ impl EventFmt for Event {
 
         f.conf.inc_level(2);
 
+        // Special case the netns & dev sections, to make the output more
+        // packed. Also the two are quite related and it makes sense to display
+        // them on a single line.
+        if let Some(netns) = &self.netns {
+            write!(f, "{sep}")?;
+            netns.event_fmt(f, format)?;
+        }
+        if let Some(dev) = &self.dev {
+            write!(f, "{}", if self.netns.is_some() { ' ' } else { sep })?;
+            dev.event_fmt(f, format)?;
+        }
+
         /* Format the rest of the optional fields. */
         [
-            self.netns.as_ref().map(|f| f as &dyn EventDisplay),
-            self.dev.as_ref().map(|f| f as &dyn EventDisplay),
             self.packet.as_ref().map(|f| f as &dyn EventDisplay),
             self.skb.as_ref().map(|f| f as &dyn EventDisplay),
             self.ovs.as_ref().map(|f| f as &dyn EventDisplay),
