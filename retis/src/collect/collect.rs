@@ -275,6 +275,10 @@ impl Collectors {
                 _ => bail!("Unknown collector {name}"),
             };
 
+            if self.collectors.contains_key(name) {
+                continue;
+            }
+
             // Check if the collector can run (prerequisites are met).
             if let Err(e) = c.can_run(collect) {
                 // Do not issue an error if the list of collectors was set by
