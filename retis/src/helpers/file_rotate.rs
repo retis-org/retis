@@ -5,11 +5,16 @@ use std::{
     ops::Drop,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::Arc,
 };
 
 use anyhow::{anyhow, Result};
 use log::error;
 use regex::Regex;
+
+use crate::{
+    core::events::RetisEventsFactory, events::StartupEvent, helpers::time::monotonic_clock_offset,
+};
 
 #[derive(Eq, PartialEq)]
 pub(crate) enum Rotation {
@@ -47,25 +52,49 @@ pub(crate) struct RotateWriter {
     target: PathBuf,
     target_index: usize,
     written: usize,
+    events_factory: Arc<RetisEventsFactory>,
 }
 
 impl RotateWriter {
-    pub(crate) fn new(file: &Path, rotation: Rotation) -> Result<Self> {
-        let inner = BufWriter::new(
-            OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(file)?,
-        );
-
+    pub(crate) fn new(
+        file: &Path,
+        rotation: Rotation,
+        events_factory: Arc<RetisEventsFactory>,
+    ) -> Result<Self> {
         Ok(Self {
-            inner,
+            inner: Self::new_file(file, &events_factory)?,
             rotation,
             target: file.to_path_buf(),
             target_index: 0,
             written: 0,
+            events_factory,
         })
+    }
+
+    fn new_file(target: &Path, events_factory: &RetisEventsFactory) -> io::Result<BufWriter<File>> {
+        let w = BufWriter::new(
+            OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(target)?,
+        );
+
+        // Issue a Startup event. This is used at post-processing time to have
+        // insights about the collection environment.
+        events_factory
+            .add_event(|event| {
+                event.startup = Some(StartupEvent {
+                    retis_version: option_env!("RELEASE_VERSION")
+                        .unwrap_or("unspec")
+                        .to_string(),
+                    clock_monotonic_offset: monotonic_clock_offset()?,
+                });
+                Ok(())
+            })
+            .map_err(|e| io::Error::other(format!("Cannot insert startup event: {e}")))?;
+
+        Ok(w)
     }
 
     fn close(&mut self) -> io::Result<()> {
@@ -100,13 +129,7 @@ impl RotateWriter {
         self.close()?;
 
         // Create the new file.
-        self.inner = BufWriter::new(
-            OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(&self.target)?,
-        );
+        self.inner = Self::new_file(&self.target, &self.events_factory)?;
 
         Ok(())
     }
