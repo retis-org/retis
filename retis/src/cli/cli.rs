@@ -145,10 +145,10 @@ where
     }
 }
 
-/// Trace packets on the Linux kernel
-///
-/// retis is a tool for capturing networking-related events from the system using ebpf and analyzing them.
 #[derive(Args, Debug, Default)]
+#[command(about = "Trace packets in the Linux networking stack & friends.
+
+Retis aims at improving visibility of what happens in the Linux networking stack and different control and/or data paths, some of which can be in userspace. It works either in a single collect & display phase, or in a collect then process fashion.")]
 pub(crate) struct MainConfig {
     #[arg(
         long,
@@ -275,6 +275,7 @@ impl RetisCli {
         // Build the main command.
         let mut command = MainConfig::augment_args(Command::new("retis"))
             .version(Self::get_version())
+            .term_width(80)
             .disable_help_subcommand(true)
             .infer_subcommands(true)
             .subcommand_required(true);

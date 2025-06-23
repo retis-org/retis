@@ -14,14 +14,19 @@ use crate::cli::*;
 
 #[derive(Debug, Default, Subcommand)]
 enum ProfileSubCommand {
-    /// List available profiles
+    /// List available profiles.
     #[default]
     List,
 }
 
-/// Manage Profiles
 #[derive(Parser, Debug, Default)]
-#[command(name = "profile")]
+#[command(
+    name = "profile",
+    about = "Manage profiles.",
+    long_about = "Manage profiles.
+
+Profiles are a predefined set of cli arguments. Profiles are meant to improve user experience to provide a comprehensive and consistent configuration to Retis aimed at operating on pre-defined topics."
+)]
 pub(crate) struct ProfileCmd {
     #[command(subcommand)]
     command: ProfileSubCommand,

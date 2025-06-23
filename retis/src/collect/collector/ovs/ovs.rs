@@ -45,24 +45,20 @@ pub(crate) struct OvsCollectorArgs {
     #[arg(
         long,
         default_value = "false",
-        help = "Enable OpenvSwitch upcall tracking. Requires USDT probes being enabled.
-See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions."
+        help = "Enable OpenvSwitch upcall tracking. Requires USDT probes being enabled. See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions."
     )]
     ovs_track: bool,
     #[arg(
         long,
         default_value = "false",
-        help = "Enable OpenvSwitch datapath flow enrichment via unixctl command.
-Requires OpenvSwitch >= 3.4"
+        help = "Enable OpenvSwitch datapath flow enrichment via unixctl command. Requires OpenvSwitch >= 3.4"
     )]
     ovs_enrich_flows: bool,
     #[arg(
         long,
         default_value = "20",
         value_name = "REQUESTS_PER_SEC",
-        help = "If '--ovs-enrich-flows' flag is set, rate-limit the number of requests
-to OpenvSwitch daemon to the specified number of requests per second. Note that
-increasing the rate might have an impact on the running OpenvSwitch daemon."
+        help = "If '--ovs-enrich-flows' flag is set, rate-limit the number of requests to OpenvSwitch daemon to the specified number of requests per second. Note that increasing the rate might have an impact on the running OpenvSwitch daemon."
     )]
     ovs_enrich_rate: u32,
 }
