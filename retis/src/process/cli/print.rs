@@ -18,9 +18,8 @@ use crate::{
     process::display::*,
 };
 
-/// Print stored events to stdout
 #[derive(Parser, Debug, Default)]
-#[command(name = "print")]
+#[command(name = "print", about = "Print stored events to stdout.")]
 pub(crate) struct Print {
     /// File from which to read events.
     #[arg(default_value = "retis.data")]

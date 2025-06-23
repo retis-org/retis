@@ -5,9 +5,8 @@ use clap::{arg, Parser};
 
 use crate::{cli::*, events::python_embed::shell_execute};
 
-/// Runs Python scripts with events imported.
 #[derive(Parser, Debug, Default)]
-#[command(name = "python")]
+#[command(name = "python", about = "Runs Python scripts with events imported.")]
 pub(crate) struct PythonCli {
     #[arg(
         long,
@@ -17,10 +16,7 @@ pub(crate) struct PythonCli {
     )]
     pub(super) input: PathBuf,
     #[arg(
-        help = "Python script to execute. Omit to drop into an interactive shell.
-Alternatively scripts can be stored in $HOME/.config/retis/python and
-/usr/share/retis/python, in which case the file name only (without the .py
-extension) can be provided."
+        help = "Python script to execute. Omit to drop into an interactive shell. Alternatively scripts can be stored in $HOME/.config/retis/python and /usr/share/retis/python, in which case the file name only (without the .py extension) can be provided."
     )]
     pub(super) script: Option<PathBuf>,
     #[arg(help = "Arguments for the Python script (available in `sys.argv`).")]
