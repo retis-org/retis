@@ -9,9 +9,12 @@ use crate::{
     core::{inspect::init_inspector, kernel::Symbol, probe::kernel::utils::probe_from_cli},
 };
 
-/// Inspect the current machine.
 #[derive(Parser, Debug, Default)]
-#[command(name = "inspect", arg_required_else_help = true)]
+#[command(
+    name = "inspect",
+    arg_required_else_help = true,
+    about = "Inspect the current machine."
+)]
 pub(crate) struct Inspect {
     #[arg(
         short,
@@ -19,9 +22,9 @@ pub(crate) struct Inspect {
         num_args = 0..=1,
         default_missing_value = "*",
         help = "List all probes matching the pattern, or all probes if no pattern is given.
-Only probes compatible with Retis probing are returned. The pattern supports wildcards. If
-no probe type is given 'kprobe' is used. Note that listing probes might take some time as
-a compatibility check is performed for each one.
+
+Only probes compatible with Retis probing are returned. The pattern supports wildcards. If no probe type is given 'kprobe' is used. Note that listing probes might take some time as a compatibility check is performed for each one.
+
 Eg. '-p tp:*'. See `retis collect --help` for more details on the probe format."
     )]
     pub(crate) probe: Option<String>,
