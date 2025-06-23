@@ -21,47 +21,51 @@ use crate::{
 /// The default size of the sorting buffer
 const DEFAULT_BUFFER: usize = 1000;
 
-/// Sort stored events in series based on tracking id.
-///
-/// Reads events from the INPUT file and arranges them by tracking id. The output is a number of
-/// "event sets". An event set is a list of events that share the same tracking id (i.e: belong to
-/// the same packet).
 #[derive(Parser, Debug, Default)]
-#[command(name = "sort")]
+#[command(
+    name = "sort",
+    about = "Sort stored events in series based on tracking id.",
+    long_about = "Sort stored events in series based on tracking id.
+
+Reads events and arranges them by tracking id. The output is a number of \"event sets\". An event set is a list of events that share the same tracking id (i.e: belong to the same packet)."
+)]
 pub(crate) struct Sort {
-    /// File from which to read events.
-    #[arg(default_value = "retis.data")]
+    #[arg(default_value = "retis.data", help = "File from which to read events")]
     pub(super) input: PathBuf,
 
-    /// Maximum number of events to buffer
-    ///
-    /// Sorting events requires storing events in a buffer while we wait to see if there is any
-    /// other event that belongs to the same series. If there are many interleaved events, you may
-    /// need to increase the size of the buffer to properly sort all events.
-    ///
-    /// A value of zero means the buffer can grow endlessly.
-    #[arg(long, default_value_t = DEFAULT_BUFFER)]
+    #[arg(
+        long,
+        default_value_t = DEFAULT_BUFFER,
+        help = "Maximum number of events to buffer
+
+Sorting events requires storing events in a buffer while we wait to see if there is any other event that belongs to the same series. If there are many interleaved events, you may need to increase the size of the buffer to properly sort all events.
+
+A value of zero means the buffer can grow endlessly."
+    )]
     pub(super) max_buffer: usize,
 
-    /// Write event series to a file rather than to stdout.
-    #[arg(short, long)]
+    #[arg(
+        short,
+        long,
+        help = "Write event series to a file rather than to stdout"
+    )]
     pub(super) out: Option<PathBuf>,
 
-    /// Write events to stdout even if --out is used.
-    #[arg(long)]
+    #[arg(long, help = "Write events to stdout even if --out is used")]
     pub(super) print: bool,
 
-    /// Format used when printing an event.
-    #[arg(long)]
-    #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
+    #[arg(
+        long,
+        value_enum,
+        default_value_t=CliDisplayFormat::MultiLine,
+        help = "Format used when printing an event"
+    )]
     pub(super) format: CliDisplayFormat,
 
-    /// Print the time as UTC.
-    #[arg(long)]
+    #[arg(long, help = "Print the time as UTC")]
     pub(super) utc: bool,
 
-    /// Print link-layer information from the packet.
-    #[arg(short = 'e')]
+    #[arg(short = 'e', help = "Print link-layer information from the packet")]
     pub(super) print_ll: bool,
 }
 

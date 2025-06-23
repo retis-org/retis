@@ -33,7 +33,7 @@ btf-rs = "1.1"
 byteorder = "1.5"
 caps = "0.5"
 cargo-platform = "0.2"
-clap = { version = "4.0", features = ["derive", "string"] }
+clap = { version = "4.0", features = ["derive", "string", "wrap_help"] }
 clap_complete = "4.4"
 elf = "0.7"
 events = {version = "1.5", path = "../retis-events", package="retis-events" }

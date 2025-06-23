@@ -145,10 +145,10 @@ where
     }
 }
 
-/// Trace packets on the Linux kernel
-///
-/// retis is a tool for capturing networking-related events from the system using ebpf and analyzing them.
 #[derive(Args, Debug, Default)]
+#[command(about = "Trace packets in the Linux networking stack & friends.
+
+Retis aims at improving visibility of what happens in the Linux networking stack and different control and/or data paths, some of which can be in userspace. It works either in a single collect & display phase, or in a collect then process fashion.")]
 pub(crate) struct MainConfig {
     #[arg(
         long,
@@ -162,16 +162,14 @@ pub(crate) struct MainConfig {
         short,
         value_delimiter = ',',
         help = "Comma separated list of profiles to apply. Accepted values:
-- Profile names, in which case the profile should be in either
-  /usr/share/retis/profiles or in $HOME/.config/retis/profiles.
+- Profile names, in which case the profile should be in either /usr/share/retis/profiles or in $HOME/.config/retis/profiles.
 - Path to a profile, in which case the file should contain a single profile."
     )]
     pub(crate) profile: Vec<PathBuf>,
     #[arg(
         long,
         short = 'P',
-        help = "Path to an additional directory with custom profiles. Takes precedence over
-built-in profiles directories."
+        help = "Path to an additional directory with custom profiles. Takes precedence over built-in profiles directories."
     )]
     pub(crate) extra_profiles_dir: Option<PathBuf>,
 }
@@ -275,6 +273,7 @@ impl RetisCli {
         // Build the main command.
         let mut command = MainConfig::augment_args(Command::new("retis"))
             .version(Self::get_version())
+            .term_width(80)
             .disable_help_subcommand(true)
             .infer_subcommands(true)
             .subcommand_required(true);
