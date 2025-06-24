@@ -1462,6 +1462,11 @@ impl FilterMeta {
 
         Ok(mf)
     }
+
+    #[cfg(feature = "debug")]
+    pub(crate) fn disasm(&self) {
+        self.filter.disasm();
+    }
 }
 
 #[cfg(test)]
