@@ -83,12 +83,31 @@ impl eBpfProg {
     pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
+
     pub(crate) fn add(&mut self, insn: eBpfInsn) {
         self.0.push(insn);
     }
 
+    pub(crate) fn add_multi(&mut self, insns: &[eBpfInsn]) {
+        self.0.extend_from_slice(insns);
+    }
+
+    pub(crate) fn insert(&mut self, insn: eBpfInsn, offset: usize) {
+        self.0.insert(offset, insn);
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         self.0.iter().flat_map(|insn| insn.to_vec()).collect()
+    }
+
+    pub(crate) fn append_prog(&mut self, prog: &eBpfProg) {
+        self.add_multi(&prog.0);
+    }
+
+    pub(crate) fn get_raw_insn_mut(&mut self, pos: usize) -> Result<&mut eBpfInsn> {
+        self.0
+            .get_mut(pos)
+            .ok_or_else(|| anyhow!("Error retrieving ebpf jmp instruction at {pos}"))
     }
 
     #[cfg(feature = "debug")]
@@ -113,7 +132,7 @@ impl eBpfProg {
     // Only intended for early exit.
     fn exit_if_reg_imm(&mut self, reg: BpfReg, val: i32, eq: bool) {
         let j_type = match eq {
-            true => eBpfJmpOpExt::Ne,
+            true => eBpfJmpOpExt::eBpf(eBpfJmpOp::Ne),
             false => eBpfJmpOpExt::Bpf(BpfJmpOp::Eq),
         };
 
@@ -132,11 +151,11 @@ impl eBpfProg {
         self.add(eBpfInsn::exit());
     }
 
-    fn exit_retval_eq(&mut self, rval: i32) {
+    pub(crate) fn exit_retval_eq(&mut self, rval: i32) {
         self.exit_if_reg_imm(BpfReg::A, rval, true);
     }
 
-    fn exit_retval_neq(&mut self, rval: i32) {
+    pub(crate) fn exit_retval_neq(&mut self, rval: i32) {
         self.exit_if_reg_imm(BpfReg::A, rval, false);
     }
 
@@ -487,17 +506,14 @@ impl TryFrom<BpfProg> for eBpfProg {
         }
 
         for jmp_off in jmps_map.iter() {
-            if jmp_off.1 >= ebpf.0.len() {
+            if jmp_off.1 >= ebpf.len() {
                 bail!(
                     "Error at position {} in ebpf while trying to resolve jump offset",
                     jmp_off.1
                 );
             }
 
-            let ebpf_jmp_insn = ebpf
-                .0
-                .get_mut(jmp_off.1)
-                .ok_or_else(|| anyhow!("Error retrieving ebpf jmp instruction"))?;
+            let ebpf_jmp_insn = ebpf.get_raw_insn_mut(jmp_off.1)?;
             let cbpf_jmp_tgt_off = usize::try_from(i16::try_from(jmp_off.0)? + ebpf_jmp_insn.off)?;
 
             if cbpf_jmp_tgt_off >= insns_map.len() {
@@ -508,13 +524,13 @@ impl TryFrom<BpfProg> for eBpfProg {
                 );
             }
 
-            ebpf_jmp_insn.off = i16::try_from(
+            ebpf_jmp_insn.set_off_raw(i16::try_from(
                 insns_map
                     .get(cbpf_jmp_tgt_off)
                     .ok_or_else(|| anyhow!("Error retrieving cbpf to ebpf jmp mapping"))?
                     - jmp_off.1
                     - 1,
-            )?;
+            )?);
         }
 
         ebpf.inline_returns()?;
