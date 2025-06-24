@@ -78,10 +78,15 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-8-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/8-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
+    centos.vm.provider "libvirt" do |libvirt|
+       libvirt.machine_virtual_size = 20
+    end
     centos.vm.provision "shell", inline: <<-SHELL
        #{$fix_centos_repositories}!
        dnf config-manager --set-enabled powertools
-       dnf install -y python39
+       dnf install -y python39 cloud-utils-growpart
+       growpart /dev/vda 1
+       xfs_growfs /dev/vda1
        alternatives --set python3 /usr/bin/python3.9
     SHELL
     centos.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common

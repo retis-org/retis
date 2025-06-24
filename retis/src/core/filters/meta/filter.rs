@@ -750,7 +750,9 @@ impl<'a> MetaExpr<'a> {
             ));
 
             idx_sz += 1;
-            if idx_sz >= ctx.target.sz {
+            // idx_sz >= ctx.target.sz is just enough, but this is
+            // needed to make old verifier happy.
+            if idx_sz >= std::mem::size_of_val(&ctx.target.md) {
                 break;
             }
         }
@@ -818,6 +820,7 @@ impl<'a> MetaExpr<'a> {
         ]);
 
         tf_list.push_false(self.filter.len());
+
         self.filter.add_multi(&[
             eBpfInsn::jmp_a(0),
             eBpfInsn::jmp(
@@ -845,9 +848,6 @@ impl<'a> MetaExpr<'a> {
                     imm: -1,
                 },
             ),
-        ]);
-
-        self.filter.add_multi(&[
             eBpfInsn::jmp(
                 eBpfJmpOpExt::Bpf(BpfJmpOp::Gt),
                 JmpInfo::Imm {
@@ -1461,6 +1461,11 @@ impl FilterMeta {
         mf.backpatch(&tf_list.false_list, exit_label)?;
 
         Ok(mf)
+    }
+
+    #[cfg(feature = "debug")]
+    pub(crate) fn disasm(&self) {
+        self.filter.disasm();
     }
 }
 
