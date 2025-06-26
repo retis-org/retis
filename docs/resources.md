@@ -2,8 +2,8 @@
 
 ## Presentations
 
-- Following a packet journey through the networking stack in OpenShift at
-  Devconf.cz (2025).
+- [Following a packet journey through the networking stack in
+  OpenShift](https://www.youtube.com/watch?v=Yn0GSaauxXw) at Devconf.cz (2025).
   [Slides](https://pretalx.devconf.info/media/devconf-cz-2025/submissions/BNUD9P/resources/Following_a_packet_journey_through_the_netw_9xriC1d.pdf).
 - [Challenges and limitations of debugging increasingly complex virtualized
   networks with Retis](https://www.youtube.com/watch?v=AR5d3gM9zH4) at Netdev
