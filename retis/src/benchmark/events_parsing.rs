@@ -3,7 +3,7 @@ use std::time::Instant;
 use anyhow::Result;
 
 use super::helpers::build_raw_event;
-use crate::{collect::collector::section_factories, core::events::*, events::*};
+use crate::{collect::collector::section_factories, core::events::*, events::backward_compat::*};
 
 /// Benchmark time to parse a bunch of raw events.
 pub(super) fn bench(ci: bool) -> Result<()> {
@@ -27,7 +27,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     let now = Instant::now();
     for _ in 0..iters {
-        let _: Event = serde_json::from_str(&event_s)?;
+        let _ = event_from_str(&event_s, false)?;
     }
     println!("1M_str_events_parsing_us {}", now.elapsed().as_micros());
 

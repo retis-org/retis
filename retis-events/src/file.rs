@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 
-use super::{Event, EventSeries};
+use super::{backward_compat::*, Event, EventSeries};
 
 // Type of file that is being processed.
 #[derive(Debug, Clone)]
@@ -54,7 +54,8 @@ impl FileEventsFactory {
         match self.reader.read_line(&mut line) {
             Err(e) => Err(e.into()),
             Ok(0) => Ok(None),
-            Ok(_) => Ok(Some(serde_json::from_str(line.as_str())?)),
+            /* Ok(_) => Ok(Some(event_from_str(line.as_str(), EventVersion::Latest)?)), */
+            Ok(_) => Ok(Some(event_from_str(line.as_str(), false)?)),
         }
     }
 
