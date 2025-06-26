@@ -44,6 +44,9 @@ pub use user::*;
 pub mod raw_packet;
 pub use raw_packet::*;
 
+// pub only because of benchmarks.
+pub mod backward_compat;
+
 // Re-export derive macros.
 use retis_derive::*;
 
