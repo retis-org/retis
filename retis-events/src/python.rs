@@ -63,7 +63,27 @@ unsafe impl Sync for PyEvent {}
 
 impl PyEvent {
     pub(crate) fn new(py: Python<'_>, event: Event) -> PyResult<Self> {
-        Ok(Self(Py::new(py, event)?))
+        let mut event = Self(Py::new(py, event)?);
+        event.fixup(py)?;
+        Ok(event)
+    }
+
+    fn fixup(&mut self, py: Python<'_>) -> PyResult<()> {
+        let s = self.0.bind(py);
+
+        if let Ok(packet) = s.getattr("packet") {
+            if !packet.is_none() {
+                if let Ok(skb) = s.getattr("skb") {
+                    if !skb.is_none() {
+                        skb.setattr("packet", &packet)?;
+                        s.setattr("skb", skb)?;
+                    }
+                    s.setattr("foo", packet)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

@@ -88,7 +88,9 @@ pub fn event_type(
         derives.push(quote!(PartialEq))
     } else if props.named_fields {
         // Generate getters to all named fields.
+        pyclass_args.push(quote!(dict));
         pyclass_args.push(quote!(get_all));
+        pyclass_args.push(quote!(set_all));
     }
     let ident = &props.ident;
 

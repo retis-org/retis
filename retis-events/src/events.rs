@@ -40,7 +40,7 @@ use crate::{display::*, *};
 #[derive(Default, Debug, Clone, serde::Deserialize, serde::Serialize)]
 // For backwards compatiblity reasons, we keep section names in kebab-case.
 #[serde(rename_all = "kebab-case")]
-#[cfg_attr(feature = "python", pyo3::pyclass(get_all))]
+#[cfg_attr(feature = "python", pyo3::pyclass(dict, get_all, set_all))]
 pub struct Event {
     /// Common section.
     pub common: Option<CommonEvent>,

@@ -30,10 +30,7 @@ const DEFAULT_BUFFER: usize = 1000;
 Reads events and arranges them by tracking id. The output is a number of \"event sets\". An event set is a list of events that share the same tracking id (i.e: belong to the same packet)."
 )]
 pub(crate) struct Sort {
-    #[arg(
-        default_value = "retis.data",
-        help = "File from which to read events"
-    )]
+    #[arg(default_value = "retis.data", help = "File from which to read events")]
     pub(super) input: PathBuf,
 
     #[arg(

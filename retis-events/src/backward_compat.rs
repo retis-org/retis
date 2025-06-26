@@ -29,6 +29,12 @@ pub fn event_from_str(input: &str, latest: bool) -> Result<Event> {
 // be found.
 #[allow(unused_must_use)]
 fn fixup(event: &mut Value) -> Result<()> {
+    event.add("ct/ct_status", Value::Number(0.into()));
+    event.r#move("skb/ns/netns", "skb/ns/inum");
+    event.r#move("skb/packet", "packet");
+    event.r#move("skb/dev", "dev");
+    event.r#move("skb/ns", "netns");
+
     Ok(())
 }
 
