@@ -61,7 +61,7 @@ impl EventFmt for SkbEvent {
                 }
             }
             if let Some(rx_ifindex) = dev.rx_ifindex {
-                write!(f, " rxif {}", rx_ifindex)?;
+                write!(f, " rxif {rx_ifindex}")?;
             }
         }
 
@@ -176,7 +176,7 @@ impl EventFmt for SkbEvent {
             }
 
             if let Some(proto) = protocol_str(ip.protocol) {
-                write!(f, " proto {}", proto)?;
+                write!(f, " proto {proto}")?;
             }
 
             write!(f, " ({})", ip.protocol)?;
@@ -254,7 +254,7 @@ impl EventFmt for SkbEvent {
                         let off = meta.csum >> 16;
                         write!(f, "partial (start {start} off {off}) ")?;
                     }
-                    x => write!(f, "unknown ({}) ", x)?,
+                    x => write!(f, "unknown ({x}) ")?,
                 }
 
                 if meta.hash != 0 {

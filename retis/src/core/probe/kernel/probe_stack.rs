@@ -111,7 +111,7 @@ impl ProbeStack {
                 return Ok(());
             }
 
-            debug!("Added probe to {}", func);
+            debug!("Added probe to {func}");
 
             Ok(())
         })?;

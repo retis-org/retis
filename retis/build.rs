@@ -13,7 +13,7 @@ fn get_paths(fpath: &str) -> (String, String) {
     if let Some(basename) = split.first() {
         (dir.to_string(), basename.to_string())
     } else {
-        panic!("Failed to find base name for {}", fpath);
+        panic!("Failed to find base name for {fpath}");
     }
 }
 
@@ -24,7 +24,7 @@ fn gen_hook_skel(source: &str) {
         if error.kind() == ErrorKind::NotFound {
             panic!("Unable to find {source}, please try 'make ebpf' first\n");
         } else {
-            panic!("Error opening file: {:?}", error);
+            panic!("Error opening file: {error:?}");
         }
     });
     let obj_f: &[u8] = &unsafe { Mmap::map(&obj_f).unwrap() };
@@ -54,7 +54,7 @@ fn gen_probe_skel(source: &str) {
                 panic!("Unable to find {skel}, please try 'make ebpf' first\n");
             }
             _ => {
-                panic!("{:?}", e);
+                panic!("{e:?}");
             }
         }
     }

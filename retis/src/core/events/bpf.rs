@@ -208,14 +208,14 @@ impl BpfEventsFactory {
             let event = match parse_raw_event(data, &mut section_factories) {
                 Ok(event) => event,
                 Err(e) => {
-                    error!("Could not parse raw event: {}", e);
+                    error!("Could not parse raw event: {e}");
                     return 0;
                 }
             };
 
             // Send the event into the events channel for future retrieval.
             if let Err(e) = txc.send(event) {
-                error!("Could not send event: {}", e);
+                error!("Could not send event: {e}");
             }
 
             0
@@ -239,7 +239,7 @@ impl BpfEventsFactory {
 
             let mut log_event = retis_log_event::default();
             if let Err(e) = plain::copy_from_bytes(&mut log_event, data) {
-                error!("Can't read eBPF log event {:?}", e);
+                error!("Can't read eBPF log event {e:?}");
                 return 0;
             }
 

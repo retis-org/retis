@@ -226,7 +226,7 @@ impl CtEvent {
         }
 
         if let Some(mark) = conn.mark {
-            write!(f, " mark {}", mark)?;
+            write!(f, " mark {mark}")?;
         }
 
         if let Some(labels) = &conn.labels {

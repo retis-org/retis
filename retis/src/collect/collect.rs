@@ -166,7 +166,7 @@ impl Collectors {
                 BpfFilter(fb.to_bytes()?),
             ))?;
 
-            info!("{} packet filter(s) loaded", loaded_info);
+            info!("{loaded_info} packet filter(s) loaded");
         }
 
         if let Some(f) = &collect.meta_filter {
@@ -395,8 +395,7 @@ impl Collectors {
             });
             if !ok {
                 info!(
-                    "No probe was attached to {} as no collector could retrieve data from it",
-                    symbol
+                    "No probe was attached to {symbol} as no collector could retrieve data from it"
                 );
             }
             ok
@@ -592,8 +591,8 @@ impl Collectors {
         }
 
         printers.iter_mut().try_for_each(|p| p.flush())?;
-        info!("{} event(s) processed", eccount);
-        debug!("{} internal event(s) processed", iccount);
+        info!("{eccount} event(s) processed");
+        debug!("{iccount} internal event(s) processed");
 
         self.stop()
     }

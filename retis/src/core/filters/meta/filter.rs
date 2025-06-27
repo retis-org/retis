@@ -1583,28 +1583,17 @@ mod tests {
     #[test]
     fn meta_filter_cast() {
         // Casting a field smaller than a pointer is not allowed
-        assert!(
-            FilterMeta::from_string(format!("sk_buff.cloned:~0x0:nf_conn").to_string()).is_err()
-        );
-        assert!(FilterMeta::from_string(format!("sk_buff.len:~0x0:nf_conn").to_string()).is_err());
-        assert!(
-            FilterMeta::from_string(format!("sk_buff.mac_len:~0x0:nf_conn").to_string()).is_err()
-        );
+        assert!(FilterMeta::from_string("sk_buff.cloned:~0x0:nf_conn".to_string()).is_err());
+        assert!(FilterMeta::from_string("sk_buff.len:~0x0:nf_conn".to_string()).is_err());
+        assert!(FilterMeta::from_string("sk_buff.mac_len:~0x0:nf_conn".to_string()).is_err());
         // Arrays cannot be casted
-        assert!(FilterMeta::from_string(format!("sk_buff.cb:~0x0:nf_conn").to_string()).is_err());
+        assert!(FilterMeta::from_string("sk_buff.cb:~0x0:nf_conn".to_string()).is_err());
         // Cast to non-walkable types is not allowed
-        assert!(
-            FilterMeta::from_string(format!("sk_buff._nfct:~0x0:u32.mark").to_string()).is_err()
-        );
+        assert!(FilterMeta::from_string("sk_buff._nfct:~0x0:u32.mark".to_string()).is_err());
         // Casting a leaf is not allowed
-        assert!(
-            FilterMeta::from_string(format!("sk_buff._nfct.mark:~0x0:nf_conn").to_string())
-                .is_err()
-        );
+        assert!(FilterMeta::from_string("sk_buff._nfct.mark:~0x0:nf_conn".to_string()).is_err());
 
-        assert!(
-            FilterMeta::from_string(format!("sk_buff._nfct:~0x0:nf_conn.mark").to_string()).is_ok()
-        )
+        assert!(FilterMeta::from_string("sk_buff._nfct:~0x0:nf_conn.mark".to_string()).is_ok())
     }
 
     // Only validates for what type of targets lhs-only expressions
@@ -1621,7 +1610,7 @@ mod tests {
     #[test_case("((sk_buff._nfct:~0x7:nf_conn.status:0xf == 0xa and (sk_buff.mark > 0 or sk_buff._nfct:~0x7:nf_conn.proto.tcp.state == 0x1)) or sk_buff.dev == 'lo'" => matches Err(_); "single and with double or with type mismatch")]
     #[test_case("sk_buff.mark > 0 and sk_buff._nfct.proto.tcp.state == 0x1" => matches Err(_); "single and with unknown type")]
     fn meta_filter_boolean_expressions(bool_expr: &'static str) -> Result<()> {
-        let _ = FilterMeta::from_string(format!("{bool_expr}").to_string())?;
+        let _ = FilterMeta::from_string(bool_expr.to_string())?;
         Ok(())
     }
 }

@@ -129,7 +129,7 @@ impl TrackingGC {
     }
 
     pub(crate) fn format_key(map: &libbpf_rs::MapHandle, key: Vec<u8>) -> String {
-        let default_format = || format!("{:#x?}", key);
+        let default_format = || format!("{key:#x?}");
 
         // Try to format the key as unsigned integers and fall back to printing the u8 vector as
         // hex if we fail.
