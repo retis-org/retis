@@ -154,7 +154,9 @@ $(EBPF_PROBES) $(EBPF_HOOKS): $(LIBBPF_INCLUDES)
 
 pylib:
 	$(call out_console,MATURIN,Building python bindings ...)
-	$(CONTAINER_RUNTIME) run --rm --name retis_build_maturin -v $$PWD:/io:z ghcr.io/pyo3/maturin build -m retis-events/Cargo.toml -F python-lib
+	$(CONTAINER_RUNTIME) run --rm --name retis_build_maturin \
+		--security-opt label=disable -v $$PWD:/io \
+		ghcr.io/pyo3/maturin build -m retis-events/Cargo.toml -F python-lib
 
 pytest-deps:
 	@which tox &> /dev/null || (echo "Please install tox ('pip install tox')."; exit 1)

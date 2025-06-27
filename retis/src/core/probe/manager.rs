@@ -416,7 +416,7 @@ impl ProbeRuntimeManager {
         )?;
 
         // Finally attach a probe to the target.
-        debug!("Attaching probe to {}", probe);
+        debug!("Attaching probe to {probe}");
         builder.attach(probe)
     }
 

@@ -59,7 +59,7 @@ impl EventFmt for CommonEvent {
         }
 
         if let Some(smp_id) = self.smp_id {
-            write!(f, " ({})", smp_id)?;
+            write!(f, " ({smp_id})")?;
         }
 
         if let Some(current) = &self.task {
