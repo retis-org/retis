@@ -129,12 +129,11 @@ impl EventParser {
                         snaplen: 0xffff,
                         options: vec![
                             InterfaceDescriptionOption::IfName(Cow::Owned(format!(
-                                "{} ({})",
-                                ifname, netns
+                                "{ifname} ({netns})"
                             ))),
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(match ifindex {
                                 0 => "Fake interface".to_string(),
-                                _ => format!("ifindex={}", ifindex),
+                                _ => format!("ifindex={ifindex}"),
                             })),
                             InterfaceDescriptionOption::IfTsResol(9),
                         ],
@@ -524,9 +523,8 @@ mod tests {
                     Err(expected_e) => {
                         panic!(
                             "Expected error but got valid result instead\n\
-                            expected error: {}\n\
-                            result: {:#?}",
-                            expected_e, v
+                            expected error: {expected_e}\n\
+                            result: {v:#?}"
                         )
                     }
                 },
@@ -534,9 +532,8 @@ mod tests {
                     Ok(expected_v) => {
                         panic!(
                             "Expected a valid result but got err instead\n\
-                            result: {:#?},\n\
-                            err: {}",
-                            expected_v, e
+                            result: {expected_v:#?},\n\
+                            err: {e}"
                         )
                     }
                     Err(expected_e) => assert_eq!(e.to_string(), expected_e.to_string(),),
@@ -590,9 +587,8 @@ mod tests {
                     Err(expected_e) => {
                         panic!(
                             "Expected error but got valid result instead\n\
-                            expected error: {}\n\
-                            result: {:#?}",
-                            expected_e, v
+                            expected error: {expected_e}\n\
+                            result: {v:#?}"
                         )
                     }
                 },
@@ -600,9 +596,8 @@ mod tests {
                     Ok(expected_v) => {
                         panic!(
                             "Expected a valid result but got err instead\n\
-                            result: {:#?},\n\
-                            err: {}",
-                            expected_v, e
+                            result: {expected_v:#?},\n\
+                            err: {e}"
                         )
                     }
                     Err(expected_e) => assert_eq!(e.to_string(), expected_e.to_string(),),

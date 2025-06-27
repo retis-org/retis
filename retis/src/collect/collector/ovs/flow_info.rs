@@ -194,7 +194,7 @@ impl FlowEnricher {
 
                         let ofpflows = if detrace_supported {
                             match unixctl
-                                .run("ofproto/detrace", Some(&[ufid_str.as_str(), format!("pmd={}", PMD_ID_NULL).as_str()]))
+                                .run("ofproto/detrace", Some(&[ufid_str.as_str(), format!("pmd={PMD_ID_NULL}").as_str()]))
                             {
                                 Err(e) => {
                                     error!("ovs-flow-enricher: failed to detrace flow {e}");

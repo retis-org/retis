@@ -244,7 +244,7 @@ impl core::fmt::Debug for BpfProg {
         bpf_dbg.push_str(&format!("{},", self.prog.len()));
 
         for x in self.prog.iter() {
-            bpf_dbg.push_str(&format!("{:?},", x));
+            bpf_dbg.push_str(&format!("{x:?},"));
         }
 
         write!(f, "{}", bpf_dbg.trim_end_matches(','))?;

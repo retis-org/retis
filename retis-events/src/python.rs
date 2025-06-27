@@ -190,8 +190,7 @@ impl PyEventSeries {
             .unwrap()
             .timestamp;
         Ok(format!(
-            "PyEventSeries(ts = {}, n_events = {})",
-            timestamp, n_events
+            "PyEventSeries(ts = {timestamp}, n_events = {n_events})"
         ))
     }
 
