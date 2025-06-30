@@ -259,8 +259,11 @@ impl Collectors {
         }
 
         let collectors = match &collect.collectors {
-            Some(collectors) => collectors.iter().map(|c| c.as_ref()).collect::<Vec<&str>>(),
-            None => vec!["skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct"],
+            Some(collectors) => collectors
+                .iter()
+                .map(|c| c.as_ref())
+                .collect::<HashSet<_>>(),
+            None => HashSet::from(["skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct"]),
         };
 
         // Try initializing all collectors.
