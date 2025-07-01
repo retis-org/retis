@@ -159,11 +159,11 @@ impl KernelInspector {
         // If not, try auto-detection.
         let paths = [
             "/proc/config.gz".to_string(),
-            format!("/boot/config-{}", release),
+            format!("/boot/config-{release}"),
             // CoreOS & friends.
-            format!("/lib/modules/{}/config", release),
+            format!("/lib/modules/{release}/config"),
             // Toolbox on CoreOS & friends.
-            format!("/run/host/usr/lib/modules/{}/config", release),
+            format!("/run/host/usr/lib/modules/{release}/config"),
         ];
         for p in paths.iter() {
             if let Ok(kconf) = Self::parse_kernel_config_single(p) {

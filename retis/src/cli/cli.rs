@@ -257,9 +257,9 @@ impl RetisCli {
         let pkg_name = option_env!("RELEASE_NAME").unwrap_or("unreleased");
 
         if cfg!(debug_assertions) {
-            format!("{} [dbg] (\"{}\")", pkg_version, pkg_name)
+            format!("{pkg_version} [dbg] (\"{pkg_name}\")")
         } else {
-            format!("{} (\"{}\")", pkg_version, pkg_name)
+            format!("{pkg_version} (\"{pkg_name}\")")
         }
     }
 

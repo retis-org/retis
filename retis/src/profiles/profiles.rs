@@ -560,7 +560,7 @@ collect:
         .expect("parsing")
         .cli_args("collect")
         .map(|e| {
-            println!("{:?}", e);
+            println!("{e:?}");
             e
         })
         .unwrap()
@@ -594,7 +594,7 @@ collect:
         .expect("parsing")
         .cli_args("collect")
         .map(|e| {
-            println!("{:?}", e);
+            println!("{e:?}");
             e
         })
         .unwrap()

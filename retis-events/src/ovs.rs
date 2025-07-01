@@ -379,9 +379,9 @@ impl EventFmt for ActionEvent {
                                 (nat.min_addr.as_ref(), nat.max_addr.as_ref())
                             {
                                 if min_addr.eq(max_addr) {
-                                    write!(f, "={}", min_addr)?;
+                                    write!(f, "={min_addr}")?;
                                 } else {
-                                    write!(f, "={}-{}", min_addr, max_addr)?;
+                                    write!(f, "={min_addr}-{max_addr}")?;
                                 }
                             }
                         }
@@ -390,9 +390,9 @@ impl EventFmt for ActionEvent {
                                 (nat.min_port.as_ref(), nat.max_port.as_ref())
                             {
                                 if min_port.eq(max_port) {
-                                    write!(f, ":{}", min_port)?;
+                                    write!(f, ":{min_port}")?;
                                 } else {
-                                    write!(f, ":{}-{}", min_port, max_port)?;
+                                    write!(f, ":{min_port}-{max_port}")?;
                                 }
                             }
                         }
@@ -436,12 +436,12 @@ impl EventFmt for ActionEvent {
             Some(OvsAction::CheckPktLen(_)) => write!(f, " check_pkt_len")?,
             Some(OvsAction::AddMpls(_)) => write!(f, " add_mpls")?,
             Some(OvsAction::DecTtl(_)) => write!(f, " dec_ttl")?,
-            Some(OvsAction::Drop { reason }) => write!(f, " drop {}", reason)?,
+            Some(OvsAction::Drop { reason }) => write!(f, " drop {reason}")?,
             None => write!(f, " unspec")?,
         }
 
         if let Some(p) = self.queue_id {
-            write!(f, " q {}", p)?;
+            write!(f, " q {p}")?;
         }
 
         Ok(())
@@ -621,7 +621,7 @@ impl Ufid {
     // Unfortunately we don't have a good way of customizing __repr__ yet, see
     // https://github.com/retis-org/retis/issues/443.
     fn show(&self) -> String {
-        format!("{}", self)
+        format!("{self}")
     }
 }
 
@@ -864,7 +864,7 @@ mod tests {
     fn test_ufid() -> Result<()> {
         let ufid_str = "177746cc-5e95-4c23-8d40-96d5bee7c6eb";
         let ufid = Ufid::try_from(ufid_str)?;
-        assert_eq!(format!("{}", ufid), ufid_str);
+        assert_eq!(format!("{ufid}"), ufid_str);
         Ok(())
     }
 }

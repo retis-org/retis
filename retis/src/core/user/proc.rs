@@ -242,7 +242,7 @@ impl Binary {
         let usdt_info = match UsdtInfo::new(&path) {
             Ok(usdt) => Some(usdt),
             Err(e) => {
-                warn!("Failed to load symbols from path: {:?}: {:?}", path, e);
+                warn!("Failed to load symbols from path: {path:?}: {e:?}");
                 None
             }
         };
