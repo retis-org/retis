@@ -222,7 +222,7 @@ impl FormatterConf {
 }
 
 /// Trait controlling how an event or an event section (or any custom type
-/// inside it) is displayed. It works by providing an helper returning an
+/// inside it) is displayed. It works by providing a helper returning an
 /// implementation of the std::fmt::Display trait, which can be used later to
 /// provide different formats. It is also interesting as those helpers can take
 /// arguments, unlike a plain std::fmt::Display implementation.
