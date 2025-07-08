@@ -48,7 +48,7 @@ pub(crate) struct Sort {
     pub(super) out: Option<PathBuf>,
 
     /// Write events to stdout even if --out is used.
-    #[arg(long, default_value = "false")]
+    #[arg(long)]
     pub(super) print: bool,
 
     /// Format used when printing an event.

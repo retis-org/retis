@@ -90,10 +90,7 @@ Examples of meta filters:
 --filter-meta 'sk_buff.dev.nd_net.net.ns.inum == 4026531840'"#
     )]
     pub(super) meta_filter: Option<String>,
-    #[arg(
-        short = 'e',
-        help = "Print link-layer information from the packet"
-    )]
+    #[arg(short = 'e', help = "Print link-layer information from the packet")]
     pub(crate) print_ll: bool,
     #[arg(
         short,
@@ -104,22 +101,16 @@ Examples of meta filters:
 defaults to \"retis.data\"."
     )]
     pub(super) out: Option<PathBuf>,
-    #[arg(
-        long,
-        help = "Write the events to stdout even if --out is used.",
-        default_value = "false"
-    )]
+    #[arg(long, help = "Write the events to stdout even if --out is used.")]
     pub(super) print: bool,
     #[arg(
         long,
-        default_value = "false",
         help = "Include stack traces in the kernel events. The stack entries are limited and
 not released. If exhausted, no stack trace will be included."
     )]
     pub(super) stack: bool,
     #[arg(
         long,
-        default_value = "false",
         help = "When set, evaluates where Retis could add additional probes based on functions reported
 in the events stack traces (their display is still controlled by --stack). All matching
 functions are probed at runtime using kprobes.
@@ -142,7 +133,6 @@ Notes:
     pub(super) cmd: Option<String>,
     #[arg(
         long,
-        default_value = "false",
         help = r#"Allow the tool to setup all the system changes needed to make the tracing
 fully operational:
 

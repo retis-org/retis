@@ -44,14 +44,12 @@ const TRACKING_OLD_LIMIT: u64 = 60;
 pub(crate) struct OvsCollectorArgs {
     #[arg(
         long,
-        default_value = "false",
         help = "Enable OpenvSwitch upcall tracking. Requires USDT probes being enabled.
 See https://docs.openvswitch.org/en/latest/topics/usdt-probes/ for instructions."
     )]
     ovs_track: bool,
     #[arg(
         long,
-        default_value = "false",
         help = "Enable OpenvSwitch datapath flow enrichment via unixctl command.
 Requires OpenvSwitch >= 3.4"
     )]
