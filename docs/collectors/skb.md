@@ -52,7 +52,10 @@ ns {namespace id}
 if {interface index} ({interface name}) rxif {rx interface index}
 ```
 
-#### VLAN acceleration section
+#### VLAN hardware acceleration section
+
+In the Linux kernel the VLAN data can be part of the metadata instead of inside
+the packet (aka. "VLAN hardware acceleration"). This section displays this.
 
 ```none
 vlan_accel (id {id} prio {prio} [drop])
