@@ -462,7 +462,7 @@ mod tests {
                 "test_data/test_events_packets_invalid_ct.json",
                 "",
                 "",
-                Err(anyhow!("missing field `ct_status` at line 1 column 404")),
+                Err(anyhow!("missing field `ct_status` at line 1 column 1062")),
                 Vec::<Block>::new(),
             ),
             // No packet data provided.
@@ -562,7 +562,7 @@ mod tests {
             // Both for list-probes and for generating the actual pcap.
             (
                 "test_data/test_events_packets_invalid_ct.json",
-                Err(anyhow!("missing field `ct_status` at line 1 column 404")),
+                Err(anyhow!("missing field `ct_status` at line 1 column 1062")),
             ),
             // Completely missing probe section.
             (
