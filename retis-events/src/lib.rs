@@ -10,6 +10,8 @@ pub use events::*;
 pub mod display;
 pub use display::*;
 
+pub(crate) mod compat;
+
 pub mod file;
 pub mod helpers;
 #[cfg(feature = "python")]
