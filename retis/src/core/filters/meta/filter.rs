@@ -1466,6 +1466,13 @@ impl FilterMeta {
         mf.backpatch(&tf_list.true_list, exit_label)?;
         mf.backpatch(&tf_list.false_list, exit_label)?;
 
+        // The self test infrastructure doesn't rely on statically
+        // compiled template where the filter gets injected. To avoid
+        // verification error an exit instruction is required in order
+        // to make it process properly by the vm.
+        #[cfg(test)]
+        mf.filter.add(eBpfInsn::exit());
+
         Ok(mf)
     }
 
@@ -1477,9 +1484,18 @@ impl FilterMeta {
 
 #[cfg(test)]
 mod tests {
+    use std::{mem, slice};
+
+    use rbpf;
+    use test_case::test_case;
+
     use super::*;
 
-    use test_case::test_case;
+    mod skb_gen {
+        #![allow(warnings)]
+        include!(concat!(env!("CARGO_MANIFEST_DIR"), "/test_data/skb_gen.rs"));
+    }
+    use skb_gen::{net_device, nf_conn, sk_buff};
 
     #[test]
     fn meta_negative_generic() {
@@ -1618,5 +1634,152 @@ mod tests {
     fn meta_filter_boolean_expressions(bool_expr: &'static str) -> Result<()> {
         let _ = FilterMeta::from_string(bool_expr.to_string())?;
         Ok(())
+    }
+
+    // Dummy function with no real probe capabilities.
+    // Use it providing dst and src accordingly.
+    fn bpf_probe_read_kernel_helper(dst: u64, size: u64, src: u64, _arg4: u64, _arg5: u64) -> u64 {
+        if src == 0 || dst == 0 {
+            return -14_i64 as u64; // EFAULT
+        }
+
+        let mdst = dst as *mut u8;
+        let msrc = src as *const u8;
+
+        for i in 0..(size as usize) {
+            unsafe {
+                *mdst.add(i) = *msrc.add(i);
+            }
+        }
+
+        0 // success
+    }
+
+    fn bpf_probe_read_kernel_str_helper(
+        dst: u64,
+        size: u64,
+        src: u64,
+        _arg4: u64,
+        _arg5: u64,
+    ) -> u64 {
+        if src == 0 || dst == 0 {
+            return -14_i64 as u64; // EFAULT
+        }
+        let msrc = src as *const u8;
+        let mdst = dst as *mut u8;
+
+        for i in 0..(size as usize) {
+            unsafe {
+                let byte = *msrc.add(i);
+                *mdst.add(i) = byte;
+                if byte == 0 {
+                    return (i + 1) as u64;
+                }
+            }
+        }
+        size
+    }
+
+    // Applies generic initializations to the skb.
+    // The following describes the fields of sk_buff that are being set
+    // in this test. The offsets are based on the architecture for which the
+    // bindings were generated.
+    //
+    // +----------------+-------------+------------+-----------+
+    // | Field          | Byte Offset | Bit Offset | Size      |
+    // +----------------+-------------+------------+-----------+
+    // | len            | 112         | 0          | 4 bytes   |
+    // | queue_mapping  | 124         | 0          | 2 bytes   |
+    // | cloned         | 126         | 0          | 1 bit     |
+    // | pkt_type       | 128         | 0          | 3 bits    |
+    // | nf_trace       | 128         | 4          | 1 bit     |
+    // | ip_summed      | 128         | 5          | 2 bits    |
+    // | vlan_tci       | 154         | 0          | 2 bytes   |
+    // +----------------+-------------+------------+-----------+
+    // net_device.name is a fixed-size (16) array within struct net_device.
+    fn init_sk_buff() -> (sk_buff, Box<net_device>, Box<nf_conn>) {
+        let mut skb: sk_buff = Default::default();
+        let mut net_dev = Box::new(net_device::default());
+        let mut nfct = Box::new(nf_conn::default());
+        let name_bytes = "verylongtruncat".as_bytes();
+
+        // The string is 15 characters long. Taking 15 anyways as this
+        // has no impact.
+        name_bytes
+            .iter()
+            .take(15)
+            .enumerate()
+            .for_each(|(i, &b)| net_dev.name[i] = b as ::std::os::raw::c_char);
+
+        nfct.mark = 3;
+
+        let nfct_ptr = &*nfct as *const nf_conn as u64;
+        skb._nfct = nfct_ptr | 2;
+
+        skb.len = 2048;
+        skb.queue_mapping = 3;
+
+        unsafe {
+            skb.set_cloned(1);
+            skb.__bindgen_anon_5
+                .__bindgen_anon_1
+                .as_mut()
+                .__bindgen_anon_2
+                .__bindgen_anon_1
+                .vlan_tci = 1234;
+            skb.__bindgen_anon_5
+                .__bindgen_anon_1
+                .as_mut()
+                .set_ip_summed(0b11);
+            skb.__bindgen_anon_5
+                .__bindgen_anon_1
+                .as_mut()
+                .set_nf_trace(1);
+            skb.__bindgen_anon_5
+                .__bindgen_anon_1
+                .as_mut()
+                .set_pkt_type(0b110);
+        }
+
+        // Assign the net_device pointer to skb.dev
+        skb.__bindgen_anon_1.__bindgen_anon_1.__bindgen_anon_1.dev = &mut *net_dev;
+
+        (skb, net_dev, nfct)
+    }
+
+    #[test_case("sk_buff.cloned == 1" => true; "simple single bit dec")]
+    #[test_case("sk_buff.cloned == 0x1" => true; "simple single bit hex")]
+    #[test_case("sk_buff.cloned == 0b1" => true; "simple single bit bin")]
+    #[test_case("sk_buff.cloned:0b1 == 0b1" => true; "simple single bit mask")]
+    #[test_case("sk_buff.cloned == 0x1 and sk_buff.ip_summed == 0b11" => true; "two bitfields (1b, 2b)")]
+    #[test_case("sk_buff.ip_summed:0b10 == 0b10 and sk_buff.ip_summed:0b01 == 0b01" => true; "two bitfields mask out (bit0, bit1)")]
+    #[test_case("sk_buff.ip_summed:0b10 == 0b10 and sk_buff.pkt_type > 0b001" => true; "two bitfields with ge (true and true)")]
+    #[test_case("sk_buff.ip_summed:0b10 == 0b10 or sk_buff.pkt_type == 0b001" => true; "two bitfields with true or false")]
+    #[test_case("sk_buff.pkt_type <= 0b001 or sk_buff.ip_summed:0b10 == 0b10" => true; "two bitfields with false or true")]
+    #[test_case("sk_buff.pkt_type == 0b110 and sk_buff.nf_trace == 0b01" => true; "two bitfields with true and true on the same unit")]
+    #[test_case("sk_buff.vlan_tci == 1 or sk_buff.dev.name == 'verylongtruncatedname'" => false; "negative two fields false or false")]
+    #[test_case("sk_buff._nfct:0x7 == 0x2 and sk_buff._nfct:~0x7:nf_conn.mark > 2" => true; "two fields with cast and mask+cast (true and true)")]
+    #[test_case("sk_buff._nfct:0x7 == 0x2 and sk_buff._nfct:~0x7:nf_conn.mark != 3" => false; "negative two fields with cast and mask+cast (true and true)")]
+    #[test_case("sk_buff.vlan_tci == 1 and sk_buff.dev.name == 'foo' or sk_buff.dev.name == 'verylongtruncat'" => true; "three field default precedence (false and false) or true")]
+    #[test_case("sk_buff.vlan_tci == 1 and (sk_buff.dev.name == 'foo' or sk_buff.dev.name == 'verylongtruncat')" => false; "negative three field false and (false or true)")]
+    fn meta_filter_runtime(expr: &'static str) -> bool {
+        let (skb, _net_dev, _nfct) = init_sk_buff();
+
+        let mf = FilterMeta::from_string(format!("{expr}").to_string());
+        let mf = mf.unwrap();
+
+        let mem = Vec::new();
+
+        let mbuff = unsafe {
+            slice::from_raw_parts((&skb as *const _) as *const u8, mem::size_of::<sk_buff>())
+        };
+        let prog = &mf.to_bytes();
+
+        let mut vm = rbpf::EbpfVmMbuff::new(Some(prog)).unwrap();
+        vm.register_helper(113, bpf_probe_read_kernel_helper)
+            .unwrap();
+        vm.register_helper(115, bpf_probe_read_kernel_str_helper)
+            .unwrap();
+        vm.execute_program(&mem, &mbuff).unwrap() != 0
     }
 }
