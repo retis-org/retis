@@ -8,6 +8,9 @@ def test_event_inspection():
     f = EventFile("test_data/test_events.json")
     events = f.events()
 
+    # Skip startup event
+    next(events)
+
     e = next(events)
 
     # Access via getitem and contains
