@@ -377,8 +377,8 @@ pub(crate) struct ProbeRuntimeManager {
     /// Global per-probe map used to report counters.
     #[cfg(not(test))]
     counters_map: libbpf_rs::MapHandle,
-    generic_builders: HashMap<usize, Box<dyn ProbeBuilder>>,
-    targeted_nohook_builders: HashMap<usize, Box<dyn ProbeBuilder>>,
+    generic_builders: HashMap<ProbeTypeKey, Box<dyn ProbeBuilder>>,
+    targeted_nohook_builders: HashMap<ProbeTypeKey, Box<dyn ProbeBuilder>>,
     targeted_builders: Vec<Box<dyn ProbeBuilder>>,
     links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, RawFd)>,
@@ -438,7 +438,10 @@ impl ProbeRuntimeManager {
     }
 
     /// Initialize a map of reusable probe builders (e.g. for generic hooks).
-    fn gen_builders(&mut self, generic: bool) -> Result<HashMap<usize, Box<dyn ProbeBuilder>>> {
+    fn gen_builders(
+        &mut self,
+        generic: bool,
+    ) -> Result<HashMap<ProbeTypeKey, Box<dyn ProbeBuilder>>> {
         let fake_probes = [
             Probe::kprobe(Symbol::from_name_no_inspect("dummy"))?,
             Probe::kretprobe(Symbol::from_name_no_inspect("dummy"))?,
