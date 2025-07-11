@@ -12,11 +12,7 @@ pub(crate) struct Benchmark {
         help = "Benchmark to run",
     )]
     pub(super) r#type: String,
-    #[arg(
-        long,
-        default_value = "false",
-        help = "Run fake benchmarks to ensure there is no runtime issue"
-    )]
+    #[arg(long, help = "Run fake benchmarks to ensure there is no runtime issue")]
     pub(super) ci: bool,
 }
 

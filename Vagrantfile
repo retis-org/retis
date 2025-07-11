@@ -36,6 +36,27 @@ sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
 sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 SCRIPT
 
+# Grow disk on rhel-like distros.
+def grow_rhel_disk(centos, id, fs)
+  centos.vm.provider "libvirt" do |libvirt|
+    libvirt.machine_virtual_size = 20
+  end
+
+  centos.vm.provision "shell" do |s|
+    s.inline = <<-SHELL
+      dnf install -y cloud-utils-growpart
+      growpart /dev/vda $1
+
+      if [[ "$2" == "xfs" ]]; then
+        xfs_growfs /dev/vda$1
+      elif [[ "$2" == "ext" ]]; then
+        resize2fs /dev/vda$1
+      fi
+    SHELL
+    s.args = [id, fs]
+  end
+end
+
 def get_box(url, pattern)
   require 'open-uri'
   require 'nokogiri'
@@ -78,17 +99,15 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-8-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/8-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
-    centos.vm.provider "libvirt" do |libvirt|
-       libvirt.machine_virtual_size = 20
-    end
     centos.vm.provision "shell", inline: <<-SHELL
        #{$fix_centos_repositories}!
        dnf config-manager --set-enabled powertools
-       dnf install -y python39 cloud-utils-growpart
-       growpart /dev/vda 1
-       xfs_growfs /dev/vda1
+       dnf install -y python39
        alternatives --set python3 /usr/bin/python3.9
     SHELL
+
+    grow_rhel_disk(centos, 1, "xfs")
+
     centos.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "common", type: "shell", inline: $bootstrap_common
     centos.vm.provision "shell", inline: <<-SHELL
@@ -104,6 +123,8 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-9-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/9-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
+    grow_rhel_disk(centos, 1, "ext")
+
     centos.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "common", type: "shell", inline: $bootstrap_common
     centos.vm.provision "shell", inline: <<-SHELL
@@ -117,6 +138,8 @@ Vagrant.configure("2") do |config|
   config.vm.define "x86_64-c10s" do |centos|
     centos.vm.box = "centos-10-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/10-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
+
+    grow_rhel_disk(centos, 2, "ext")
 
     # The CRB repository is needed for libpcap-devel.
     centos.vm.provision "shell", inline: <<-SHELL

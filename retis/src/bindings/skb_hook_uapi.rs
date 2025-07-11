@@ -68,7 +68,6 @@ pub struct skb_packet_event {
     pub len: u32_,
     pub capture_len: u32_,
     pub packet: [u8_; 255usize],
-    pub fake_eth: u8_,
 }
 impl Default for skb_packet_event {
     fn default() -> Self {

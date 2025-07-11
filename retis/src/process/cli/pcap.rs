@@ -155,7 +155,7 @@ impl EventParser {
                     TimeSpec::new(0, common.timestamp as i64) + self.ts_off.unwrap_or_default(),
                 ) as u64),
                 original_len: packet.len,
-                data: Cow::Borrowed(&packet.packet.0),
+                data: Cow::Borrowed(&packet.raw.0),
                 options: vec![EnhancedPacketOption::Comment(Cow::Owned(format!(
                     "probe={}:{}",
                     &kernel.probe_type, &kernel.symbol
@@ -462,7 +462,7 @@ mod tests {
                 "test_data/test_events_packets_invalid_ct.json",
                 "",
                 "",
-                Err(anyhow!("missing field `ct_status` at line 1 column 404")),
+                Err(anyhow!("missing field `ct_status` at line 1 column 1062")),
                 Vec::<Block>::new(),
             ),
             // No packet data provided.
@@ -562,7 +562,7 @@ mod tests {
             // Both for list-probes and for generating the actual pcap.
             (
                 "test_data/test_events_packets_invalid_ct.json",
-                Err(anyhow!("missing field `ct_status` at line 1 column 404")),
+                Err(anyhow!("missing field `ct_status` at line 1 column 1062")),
             ),
             // Completely missing probe section.
             (

@@ -19,6 +19,9 @@ export in the events. The raw start of the packet (headers), ARP, IPv4/6, TCP,
 UDP and ICMPv4/v6 information are always included. See the `retis collect
 --help` for a detailed description.
 
+Display of link layer information is controlled by the `--print-ll` argument of
+the `collect`, `print` and `sort` subcommands.
+
 When collecting event for later `pcap-ng` file generation (see `retis pcap
 --help`), it's best to collect the `dev` and `ns` sections too.
 
@@ -27,84 +30,40 @@ When collecting event for later `pcap-ng` file generation (see `retis pcap
 Full `skb` collector events will be constructed with the following. Non-reported
 or invalid fields are automatically hidden.
 
-### Ns event section
+When using the multi-line format the metadata is displayed on a line, followed
+by information from the packet itself on a second dedicated line:
+
+```none
+{metadata info}
+{packet info}
+```
+
+### Metadata info
+
+#### Ns event section
 
 ```none
 ns {namespace id}
 ```
 
-### Net device event section
+#### Net device event section
 
 ```none
 if {interface index} ({interface name}) rxif {rx interface index}
 ```
 
-### Ethernet section
+#### VLAN hardware acceleration section
+
+In the Linux kernel the VLAN data can be part of the metadata instead of inside
+the packet (aka. "VLAN hardware acceleration"). This section displays this.
+
+When not accelerated, the VLAN information is shown as part of the packet.
 
 ```none
-{src mac} > {dst mac} ethertype {etype name} ({etype hex})
+vlan_accel (vlan {id} p {prio} [DEI])
 ```
 
-### VLAN section
-
-```none
-vlan (id {id} prio {prio} [drop] [accel])
-```
-
-### ARP section
-
-```none
-request who-has {ip} tell {ip}
-```
-
-or,
-
-```none
-reply {ip} is at {mac}
-```
-
-### IP section
-
-For IPv4:
-
-```none
-{src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} tos {tos} id {id}
-    off {frag offset} [{flags}] len {packet len} proto {protocol name}
-```
-
-- `ECN info` can be one of `CE`, `ECT(0)` or `ECT(1)`.
-- `flags` are constructed with a combination of `+`, `DF` and `rsvd`.
-
-For IPv6:
-
-```none
-{src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} label {flow label}
-    len {packet len} proto {protocol name}
-```
-
-### TCP section
-
-```none
-flags [{flags}] seq {sequence} ack {acked sequence} win {window}
-```
-
-- `flags` are constructed using a combination of `F` (fin), `S` (syn), `R`
-  (reset), `P` (push), `.` (ack), `U` (urgent).
-- `sequence` can be a range (`{start}:{end}`) or a single number (`{sequence}`).
-
-### UDP section
-
-```none
-len {UDP data len}
-```
-
-### ICMP & ICMPv6 sections
-
-```none
-type {type number} code {code number}
-```
-
-### Metadata & dataref sections
+#### Metadata & dataref sections
 
 Those two sections report metadata and reference counting from the socket buffer
 itself.
@@ -118,7 +77,7 @@ skb [{csum} hash {skb hash} data_len {skb data lenght} priority {skb priority}
   status (`none`, `unnecessary`, `partial` or `complete`).
 - `flags` are a combination of `nohdr` and `cloned`.
 
-### GSO section
+#### GSO section
 
 Generic Segmentation Offload information linked to an `skb` (see
 `skb_shared_info`).
@@ -130,3 +89,92 @@ gso [type {GSO type} flags {GSO flags} frags {nr of GSO frags}
 
 - `GSO type`, see `SKBFL_*` in the Linux kernel `include/linux/skbuff.h`.
 - `GSO flags`, see `SKB_GSO_*` in the Linux kernel `include/linux/skbuff.h`.
+
+### Packet info
+
+#### Ethernet section
+
+```none
+{src mac} > {dst mac} ethertype {etype name} ({etype hex})
+```
+
+#### VLAN
+
+```none
+vlan {id} p {prio} [DEI] ethertype {etype name} ({etype hex})
+```
+
+#### ARP section
+
+```none
+request who-has {ip} tell {ip}
+```
+
+or,
+
+```none
+reply {ip} is at {mac}
+```
+
+#### IP section
+
+For IPv4:
+
+```none
+{src ip}.{src port} > {dst ip}.{dst port} tos {tos} {ECN info} ttl {ttl} id {id}
+    off {frag offset} [{flags}] len {packet len} opts [{IPv4 options}]
+    proto {protocol name} ({protocol hex})
+```
+
+- `ECN info` can be one of `CE`, `ECT(0)` or `ECT(1)`.
+- `flags` are constructed with a combination of `+`, `DF` and `rsvd`.
+
+For IPv6:
+
+```none
+{src ip}.{src port} > {dst ip}.{dst port} {ECN info} ttl {ttl} label {flow label}
+    len {packet len} exts [{IPv6 extensions}] proto {protocol name} ({protocol hex})
+```
+
+#### TCP section
+
+```none
+flags [{flags}] seq {sequence} ack {acked sequence} win {window} [{options}]
+```
+
+- `flags` are constructed using a combination of `F` (fin), `S` (syn), `R`
+  (reset), `P` (push), `.` (ack), `U` (urgent), `E` (ece), `W` (cwr) and `e`
+  (RFC7560).
+- `sequence` can be a range (`{start}:{end}`) or a single number (`{sequence}`).
+- {options} are constructed by listing all options and for some extra
+  information (mss, wscale, sack, echo, echoreply, cc, ccnew, ccecho, timestamp,
+  tfo).
+
+#### UDP section
+
+```none
+len {UDP data len}
+```
+
+#### ICMP & ICMPv6 sections
+
+```none
+type {type number} code {code number}
+```
+
+#### Geneve
+
+```none
+geneve [{flags}] vni {vni} proto {etype name} ({etype hex}) opts_len {opts_len}
+```
+
+- `flags` are constructed using a combination of `O` (control) and `C`
+  (critical).
+
+#### VXLAN
+
+```none
+vxlan [{flags}] vni {vni}
+```
+
+- `flags` can be `I` (set for a valid VNI).

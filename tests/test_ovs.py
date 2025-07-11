@@ -71,59 +71,59 @@ def test_ovs_conntrack(two_port_ovs):
         "probe_type": "raw_tracepoint",
         "symbol": "openvswitch:ovs_do_execute_action",
     }
-    orig_skb = {
-        "eth": {
-            "etype": 2048,
+    orig_packet = {
+        "ethernet": {
+            "type": "ipv4",
         },
         "ip": {
-            "daddr": "192.168.1.2",
-            "saddr": "192.168.1.1",
-            "ttl": 64,
+            "dst": "192.168.1.2",
+            "src": "192.168.1.1",
+            "ttl": "64",
         },
         "tcp": {
-            "dport": 80,
+            "dport": "http",
         },
     }
-    reply_skb = {
-        "eth": {
-            "etype": 2048,
+    reply_packet = {
+        "ethernet": {
+            "type": "ipv4",
         },
         "ip": {
-            "daddr": "192.168.1.1",
-            "saddr": "192.168.1.2",
-            "ttl": 64,
+            "dst": "192.168.1.1",
+            "src": "192.168.1.2",
+            "ttl": "64",
         },
         "tcp": {
-            "sport": 80,
+            "sport": "http",
         },
     }
 
     # SYN
-    syn = copy.deepcopy(orig_skb)
-    syn["tcp"]["flags"] = 2
+    syn = copy.deepcopy(orig_packet)
+    syn["tcp"]["flags"] = "s"
 
     # SYN+ACK
-    syn_ack = copy.deepcopy(reply_skb)
-    syn_ack["tcp"]["flags"] = 18
+    syn_ack = copy.deepcopy(reply_packet)
+    syn_ack["tcp"]["flags"] = "sa"
 
     # ACK
-    ack = copy.deepcopy(orig_skb)
-    ack["tcp"]["flags"] = 16
+    ack = copy.deepcopy(orig_packet)
+    ack["tcp"]["flags"] = "a"
 
     # FIN
     fin = copy.deepcopy(syn)
-    fin["tcp"]["flags"] = 17
+    fin["tcp"]["flags"] = "fa"
 
     expected_events = [
         # SYN actions: ct, recirc, ct(commit), output
         {
             "kernel": ovs_exec,
-            "skb": syn,
+            "parsed_packet": syn,
             "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
-            "skb": syn,
+            "parsed_packet": syn,
             "ovs": {
                 "action": "recirc",
             },
@@ -131,7 +131,7 @@ def test_ovs_conntrack(two_port_ovs):
         },
         {
             "kernel": ovs_exec,
-            "skb": syn,
+            "parsed_packet": syn,
             "ovs": {
                 "action": "ct",
                 "flags": 5,
@@ -140,19 +140,19 @@ def test_ovs_conntrack(two_port_ovs):
         },
         {
             "kernel": ovs_exec,
-            "skb": syn,
+            "parsed_packet": syn,
             "ovs": {"action": "output"},
             "ct": {"state": "new", "zone_id": 43210},
         },
         # SYN+ACK actions: ct, recirc, output
         {
             "kernel": ovs_exec,
-            "skb": syn_ack,
+            "parsed_packet": syn_ack,
             "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
-            "skb": syn_ack,
+            "parsed_packet": syn_ack,
             "ovs": {
                 "action": "recirc",
             },
@@ -160,7 +160,7 @@ def test_ovs_conntrack(two_port_ovs):
         },
         {
             "kernel": ovs_exec,
-            "skb": syn_ack,
+            "parsed_packet": syn_ack,
             "ovs": {
                 "action": "output",
             },
@@ -168,12 +168,12 @@ def test_ovs_conntrack(two_port_ovs):
         # ACK actions: ct, recirc, output
         {
             "kernel": ovs_exec,
-            "skb": ack,
+            "parsed_packet": ack,
             "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
-            "skb": ack,
+            "parsed_packet": ack,
             "ovs": {
                 "action": "recirc",
             },
@@ -181,7 +181,7 @@ def test_ovs_conntrack(two_port_ovs):
         },
         {
             "kernel": ovs_exec,
-            "skb": ack,
+            "parsed_packet": ack,
             "ovs": {
                 "action": "output",
             },
@@ -189,12 +189,12 @@ def test_ovs_conntrack(two_port_ovs):
         # FIN actions: ct, recirc, output
         {
             "kernel": ovs_exec,
-            "skb": fin,
+            "parsed_packet": fin,
             "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
-            "skb": fin,
+            "parsed_packet": fin,
             "ovs": {
                 "action": "recirc",
                 "id": "&recirc_id_orig",  # Store orig recirc_id
@@ -203,7 +203,7 @@ def test_ovs_conntrack(two_port_ovs):
         },
         {
             "kernel": ovs_exec,
-            "skb": fin,
+            "parsed_packet": fin,
             "ovs": {
                 "action": "output",
                 "recirc_id": "*recirc_id_orig",  # Check orig recirc_id
@@ -213,12 +213,12 @@ def test_ovs_conntrack(two_port_ovs):
         # ACK actions: ct, recirc, output
         {
             "kernel": ovs_exec,
-            "skb": ack,
+            "parsed_packet": ack,
             "ovs": {"action": "ct", "flags": 4, "zone_id": 43210},
         },
         {
             "kernel": ovs_exec,
-            "skb": ack,
+            "parsed_packet": ack,
             "ovs": {
                 "action": "recirc",
                 "id": "&recirc_id_reply",  # Store reply recirc_id
@@ -227,7 +227,7 @@ def test_ovs_conntrack(two_port_ovs):
         },
         {
             "kernel": ovs_exec,
-            "skb": ack,
+            "parsed_packet": ack,
             "ovs": {
                 "action": "output",
                 "recirc_id": "*recirc_id_reply",  # Check reply recirc_id
@@ -241,8 +241,8 @@ def test_ovs_conntrack(two_port_ovs):
         return (
             "kernel" in e
             and e["kernel"]["symbol"] == "openvswitch:ovs_do_execute_action"
-            and "skb" in e
-            and e["skb"].get("ip")
+            and "parsed_packet" in e
+            and e["parsed_packet"].get("ip")
         )
 
     events = list(filter(interested, events))
@@ -250,7 +250,7 @@ def test_ovs_conntrack(two_port_ovs):
 
 
 # Expected OVS upcall events.
-def gen_expected_events(skb):
+def gen_expected_events(packet):
     return [
         # Lookup event with no flow information, i.e: miss.
         {
@@ -259,7 +259,7 @@ def gen_expected_events(skb):
                 "symbol": "ovs_flow_tbl_lookup_stats",
             },
             "ovs": {"event_type": "flow_lookup", "flow": 0},
-            "skb": skb,
+            "parsed_packet": packet,
             "skb-tracking": {"orig_head": "&orig_head"},
         },
         # Packet hits ovs_dp_upcall. Upcall start.
@@ -269,7 +269,7 @@ def gen_expected_events(skb):
                 "symbol": "openvswitch:ovs_dp_upcall",
             },
             "ovs": {"event_type": "upcall"},
-            "skb": skb,
+            "parsed_packet": packet,
             "skb-tracking": {"orig_head": "*orig_head"},  # Check same orig_head
         },
         # Packet is enqueued for upcall (only 1, i.e: no fragmentation
@@ -283,7 +283,7 @@ def gen_expected_events(skb):
                 "event_type": "upcall_enqueue",
                 "queue_id": "&queue_id",  # Store queue_id
             },
-            "skb": skb,
+            "parsed_packet": packet,
             "skb-tracking": {"orig_head": "*orig_head"},  # Check same orig_head
         },
         # Upcall ends.
@@ -295,7 +295,7 @@ def gen_expected_events(skb):
             "ovs": {
                 "event_type": "upcall_return",
             },
-            "skb": skb,
+            "parsed_packet": packet,
             "skb-tracking": {"orig_head": "*orig_head"},  # Check same orig_head
         },
         # Upcall is received by userspace.
@@ -339,7 +339,7 @@ def gen_expected_events(skb):
                 "probe_type": "raw_tracepoint",
                 "symbol": "openvswitch:ovs_do_execute_action",
             },
-            "skb": skb,
+            "parsed_packet": packet,
             "ovs": {
                 "action": "output",
                 "event_type": "action_execute",
@@ -368,24 +368,24 @@ def test_ovs_tracking(two_port_ovs):
 
     events = retis.events()
 
-    skb_icmp_req = {
+    packet_icmp_req = {
         "ip": {
-            "saddr": "192.168.1.1",
-            "daddr": "192.168.1.2",
+            "src": "192.168.1.1",
+            "dst": "192.168.1.2",
         },
-        "icmp": {"type": 8},  # Echo Request
+        "icmp": {"type": "echo-request"},
     }
-    skb_icmp_resp = {
+    packet_icmp_resp = {
         "ip": {
-            "saddr": "192.168.1.2",
-            "daddr": "192.168.1.1",
+            "src": "192.168.1.2",
+            "dst": "192.168.1.1",
         },
-        "icmp": {"type": 0},  # Echo Reply
+        "icmp": {"type": "echo-reply"},
     }
 
     # Expected eventes for both directions
-    expected_events = gen_expected_events(skb_icmp_req) + gen_expected_events(
-        skb_icmp_resp
+    expected_events = gen_expected_events(packet_icmp_req) + gen_expected_events(
+        packet_icmp_resp
     )
 
     assert_events_present(events, expected_events)
@@ -424,27 +424,29 @@ def test_ovs_tracking_filtered(two_port_ovs):
 
     events = retis.events()
 
-    skb_icmp_req = {
+    packet_icmp_req = {
         "ip": {
-            "saddr": "192.168.1.1",
-            "daddr": "192.168.1.2",
+            "src": "192.168.1.1",
+            "dst": "192.168.1.2",
         },
-        "icmp": {"type": 8},  # Echo Request
+        "icmp": {"type": "echo-request"},
     }
 
     # We only expect one way events
-    expected_events = gen_expected_events(skb_icmp_req)
+    expected_events = gen_expected_events(packet_icmp_req)
     assert_events_present(events, expected_events)
 
     # Ensure we didn't pick up any ARP or return traffic
     return_events = filter(
-        lambda e: e.get("skb", {}).get("ip", {}).get("saddr", None) == "192.168.1.2",
+        lambda e: e.get("parsed_packet", {}).get("ip", {}).get("src", None)
+        == "192.168.1.2",
         events,
     )
     assert len(list(return_events)) == 0
 
     arps = filter(
-        lambda e: e.get("skb", {}).get("eth", {}).get("etype", None) == 0x0806,
+        lambda e: e.get("parsed_packet", {}).get("ethernet", {}).get("type", None)
+        == "arp",
         events,
     )
     assert len(list(arps)) == 0

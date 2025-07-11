@@ -1,3 +1,4 @@
+import base64
 import json
 import signal
 import subprocess
@@ -6,6 +7,7 @@ import re
 
 from os import uname
 from os.path import dirname, abspath, join, getsize, exists
+from scapy.all import Ether
 from shutil import rmtree
 from tempfile import mkdtemp
 
@@ -69,7 +71,9 @@ class Retis:
         if exists(self._event_file()) and getsize(self._event_file()) > 0:
             with open(self._event_file()) as f:
                 for event in f.readlines():
-                    self._events.append(json.loads(event))
+                    event = json.loads(event)
+                    fixup_event_packet(event)
+                    self._events.append(event)
 
         return (outs.decode("utf8"), errs.decode("utf8"))
 
@@ -269,6 +273,31 @@ def run(cmd, should_fail=False):
 
 def run_bg(cmd):
     return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+def packet_to_json(raw_packet):
+    """Transforms a raw packet into a JSON represention of all its fields."""
+    p = Ether(base64.decodebytes(raw_packet.encode("ascii")))
+    res = {}
+    for line in p.show2(dump=True).split("\n"):
+        if "###" in line:
+            proto = line.strip("#[] ").lower()
+            res[proto] = {}
+        elif "=" in line:
+            key, val = line.split("=", 1)
+            res[proto][key.strip().lower()] = val.strip().lower()
+    return res
+
+
+def fixup_event_packet(event):
+    """Augment an event containing a raw packet with its parsed JSON
+    representation.
+    """
+    if "skb" not in event:
+        return
+    if "packet" not in event["skb"]:
+        return
+    event["parsed_packet"] = packet_to_json(event["skb"]["packet"]["raw"])
 
 
 def assert_events_present(events, expected):

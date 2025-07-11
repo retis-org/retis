@@ -24,6 +24,8 @@ pub struct DisplayFormat {
     pub time_format: TimeFormat,
     /// Offset of the monotonic clock to the wall-clock time.
     pub monotonic_offset: Option<TimeSpec>,
+    /// Should the link level part be displayed?
+    pub print_ll: bool,
 }
 
 impl DisplayFormat {
@@ -46,6 +48,12 @@ impl DisplayFormat {
     /// Sets the monotonic clock to the wall-clock time.
     pub fn monotonic_offset(mut self, offset: TimeSpec) -> Self {
         self.monotonic_offset = Some(offset);
+        self
+    }
+
+    /// Configure if LL information is printed.
+    pub fn print_ll(mut self, enabled: bool) -> Self {
+        self.print_ll = enabled;
         self
     }
 }
@@ -214,7 +222,7 @@ impl FormatterConf {
 }
 
 /// Trait controlling how an event or an event section (or any custom type
-/// inside it) is displayed. It works by providing an helper returning an
+/// inside it) is displayed. It works by providing a helper returning an
 /// implementation of the std::fmt::Display trait, which can be used later to
 /// provide different formats. It is also interesting as those helpers can take
 /// arguments, unlike a plain std::fmt::Display implementation.
@@ -316,6 +324,11 @@ impl DelimWriter {
             false => write!(f, "{}", self.delim)?,
         }
         Ok(())
+    }
+
+    /// Reset the DelimWriter to behave as if it was new.
+    pub fn reset(&mut self) {
+        self.first = true;
     }
 
     /// Was the DelimWriter used?

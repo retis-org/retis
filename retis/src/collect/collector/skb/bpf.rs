@@ -7,11 +7,7 @@
 use anyhow::bail;
 use std::str;
 
-use anyhow::{anyhow, Result};
-use pnet_packet::{
-    arp::ArpPacket, ethernet::*, icmp::IcmpPacket, icmpv6::Icmpv6Packet, ip::*, ipv4::*, ipv6::*,
-    tcp::TcpPacket, udp::UdpPacket, Packet,
-};
+use anyhow::Result;
 
 use crate::{
     bindings::if_vlan_uapi::*,
@@ -20,108 +16,8 @@ use crate::{
         parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId, RawEventSectionFactory,
     },
     event_section_factory,
-    events::{
-        helpers::{etype_str, RawPacket},
-        *,
-    },
-    helpers,
+    events::*,
 };
-
-pub(super) fn unmarshal_eth(eth: &EthernetPacket) -> Result<SkbEthEvent> {
-    Ok(SkbEthEvent {
-        etype: eth.get_ethertype().0,
-        src: helpers::net::parse_eth_addr(&eth.get_source().octets())?,
-        dst: helpers::net::parse_eth_addr(&eth.get_destination().octets())?,
-    })
-}
-
-pub(super) fn unmarshal_arp(arp: &ArpPacket) -> Result<Option<SkbArpEvent>> {
-    let operation = match arp.get_operation().0 {
-        1 => ArpOperation::Request,
-        2 => ArpOperation::Reply,
-        3 => ArpOperation::ReverseRequest,
-        4 => ArpOperation::ReverseReply,
-        // We only support ARP for IPv4 over Ethernet; request & reply */
-        _ => return Ok(None),
-    };
-
-    Ok(Some(SkbArpEvent {
-        operation,
-        sha: helpers::net::parse_eth_addr(&arp.get_sender_hw_addr().octets())?,
-        spa: helpers::net::parse_ipv4_addr(u32::from(arp.get_sender_proto_addr()))?,
-        tha: helpers::net::parse_eth_addr(&arp.get_target_hw_addr().octets())?,
-        tpa: helpers::net::parse_ipv4_addr(u32::from(arp.get_target_proto_addr()))?,
-    }))
-}
-
-pub(super) fn unmarshal_ipv4(ip: &Ipv4Packet) -> Result<SkbIpEvent> {
-    Ok(SkbIpEvent {
-        saddr: helpers::net::parse_ipv4_addr(u32::from(ip.get_source()))?,
-        daddr: helpers::net::parse_ipv4_addr(u32::from(ip.get_destination()))?,
-        version: SkbIpVersion::V4 {
-            v4: SkbIpv4Event {
-                tos: ip.get_dscp(),
-                flags: ip.get_flags(),
-                id: ip.get_identification(),
-                offset: ip.get_fragment_offset(),
-            },
-        },
-        protocol: ip.get_next_level_protocol().0,
-        len: ip.get_total_length(),
-        ttl: ip.get_ttl(),
-        ecn: ip.get_ecn(),
-    })
-}
-
-pub(super) fn unmarshal_ipv6(ip: &Ipv6Packet) -> Result<SkbIpEvent> {
-    Ok(SkbIpEvent {
-        saddr: ip.get_source().to_string(),
-        daddr: ip.get_destination().to_string(),
-        version: SkbIpVersion::V6 {
-            v6: SkbIpv6Event {
-                flow_label: ip.get_flow_label(),
-            },
-        },
-        protocol: ip.get_next_header().0,
-        len: ip.get_payload_length(),
-        ttl: ip.get_hop_limit(),
-        ecn: ip.get_traffic_class() & 0x3,
-    })
-}
-
-pub(super) fn unmarshal_tcp(tcp: &TcpPacket) -> Result<SkbTcpEvent> {
-    Ok(SkbTcpEvent {
-        sport: tcp.get_source(),
-        dport: tcp.get_destination(),
-        seq: tcp.get_sequence(),
-        ack_seq: tcp.get_acknowledgement(),
-        window: tcp.get_window(),
-        doff: tcp.get_data_offset(),
-        flags: tcp.get_flags(),
-    })
-}
-
-pub(super) fn unmarshal_udp(udp: &UdpPacket) -> Result<SkbUdpEvent> {
-    Ok(SkbUdpEvent {
-        sport: udp.get_source(),
-        dport: udp.get_destination(),
-        len: udp.get_length(),
-    })
-}
-
-pub(super) fn unmarshal_icmp(icmp: &IcmpPacket) -> Result<SkbIcmpEvent> {
-    Ok(SkbIcmpEvent {
-        r#type: icmp.get_icmp_type().0,
-        code: icmp.get_icmp_code().0,
-    })
-}
-
-pub(super) fn unmarshal_icmpv6(icmp: &Icmpv6Packet) -> Result<SkbIcmpV6Event> {
-    Ok(SkbIcmpV6Event {
-        r#type: icmp.get_icmpv6_type().0,
-        code: icmp.get_icmpv6_code().0,
-    })
-}
 
 /// Unmarshal net device info. Can return Ok(None) in case the info does not
 /// look like it's genuine (see below).
@@ -170,14 +66,13 @@ pub(super) fn unmarshal_meta(raw_section: &BpfRawSection) -> Result<SkbMetaEvent
     })
 }
 
-pub(super) fn unmarshal_vlan(raw_section: &BpfRawSection) -> Result<SkbVlanEvent> {
+pub(super) fn unmarshal_vlan(raw_section: &BpfRawSection) -> Result<SkbVlanAccelEvent> {
     let raw = parse_raw_section::<skb_vlan_event>(raw_section)?;
 
-    Ok(SkbVlanEvent {
+    Ok(SkbVlanAccelEvent {
         pcp: raw.pcp,
         dei: raw.dei == 1,
         vid: raw.vid,
-        acceleration: raw.acceleration == 1,
     })
 }
 
@@ -205,111 +100,19 @@ pub(super) fn unmarshal_gso(raw_section: &BpfRawSection) -> Result<SkbGsoEvent> 
     })
 }
 
-pub(super) fn unmarshal_packet(
-    event: &mut SkbEvent,
-    raw_section: &BpfRawSection,
-    report_eth: bool,
-) -> Result<()> {
+pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<SkbPacketEvent> {
     let raw = parse_raw_section::<skb_packet_event>(raw_section)?;
 
-    // First add the raw packet part in the event.
-    event.packet = Some(SkbPacketEvent {
+    Ok(SkbPacketEvent {
         len: raw.len,
         capture_len: raw.capture_len,
-        packet: RawPacket(raw.packet[..(raw.capture_len as usize)].to_vec()),
-    });
-
-    // Then start parsing the raw packet to generate other sections.
-    let eth = EthernetPacket::new(&raw.packet[..(raw.capture_len as usize)]).ok_or_else(|| {
-        anyhow!("Could not parse Ethernet packet (buffer size less than minimal)")
-    })?;
-
-    // We can report non-Ethernet packets, sanity check they look like one. We
-    // could still get invalid ones, if the data at the right offset looks like
-    // an ethernet packet; but what else can we do?
-    if etype_str(eth.get_ethertype().0).is_none() {
-        return Ok(());
-    }
-
-    if report_eth && raw.fake_eth == 0 {
-        event.eth = Some(unmarshal_eth(&eth)?);
-    }
-
-    match eth.get_ethertype() {
-        EtherTypes::Arp => {
-            if let Some(eth) = ArpPacket::new(eth.payload()) {
-                event.arp = unmarshal_arp(&eth)?;
-            };
-        }
-        EtherTypes::Ipv4 => {
-            if let Some(ip) = Ipv4Packet::new(eth.payload()) {
-                event.ip = Some(unmarshal_ipv4(&ip)?);
-                unmarshal_l4(event, ip.get_next_level_protocol(), ip.payload())?;
-            };
-        }
-        EtherTypes::Ipv6 => {
-            if let Some(ip) = Ipv6Packet::new(eth.payload()) {
-                event.ip = Some(unmarshal_ipv6(&ip)?);
-                unmarshal_l4(event, ip.get_next_header(), ip.payload())?;
-            };
-        }
-        // If we did not generate any data in the skb section, this means we do
-        // not support yet the protocol used. At least provide the ethertype (we
-        // already checked it looked valid).
-        _ => {
-            if event.eth.is_none() {
-                event.eth = Some(unmarshal_eth(&eth)?);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn unmarshal_l4(
-    event: &mut SkbEvent,
-    protocol: IpNextHeaderProtocol,
-    payload: &[u8],
-) -> Result<()> {
-    match protocol {
-        IpNextHeaderProtocols::Tcp => {
-            if let Some(tcp) = TcpPacket::new(payload) {
-                event.tcp = Some(unmarshal_tcp(&tcp)?);
-            }
-        }
-        IpNextHeaderProtocols::Udp => {
-            if let Some(udp) = UdpPacket::new(payload) {
-                event.udp = Some(unmarshal_udp(&udp)?);
-            }
-        }
-        IpNextHeaderProtocols::Icmp => {
-            if let Some(icmp) = IcmpPacket::new(payload) {
-                event.icmp = Some(unmarshal_icmp(&icmp)?);
-            }
-        }
-        IpNextHeaderProtocols::Icmpv6 => {
-            if let Some(icmpv6) = Icmpv6Packet::new(payload) {
-                event.icmpv6 = Some(unmarshal_icmpv6(&icmpv6)?);
-            }
-        }
-        _ => (),
-    }
-
-    Ok(())
+        raw: RawPacket(raw.packet[..(raw.capture_len as usize)].to_vec()),
+    })
 }
 
 #[event_section_factory(FactoryId::Skb)]
 #[derive(Default)]
-pub(crate) struct SkbEventFactory {
-    // Should we report the Ethernet header.
-    pub(super) report_eth: bool,
-}
-
-impl SkbEventFactory {
-    pub(crate) fn report_eth(&mut self, on: bool) {
-        self.report_eth = on;
-    }
-}
+pub(crate) struct SkbEventFactory {}
 
 impl RawEventSectionFactory for SkbEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
@@ -317,13 +120,13 @@ impl RawEventSectionFactory for SkbEventFactory {
 
         for section in raw_sections.iter() {
             match section.header.data_type as u32 {
-                SECTION_VLAN => skb.vlan = Some(unmarshal_vlan(section)?),
+                SECTION_VLAN => skb.vlan_accel = Some(unmarshal_vlan(section)?),
                 SECTION_DEV => skb.dev = unmarshal_dev(section)?,
                 SECTION_NS => skb.ns = Some(unmarshal_ns(section)?),
                 SECTION_META => skb.meta = Some(unmarshal_meta(section)?),
                 SECTION_DATA_REF => skb.data_ref = Some(unmarshal_data_ref(section)?),
                 SECTION_GSO => skb.gso = Some(unmarshal_gso(section)?),
-                SECTION_PACKET => unmarshal_packet(&mut skb, section, self.report_eth)?,
+                SECTION_PACKET => skb.packet = Some(unmarshal_packet(section)?),
                 x => bail!("Unknown data type ({x})"),
             }
         }
@@ -389,7 +192,6 @@ pub(crate) mod benchmark {
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 ],
-                ..Default::default()
             };
             build_raw_section(
                 out,

@@ -102,6 +102,22 @@ True
 Got 149 series
 ```
 
+### Command line arguments
+
+When executing a script using `retis python script.py`, command line arguments
+are available in `sys.argv`. Modules like `argparse` can be used as-is.
+
+```text
+$ cat argv.py
+print(sys.argv)
+$ retis python argv.py
+['argv.py']
+$ retis python argv.py foo
+['argv.py', 'foo']
+$ retis python -- argv.py -x --foo
+['argv.py', '-x', '--foo']
+```
+
 ## Python library
 
 For more sophisticated programs that require more control over the python
@@ -120,4 +136,102 @@ events_per_series = [len(s) for s in reader]
 
 print("Number of series: {}".format(len(events_per_series)))
 print("Average events per series: {}".format(statistics.mean(events_per_series)))
+```
+
+## Parsing the packet data
+
+The packet itself is stored as raw data in the Retis events and as such
+individual packet fields cannot be directly accessed. A third party library is
+required, such as (Scapy)[https://scapy.readthedocs.io/].
+
+To ease packet consumption a helper is available to convert raw packets to a
+Scapy `Ether` representation. The helper only works if Scapy is available on the
+system.
+
+Example after launching the builtin interpreter (`retis python`):
+
+```text
+$ retis python
+>>> events = reader.events()
+>>> e = next(events) # Skip startup event
+>>> e = next(events)
+>>> p = e.skb.packet.to_scapy()
+>>> print(p.summary())
+Ether / IP / TCP 1.1.1.1:https > 10.0.0.42:12345 A
+>>> if IP in p:
+...     print("src: " + p[IP].src)
+...
+src: 1.1.1.1
+>>> if TCP in p:
+...     p[TCP].options(2)
+...
+('Timestamp', (3570509991, 2706919))
+```
+
+While not mandatory for using `to_scapy()`, to access the full Scapy
+functionalities its objects must be imported first when using the Retis Python
+library or when executing a Python script (Scapy is automatically imported when
+using the builtin interpreter).
+
+```python
+from scapy.all import *
+```
+
+The raw packet can also be accessed as a bytes string or as bytes, for low-level
+access or for using in other packet-parsing libraries:
+
+```python
+e.skb.packet.raw          # Bytes string
+bytes(e.skb.packet.raw)   # bytes
+
+# Manual implementation of to_scapy().
+from scapy.layers.l2 import Ether
+Ether(bytes(e.skb.packet.raw))
+```
+
+## Available helpers
+
+Different helpers are provided to help working with events in Python.
+
+With the top-level event:
+
+```text
+>>> print(event.sections())
+['ct', 'skb-tracking', 'common', 'skb', 'kernel']
+>>> event.raw().keys()  # Makes the event and all its sub-sections a real dict.
+dict_keys(['skb-tracking', 'kernel', 'common', 'ct', 'skb'])
+>>> event.raw()['skb'].keys()
+dict_keys(['dev', 'packet'])
+```
+
+With the top-level event and all sections:
+
+```text
+>>> print(event.show())
+8974965787422 (5) [ping] 100854 [tp] net:net_dev_start_xmit #829a5a5cb1effff8be0ca834000 (skb ffff8be0ca56ae00)
+  if 3 (eth0)
+  xx:xx:xx:xx:xx:xx > xx:xx:xx:xx:xx:xx ethertype IPv4 (0x0800) 10.0.42.5 > 1.1.1.1 tos 0x0 ttl 64 id 2368 off 0 [DF] len 84 proto ICMP (1) type 8 code 0
+  ct_state NEW status 0x188 icmp orig [10.0.42.5 > 1.1.1.1 type 8 code 0 id 1] reply [1.1.1.1 > 10.0.42.5 type 0 code 0 id 1] zone 0 mark 0
+>>> print(event.common.show())
+8974965787422 (5) [ping] 100854
+>>> print(event.ct.show())
+ct_state NEW status 0x188 icmp orig [10.0.42.5 > 1.1.1.1 type 8 code 0 id 1] reply [1.1.1.1 > 10.0.42.5 type 0 code 0 id 1] zone 0 mark 0
+```
+
+With the `skb-tracking` section:
+
+```text
+>>> hex(event.skb_tracking.tracking_id())
+'0x829a5a5cb1effff8be0ca834000'
+>>> e0.skb_tracking.match(e1.skb_tracking)        # Match on the tracking id.
+True
+>>> e0.skb_tracking.strict_match(e1.skb_tracking) # Match on the tracking id + skb address.
+False
+```
+
+With the `packet` sub-section in the `skb` section:
+
+```text
+>>> event.skb.packet.to_scapy()
+...
 ```

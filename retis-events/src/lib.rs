@@ -37,6 +37,8 @@ pub mod skb_tracking;
 pub use skb_tracking::*;
 pub mod user;
 pub use user::*;
+pub mod raw_packet;
+pub use raw_packet::*;
 
 // Re-export derive macros.
 use retis_derive::*;
