@@ -222,3 +222,54 @@ pub(crate) unsafe extern "C" fn fixup_filter_load_fn(
 
     0
 }
+
+#[cfg(test)]
+pub(crate) mod test_helpers {
+    pub(crate) fn bpf_probe_read_kernel_helper(
+        dst: u64,
+        size: u64,
+        src: u64,
+        _arg4: u64,
+        _arg5: u64,
+    ) -> u64 {
+        if src == 0 || dst == 0 {
+            return -14_i64 as u64; // EFAULT
+        }
+
+        let mdst = dst as *mut u8;
+        let msrc = src as *const u8;
+
+        for i in 0..(size as usize) {
+            unsafe {
+                *mdst.add(i) = *msrc.add(i);
+            }
+        }
+
+        0 // success
+    }
+
+    pub(crate) fn bpf_probe_read_kernel_str_helper(
+        dst: u64,
+        size: u64,
+        src: u64,
+        _arg4: u64,
+        _arg5: u64,
+    ) -> u64 {
+        if src == 0 || dst == 0 {
+            return -14_i64 as u64; // EFAULT
+        }
+        let msrc = src as *const u8;
+        let mdst = dst as *mut u8;
+
+        for i in 0..(size as usize) {
+            unsafe {
+                let byte = *msrc.add(i);
+                *mdst.add(i) = byte;
+                if byte == 0 {
+                    return (i + 1) as u64;
+                }
+            }
+        }
+        size
+    }
+}

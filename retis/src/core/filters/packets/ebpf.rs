@@ -533,6 +533,9 @@ impl TryFrom<BpfProg> for eBpfProg {
             )?);
         }
 
+        // Tests directly rely on the value returned by the filter as
+        // they are not part of a bigger function
+        #[cfg(not(test))]
         ebpf.inline_returns()?;
 
         Ok(ebpf)

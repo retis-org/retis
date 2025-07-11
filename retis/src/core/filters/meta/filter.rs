@@ -1497,6 +1497,8 @@ mod tests {
     }
     use skb_gen::{net_device, nf_conn, sk_buff};
 
+    use crate::core::filters::{bpf_probe_read_kernel_helper, bpf_probe_read_kernel_str_helper};
+
     #[test]
     fn meta_negative_generic() {
         // sk_buff is mandatory.
@@ -1634,50 +1636,6 @@ mod tests {
     fn meta_filter_boolean_expressions(bool_expr: &'static str) -> Result<()> {
         let _ = FilterMeta::from_string(bool_expr.to_string())?;
         Ok(())
-    }
-
-    // Dummy function with no real probe capabilities.
-    // Use it providing dst and src accordingly.
-    fn bpf_probe_read_kernel_helper(dst: u64, size: u64, src: u64, _arg4: u64, _arg5: u64) -> u64 {
-        if src == 0 || dst == 0 {
-            return -14_i64 as u64; // EFAULT
-        }
-
-        let mdst = dst as *mut u8;
-        let msrc = src as *const u8;
-
-        for i in 0..(size as usize) {
-            unsafe {
-                *mdst.add(i) = *msrc.add(i);
-            }
-        }
-
-        0 // success
-    }
-
-    fn bpf_probe_read_kernel_str_helper(
-        dst: u64,
-        size: u64,
-        src: u64,
-        _arg4: u64,
-        _arg5: u64,
-    ) -> u64 {
-        if src == 0 || dst == 0 {
-            return -14_i64 as u64; // EFAULT
-        }
-        let msrc = src as *const u8;
-        let mdst = dst as *mut u8;
-
-        for i in 0..(size as usize) {
-            unsafe {
-                let byte = *msrc.add(i);
-                *mdst.add(i) = byte;
-                if byte == 0 {
-                    return (i + 1) as u64;
-                }
-            }
-        }
-        size
     }
 
     // Applies generic initializations to the skb.
