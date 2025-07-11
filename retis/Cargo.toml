@@ -38,7 +38,7 @@ clap_complete = "4.4"
 elf = "0.7"
 events = {version = "1.5", path = "../retis-events", package="retis-events" }
 flate2 = "1.0"
-libbpf-rs = "0.24"
+libbpf-rs = "0.25"
 libbpf-sys = "1.5"
 libc = "0.2"
 log = { version = "0.4", features = ["std"] }
@@ -66,7 +66,7 @@ thiserror = "2.0"
 
 [build-dependencies]
 bindgen = "0.71"
-libbpf-cargo = "0.24"
+libbpf-cargo = "0.25"
 memmap2 = "0.9"
 
 [dev-dependencies]

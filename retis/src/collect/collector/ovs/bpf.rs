@@ -21,9 +21,12 @@ use crate::{
         ovs_operation_uapi::ovs_operation_event,
         user_recv_upcall_uapi::recv_upcall_event,
     },
-    core::events::{
-        parse_enum, parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
-        RawEventSectionFactory,
+    core::{
+        events::{
+            parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
+            RawEventSectionFactory,
+        },
+        inspect::parse_enum,
     },
     event_section_factory,
     events::*,

@@ -42,6 +42,8 @@ impl TryFrom<&str> for ProbeOption {
     }
 }
 
+pub(crate) type ProbeTypeKey = usize;
+
 /// Represents a probe we can install in a target (kernel, user space program,
 /// etc). It can be of various underlying types, which can be retrieved using
 /// `let r#type = probe.r#type();`
@@ -115,7 +117,7 @@ impl Probe {
     }
 
     /// We do use probe types as indexes, the following makes it easy.
-    pub(crate) fn type_key(&self) -> usize {
+    pub(crate) fn type_key(&self) -> ProbeTypeKey {
         match self.r#type() {
             ProbeType::Kprobe(_) => 0,
             ProbeType::Kretprobe(_) => 1,
