@@ -848,6 +848,12 @@ impl<'a> MetaExpr<'a> {
                     imm: -1,
                 },
             ),
+        ]);
+
+        // These two blocks cannot be coalesced because the following
+        // has a dependency on the filter length based on the previous
+        // instructions.
+        self.filter.add_multi(&[
             eBpfInsn::jmp(
                 eBpfJmpOpExt::Bpf(BpfJmpOp::Gt),
                 JmpInfo::Imm {
