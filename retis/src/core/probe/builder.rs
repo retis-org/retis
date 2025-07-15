@@ -16,7 +16,7 @@ use crate::core::probe::*;
 pub(super) trait ProbeBuilder {
     /// Allocate and return a new instance of the probe builder, with default
     /// values.
-    fn new() -> Self
+    fn new() -> Result<Self>
     where
         Self: Sized;
     /// Initialize the probe builder before attaching programs to probes. It
@@ -28,10 +28,11 @@ pub(super) trait ProbeBuilder {
         hooks: Vec<Hook>,
         ctx_hook: Option<Hook>,
     ) -> Result<()>;
-    /// Attach a probe to a given target (function, tracepoint, etc).
-    fn attach(&mut self, probe: &Probe) -> Result<()>;
-    /// Detach all probes installed by the builder (function,
-    /// tracepoint, etc).
+    /// Add a probe to the probe builder.
+    fn add_probe(&mut self, probe: Probe) -> Result<()>;
+    /// Attach all probes added to the builder.
+    fn attach(&mut self) -> Result<()>;
+    /// Detach all probes installed by the builder.
     fn detach(&mut self) -> Result<()>;
 }
 

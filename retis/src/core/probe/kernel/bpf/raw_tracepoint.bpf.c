@@ -6,8 +6,10 @@
 /* It is safe to have these values per-object as the loaded object won't be
  * shared between attached programs for raw tracepoints.
  */
-const volatile u64 ksym = 0;
 const volatile u32 nargs = 0;
+
+/* Only used in legacy mode where the raw tracepoint program can't be reused. */
+const volatile u64 ksym = 0;
 
 /* We unroll the loop bellow as the verifier disallow arithmetic operations on
  * context pointer. The loop unrolling pragma doesn't work here, do it manually,
@@ -47,10 +49,17 @@ int probe_raw_tracepoint(struct bpf_raw_tracepoint_args *ctx)
 	struct retis_context context = {};
 
 	context.timestamp = bpf_ktime_get_ns();
-	context.ksym = ksym;
 	context.probe_type = KERNEL_PROBE_TRACEPOINT;
 	context.orig_ctx = ctx;
 	get_regs(&context.regs, ctx);
+
+	/* Check if cookies can be set and retrieved from raw tracepoints,
+	 * otherwise fallback to a per-program kernel symbol being provided.
+	 */
+	if (bpf_core_field_exists(((struct bpf_raw_tp_link *) 0)->cookie))
+		context.ksym = bpf_get_attach_cookie(ctx);
+	else
+		context.ksym = ksym;
 
 	return chain(&context);
 }
