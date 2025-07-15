@@ -1,31 +1,4 @@
-# SKB collector
-
-The `skb` collector provides insights into the `struct sk_buff` (we call
-instances of this `skb` below) kernel data structure, which holds metadata and
-data for networking packets.
-
-The `skb` collector does not install any probe itself, and is only responsible
-for gathering data whenever an `skb` is available in a probe arguments. This is
-done automatically. Eg. if the `skb` collector is enabled and a probe is added
-(manually, by a profile or by another collector) on `kfree_skb_reason`, the
-`skb` collector will generate events with data coming from the `skb` given as an
-argument to the `kfree_skb_reason` function.
-
-## Arguments
-
-The `skb` collector has a single specific argument, `--skb-sections`. This is
-used to choose which parts of the `skb` metadata and/or data to retrieve and
-export in the events. The raw start of the packet (headers), ARP, IPv4/6, TCP,
-UDP and ICMPv4/v6 information are always included. See the `retis collect
---help` for a detailed description.
-
-Display of link layer information is controlled by the `--print-ll` argument of
-the `collect`, `print` and `sort` subcommands.
-
-When collecting event for later `pcap-ng` file generation (see `retis pcap
---help`), it's best to collect the `dev` and `ns` sections too.
-
-## Events
+# Skb event
 
 Full `skb` collector events will be constructed with the following. Non-reported
 or invalid fields are automatically hidden.
@@ -38,9 +11,9 @@ by information from the packet itself on a second dedicated line:
 {packet info}
 ```
 
-### Metadata info
+## Metadata info
 
-#### Ns event section
+### Ns event section
 
 ```none
 ns [{unique id}/]{inum}
@@ -57,13 +30,13 @@ ns [{unique id}/]{inum}
   looking at `/proc/<pid>/ns/net` or `/run/netns` (when using `iproute2` for the
   latter).
 
-#### Net device event section
+### Net device event section
 
 ```none
 if {interface index} ({interface name}) rxif {rx interface index}
 ```
 
-#### VLAN hardware acceleration section
+### VLAN hardware acceleration section
 
 In the Linux kernel the VLAN data can be part of the metadata instead of inside
 the packet (aka. "VLAN hardware acceleration"). This section displays this.
@@ -74,7 +47,7 @@ When not accelerated, the VLAN information is shown as part of the packet.
 vlan_accel (vlan {id} p {prio} [DEI])
 ```
 
-#### Metadata & dataref sections
+### Metadata & dataref sections
 
 Those two sections report metadata and reference counting from the socket buffer
 itself.
@@ -88,7 +61,7 @@ skb [{csum} hash {skb hash} data_len {skb data lenght} priority {skb priority}
   status (`none`, `unnecessary`, `partial` or `complete`).
 - `flags` are a combination of `nohdr` and `cloned`.
 
-#### GSO section
+### GSO section
 
 Generic Segmentation Offload information linked to an `skb` (see
 `skb_shared_info`).
@@ -101,21 +74,21 @@ gso [type {GSO type} flags {GSO flags} frags {nr of GSO frags}
 - `GSO type`, see `SKBFL_*` in the Linux kernel `include/linux/skbuff.h`.
 - `GSO flags`, see `SKB_GSO_*` in the Linux kernel `include/linux/skbuff.h`.
 
-### Packet info
+## Packet info
 
-#### Ethernet section
+### Ethernet section
 
 ```none
 {src mac} > {dst mac} ethertype {etype name} ({etype hex})
 ```
 
-#### VLAN
+### VLAN
 
 ```none
 vlan {id} p {prio} [DEI] ethertype {etype name} ({etype hex})
 ```
 
-#### ARP section
+### ARP section
 
 ```none
 request who-has {ip} tell {ip}
@@ -127,7 +100,7 @@ or,
 reply {ip} is at {mac}
 ```
 
-#### IP section
+### IP section
 
 For IPv4:
 
@@ -147,7 +120,7 @@ For IPv6:
     len {packet len} exts [{IPv6 extensions}] proto {protocol name} ({protocol hex})
 ```
 
-#### TCP section
+### TCP section
 
 ```none
 flags [{flags}] seq {sequence} ack {acked sequence} win {window} [{options}]
@@ -161,19 +134,19 @@ flags [{flags}] seq {sequence} ack {acked sequence} win {window} [{options}]
   information (mss, wscale, sack, echo, echoreply, cc, ccnew, ccecho, timestamp,
   tfo).
 
-#### UDP section
+### UDP section
 
 ```none
 len {UDP data len}
 ```
 
-#### ICMP & ICMPv6 sections
+### ICMP & ICMPv6 sections
 
 ```none
 type {type number} code {code number}
 ```
 
-#### Geneve
+### Geneve
 
 ```none
 geneve [{flags}] vni {vni} proto {etype name} ({etype hex}) opts_len {opts_len}
@@ -182,7 +155,7 @@ geneve [{flags}] vni {vni} proto {etype name} ({etype hex}) opts_len {opts_len}
 - `flags` are constructed using a combination of `O` (control) and `C`
   (critical).
 
-#### VXLAN
+### VXLAN
 
 ```none
 vxlan [{flags}] vni {vni}
