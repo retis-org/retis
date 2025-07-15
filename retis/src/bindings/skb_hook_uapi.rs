@@ -31,7 +31,8 @@ pub struct skb_netdev_event {
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct skb_netns_event {
-    pub netns: u32_,
+    pub cookie: u64_,
+    pub inum: u32_,
 }
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]

@@ -43,7 +43,8 @@ struct skb_netdev_event {
 	u32 iif;
 } __binding;
 struct skb_netns_event {
-	u32 netns;
+	u64 cookie;
+	u32 inum;
 } __binding;
 struct skb_meta_event {
 	u32 len;
@@ -207,7 +208,8 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 }
 
 /* Must be called with a valid skb pointer */
-static __always_inline int process_skb(struct retis_raw_event *event,
+static __always_inline int process_skb(struct retis_context *ctx,
+				       struct retis_raw_event *event,
 				       struct sk_buff *skb)
 {
 	struct skb_shared_info *si;
@@ -242,28 +244,38 @@ static __always_inline int process_skb(struct retis_raw_event *event,
 
 	if (cfg->sections & BIT(SECTION_NS)) {
 		struct skb_netns_event *e;
-		u32 netns;
+		bool get_cookie;
+		u64 cookie = 0;
+		u32 inum;
+
+		/* Netns cookies are not available on older kernels. */
+		get_cookie = bpf_core_field_exists(struct net, net_cookie);
 
 		/* If the network device is initialized in the skb, use it to
 		 * get the network namespace; otherwise try getting the network
 		 * namespace from the skb associated socket.
 		 */
 		if (dev) {
-			netns = BPF_CORE_READ(dev, nd_net.net, ns.inum);
+			if (get_cookie)
+				cookie = BPF_CORE_READ(dev, nd_net.net, net_cookie);
+			inum = BPF_CORE_READ(dev, nd_net.net, ns.inum);
 		} else {
 			struct sock *sk = BPF_CORE_READ(skb, sk);
 
 			if (!sk)
 				goto skip_netns;
 
-			netns = BPF_CORE_READ(sk, __sk_common.skc_net.net, ns.inum);
+			if (get_cookie)
+				cookie = BPF_CORE_READ(sk, __sk_common.skc_net.net, net_cookie);
+			inum = BPF_CORE_READ(sk, __sk_common.skc_net.net, ns.inum);
 		}
 
 		e = get_event_section(event, COLLECTOR_SKB, SECTION_NS, sizeof(*e));
 		if (!e)
 			return 0;
 
-		e->netns = netns;
+		e->cookie = cookie;
+		e->inum = inum;
 	}
 
 skip_netns:
@@ -346,7 +358,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 
 	skb = retis_get_sk_buff(ctx);
 	if (skb)
-		process_skb(event, skb);
+		process_skb(ctx, event, skb);
 
 	return 0;
 )
