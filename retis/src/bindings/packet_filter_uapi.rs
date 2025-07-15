@@ -5,7 +5,6 @@
 pub struct retis_packet_filter_ctx {
     pub data: *mut ::std::os::raw::c_char,
     pub len: ::std::os::raw::c_uint,
-    pub ret: ::std::os::raw::c_uint,
 }
 impl Default for retis_packet_filter_ctx {
     fn default() -> Self {
