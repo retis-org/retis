@@ -11,7 +11,7 @@ the packet (aka. "VLAN hardware acceleration"). This section displays this.
 When not accelerated, the VLAN information is shown as part of the packet.
 
 ```none
-vlan_accel (vlan {id} p {prio} [DEI])
+vlan_accel (ethertype {etype name} ({etype hex}) vlan {id} p {prio} [DEI])
 ```
 
 ## Metadata & dataref

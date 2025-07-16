@@ -33,6 +33,7 @@ pub(super) fn unmarshal_vlan(raw_section: &BpfRawSection) -> Result<SkbVlanAccel
     let raw = parse_raw_section::<skb_vlan_event>(raw_section)?;
 
     Ok(SkbVlanAccelEvent {
+        proto: raw.proto,
         pcp: raw.pcp,
         dei: raw.dei == 1,
         vid: raw.vid,
