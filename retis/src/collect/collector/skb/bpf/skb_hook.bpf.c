@@ -244,7 +244,7 @@ static __always_inline int process_skb(struct retis_context *ctx,
 	}
 
 	if (cfg->sections & BIT(SECTION_VLAN)) {
-		u16 vlan_tci;
+		u16 vlan_tci, vlan_proto;
 
 		if (!__vlan_hwaccel_get_tag(skb, &vlan_tci)) {
 			struct skb_vlan_event *e =
@@ -253,7 +253,8 @@ static __always_inline int process_skb(struct retis_context *ctx,
 			if (!e)
 				return 0;
 
-			set_skb_vlan_event(e, vlan_tci);
+			vlan_proto = bpf_ntohs(BPF_CORE_READ(skb, vlan_proto));
+			set_skb_vlan_event(e, vlan_proto, vlan_tci);
 		}
 	}
 

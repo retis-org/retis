@@ -1,5 +1,7 @@
 use std::fmt;
 
+use retis_pnet::ethernet::EtherType;
+
 use super::*;
 use crate::{event_section, event_type, Formatter};
 
@@ -24,10 +26,16 @@ impl EventFmt for SkbEvent {
         if format.print_ll {
             if let Some(vlan) = &self.vlan_accel {
                 space.write(f)?;
+                write!(f, "vlan_accel (")?;
+
+                match helpers::etype_str(EtherType::new(vlan.proto)) {
+                    Some(etype) => write!(f, "ethertype {etype} ({:#06x})", vlan.proto)?,
+                    None => write!(f, "ethertype ({:#06x})", vlan.proto)?,
+                }
 
                 write!(
                     f,
-                    "vlan_accel (vlan {} p {}{})",
+                    " vlan {} p {}{})",
                     vlan.vid,
                     vlan.pcp,
                     if vlan.dei { " DEI" } else { "" }
@@ -127,6 +135,8 @@ pub struct SkbEthEvent {
 /// VLAN acceleration fields.
 #[event_type]
 pub struct SkbVlanAccelEvent {
+    /// Tag protocol identifier.
+    pub proto: u16,
     /// Priority Code Point, also called CoS.
     pub pcp: u8,
     /// Drop eligible indicator.
