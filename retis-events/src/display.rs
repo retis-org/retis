@@ -245,6 +245,11 @@ pub trait EventDisplay<'a>: EventFmt {
 pub trait EventFmt {
     /// Default formatting of an event.
     fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result;
+    /// Reports if the event section contains any formatable data when using the
+    /// provided `DisplayFormat`.
+    fn can_format(&self, _: &DisplayFormat) -> bool {
+        true
+    }
 }
 
 impl<'a, T> EventDisplay<'a> for T

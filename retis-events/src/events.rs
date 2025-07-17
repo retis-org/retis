@@ -132,12 +132,12 @@ impl EventFmt for Event {
             self.startup.as_ref().map(|f| f as &dyn EventDisplay),
         ]
         .iter()
-        .try_for_each(|field| {
-            if let Some(field) = field {
+        .try_for_each(|field| match field {
+            Some(field) if field.can_format(format) => {
                 write!(f, "{sep}")?;
-                return field.event_fmt(f, format);
+                field.event_fmt(f, format)
             }
-            Ok(())
+            _ => Ok(()),
         })?;
 
         f.conf.reset_level();
