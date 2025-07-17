@@ -132,6 +132,15 @@ impl EventFmt for SkbEvent {
 
         Ok(())
     }
+
+    fn can_format(&self, format: &DisplayFormat) -> bool {
+        (self.vlan_accel.is_some() && format.print_ll)
+            || self.dev.is_some()
+            || self.ns.is_some()
+            || self.meta.is_some()
+            || self.data_ref.is_some()
+            || self.gso.is_some()
+    }
 }
 
 /// Ethernet fields.
