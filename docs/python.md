@@ -198,9 +198,9 @@ With the top-level event:
 ```text
 >>> print(event.sections())
 ['ct', 'skb-tracking', 'common', 'skb', 'kernel']
->>> event.raw().keys()  # Makes the event and all its sub-sections a real dict.
+>>> event.to_dict().keys()  # Makes the event and all its sub-sections a real dict.
 dict_keys(['skb-tracking', 'kernel', 'common', 'ct', 'skb'])
->>> event.raw()['common'].keys()
+>>> event.to_dict()['common'].keys()
 dict_keys(['timestamp'])
 ```
 

@@ -20,7 +20,7 @@ pub fn event_section(
         #[cfg_attr(feature = "python", pyo3::pymethods)]
         #[cfg(feature = "python")]
         impl #ident {
-            fn raw(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+            fn to_dict(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
                 crate::python::to_pyobject(&serde_json::json!(self), py)
             }
 
