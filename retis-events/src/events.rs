@@ -36,11 +36,10 @@
 use crate::{display::*, *};
 
 /// Full event. Internal representation
-#[serde_with::skip_serializing_none]
-#[derive(Default, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default)]
+#[event_section]
 // For backwards compatiblity reasons, we keep section names in kebab-case.
 #[serde(rename_all = "kebab-case")]
-#[cfg_attr(feature = "python", pyo3::pyclass(get_all))]
 pub struct Event {
     /// Common section.
     pub common: Option<CommonEvent>,
