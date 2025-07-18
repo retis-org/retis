@@ -24,7 +24,7 @@ pub fn event_section(
                 crate::python::to_pyobject(&serde_json::json!(self), py)
             }
 
-            fn show(&self) -> String {
+            fn __str__(&self, py: pyo3::Python<'_>) -> String {
                 let format = crate::DisplayFormat::new().multiline(true);
                 format!("{}", self.display(&format, &crate::FormatterConf::new()))
             }
@@ -104,7 +104,6 @@ pub fn event_type(
             fn __repr__(&self, py: pyo3::Python<'_>) -> String {
                 format!("{:?}", self)
             }
-
         }
     };
     output.into()

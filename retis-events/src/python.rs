@@ -32,9 +32,12 @@ use super::*;
 ///
 /// # Displaying events
 ///
-/// Another helper implemented for all event types as well as for the Event
-/// class is `show()` which returns a string representation of the event, similar
-/// to how `retis print` would print it.
+/// The Event class implements the __str__ function which allow to directly use
+/// built-in helpers such as `print(event)` or `"{}".format(event)`.
+///
+/// The Event class also implements the __repr__ function, but in a different
+/// way. Here the event is represented as a dictionary. This allows quick
+/// investigation of events in the interpreter.
 /// ```
 #[pyclass(name = "Event")]
 pub struct PyEvent(Py<Event>);
@@ -53,9 +56,21 @@ impl PyEvent {
 #[pymethods]
 impl PyEvent {
     /// Controls how the PyEvent is represented, eg. what is the output of
-    /// `print(e)`.
+    /// `print(repr(e))`.
     fn __repr__<'a>(&'a self, py: Python<'a>) -> PyResult<String> {
         Ok(self.to_dict(py)?.to_string())
+    }
+
+    /// Controls how the PyEvent is represented as a string. This can be used
+    /// directly in `print(e)`.
+    fn __str__<'a>(&'a self, py: Python<'a>) -> String {
+        let format = crate::DisplayFormat::new().multiline(true).print_ll(true);
+        format!(
+            "{}",
+            self.0
+                .borrow(py)
+                .display(&format, &crate::FormatterConf::new())
+        )
     }
 
     /// Allows to use the object as a dictionary, e.g. `e['skb']`.
@@ -95,17 +110,6 @@ impl PyEvent {
         ))
     }
 
-    /// Returns a string representation of the event
-    fn show(&self, py: Python<'_>) -> String {
-        let format = crate::DisplayFormat::new().multiline(true).print_ll(true);
-        format!(
-            "{}",
-            self.0
-                .borrow(py)
-                .display(&format, &crate::FormatterConf::new())
-        )
-    }
-
     /// Returns a list of existing section names.
     pub fn sections(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
         let globals = [("event", self.0.bind(py))].into_py_dict(py)?;
@@ -135,7 +139,7 @@ impl PyEvent {
 /// >>> len(series)
 /// 3
 /// >>> for event in series:
-///     print(event.show())
+///     print(event)
 /// ```
 ///
 #[pyclass(name = "EventSeries")]
@@ -209,7 +213,7 @@ impl PyEventSeries {
 /// reader = EventReader("retis.data")
 ///
 /// for event in series:
-///     print(event.show())
+///     print(event)
 /// ```
 #[pyclass(name = "EventReader")]
 pub(crate) struct PyEventReader {
@@ -266,7 +270,7 @@ impl PyEventReader {
 /// reader = EventReader("retis.data")
 ///
 /// for event in series:
-///     print(event.show())
+///     print(event)
 /// ```
 #[pyclass(name = "SeriesReader")]
 pub(crate) struct PySeriesReader {
@@ -325,11 +329,11 @@ impl PySeriesReader {
 /// if event_file.sorted():
 ///     for series in event_file.series():
 ///         for event in series:
-///             print(event.show())
+///             print(event)
 ///
 /// else:
 ///     for event in event_file.events():
-///         print(event.show())
+///         print(event)
 /// ```
 #[pyclass(name = "EventFile")]
 pub(crate) struct PyEventFile {

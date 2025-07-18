@@ -191,7 +191,8 @@ Ether(bytes(e.packet.data))
 
 ## Available helpers
 
-Different helpers are provided to help working with events in Python.
+Different helpers and built-in methods are provided to help working with events
+in Python.
 
 With the top-level event:
 
@@ -207,14 +208,14 @@ dict_keys(['timestamp'])
 With the top-level event and all sections:
 
 ```text
->>> print(event.show())
+>>> print(event)
 8974965787422 (5) [ping] 100854 [tp] net:net_dev_start_xmit #829a5a5cb1effff8be0ca834000 (skb ffff8be0ca56ae00)
   if 3 (eth0)
   xx:xx:xx:xx:xx:xx > xx:xx:xx:xx:xx:xx ethertype IPv4 (0x0800) 10.0.42.5 > 1.1.1.1 tos 0x0 ttl 64 id 2368 off 0 [DF] len 84 proto ICMP (1) type 8 code 0
   ct_state NEW status 0x188 icmp orig [10.0.42.5 > 1.1.1.1 type 8 code 0 id 1] reply [1.1.1.1 > 10.0.42.5 type 0 code 0 id 1] zone 0 mark 0
->>> print(event.common.show())
+>>> print(event.common)
 8974965787422 (5) [ping] 100854
->>> print(event.ct.show())
+>>> print(event.ct)
 ct_state NEW status 0x188 icmp orig [10.0.42.5 > 1.1.1.1 type 8 code 0 id 1] reply [1.1.1.1 > 10.0.42.5 type 0 code 0 id 1] zone 0 mark 0
 ```
 
