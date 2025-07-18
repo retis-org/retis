@@ -12,5 +12,5 @@ from retis import EventFile
 reader = EventFile("retis.data")
 
 for e in reader.events():
-    print(e.show())
+    print(e)
 ```
