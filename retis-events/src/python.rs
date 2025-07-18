@@ -57,20 +57,14 @@ impl PyEvent {
 impl PyEvent {
     /// Controls how the PyEvent is represented, eg. what is the output of
     /// `print(repr(e))`.
-    fn __repr__<'a>(&'a self, py: Python<'a>) -> PyResult<String> {
-        Ok(self.to_dict(py)?.to_string())
+    fn __repr__<'a>(&'a self, py: Python<'a>) -> String {
+        self.0.borrow(py).__repr__(py)
     }
 
     /// Controls how the PyEvent is represented as a string. This can be used
     /// directly in `print(e)`.
     fn __str__<'a>(&'a self, py: Python<'a>) -> String {
-        let format = crate::DisplayFormat::new().multiline(true).print_ll(true);
-        format!(
-            "{}",
-            self.0
-                .borrow(py)
-                .display(&format, &crate::FormatterConf::new())
-        )
+        self.0.borrow(py).__str__(py)
     }
 
     /// Allows to use the object as a dictionary, e.g. `e['skb']`.
@@ -103,11 +97,8 @@ impl PyEvent {
     ///
     /// Returns a dictionary with all key<>data stored (recursively) in the
     /// event, eg. `e.to_dict()['skb']['dev']`.
-    fn to_dict(&self, py: Python<'_>) -> PyResult<PyObject> {
-        Ok(to_pyobject(
-            &serde_json::to_value(self.0.borrow(py).clone()).unwrap(),
-            py,
-        ))
+    fn to_dict(&self, py: Python<'_>) -> PyObject {
+        self.0.borrow(py).to_dict(py)
     }
 
     /// Returns a list of existing section names.

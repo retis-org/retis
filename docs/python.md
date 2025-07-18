@@ -217,6 +217,8 @@ With the top-level event and all sections:
 8974965787422 (5) [ping] 100854
 >>> print(event.ct)
 ct_state NEW status 0x188 icmp orig [10.0.42.5 > 1.1.1.1 type 8 code 0 id 1] reply [1.1.1.1 > 10.0.42.5 type 0 code 0 id 1] zone 0 mark 0
+>>> print(repr(e.common))   # Or just `e.common` in any Python REPL (e.g. the built-in interpreter).
+{'task': {'comm': 'irq/184-iwlwifi', 'tgid': 1632, 'pid': 1632}, 'smp_id': 7, 'timestamp': 6876861762597}
 ```
 
 With the `skb-tracking` section:
