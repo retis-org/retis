@@ -1,27 +1,4 @@
-# Nft collector
-
-The `nft` collector provides insight into Netfilter rules and actions, by
-automatically adding a probe on `__nft_trace_packet`. For the `nft` collector to
-work a special dummy `nft` table must be added:
-
-```none
-table inet Retis_Table {
-    chain Retis_Chain {
-        meta nftrace set 1
-    }
-}
-```
-
-Retis can also install and uninstall the above table automatically by using the
-`--allow-system-changes` cli parameter.
-
-## Arguments
-
-The `nft` collector has a single specific argument, `--nft-verdicts`. It is used
-to choose which Netfilter verdicts will be reported in events. By default it
-reports only `drop` and `accept` verdicts.
-
-## Event
+# Netfilter event
 
 ```none
 table {table name} ({table handle}) chain {chain name} ({chain handle})

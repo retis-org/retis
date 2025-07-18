@@ -7,7 +7,7 @@ def test_tracking_sanity(three_ns_nat):
 
     retis.collect(
         "-c",
-        "skb,skb-tracking",
+        "skb,skb-tracking,dev",
         "-f",
         "icmp and host 10.0.255.1",
         "-p",
@@ -18,10 +18,8 @@ def test_tracking_sanity(three_ns_nat):
 
     expected_events = [
         {
-            "skb": {
-                "dev": {
-                    "name": "veth10",
-                },
+            "dev": {
+                "name": "veth10",
             },
             "parsed_packet": {
                 "icmp": {
@@ -40,10 +38,8 @@ def test_tracking_sanity(three_ns_nat):
             },
         },
         {
-            "skb": {
-                "dev": {
-                    "name": "veth21",
-                },
+            "dev": {
+                "name": "veth21",
             },
             "parsed_packet": {
                 "icmp": {
@@ -62,10 +58,8 @@ def test_tracking_sanity(three_ns_nat):
             },
         },
         {
-            "skb": {
-                "dev": {
-                    "name": "veth01",
-                },
+            "dev": {
+                "name": "veth01",
             },
             "parsed_packet": {
                 "icmp": {
