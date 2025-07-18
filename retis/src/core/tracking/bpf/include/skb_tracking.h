@@ -140,9 +140,6 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 		ti->last_seen = ctx->timestamp;
 		ti->orig_head = head;
 
-		/* No need to globally track it if the first time we see this
-		 * skb is when it is freed.
-		 */
 		bpf_map_update_elem(&tracking_map, &head, &new, BPF_NOEXIST);
 	}
 
