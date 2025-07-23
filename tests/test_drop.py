@@ -5,7 +5,7 @@ def test_drop_sanity(two_ns_simple):
     ns = two_ns_simple
     retis = Retis()
 
-    retis.collect("-c", "skb-drop,skb", "-f", "tcp")
+    retis.collect("-c", "skb-drop,skb,dev", "-f", "tcp")
     print(ns.run_fail("ns0", "socat", "-T", "1", "-", "TCP:10.0.42.2:443"))
     retis.stop()
 
@@ -20,10 +20,8 @@ def test_drop_sanity(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "skb:kfree_skb",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth10",
-                },
+            "dev": {
+                "name": "veth10",
             },
             "skb-drop": {
                 "drop_reason": "NO_SOCKET",

@@ -155,7 +155,7 @@ $ retis python
 >>> events = reader.events()
 >>> e = next(events) # Skip startup event
 >>> e = next(events)
->>> p = e.skb.packet.to_scapy()
+>>> p = e.packet.to_scapy()
 >>> print(p.summary())
 Ether / IP / TCP 1.1.1.1:https > 10.0.0.42:12345 A
 >>> if IP in p:
@@ -181,12 +181,12 @@ The raw packet can also be accessed as a bytes string or as bytes, for low-level
 access or for using in other packet-parsing libraries:
 
 ```python
-e.skb.packet.raw          # Bytes string
-bytes(e.skb.packet.raw)   # bytes
+e.packet.raw          # Bytes string
+bytes(e.packet.raw)   # bytes
 
 # Manual implementation of to_scapy().
 from scapy.layers.l2 import Ether
-Ether(bytes(e.skb.packet.raw))
+Ether(bytes(e.packet.raw))
 ```
 
 ## Available helpers
@@ -198,24 +198,26 @@ With the top-level event:
 ```text
 >>> print(event.sections())
 ['ct', 'skb-tracking', 'common', 'skb', 'kernel']
->>> event.raw().keys()  # Makes the event and all its sub-sections a real dict.
+>>> event.to_raw().keys()  # Makes the event and all its sub-sections a real dict.
 dict_keys(['skb-tracking', 'kernel', 'common', 'ct', 'skb'])
->>> event.raw()['skb'].keys()
-dict_keys(['dev', 'packet'])
+>>> event.to_raw()['common'].keys()
+dict_keys(['timestamp'])
 ```
 
 With the top-level event and all sections:
 
 ```text
->>> print(event.show())
+>>> print(event)
 8974965787422 (5) [ping] 100854 [tp] net:net_dev_start_xmit #829a5a5cb1effff8be0ca834000 (skb ffff8be0ca56ae00)
   if 3 (eth0)
   xx:xx:xx:xx:xx:xx > xx:xx:xx:xx:xx:xx ethertype IPv4 (0x0800) 10.0.42.5 > 1.1.1.1 tos 0x0 ttl 64 id 2368 off 0 [DF] len 84 proto ICMP (1) type 8 code 0
   ct_state NEW status 0x188 icmp orig [10.0.42.5 > 1.1.1.1 type 8 code 0 id 1] reply [1.1.1.1 > 10.0.42.5 type 0 code 0 id 1] zone 0 mark 0
->>> print(event.common.show())
+>>> print(event.common)
 8974965787422 (5) [ping] 100854
->>> print(event.ct.show())
+>>> print(event.ct)
 ct_state NEW status 0x188 icmp orig [10.0.42.5 > 1.1.1.1 type 8 code 0 id 1] reply [1.1.1.1 > 10.0.42.5 type 0 code 0 id 1] zone 0 mark 0
+>>> print(repr(e.common))
+{'task': {'comm': 'irq/184-iwlwifi', 'tgid': 1632, 'pid': 1632}, 'smp_id': 7, 'timestamp': 6876861762597}
 ```
 
 With the `skb-tracking` section:
@@ -232,6 +234,6 @@ False
 With the `packet` sub-section in the `skb` section:
 
 ```text
->>> event.skb.packet.to_scapy()
+>>> event.packet.to_scapy()
 ...
 ```

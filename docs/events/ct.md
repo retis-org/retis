@@ -1,17 +1,6 @@
-# Conntrack collector
+# Conntrack event
 
-The `ct` collector reports information collected from socket buffers
-(`struct sk_buff`) about their conntrack status. This is done by reading the
-`_nfct` field of an `skb`.
-
-The reported information in the events contains conntrack status and protocol
-specific data. Currently supported protocols are IPv4/6, TCP, UDP and ICMP.
-
-## Events
-
-The `ct` events will be constructed with the following.
-
-### Metadata
+## Metadata
 
 State information,
 
@@ -33,7 +22,7 @@ See `enum ip_conntrack_status` in the kernel
 [uapi headers](https://github.com/torvalds/linux/blob/master/include/uapi/linux/netfilter/nf_conntrack_common.h)
 for the bitset representing the corresponding values.
 
-### Connection information
+## Connection information
 
 This starts by a protocol specific part. For TCP and UDP,
 
@@ -57,7 +46,7 @@ conntrack mark value that can be linked to an entry and the `labels` is an
 hex-formatted bitfield value that represents the labels set for a given entry
 (if none are set, the labels are not populated in the event).
 
-### Parent connection information
+## Parent connection information
 
 If available, the parent connection information is printed on a new line and
 shown as follow,

@@ -17,13 +17,15 @@
 #define VLAN_CFI_MASK		0x1000 /* Canonical Format Indicator */
 #define VLAN_TAG_PRESENT	VLAN_CFI_MASK
 
-#define set_skb_vlan_event(e, vlan_tci)	{ \
+#define set_skb_vlan_event(e, vlan_proto, vlan_tci)	{ \
+	e->proto = vlan_proto; \
 	e->pcp = (vlan_tci & 0xe000) >> 13; \
 	e->dei = (vlan_tci & 0x1000) >> 12; \
 	e->vid = vlan_tci & 0x0fff; \
 }
 
 struct skb_vlan_event {
+	u16 proto;
 	u8 pcp;
 	u8 dei;
 	u16 vid;
