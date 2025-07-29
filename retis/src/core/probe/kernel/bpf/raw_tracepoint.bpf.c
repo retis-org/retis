@@ -22,8 +22,9 @@ static __always_inline void get_regs(struct retis_regs *regs,
 	case x:		\
 		regs->reg[x] = ctx->args[x];
 
-	if (!nargs)
+	if (!nargs) {
 		return;
+	}
 
 	switch (nargs - 1) {
 	arg_case(11)
@@ -48,7 +49,7 @@ int probe_raw_tracepoint(struct bpf_raw_tracepoint_args *ctx)
 {
 	struct retis_context context = {};
 
-	context.timestamp = bpf_ktime_get_ns();
+	  context.timestamp = bpf_ktime_get_ns();
 	context.probe_type = KERNEL_PROBE_TRACEPOINT;
 	context.orig_ctx = ctx;
 	get_regs(&context.regs, ctx);
@@ -61,7 +62,7 @@ int probe_raw_tracepoint(struct bpf_raw_tracepoint_args *ctx)
 	else
 		context.ksym = ksym;
 
-	return chain(&context);
+        return chain(&context);
 }
 
 char __license[] SEC("license") = "GPL";

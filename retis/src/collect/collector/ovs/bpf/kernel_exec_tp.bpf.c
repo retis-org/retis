@@ -56,7 +56,7 @@ struct exec_ct {
 } __binding;
 
 static __always_inline void fill_nat(struct ovs_conntrack_info *info,
-				     struct exec_ct *ct)
+				     struct exec_ct * ct)
 {
 	if (info->nat & OVS_CT_SRC_NAT)
 		ct->flags |= R_OVS_CT_NAT_SRC;
@@ -96,7 +96,7 @@ static __always_inline void fill_nat(struct ovs_conntrack_info *info,
 		ct->flags |= R_OVS_CT_NAT_RANGE_PROTO_SPECIFIED;
 		bpf_probe_read_kernel(&ct->min_port, sizeof(ct->min_port),
 				      &info->range.min_proto.all);
-		bpf_probe_read_kernel(&ct->max_port, sizeof(ct->max_port),
+  		bpf_probe_read_kernel(&ct->max_port, sizeof(ct->max_port),
 				      &info->range.max_proto.all);
 	}
 }
@@ -114,8 +114,9 @@ DEFINE_HOOK_RAW(
 		return 0;
 
 	attr = (struct nlattr *) ctx->regs.reg[3];
-	if (!attr)
+	if (!attr) {
 		return 0;
+	}
 
 	ectx = bpf_map_lookup_elem(&inflight_exec, &tid);
 	/* Filtering is done at the ovs_execute_actions kprobe. */

@@ -84,12 +84,13 @@ and/or [help wanted](https://github.com/retis-org/retis/issues?q=is%3Aissue+is%3
 
 ### Coding style
 
-We strictly follow the Rust coding style as enforced by `rustfmt` and have a
-strong preference for the
-[Linux kernel](https://www.kernel.org/doc/html/latest/process/coding-style.html)
-and particularly its
+We strictly follow the Rust coding style as enforced by `rustfmt` and we also adhere the
+[Linux kernel](https://www.kernel.org/doc/html/latest/process/coding-style.html) coding style
+as enforced by `checkpatch.pl` and particularly its
 [networking](https://www.kernel.org/doc/html/latest/process/maintainer-netdev.html#multi-line-comments)
-flavor coding style for the BPF parts.
+flavor for the BPF parts. `checkpatch.pl` can generate false
+positives, and in such case the formerly described coding style rules
+take precedence over its suggestions.
 
 ### Events and Rust bindings
 
