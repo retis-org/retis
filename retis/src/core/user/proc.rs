@@ -79,11 +79,11 @@ impl UsdtInfo {
                     Note::Unknown(note) => note,
                     _ => bail!("Unexpected note variant found"),
                 };
-                if note.n_type != STAPSDT_TYPE || note.name.ne("stapsdt") {
+                if note.n_type != STAPSDT_TYPE || note.name_str()? != "stapsdt" {
                     bail!(
                         "Unexpected note type and name: {}/{}",
                         note.n_type,
-                        note.name
+                        note.name_str()?
                     );
                 }
 
