@@ -35,8 +35,8 @@ where
         _ => bail!("Unknown event format (not a map nor an array)"),
     }
 
-    Ok(serde_json::from_value(event)
-        .map_err(|e| anyhow!(format!("Event was fixed up but parsing still failed: {e}")))?)
+    serde_json::from_value(event)
+        .map_err(|e| anyhow!(format!("Event was fixed up but parsing still failed: {e}")))
 }
 
 impl EventCompatibility for serde_json::Value {

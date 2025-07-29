@@ -31,6 +31,7 @@ nav:
         - Filtering: filtering.md
         - Profiles: profiles.md
         - Python bindings: python.md
+        - Compatiblity: compatibility.md
         - Limitations: limitations.md
     - Resourses:
         - External: resources.md
