@@ -7,6 +7,7 @@ pub type u16_ = __u16;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct skb_vlan_event {
+    pub proto: u16_,
     pub pcp: u8_,
     pub dei: u8_,
     pub vid: u16_,

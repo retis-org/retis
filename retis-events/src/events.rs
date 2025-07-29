@@ -36,11 +36,10 @@
 use crate::{display::*, *};
 
 /// Full event. Internal representation
-#[serde_with::skip_serializing_none]
-#[derive(Default, Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Default)]
+#[event_section]
 // For backwards compatiblity reasons, we keep section names in kebab-case.
 #[serde(rename_all = "kebab-case")]
-#[cfg_attr(feature = "python", pyo3::pyclass(get_all))]
 pub struct Event {
     /// Common section.
     pub common: Option<CommonEvent>,
@@ -54,8 +53,14 @@ pub struct Event {
     pub skb_tracking: Option<SkbTrackingEvent>,
     /// Skb drop section.
     pub skb_drop: Option<SkbDropEvent>,
+    /// Packet section.
+    pub packet: Option<PacketEvent>,
     /// Skb section.
     pub skb: Option<SkbEvent>,
+    /// Net namespace section.
+    pub netns: Option<NetnsEvent>,
+    /// Net device section.
+    pub dev: Option<DevEvent>,
     /// OVS section.
     pub ovs: Option<OvsEvent>,
     /// OVS-detrace section.
@@ -119,8 +124,21 @@ impl EventFmt for Event {
 
         f.conf.inc_level(2);
 
+        // Special case the netns & dev sections, to make the output more
+        // packed. Also the two are quite related and it makes sense to display
+        // them on a single line.
+        if let Some(netns) = &self.netns {
+            write!(f, "{sep}")?;
+            netns.event_fmt(f, format)?;
+        }
+        if let Some(dev) = &self.dev {
+            write!(f, "{}", if self.netns.is_some() { ' ' } else { sep })?;
+            dev.event_fmt(f, format)?;
+        }
+
         /* Format the rest of the optional fields. */
         [
+            self.packet.as_ref().map(|f| f as &dyn EventDisplay),
             self.skb.as_ref().map(|f| f as &dyn EventDisplay),
             self.ovs.as_ref().map(|f| f as &dyn EventDisplay),
             self.ovs_detrace.as_ref().map(|f| f as &dyn EventDisplay),
@@ -129,12 +147,12 @@ impl EventFmt for Event {
             self.startup.as_ref().map(|f| f as &dyn EventDisplay),
         ]
         .iter()
-        .try_for_each(|field| {
-            if let Some(field) = field {
+        .try_for_each(|field| match field {
+            Some(field) if field.can_format(format) => {
                 write!(f, "{sep}")?;
-                return field.event_fmt(f, format);
+                field.event_fmt(f, format)
             }
-            Ok(())
+            _ => Ok(()),
         })?;
 
         f.conf.reset_level();

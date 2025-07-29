@@ -6,8 +6,10 @@ use crate::{
     bindings::{
         common_uapi::kernel_event,
         ct_uapi::*,
+        dev_hook_uapi::*,
         events_uapi::{common_event, common_task_event},
         kernel_exec_tp_uapi::exec_event,
+        netns_hook_uapi::*,
         skb_hook_uapi::*,
         tracking_hook_uapi::skb_tracking_event,
     },
@@ -59,8 +61,8 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
     common_task_event::build_raw(&mut event)?;
     kernel_event::build_raw(&mut event)?;
     skb_tracking_event::build_raw(&mut event)?;
-    skb_netdev_event::build_raw(&mut event)?;
-    skb_netns_event::build_raw(&mut event)?;
+    dev_event::build_raw(&mut event)?;
+    netns_event::build_raw(&mut event)?;
     skb_packet_event::build_raw(&mut event)?;
     ct_meta_event::build_raw(&mut event)?;
     ct_event::build_raw(&mut event)?;

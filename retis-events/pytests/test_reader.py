@@ -6,8 +6,7 @@ import pytest
 def verify_event(e):
     """Verify the event is valid"""
     assert e.__class__ == Event
-    assert isinstance(e.raw(), dict)
-    assert isinstance(e.show(), str)
+    assert isinstance(e.to_dict(), dict)
     assert "userspace" in e or "kernel" in e
 
 

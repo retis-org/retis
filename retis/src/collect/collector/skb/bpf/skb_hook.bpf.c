@@ -15,8 +15,6 @@
 enum skb_sections {
 	SECTION_PACKET = 1,
 	SECTION_VLAN,
-	SECTION_DEV,
-	SECTION_NS,
 	SECTION_META,
 	SECTION_DATA_REF,
 	SECTION_GSO,
@@ -35,17 +33,6 @@ struct {
 	__type(value, struct skb_config);
 } skb_config_map SEC(".maps");
 
-BINDING_DEF(IFNAMSIZ, 16)
-
-struct skb_netdev_event {
-	u8 dev_name[IFNAMSIZ];
-	u32 ifindex;
-	u32 iif;
-} __binding;
-struct skb_netns_event {
-	u64 cookie;
-	u32 inum;
-} __binding;
 struct skb_meta_event {
 	u32 len;
 	u32 data_len;
@@ -214,71 +201,15 @@ static __always_inline int process_skb(struct retis_context *ctx,
 {
 	struct skb_shared_info *si;
 	struct skb_config *cfg;
-	struct net_device *dev;
 	u32 key = 0;
 
 	cfg = bpf_map_lookup_elem(&skb_config_map, &key);
 	if (!cfg)
 		return 0;
 
-	dev = BPF_CORE_READ(skb, dev);
-
 	/* Always retrieve the raw packet */
 	process_packet(event, skb);
 
-	if (cfg->sections & BIT(SECTION_DEV) && dev) {
-		int ifindex = BPF_CORE_READ(dev, ifindex);
-
-		if (ifindex > 0) {
-			struct skb_netdev_event *e =
-				get_event_section(event, COLLECTOR_SKB,
-						  SECTION_DEV, sizeof(*e));
-			if (!e)
-				return 0;
-
-			bpf_probe_read(e->dev_name, IFNAMSIZ, dev->name);
-			e->ifindex = ifindex;
-			e->iif = BPF_CORE_READ(skb, skb_iif);
-		}
-	}
-
-	if (cfg->sections & BIT(SECTION_NS)) {
-		struct skb_netns_event *e;
-		bool get_cookie;
-		u64 cookie = 0;
-		u32 inum;
-
-		/* Netns cookies are not available on older kernels. */
-		get_cookie = bpf_core_field_exists(struct net, net_cookie);
-
-		/* If the network device is initialized in the skb, use it to
-		 * get the network namespace; otherwise try getting the network
-		 * namespace from the skb associated socket.
-		 */
-		if (dev) {
-			if (get_cookie)
-				cookie = BPF_CORE_READ(dev, nd_net.net, net_cookie);
-			inum = BPF_CORE_READ(dev, nd_net.net, ns.inum);
-		} else {
-			struct sock *sk = BPF_CORE_READ(skb, sk);
-
-			if (!sk)
-				goto skip_netns;
-
-			if (get_cookie)
-				cookie = BPF_CORE_READ(sk, __sk_common.skc_net.net, net_cookie);
-			inum = BPF_CORE_READ(sk, __sk_common.skc_net.net, ns.inum);
-		}
-
-		e = get_event_section(event, COLLECTOR_SKB, SECTION_NS, sizeof(*e));
-		if (!e)
-			return 0;
-
-		e->cookie = cookie;
-		e->inum = inum;
-	}
-
-skip_netns:
 	if (cfg->sections & BIT(SECTION_META)) {
 		struct skb_meta_event *e =
 			get_event_section(event, COLLECTOR_SKB,
@@ -313,7 +244,7 @@ skip_netns:
 	}
 
 	if (cfg->sections & BIT(SECTION_VLAN)) {
-		u16 vlan_tci;
+		u16 vlan_tci, vlan_proto;
 
 		if (!__vlan_hwaccel_get_tag(skb, &vlan_tci)) {
 			struct skb_vlan_event *e =
@@ -322,7 +253,8 @@ skip_netns:
 			if (!e)
 				return 0;
 
-			set_skb_vlan_event(e, vlan_tci);
+			vlan_proto = bpf_ntohs(BPF_CORE_READ(skb, vlan_proto));
+			set_skb_vlan_event(e, vlan_proto, vlan_tci);
 		}
 	}
 

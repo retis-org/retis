@@ -24,7 +24,7 @@ pub(crate) struct Collect {
         short,
         long,
         value_parser=PossibleValuesParser::new([
-            "skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct",
+            "skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct", "dev", "ns",
         ]),
         value_delimiter=',',
         help = "Comma-separated list of collectors to enable.

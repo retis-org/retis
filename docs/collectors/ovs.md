@@ -201,4 +201,3 @@ Finally, we see more events as the packet leaves OVS and is further processed by
 Retis uses the upcall queue identifier (`q 2809249329`) to determine that when the packet is reinjected
 into the kernel, it's not really a "new" packet, but the old one that took a detour through userspace.
 That way, retis shows all of these events indented under their first one.
-

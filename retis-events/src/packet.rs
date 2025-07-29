@@ -16,6 +16,33 @@ use {
 
 use super::*;
 
+/// Raw packet and related metadata.
+#[event_section(SectionId::Packet)]
+pub struct PacketEvent {
+    /// Length of the packet.
+    pub len: u32,
+    /// Lenght of the capture. <= len.
+    pub capture_len: u32,
+    /// Raw packet data.
+    pub data: RawPacket,
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "python")]
+#[cfg_attr(feature = "python", pymethods)]
+impl PacketEvent {
+    /// Forward the `to_scapy` method down to the RawPacket.
+    fn to_scapy(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.data.to_scapy(py)
+    }
+}
+
+impl EventFmt for PacketEvent {
+    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
+        self.data.event_fmt(f, format)
+    }
+}
+
 /// Represents a raw packet. Stored internally as a `Vec<u8>`.
 /// We don't use #[event_type] as we're implementing serde::Serialize and
 /// serde::Deserialize manually.

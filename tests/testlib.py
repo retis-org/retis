@@ -293,11 +293,9 @@ def fixup_event_packet(event):
     """Augment an event containing a raw packet with its parsed JSON
     representation.
     """
-    if "skb" not in event:
+    if "packet" not in event:
         return
-    if "packet" not in event["skb"]:
-        return
-    event["parsed_packet"] = packet_to_json(event["skb"]["packet"]["raw"])
+    event["parsed_packet"] = packet_to_json(event["packet"]["data"])
 
 
 def assert_events_present(events, expected):

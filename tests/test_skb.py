@@ -30,7 +30,7 @@ def test_skb_tcp_cc(two_ns_simple):
 
     retis.collect(
         "-c",
-        "skb",
+        "skb,dev",
         "--skb-sections",
         "all",
         "-f",
@@ -55,10 +55,8 @@ def test_skb_tcp_cc(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:netif_rx",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth10",
-                },
+            "dev": {
+                "name": "veth10",
             },
             "parsed_packet": {
                 "ethernet": {
@@ -82,10 +80,8 @@ def test_skb_tcp_cc(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:netif_rx",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth01",
-                },
+            "dev": {
+                "name": "veth01",
             },
             "parsed_packet": {
                 "arp": {
@@ -109,10 +105,8 @@ def test_skb_tcp_cc(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:netif_rx",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth10",
-                },
+            "dev": {
+                "name": "veth10",
             },
             "parsed_packet": {
                 "ethernet": {
@@ -141,10 +135,8 @@ def test_skb_tcp_cc(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:netif_rx",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth01",
-                },
+            "dev": {
+                "name": "veth01",
             },
             "parsed_packet": {
                 "ethernet": {
@@ -173,10 +165,8 @@ def test_skb_tcp_cc(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:netif_rx",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth10",
-                },
+            "dev": {
+                "name": "veth10",
             },
             "parsed_packet": {
                 "ethernet": {
@@ -205,10 +195,8 @@ def test_skb_tcp_cc(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:netif_rx",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth10",
-                },
+            "dev": {
+                "name": "veth10",
             },
             "parsed_packet": {
                 "ethernet": {
@@ -232,10 +220,8 @@ def test_skb_tcp_cc(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:netif_rx",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth01",
-                },
+            "dev": {
+                "name": "veth01",
             },
             "parsed_packet": {
                 "ethernet": {
@@ -264,10 +250,8 @@ def test_skb_tcp_cc(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:netif_rx",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth01",
-                },
+            "dev": {
+                "name": "veth01",
             },
             "parsed_packet": {
                 "ethernet": {
@@ -291,10 +275,8 @@ def test_skb_tcp_cc(two_ns_simple):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:netif_rx",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth10",
-                },
+            "dev": {
+                "name": "veth10",
             },
             "parsed_packet": {
                 "ethernet": {
@@ -323,7 +305,7 @@ def test_skb_vlan(two_ns_vlan):
 
     retis.collect(
         "-c",
-        "skb",
+        "skb,dev",
         "--skb-sections",
         "all",
         "-f",
@@ -350,10 +332,10 @@ def test_skb_vlan(two_ns_vlan):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:net_dev_start_xmit",
             },
+            "dev": {
+                "name": "veth01",
+            },
             "skb": {
-                "dev": {
-                    "name": "veth01",
-                },
                 "vlan_accel": {
                     "dei": False,
                     "pcp": 0,
@@ -382,10 +364,8 @@ def test_skb_vlan(two_ns_vlan):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:net_dev_start_xmit",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth10",
-                },
+            "dev": {
+                "name": "veth10",
             },
             "parsed_packet": {
                 "ethernet": {
@@ -410,10 +390,10 @@ def test_skb_vlan(two_ns_vlan):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:net_dev_start_xmit",
             },
+            "dev": {
+                "name": "veth01",
+            },
             "skb": {
-                "dev": {
-                    "name": "veth01",
-                },
                 "vlan_accel": {
                     "dei": False,
                     "pcp": 6,
@@ -447,10 +427,8 @@ def test_skb_vlan(two_ns_vlan):
                 "probe_type": "raw_tracepoint",
                 "symbol": "net:net_dev_start_xmit",
             },
-            "skb": {
-                "dev": {
-                    "name": "veth10",
-                },
+            "dev": {
+                "name": "veth10",
             },
             "parsed_packet": {
                 "ethernet": {

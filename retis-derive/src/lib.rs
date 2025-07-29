@@ -20,11 +20,7 @@ pub fn event_section(
         #[cfg_attr(feature = "python", pyo3::pymethods)]
         #[cfg(feature = "python")]
         impl #ident {
-            fn raw(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-                crate::python::to_pyobject(&serde_json::json!(self), py)
-            }
-
-            fn show(&self) -> String {
+            pub(crate) fn __str__(&self, py: pyo3::Python<'_>) -> String {
                 let format = crate::DisplayFormat::new().multiline(true);
                 format!("{}", self.display(&format, &crate::FormatterConf::new()))
             }
@@ -101,10 +97,13 @@ pub fn event_type(
         #[cfg_attr(feature = "python", pyo3::pymethods)]
         #[cfg(feature = "python")]
         impl #ident {
-            fn __repr__(&self, py: pyo3::Python<'_>) -> String {
-                format!("{:?}", self)
+            pub(crate) fn to_dict(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
+                crate::python::to_pyobject(&serde_json::json!(self), py)
             }
 
+            pub(crate) fn __repr__(&self, py: pyo3::Python<'_>) -> String {
+                self.to_dict(py).to_string()
+            }
         }
     };
     output.into()

@@ -21,12 +21,18 @@ pub mod common;
 pub use common::*;
 pub mod ct;
 pub use ct::*;
+pub mod dev;
+pub use dev::*;
 pub mod kernel;
 pub use kernel::*;
 pub mod nft;
 pub use nft::*;
+pub mod ns;
+pub use ns::*;
 pub mod ovs;
 pub use ovs::*;
+pub mod packet;
+pub use packet::*;
 pub mod time;
 pub use time::*;
 pub mod skb;
@@ -37,8 +43,6 @@ pub mod skb_tracking;
 pub use skb_tracking::*;
 pub mod user;
 pub use user::*;
-pub mod raw_packet;
-pub use raw_packet::*;
 
 // Re-export derive macros.
 use retis_derive::*;

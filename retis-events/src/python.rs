@@ -25,33 +25,19 @@ use super::*;
 /// be accessed directly.
 ///
 /// In addition, some helpers might be available. One of the helpers that
-/// is implemented for all event section types is `raw()`, which returns
+/// is implemented for all event section types is `to_dict()`, which returns
 /// the data as a dictionary.
 ///
 /// Also, sections can be iterated through the `sections()` helper.
 ///
-/// ## Examples
-///
-/// ```text
-/// >>> print(event["skb"])
-/// {'tcp': {'sport': 35082, 'window': 9285, 'ack_seq': 3083383182, 'doff': 8, 'dport': 8080, 'flags': 24, 'seq': 132765809}, 'ip': {'ttl': 64, 'v4': {'tos': 0, 'offset': 0, 'id': 53289, 'flags': 2}, 'ecn': 0, 'len': 91, 'protocol': 6, 'daddr': '127.0.0.1', 'saddr': '127.0.0.1'}, 'dev': {'ifindex': 1, 'name': 'lo'}}
-///
-/// >>> print(event["skb"].tcp.dport)
-/// 8080
-/// ```
-///
 /// # Displaying events
 ///
-/// Another helper implemented for all event types as well as for the Event
-/// class is `show()` which returns a string representation of the event, similar
-/// to how `retis print` would print it.
+/// The Event class implements the __str__ function which allow to directly use
+/// built-in helpers such as `print(event)` or `"{}".format(event)`.
 ///
-/// ## Examples
-///
-/// ```text
-/// >>> print(e.show())
-/// 633902702662502 (8) [scapy] 2856768 [tp] net:net_dev_queue #24087f96a1366ffff8fa9b9718500 (skb ffff8fa94fabd500)
-///   if 15 (p1_p) 2001:db8:dead::1.20 > 2001:db8:dead::2.80 ttl 64 len 20 proto TCP (6) flags [S] seq 0 win 8192
+/// The Event class also implements the __repr__ function, but in a different
+/// way. Here the event is represented as a dictionary. This allows quick
+/// investigation of events in the interpreter.
 /// ```
 #[pyclass(name = "Event")]
 pub struct PyEvent(Py<Event>);
@@ -70,9 +56,15 @@ impl PyEvent {
 #[pymethods]
 impl PyEvent {
     /// Controls how the PyEvent is represented, eg. what is the output of
-    /// `print(e)`.
-    fn __repr__<'a>(&'a self, py: Python<'a>) -> PyResult<String> {
-        Ok(self.raw(py)?.to_string())
+    /// `print(repr(e))`.
+    fn __repr__<'a>(&'a self, py: Python<'a>) -> String {
+        self.0.borrow(py).__repr__(py)
+    }
+
+    /// Controls how the PyEvent is represented as a string. This can be used
+    /// directly in `print(e)`.
+    fn __str__<'a>(&'a self, py: Python<'a>) -> String {
+        self.0.borrow(py).__str__(py)
     }
 
     /// Allows to use the object as a dictionary, e.g. `e['skb']`.
@@ -104,23 +96,9 @@ impl PyEvent {
     /// Returns internal data as a dictionary
     ///
     /// Returns a dictionary with all key<>data stored (recursively) in the
-    /// event, eg. `e.raw()['skb']['dev']`.
-    fn raw(&self, py: Python<'_>) -> PyResult<PyObject> {
-        Ok(to_pyobject(
-            &serde_json::to_value(self.0.borrow(py).clone()).unwrap(),
-            py,
-        ))
-    }
-
-    /// Returns a string representation of the event
-    fn show(&self, py: Python<'_>) -> String {
-        let format = crate::DisplayFormat::new().multiline(true).print_ll(true);
-        format!(
-            "{}",
-            self.0
-                .borrow(py)
-                .display(&format, &crate::FormatterConf::new())
-        )
+    /// event, eg. `e.to_dict()['skb']['dev']`.
+    fn to_dict(&self, py: Python<'_>) -> PyObject {
+        self.0.borrow(py).to_dict(py)
     }
 
     /// Returns a list of existing section names.
@@ -152,7 +130,7 @@ impl PyEvent {
 /// >>> len(series)
 /// 3
 /// >>> for event in series:
-///     print(event.show())
+///     print(event)
 /// ```
 ///
 #[pyclass(name = "EventSeries")]
@@ -226,7 +204,7 @@ impl PyEventSeries {
 /// reader = EventReader("retis.data")
 ///
 /// for event in series:
-///     print(event.show())
+///     print(event)
 /// ```
 #[pyclass(name = "EventReader")]
 pub(crate) struct PyEventReader {
@@ -283,7 +261,7 @@ impl PyEventReader {
 /// reader = EventReader("retis.data")
 ///
 /// for event in series:
-///     print(event.show())
+///     print(event)
 /// ```
 #[pyclass(name = "SeriesReader")]
 pub(crate) struct PySeriesReader {
@@ -342,11 +320,11 @@ impl PySeriesReader {
 /// if event_file.sorted():
 ///     for series in event_file.series():
 ///         for event in series:
-///             print(event.show())
+///             print(event)
 ///
 /// else:
 ///     for event in event_file.events():
-///         print(event.show())
+///         print(event)
 /// ```
 #[pyclass(name = "EventFile")]
 pub(crate) struct PyEventFile {
