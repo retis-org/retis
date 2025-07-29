@@ -108,7 +108,7 @@ impl BpfEventsFactory {
             Some("events_map"),
             0,
             0,
-            mem::size_of::<RawEvent>() as u32 * BPF_EVENTS_MAX,
+            mem::size_of::<RawEvent>() as u32 * EVENTS_MAX,
             &opts,
         )
         .or_else(|e| bail!("Failed to create events map: {}", e))?;
@@ -480,20 +480,12 @@ impl BpfEventsFactory {
     }
 }
 
-/// Max number of events we can store at once in the shared map. Please keep in
-/// sync with its BPF counterpart.
-pub(super) const BPF_EVENTS_MAX: u32 = 8 * 1024;
-
-/// Size of the raw data buffer of a BPF event. Please keep synced with its BPF
-/// counterpart.
-pub(crate) const BPF_RAW_EVENT_DATA_SIZE: usize = 1024 - 2 /* remove the size field */;
-
 /// Raw event format shared between the Rust and BPF part. Please keep in sync
 /// with its BPF counterpart.
 #[repr(C, packed)]
 pub(crate) struct RawEvent {
     pub(crate) size: u16,
-    pub(crate) data: [u8; BPF_RAW_EVENT_DATA_SIZE],
+    pub(crate) data: [u8; RAW_EVENT_DATA_SIZE as usize],
 }
 
 unsafe impl Plain for RawEvent {}

@@ -6,6 +6,7 @@ In alphabetical order:
 - Adrian Moreno
 - Andreas Karis
 - Antoine Tenart
+- Benjamin A. Beasley
 - Daniel Mendes
 - Fernando Fernandez Mancera
 - Hangbin Liu
