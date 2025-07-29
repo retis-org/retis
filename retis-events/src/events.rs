@@ -124,6 +124,13 @@ impl EventFmt for Event {
 
         f.conf.inc_level(2);
 
+        // Format the packet before the other fields, as this is the main focus
+        // of Retis.
+        if let Some(packet) = &self.packet {
+            write!(f, "{sep}")?;
+            packet.event_fmt(f, format)?;
+        }
+
         // Special case the netns & dev sections, to make the output more
         // packed. Also the two are quite related and it makes sense to display
         // them on a single line.
@@ -138,7 +145,6 @@ impl EventFmt for Event {
 
         /* Format the rest of the optional fields. */
         [
-            self.packet.as_ref().map(|f| f as &dyn EventDisplay),
             self.skb.as_ref().map(|f| f as &dyn EventDisplay),
             self.ovs.as_ref().map(|f| f as &dyn EventDisplay),
             self.ovs_detrace.as_ref().map(|f| f as &dyn EventDisplay),
