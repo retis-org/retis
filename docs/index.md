@@ -63,6 +63,8 @@ Currently supported collectors are:
 | ovs          | OpenVSwitch data    | Yes (many)      |
 | nft          | Nftables context    | Yes (1)         |
 | ct           | Conntrack info      | No              |
+| dev          | Net device          | No              |
+| ns           | Namespace           | No              |
 
 See `retis collect --help` for a description of each collector and its command
 line arguments.
