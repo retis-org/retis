@@ -5,19 +5,13 @@
 
 #include <common_defs.h>
 
-/* Please keep the below in sync with its Rust counterpart. */
-#define EVENTS_MAX		8 * 1024
-#define RAW_EVENT_DATA_SIZE	1024 - 2 /* Remove the size field */
-#define RETIS_MAX_COMM		64
-
-/* Please keep the below in sync with its Rust counterpart. */
-#define LOG_MAX			127
-
+BINDING_DEF(EVENTS_MAX, 8 * 1024)
+BINDING_DEF(RAW_EVENT_DATA_SIZE, 2048 - 2 /* Remove the size field */)
 BINDING_DEF(LOG_EVENTS_MAX, 128)
 
 struct retis_log_event {
 	u8 level;
-	char msg[LOG_MAX];
+	char msg[127];
 } __binding;
 
 /* We're using the factory identifiers defined in retis-events.
@@ -99,8 +93,8 @@ static __always_inline void *get_event_section(struct retis_raw_event *event,
 	left = sizeof(event->data) - event->size;
 
 	if (unlikely(requested > left)) {
-		log_error("Failed to get event section: no space left (%u > %u)",
-			  requested, left);
+		log_error("Failed to get event section (%u): no space left (%u > %u)",
+			  owner, requested, left);
 		return NULL;
 	}
 
@@ -141,7 +135,7 @@ struct common_event {
 
 struct common_task_event {
 	u64 pid;
-	char comm[RETIS_MAX_COMM];
+	char comm[64];
 } __binding;
 
 #endif /* __CORE_PROBE_KERNEL_BPF_EVENTS__ */
