@@ -80,8 +80,6 @@ enum {
  *
  * char __license[] SEC("license") = "GPL";
  * ```
- *
- * Do not forget to add the hook to build.rs
  */
 #define DEFINE_HOOK(fmode, fflags, statements)					\
 	SEC("ext/hook")								\
@@ -114,8 +112,6 @@ enum {
  *
  * char __license[] SEC("license") = "GPL";
  * ```
- *
- * Do not forget to add the hook to build.rs
  */
 #define DEFINE_HOOK_RAW(statements) DEFINE_HOOK(F_AND, 0, statements)
 
