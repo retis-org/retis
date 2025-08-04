@@ -78,11 +78,13 @@ struct retis_context {
 	/* Pointer to the original ctx. Needed for helper calls. */
 	void *orig_ctx;
 	u64 stack_base;
-	/* Contains the bits identifying what filters yield a hit outcome.
-	 * A bit is set means that the filter matched the data based on its
-	 * criteria.
+	/* Contains flags associated with the packet or the execution
+	 * in its context.
+	 * The first two bits are used for filtering, namely,
+	 * if a bit is set means that the filter matched the
+	 * data based on its criteria.
 	 */
-	u32 filters_ret;
+	u32 flags;
 };
 
 /* Helper to retrieve a function parameter argument using the common context */
