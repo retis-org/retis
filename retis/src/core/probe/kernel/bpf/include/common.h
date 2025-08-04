@@ -62,7 +62,7 @@ enum {
 
 #define RETIS_ALL_FILTERS	(RETIS_F_PACKET_PASS | RETIS_F_META_PASS)
 
-#define RETIS_TRACKABLE(ctx)	(!(ctx->filters_ret ^ RETIS_ALL_FILTERS))
+#define RETIS_TRACKABLE(ctx)	(!(ctx->flags ^ RETIS_ALL_FILTERS))
 
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
@@ -90,8 +90,8 @@ enum {
 		if (!ctx || !event)						\
 			return 0;						\
 		if (!((fmode == F_OR) ?						\
-		      (ctx->filters_ret & (fflags)) :				\
-		      ((ctx->filters_ret & (fflags)) == (fflags))))		\
+		      (ctx->flags & (fflags)) :				\
+		      ((ctx->flags & (fflags)) == (fflags))))		\
 			return 0;						\
 		statements							\
 	}
@@ -104,7 +104,7 @@ enum {
 
 /* Helper that defines a hook that doesn't depend on any filtering
  * result and runs regardless.  Filtering outcome is still available
- * through ctx->filters_ret for actions that need special handling not
+ * through ctx->flags for actions that need special handling not
  * covered by DEFINE_HOOK([F_AND|F_OR], flags, ...).
  *
  * To define a hook in a collector hook, say hook.bpf.c,
@@ -254,7 +254,7 @@ FILTER(meta)
 static __always_inline u32 filter(struct sk_buff *skb)
 {
 	struct retis_packet_filter_ctx fctx = {};
-	u32 filters_ret = 0;
+	u32 flags = 0;
 	char *head;
 
 	if (!skb)
@@ -279,8 +279,7 @@ static __always_inline u32 filter(struct sk_buff *skb)
 	 */
 	if (is_mac_data_valid(skb)) {
 		fctx.data = head + BPF_CORE_READ(skb, mac_header);
-		filters_ret |=
-			!!filter_l2(&fctx) << RETIS_F_PACKET_PASS_SH;
+		flags |= !!filter_l2(&fctx) << RETIS_F_PACKET_PASS_SH;
 		goto next_filter;
 	}
 
@@ -291,13 +290,12 @@ static __always_inline u32 filter(struct sk_buff *skb)
 	/* L3 filter can be a nop, meaning the criteria are not enough to
 	 * express a match in terms of L3 only.
 	 */
-	filters_ret |=
-		!!filter_l3(&fctx) << RETIS_F_PACKET_PASS_SH;
+	flags |= !!filter_l3(&fctx) << RETIS_F_PACKET_PASS_SH;
 
 next_filter:
-	filters_ret |= !!filter_meta(skb) << RETIS_F_META_PASS_SH;
+	flags |= !!filter_meta(skb) << RETIS_F_META_PASS_SH;
 ret:
-	return filters_ret;
+	return flags;
 }
 
 /* The chaining function, which contains all our core probe logic. This is
@@ -340,7 +338,7 @@ static __always_inline int chain(struct retis_context *ctx)
 
 	skb = retis_get_sk_buff(ctx);
 	if (skb)
-		ctx->filters_ret = filter(skb);
+		ctx->flags = filter(skb);
 
 	/* Track the skb. Note that this is done *after* filtering! If no skb is
 	 * available this is a no-op.
