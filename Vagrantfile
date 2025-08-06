@@ -125,6 +125,10 @@ Vagrant.configure("2") do |config|
 
     grow_rhel_disk(centos, 1, "ext")
 
+    # The CRB repository is needed for libpcap-devel.
+    centos.vm.provision "shell", inline: <<-SHELL
+       dnf config-manager --set-enabled crb
+    SHELL
     centos.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "common", type: "shell", inline: $bootstrap_common
     centos.vm.provision "shell", inline: <<-SHELL

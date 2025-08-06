@@ -154,7 +154,6 @@ fully operational:
 "#
     )]
     pub(crate) allow_system_changes: bool,
-    pub(crate) profile: Vec<String>,
     #[arg(
         long,
         help = "Path to kernel configuration (e.g. /boot/config-6.3.8-200.fc38.x86_64; default: auto-detect)"
