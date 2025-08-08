@@ -37,7 +37,7 @@ sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 SCRIPT
 
 # Grow disk on rhel-like distros.
-def grow_rhel_disk(centos, id, fs)
+def grow_vm_disk(centos, id, fs)
   centos.vm.provider "libvirt" do |libvirt|
     libvirt.machine_virtual_size = 20
   end
@@ -51,6 +51,8 @@ def grow_rhel_disk(centos, id, fs)
         xfs_growfs /dev/vda$1
       elif [[ "$2" == "ext" ]]; then
         resize2fs /dev/vda$1
+      elif [[ "$2" == "btrfs" ]]; then
+        btrfs filesystem resize max /
       fi
     SHELL
     s.args = [id, fs]
@@ -86,6 +88,8 @@ Vagrant.configure("2") do |config|
     rawhide.vm.box = "fedora-rawhide-cloud"
     rawhide.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
+    grow_vm_disk(rawhide, 4, "btrfs")
+
     rawhide.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
     rawhide.vm.provision "common", type: "shell", inline: $bootstrap_common
     rawhide.vm.provision "shell", inline: <<-SHELL
@@ -106,7 +110,7 @@ Vagrant.configure("2") do |config|
        alternatives --set python3 /usr/bin/python3.9
     SHELL
 
-    grow_rhel_disk(centos, 1, "xfs")
+    grow_vm_disk(centos, 1, "xfs")
 
     centos.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "common", type: "shell", inline: $bootstrap_common
@@ -123,7 +127,7 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-9-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/9-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
-    grow_rhel_disk(centos, 1, "ext")
+    grow_vm_disk(centos, 1, "ext")
 
     # The CRB repository is needed for libpcap-devel.
     centos.vm.provision "shell", inline: <<-SHELL
@@ -143,7 +147,7 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-10-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/10-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
-    grow_rhel_disk(centos, 2, "ext")
+    grow_vm_disk(centos, 2, "ext")
 
     # The CRB repository is needed for libpcap-devel.
     centos.vm.provision "shell", inline: <<-SHELL
