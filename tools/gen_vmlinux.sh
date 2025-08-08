@@ -54,7 +54,6 @@ types="
 	nft_verdicts
 
 	`# ovs collector`
-	__una_u32
 	dp_upcall_info
 	ovs_action_attr
 	ovs_conntrack_info
