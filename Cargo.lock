@@ -1418,6 +1418,7 @@ dependencies = [
  "pyo3",
  "retis-derive",
  "retis-pnet",
+ "semver 1.0.26",
  "serde",
  "serde_json",
  "serde_with",
