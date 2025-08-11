@@ -9,41 +9,55 @@ struct netns_event {
 	u32 inum;
 } __binding;
 
+static __always_inline struct net *get_net_from_parms(struct retis_context *ctx)
+{
+	struct net *net = retis_get_net(ctx);
+	struct net_device *dev;
+
+	if (net)
+		return net;
+
+	dev = retis_get_net_device(ctx);
+	if (dev)
+		return BPF_CORE_READ(dev, nd_net.net);
+
+	return NULL;
+}
+
+static __always_inline struct net *get_net_from_skb(struct sk_buff *skb)
+{
+	struct net_device *dev = BPF_CORE_READ(skb, dev);
+	struct sock *sk;
+
+	if (dev)
+		return BPF_CORE_READ(dev, nd_net.net);
+
+	sk = BPF_CORE_READ(skb, sk);
+	if (sk)
+		return BPF_CORE_READ(sk, __sk_common.skc_net.net);
+
+	return NULL;
+}
+
 DEFINE_HOOK_RAW(
 	/* Netns cookies are not available on older kernels. */
 	bool get_cookie = bpf_core_field_exists(struct net, net_cookie);
 	struct netns_event *e;
+	struct sk_buff *skb;
 	struct net *net;
 	u64 cookie;
 	u32 inum;
 
-	net = retis_get_net(ctx);
+	skb = retis_get_sk_buff(ctx);
+	if (!skb || !skb_is_tracked(skb))
+		return 0;
+
+	net = get_net_from_skb(skb);
 	if (!net) {
-		struct net_device *dev;
-		struct sk_buff *skb;
-
-		skb = retis_get_sk_buff(ctx);
-		if (!skb || !skb_is_tracked(skb))
+		/* Fallback to parameters. */
+		net = get_net_from_parms(ctx);
+		if (!net)
 			return 0;
-
-		dev = BPF_CORE_READ(skb, dev);
-		if (!dev)
-			dev = retis_get_net_device(ctx);
-
-		/* If the network device is initialized in the skb, use it to
-		 * get the network namespace; otherwise try getting the network
-		 * namespace from the skb associated socket.
-		 */
-		if (dev) {
-			net = BPF_CORE_READ(dev, nd_net.net);
-		} else {
-			struct sock *sk = BPF_CORE_READ(skb, sk);
-
-			if (!sk)
-				return 0;
-
-			net = BPF_CORE_READ(sk, __sk_common.skc_net.net);
-		}
 	}
 
 	if (get_cookie)
