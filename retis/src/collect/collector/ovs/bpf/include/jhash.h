@@ -29,6 +29,8 @@ static inline __u32 rol32(__u32 word, unsigned int shift)
  * From include/linux/unaligned/packed_struct.h
  */
 
+struct __una_u32 { u32 x; } __packed;
+
 static inline u32 __get_unaligned_cpu32(const void *p)
 {
 	const struct __una_u32 *ptr = (const struct __una_u32 *)p;

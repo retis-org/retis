@@ -1208,10 +1208,6 @@ enum nft_verdicts {
 	NFT_RETURN   = -5,
 };
 
-struct __una_u32 {
-	u32                        x;
-};
-
 struct ip_tunnel_info;
 
 struct nlattr;

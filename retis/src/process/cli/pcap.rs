@@ -79,7 +79,7 @@ impl EventParser {
     }
 
     /// Parse & process a single Retis event.
-    fn parse(&mut self, event: &Event) -> Result<Vec<Block>> {
+    fn parse(&mut self, event: &Event) -> Result<Vec<Block<'_>>> {
         // Having a common & a kernel section is mandatory for now, seeing a
         // filtered event w/o one of those is bogus.
         let common = event
