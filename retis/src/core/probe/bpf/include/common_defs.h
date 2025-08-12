@@ -127,6 +127,8 @@ static __always_inline void err_report(u64 sym_addr, u32 pid)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #endif
 
+# define fallthrough __attribute__((__fallthrough__))
+
 #define DIV_CEIL(m, n) (1 + ((m) - 1) / (n))
 
 #endif /* __CORE_PROBE_COMMON_DEFS__ */
