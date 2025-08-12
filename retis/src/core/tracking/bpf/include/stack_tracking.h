@@ -9,6 +9,10 @@
 #include <common_defs.h>
 #include <retis_context.h>
 
+enum bpf_attach_type___compat {
+	BPF_TRACE_KPROBE_MULTI,
+};
+
 const volatile unsigned int THREAD_SIZE;
 
 struct {
@@ -32,9 +36,24 @@ __noinline u64 get_base_addr(struct stack_addr *saddr)
 
 static __always_inline u64 get_stack_addr(void *ctx, enum kernel_probe_type type)
 {
-	u64 addr = type == KERNEL_PROBE_TRACEPOINT
-		? (u64)ctx
-		: PT_REGS_SP((struct pt_regs *)ctx);
+	u64 addr;
+
+	switch (type) {
+	case KERNEL_PROBE_KRETPROBE:
+		fallthrough;
+	case KERNEL_PROBE_KPROBE:
+		if (!bpf_core_enum_value_exists(enum bpf_attach_type___compat,
+					       BPF_TRACE_KPROBE_MULTI) ||
+		    !bpf_core_field_exists(((struct bpf_kprobe_multi_link *)0)->cookies)) {
+			addr = PT_REGS_SP((struct pt_regs *)ctx);
+			break;
+		}
+
+		fallthrough;
+	default:
+		addr = (u64)ctx;
+		break;
+	}
 
 	/* Sanity check mostly against pt_regs. */
 	if (!addr)
