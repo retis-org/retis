@@ -7,6 +7,7 @@
 
 #include <events.h>
 #include <common_defs.h>
+#include <helpers.h>
 #include <retis_context.h>
 
 const volatile unsigned int THREAD_SIZE;
@@ -31,9 +32,22 @@ __noinline u64 get_base_addr(u64 *saddr)
 
 static __always_inline u64 get_stack_addr(void *ctx, enum kernel_probe_type type)
 {
-	u64 addr = type == KERNEL_PROBE_TRACEPOINT
-		? (u64)ctx
-		: PT_REGS_SP((struct pt_regs *)ctx);
+	u64 addr;
+
+	switch (type) {
+	case KERNEL_PROBE_KRETPROBE:
+		fallthrough;
+	case KERNEL_PROBE_KPROBE:
+		if (!kprobe_multi_has_cookies()) {
+			addr = PT_REGS_SP((struct pt_regs *)ctx);
+			break;
+		}
+
+		fallthrough;
+	default:
+		addr = (u64)ctx;
+		break;
+	}
 
 	/* Sanity check mostly against pt_regs. */
 	if (!addr)
