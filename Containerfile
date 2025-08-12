@@ -1,4 +1,5 @@
-FROM quay.io/centos/centos:stream9 as builder
+ARG BASE_IMAGE=quay.io/centos/centos:stream9
+FROM ${BASE_IMAGE} as builder
 
 WORKDIR /retis
 
@@ -22,7 +23,7 @@ COPY . /retis
 RUN make clean-ebpf && make CARGO_CMD_OPTS=--locked V=1 release -j$(nproc)
 
 # Final image
-FROM quay.io/centos/centos:stream9
+FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.authors="https://github.com/retis-org"
 
