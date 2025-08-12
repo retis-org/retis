@@ -2,6 +2,7 @@ FROM quay.io/centos/centos:stream9 as builder
 
 WORKDIR /retis
 
+RUN dnf config-manager --set-enabled crb
 RUN dnf install -y \
     cargo \
     clang \
