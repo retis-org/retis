@@ -1,7 +1,10 @@
 [package]
 name = "retis-derive"
-version = "1.5.0"
-edition = "2021"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+edition.workspace = true
 
 [features]
 python = []

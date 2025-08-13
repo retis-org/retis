@@ -88,6 +88,10 @@ impl SubCommandParserRunner for Sort {
         let mut printers = Vec::new();
 
         if let Some(out) = &self.out {
+            if factory.is_compat() {
+                bail!("Storing sorted events is not supported (input event format is too old, remove `--out`)");
+            }
+
             let out = match out.canonicalize() {
                 Ok(out) => out,
                 // If the file doesn't exist we can't use fs::canonicalize() but it is not needed

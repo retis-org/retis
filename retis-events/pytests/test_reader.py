@@ -7,7 +7,7 @@ def verify_event(e):
     """Verify the event is valid"""
     assert e.__class__ == Event
     assert isinstance(e.to_dict(), dict)
-    assert "userspace" in e or "kernel" in e
+    assert "userspace" in e or "kernel" in e or "startup" in e
 
 
 def verify_event_reader(r):

@@ -454,16 +454,6 @@ mod tests {
                     }),
                 ],
             ),
-            // Partially valid data (outdated ct, missing ct_status field).
-            // TODO: Skip invalid lines, but process everything else.
-            // Both for list-probes and for generating the actual pcap.
-            (
-                "test_data/test_events_packets_invalid_ct.json",
-                "",
-                "",
-                Err(anyhow!("missing field `ct_status` at line 1 column 1076")),
-                Vec::<Block>::new(),
-            ),
             // No packet data provided.
             (
                 "test_data/test_events_bench.json",
@@ -555,13 +545,6 @@ mod tests {
                     "raw_tracepoint:openvswitch:ovs_dp_upcall".to_string(),
                     "raw_tracepoint:skb:kfree_skb".to_string(),
                 ]),
-            ),
-            // Partially valid data (outdated ct, missing ct_status field).
-            // TODO: Skip invalid lines, but process everything else.
-            // Both for list-probes and for generating the actual pcap.
-            (
-                "test_data/test_events_packets_invalid_ct.json",
-                Err(anyhow!("missing field `ct_status` at line 1 column 1076")),
             ),
             // Completely missing probe section.
             (
