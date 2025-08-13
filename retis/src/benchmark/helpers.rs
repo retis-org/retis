@@ -4,13 +4,8 @@ use anyhow::Result;
 
 use crate::{
     bindings::{
-        common_uapi::kernel_event,
-        ct_uapi::*,
-        dev_hook_uapi::*,
-        events_uapi::{common_event, common_task_event},
-        kernel_exec_tp_uapi::exec_event,
-        netns_hook_uapi::*,
-        skb_hook_uapi::*,
+        common_uapi::kernel_event, ct_uapi::*, dev_hook_uapi::*, events_uapi::*,
+        kernel_exec_tp_uapi::exec_event, netns_hook_uapi::*, skb_hook_uapi::*,
         tracking_hook_uapi::skb_tracking_event,
     },
     core::events::*,
@@ -54,7 +49,7 @@ pub(crate) fn as_u8_vec<T: Sized>(input: &T) -> Vec<u8> {
 /// is to ensure modification in sub-sections won't impact this function for
 /// every change.
 pub(super) fn build_raw_event() -> Result<Vec<u8>> {
-    let mut event = Vec::with_capacity(BPF_RAW_EVENT_DATA_SIZE);
+    let mut event = Vec::with_capacity(RAW_EVENT_DATA_SIZE as usize);
 
     // Build sections.
     common_event::build_raw(&mut event)?;
@@ -70,7 +65,7 @@ pub(super) fn build_raw_event() -> Result<Vec<u8>> {
 
     // Construct the raw event.
     let size = event.len() as u16;
-    event.append(&mut vec![0; BPF_RAW_EVENT_DATA_SIZE - event.len()]);
+    event.append(&mut vec![0; RAW_EVENT_DATA_SIZE as usize - event.len()]);
     let raw = RawEvent {
         size,
         data: event

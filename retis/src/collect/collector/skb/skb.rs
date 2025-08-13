@@ -32,15 +32,14 @@ pub(crate) struct SkbCollectorArgs {
         help = "Comma separated list of extra information to collect from skbs.
 
 Supported values:
-- meta:    include skb metadata information (len, data_len, hash, etc).
+- meta: include skb metadata information (len, data_len, hash, etc).
 - dataref: include data & refcnt information (cloned, users, data refs, etc).
-- gso:     include generic segmentation offload (GSO) information.
-- all:     all of the above.
+- gso: include generic segmentation offload (GSO) information.
+- all: all of the above.
 
 The packet section as well as the VLAN offloading metadata are always retrieved.
 
-The following values are ignored and no event section will be generated as the
-corresponding data is part of the raw packet: eth, arp, ip, tcp, udp, icmp."
+The following values are ignored and no event section will be generated as the corresponding data is part of the raw packet: eth, arp, ip, tcp, udp, icmp."
     )]
     pub(crate) skb_sections: Vec<String>,
 }

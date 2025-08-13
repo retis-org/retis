@@ -32,10 +32,10 @@ base64 = "0.22"
 btf-rs = "1.1"
 byteorder = "1.5"
 caps = "0.5"
-cargo-platform = "0.2"
-clap = { version = "4.0", features = ["derive", "string"] }
+cargo-platform = "0.3"
+clap = { version = "4.0", features = ["derive", "string", "wrap_help"] }
 clap_complete = "4.4"
-elf = "0.7"
+elf = "0.8"
 events = {version = "1.5", path = "../retis-events", package="retis-events" }
 flate2 = "1.0"
 libbpf-rs = "0.25"
@@ -43,7 +43,7 @@ libbpf-sys = "1.5"
 libc = "0.2"
 log = { version = "0.4", features = ["std"] }
 memoffset = "0.9"
-nix = { version = "0.29", features = ["feature", "mount", "time", "user"] }
+nix = { version = "0.30", features = ["feature", "mount", "time", "user"] }
 once_cell = "1.15"
 ovs-unixctl = { version = "0.1.0" }
 pager = "0.16"
@@ -65,7 +65,7 @@ time = { version = "0.3", features = ["formatting", "macros"] }
 thiserror = "2.0"
 
 [build-dependencies]
-bindgen = "0.71"
+bindgen = "0.72"
 libbpf-cargo = "0.25"
 memmap2 = "0.9"
 

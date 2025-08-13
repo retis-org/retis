@@ -203,9 +203,8 @@ impl EventParser {
     }
 }
 
-/// Generate a PCAP file from stored events.
 #[derive(Parser, Debug, Default)]
-#[command(name = "pcap")]
+#[command(name = "pcap", about = "Generate a PCAP file from stored events.")]
 pub(crate) struct Pcap {
     #[command(flatten)]
     cmd: PcapCmd,
@@ -227,8 +226,7 @@ pub(crate) struct PcapCmd {
     #[arg(
         short,
         long,
-        help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern.
-See `retis collect --help` for more details on the probe format"
+        help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern. See `retis collect --help` for more details on the probe format"
     )]
     pub(super) probe: Option<String>,
 }

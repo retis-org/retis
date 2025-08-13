@@ -106,7 +106,7 @@ impl PyEvent {
         let globals = [("event", self.0.bind(py))].into_py_dict(py)?;
 
         Ok(py.eval(
-            &CString::new("[v for v in dir(event) if not callable(v) and getattr(event,v) and not v.startswith('__')]")?,
+            &CString::new("[v for v in dir(event) if getattr(event,v) and not callable(getattr(event,v)) and not v.startswith('__')]")?,
             Some(&globals),
             None,
         )?.downcast_into()?.unbind())
