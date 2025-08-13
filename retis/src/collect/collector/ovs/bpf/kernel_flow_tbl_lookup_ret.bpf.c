@@ -13,13 +13,13 @@ struct flow_lookup_ret_event {
 
 /* Hook for kretprobe:ovs_flow_tbl_lookup_stats */
 DEFINE_HOOK_RAW(
-	u64 tid = bpf_get_current_pid_tgid();
 	struct flow_lookup_ret_event *ret;
 	struct execute_actions_ctx *ectx;
+	u64 sb = ctx->stack_base;
 	struct sw_flow *flow;
 	u32 ufid_len = 0;
 
-	ectx = bpf_map_lookup_elem(&inflight_exec, &tid);
+	ectx = bpf_map_lookup_elem(&inflight_exec, &sb);
 	if (!ectx) {
 		return 0;
 	}
@@ -44,7 +44,7 @@ DEFINE_HOOK_RAW(
 		 * There's no much we can do other than clean-up
 		 * the map and return.
 		 */
-		bpf_map_delete_elem(&inflight_exec, &tid);
+		bpf_map_delete_elem(&inflight_exec, &sb);
 		return 0;
 	}
 

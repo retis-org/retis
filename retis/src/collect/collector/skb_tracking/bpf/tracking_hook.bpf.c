@@ -16,10 +16,14 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);
-	if (!skb)
-		return 0;
 
-	ti = skb_tracking_info(skb);
+	if (!skb) {
+		u64 sid = get_stack_id(ctx->stack_base);
+		ti = __skb_tracking_info(&sid);
+	} else {
+		ti = skb_tracking_info(skb);
+	}
+
 	if (!ti)
 		return 0;
 
