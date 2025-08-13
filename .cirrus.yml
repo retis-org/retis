@@ -157,6 +157,8 @@ functional_task:
     - vagrant box update -f ${DISTRO}
     - vagrant box prune -f
     - vagrant up ${DISTRO} --no-tty || vagrant up ${DISTRO} --no-tty # Retry to overcome network glitches.
+    - vagrant halt --no-tty ${DISTRO} || vagrant halt --no-tty --force ${DISTRO}
+    - vagrant up --no-tty --no-provision ${DISTRO} # Restart the vm after the update without reprovisioning
     - mkdir -p -m 0700 /root/.ssh
     - vagrant ssh-config ${DISTRO} >> /root/.ssh/config
 
