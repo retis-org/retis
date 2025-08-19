@@ -17,12 +17,6 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     // Build a raw event for later consumption by factories.
     let data = build_raw_event()?;
 
-    // Parse one first as some factories have on-demand
-    // initialization steps.
-    let now = Instant::now();
-    parse_raw_event(&data, &mut factories)?;
-    println!("first_raw_event_parsing_us {}", now.elapsed().as_micros());
-
     let now = Instant::now();
     for _ in 0..iters {
         parse_raw_event(&data, &mut factories)?;
