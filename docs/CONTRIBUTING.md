@@ -117,7 +117,7 @@ headers under the directory
 [bindings](https://github.com/retis-org/retis/tree/main/retis/src/bindings/).
 
 When updating the version of `bindgen`, instead, the current
-stable has to be used. It is also preferrable that this kind of
+stable has to be used. It is also preferable that this kind of
 pull-request does not contain any other logical change other than the
 version bump.
 Installing a specific version of `bindgen` can be done with
@@ -128,6 +128,15 @@ dependencies installed (i.e. libclang).
 You may install the Python bindings for Clang using your system's package
 manager or any other preferred installation method.
 For example, on Fedora, you can simply use `dnf -y install python3-clang`.
+
+### Backward compatibility
+
+Retis offers some compatibility guarantees as described in the [compatibility
+page](compatibility.md). Make sure those guarantees are met.
+
+As part of this, backward compatibility of generated events at collection time
+should work. This is done in `retis-events/src/compat/compat.rs`. Make sure to
+do the relevant changes in there.
 
 ### Opening a pull-request
 
