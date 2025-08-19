@@ -124,7 +124,7 @@ where
     }
 
     fn command(&mut self) -> Result<Command> {
-        Ok(<Self as clap::CommandFactory>::command())
+        Ok(<Self as clap::CommandFactory>::command().help_template(HELP_TEMPLATE))
     }
 
     fn update_from_arg_matches(&mut self, args: &ArgMatches) -> Result<(), ClapError> {
@@ -173,6 +173,13 @@ pub(crate) struct MainConfig {
     )]
     pub(crate) extra_profiles_dir: Option<PathBuf>,
 }
+
+const HELP_TEMPLATE: &str = "\
+{usage-heading} {usage}
+
+{before-help}{about-with-newline}
+{all-args}{after-help}\
+        ";
 
 #[derive(Debug, Default)]
 pub(crate) struct RetisCli {
@@ -276,7 +283,8 @@ impl RetisCli {
             .term_width(80)
             .disable_help_subcommand(true)
             .infer_subcommands(true)
-            .subcommand_required(true);
+            .subcommand_required(true)
+            .help_template(HELP_TEMPLATE);
 
         // Add full subcommands so that the main help shows them.
         for sub in self.subcommands.iter_mut() {

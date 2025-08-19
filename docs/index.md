@@ -188,13 +188,19 @@ $ retis collect --allow-system-changes -p ip_local_deliver \
 ...
 $ retis sort
 
-3316376152002 [swapper/2] 0 [k] ip_local_deliver #304276b119fffff9847c36ba800 (skb 18446630032886128640) n 0
-  if 2 (eth0) rxif 2 172.16.42.1.40532 > 172.16.42.2.8080 ttl 64 tos 0x0 id 14042 off 0 [DF] len 32 proto UDP (17) len 4
-  + 3316376220653 [swapper/2] 0 [k] __nft_trace_packet #304276b119fffff9847c36ba800 (skb 18446630032886128640) n 1
-    if 2 (eth0) rxif 2 172.16.42.1.40532 > 172.16.42.2.8080 ttl 64 tos 0x0 id 14042 off 0 [DF] len 32 proto UDP (17) len 4
-    table firewalld (1) chain filter_IN_FedoraServer (202) handle 215 drop
-  + 3316376224687 [swapper/2] 0 [tp] skb:kfree_skb #304276b119fffff9847c36ba800 (skb 18446630032886128640) n 2 drop (NETFILTER_DROP)
-    if 2 (eth0) rxif 2 172.16.42.1.40532 > 172.16.42.2.8080 ttl 64 tos 0x0 id 14042 off 0 [DF] len 32 proto UDP (17) len 4
+136852156905 (3) [swapper/3] 0 [k] ip_local_deliver #1fdd03636dffff889641716940 (skb ffff889642506300) n 0
+  172.16.42.1.39677 > 172.16.42.2.8080 tos 0x0 ttl 64 id 17803 off 0 [DF] len 31 proto UDP (17) len 3
+  ns 0x1/4026531833 if 2 (eth0) rxif 2
+  ct_state NEW status 0x100 udp orig [172.16.42.1.39677 > 172.16.42.2.8080] reply [172.16.42.2.8080 > 172.16.42.1.39677] zone 0 mark 0
+  ↳ 136852318052 (3) [swapper/3] 0 [k] __nft_trace_packet #1fdd03636dffff889641716940 (skb ffff889642506300) n 1
+      172.16.42.1.39677 > 172.16.42.2.8080 tos 0x0 ttl 64 id 17803 off 0 [DF] len 31 proto UDP (17) len 3
+      ns 0x1/4026531833 if 2 (eth0) rxif 2
+      table firewalld (4) chain filter_INPUT_POLICIES (124) handle 284 drop
+      ct_state NEW status 0x100 udp orig [172.16.42.1.39677 > 172.16.42.2.8080] reply [172.16.42.2.8080 > 172.16.42.1.39677] zone 0 mark 0
+  ↳ 136852333279 (3) [swapper/3] 0 [tp] skb:kfree_skb #1fdd03636dffff889641716940 (skb ffff889642506300) n 2 drop (reason NETFILTER_DROP)
+      172.16.42.1.39677 > 172.16.42.2.8080 tos 0x0 ttl 64 id 17803 off 0 [DF] len 31 proto UDP (17) len 3
+      ns 0x1/4026531833 if 2 (eth0) rxif 2
+      ct_state NEW status 0x100 udp orig [172.16.42.1.39677 > 172.16.42.2.8080] reply [172.16.42.2.8080 > 172.16.42.1.39677] zone 0 mark 0
 ```
 
 Another post-processing command, `pcap`, can be used to generate `pcap-ng` files
