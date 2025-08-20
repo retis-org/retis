@@ -13,7 +13,7 @@ homepage.workspace = true
 edition.workspace = true
 
 [package.metadata.misc]
-release_name = "pistou"
+release_name = "olive oil"
 
 [badges]
 maintenance = { status = "actively-developed" }
