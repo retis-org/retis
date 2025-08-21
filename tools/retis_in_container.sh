@@ -4,7 +4,6 @@ set -e
 RETIS_IMAGE=${RETIS_IMAGE:-quay.io/retis/retis}
 RETIS_TAG=${RETIS_TAG:-latest}
 
-
 # Auto-detect the available runtime.
 if command -v podman >/dev/null; then
 	runtime=podman
@@ -64,9 +63,11 @@ if [ -f ${OVS_RUNDIR:-/var/run/openvswitch}/ovs-vswitchd.pid ]; then
 fi
 
 # Run the Retis container.
-exec $runtime run $extra_args $term_opts --privileged --rm --pid=host \
+exec $runtime run $extra_args $term_opts --rm --pid=host \
+      --cap-drop all --security-opt no-new-privileges --read-only --net none \
+      --cap-add SYS_ADMIN --cap-add BPF --cap-add CAP_PERFMON --cap-add SYSLOG \
+      --cap-add DAC_OVERRIDE --cap-add CAP_NET_ADMIN --cap-add SYS_PTRACE \
       -e PAGER -e NOPAGER -e TERM -e LC_ALL="C.UTF-8" \
-      --cap-add SYS_ADMIN --cap-add BPF --cap-add SYSLOG \
       -v /sys/kernel/btf:/sys/kernel/btf:ro \
       $tracefs $debugfs \
       -v $(pwd):/data:rw \
