@@ -15,9 +15,8 @@ RUN dnf install -y \
     python3-devel \
     zlib-devel
 
-# Only the allowlisted files are copied,
-# see .containerignore for more details.
-COPY . .git /retis
+# Only the allowlisted files are copied, see .containerignore for more details.
+COPY . /retis
 
 # Build Retis
 RUN make clean-ebpf && make CARGO_CMD_OPTS=--locked V=1 release -j$(nproc)

@@ -1,12 +1,5 @@
-**
-!.git
-!Makefile
-!ebpf.mk
-!**/Cargo.*
-!retis-derive
-!retis-events
-!retis-pnet
-!retis/profiles
-!retis/build.rs
-!retis/src
-!tools
+**/.out
+**/target
+**/__pycache__
+retis-events/.tox
+retis.data
