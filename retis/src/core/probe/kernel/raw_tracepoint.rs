@@ -95,13 +95,20 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
 
 impl<'a> RawTracepointBuilder<'a> {
     // Checks whether the underlying kernel supports setting/retrieving cookies
-    // in raw tracepoints.
+    // in raw tracepoints. We both check the availability of the get cookie API
+    // as well as the cookie support itself, as the two are part of unrelated
+    // commits that could be backported separately.
     fn cookie_support() -> Result<bool> {
-        Ok(inspect::inspector()?
+        let get_cookie = inspect::inspector()?
             .kernel
             .btf
             .resolve_types_by_name("bpf_get_attach_cookie_tracing")
-            .is_ok())
+            .is_ok();
+        let raw_tp_cookie = inspect::parse_struct("bpf_raw_tp_link")?
+            .iter()
+            .any(|field| field == "cookie");
+
+        Ok(get_cookie && raw_tp_cookie)
     }
 
     fn init_skel(
