@@ -7,5 +7,5 @@ pub(crate) mod bpf;
 pub(crate) use bpf::NftEventFactory;
 
 mod nft_hook {
-    include!("bpf/.out/nft.rs");
+    include!("bpf/.out/nft_hook.rs");
 }

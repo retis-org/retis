@@ -7,5 +7,5 @@ pub(crate) mod bpf;
 pub(crate) use bpf::CtEventFactory;
 
 mod ct_hook {
-    include!("bpf/.out/ct.rs");
+    include!("bpf/.out/ct_hook.rs");
 }
