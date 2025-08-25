@@ -32,13 +32,13 @@ DEFINE_HOOK_RAW(
 	struct sk_buff *skb;
 	struct upcall_context *uctx;
 	struct upcall_enqueue_event *enqueue;
-	u64 tid = bpf_get_current_pid_tgid();
+	u64 sb = ctx->stack_base;
 
 	/* Retrieve upcall context and store add it to the event so we can
 	* group enqueue events to their upcall event.
 	* If there is no upcall in flight (it may have been filtered out) ignore
 	* this event as well. */
-	uctx = bpf_map_lookup_elem(&inflight_upcalls, &tid);
+	uctx = bpf_map_lookup_elem(&inflight_upcalls, &sb);
 	if (!uctx)
 		return 0;
 

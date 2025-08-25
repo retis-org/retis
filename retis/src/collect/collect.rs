@@ -38,7 +38,9 @@ use crate::{
             kernel::{probe_stack::ProbeStack, utils::probe_from_cli},
             *,
         },
-        tracking::{gc::TrackingGC, skb_tracking::init_tracking},
+        tracking::{
+            gc::TrackingGC, skb_tracking::init_tracking, stack_tracking::init_stack_tracking,
+        },
     },
     events::*,
     helpers::{signals::Running, time::*},
@@ -106,8 +108,9 @@ pub(crate) struct Collectors {
     known_kernel_types: HashSet<String>,
     run: Running,
     tracking_gc: Option<TrackingGC>,
-    // Keep a reference on the tracking configuration map.
+    // Keep a reference on both the skb and stack tracking configuration maps.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
+    stack_tracking_config_map: Option<libbpf_rs::MapHandle>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
     // Did we mount tracefs/debugfs ourselves? If so, contains the target dir.
@@ -127,6 +130,7 @@ impl Collectors {
             run: Running::new(),
             tracking_gc: None,
             tracking_config_map: None,
+            stack_tracking_config_map: None,
             events_factory: Arc::new(RetisEventsFactory::default()),
             mounted: None,
         })
@@ -354,6 +358,7 @@ impl Collectors {
             let (gc, map) = init_tracking(self.probes.builder_mut()?)?;
             self.tracking_gc = Some(gc);
             self.tracking_config_map = Some(map);
+            self.stack_tracking_config_map = Some(init_stack_tracking(self.probes.builder_mut()?)?);
         }
         Self::setup_filters(self.probes.builder_mut()?, collect)
     }
@@ -399,23 +404,10 @@ impl Collectors {
                 .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
         }
 
-        // Setup user defined probes.
-        let filter = |symbol: &Symbol| {
-            // Skip probes not being compatible with the loaded collectors.
-            let ok = self.known_kernel_types.iter().any(|t| {
-                symbol
-                    .parameter_offset(t)
-                    .is_ok_and(|offset| offset.is_some())
-            });
-            if !ok {
-                info!(
-                    "No probe was attached to {symbol} as no collector could retrieve data from it"
-                );
-            }
-            ok
-        };
+        // Probes are unfiltered as stack tracking and the integration
+        // with skb tracking don't require an skb
         collect.probes.iter().try_for_each(|p| -> Result<()> {
-            probe_from_cli(p, filter)?
+            probe_from_cli(p, |_| true)?
                 .drain(..)
                 .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))
         })
