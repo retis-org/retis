@@ -14,7 +14,7 @@ $(OUT_DIR):
 $(OBJS): | $(OUT_DIR)
 
 $(OUT_DIR)/%.o: %.c
-	$(CLANG) $(CFLAGS) -MMD -c -g -o $@ $<
+	$(CLANG) $(CFLAGS) -D__FILE_BASE_NAME=$(patsubst %.bpf.o,%,$(notdir $@)) -MMD -c -g -o $@ $<
 	$(OBJCOPY) --strip-debug $@
 
 -include $(DEP)

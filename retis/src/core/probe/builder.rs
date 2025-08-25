@@ -67,7 +67,7 @@ pub(super) fn replace_hook(fd: RawFd, hook: &Hook, target: String) -> Result<lib
 
     let mut open_prog = open_obj
         .progs_mut()
-        .find(|p| p.name() == "hook")
+        .find(|p| p.section() == "ext/hook")
         .ok_or_else(|| anyhow!("Couldn't get hook program"))?;
 
     open_prog.set_prog_type(libbpf_rs::ProgramType::Ext);
@@ -76,7 +76,7 @@ pub(super) fn replace_hook(fd: RawFd, hook: &Hook, target: String) -> Result<lib
     let obj = open_obj.load()?;
     let link = obj
         .progs_mut()
-        .find(|p| p.name() == "hook")
+        .find(|p| p.section() == "ext/hook")
         .ok_or_else(|| anyhow!("Couldn't get hook program"))?
         .attach_trace()?;
     Ok(link)
