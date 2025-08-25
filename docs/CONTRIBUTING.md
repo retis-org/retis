@@ -84,12 +84,13 @@ and/or [help wanted](https://github.com/retis-org/retis/issues?q=is%3Aissue+is%3
 
 ### Coding style
 
-We strictly follow the Rust coding style as enforced by `rustfmt` and have a
-strong preference for the
-[Linux kernel](https://www.kernel.org/doc/html/latest/process/coding-style.html)
-and particularly its
+We strictly follow the Rust coding style as enforced by `rustfmt` and we also adhere the
+[Linux kernel](https://www.kernel.org/doc/html/latest/process/coding-style.html) coding style
+as enforced by `checkpatch.pl` and particularly its
 [networking](https://www.kernel.org/doc/html/latest/process/maintainer-netdev.html#multi-line-comments)
-flavor coding style for the BPF parts.
+flavor for the BPF parts. `checkpatch.pl` can generate false
+positives, and in such case the formerly described coding style rules
+take precedence over its suggestions.
 
 ### Events and Rust bindings
 
@@ -145,6 +146,7 @@ do the relevant changes in there.
 1. Check the following commands do not return an error:
    1. `cargo fmt --check`
    1. `cargo clippy -- -D warnings`
+   1. `make check-ebpf`
    1. `make test V=1`, or to include runtime tests,
       `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=sudo CARGO_CMD_OPTS="--features=test_cap_bpf" make test V=1`
    1. `make pytest V=1`
