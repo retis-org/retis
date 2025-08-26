@@ -9,7 +9,7 @@ cargo_task_tempate: &cargo_task_template
       - cat Cargo.lock
   setup_script:
     - apt-get update
-    - apt-get -y install llvm clang curl libelf-dev libpcap-dev python3-pip make jq
+    - apt-get -y install llvm clang curl libelf-dev libpcap-dev locales python3-pip make jq
     - ln -s /usr/include/asm-generic /usr/include/asm
     - rustup component add rustfmt
     - rustup component add clippy
@@ -27,10 +27,14 @@ unittest_task:
     - chmod +x codecov
     - make test V=1 COV=1 CARGO_CMD_OPTS="--verbose --codecov --output-path retis.codecov"
     - ./codecov --verbose upload-process --disable-search --fail-on-error --git-service github -F x86_64 -f ./retis.codecov
-  check_script:
+  rust_check_script:
     - cargo fmt --check
     - cargo clippy -- -D warnings
-
+  ebpf_style_script: |
+    # make perl happy.
+    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
+    git remote update origin
+    make check-ebpf BASE_COMMIT=origin/$CIRRUS_BASE_BRANCH
 benchmark_task:
   << : *cargo_task_template
   container:

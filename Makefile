@@ -178,6 +178,20 @@ endef
 
 $(foreach tgt,check clippy,$(eval $(call analyzer_tmpl,$(tgt))))
 
+check-ebpf:
+	$(call out_console,CHECKPATCH,checking eBPF coding style ...)
+	base_hash=$$(git merge-base $${BASE_COMMIT:-main} HEAD); \
+	COMMIT_RANGE=$$(git rev-list --no-merges --reverse $${base_hash}..HEAD); \
+	for commit in $$COMMIT_RANGE; do \
+	    pretty_commit=$$(git -P show -s --format="%h (\"%s\")" --abbrev=12 $${commit}); \
+	    echo "Commit $${pretty_commit}"; \
+	    printf -- '-%0.s' $$(seq 1 $${#pretty_commit}); \
+	    echo "-------"; \
+	    git show --format=email $${commit} -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=SPDX_LICENSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || restyle=$$?; \
+	    echo; \
+	done; \
+	[ -z "$$restyle" ]
+
 report-cov:
 	$(CARGO) llvm-cov report $(CARGO_CMD_OPTS)
 
@@ -213,6 +227,8 @@ help:
 	$(call help_once,install             --  Installs Retis.)
 	$(call help_once,release             --  Builds Retis with the release option.)
 	$(call help_once,check               --  Runs cargo check.)
+	$(call help_once,check-ebpf          --  Checks eBPF coding style for commits in current branch.)
+	$(call help_once,                    --  Requires `BASE_COMMIT` env variable to be set otherwise `main` is assumed.)
 	$(call help_once,clippy              --  Runs cargo clippy.)
 	$(call help_once,test                --  Builds and runs unit tests.)
 	$(call help_once,pylib               --  Builds the python bindings.)
@@ -239,5 +255,5 @@ help:
 	$(call help_once,                        Requires llvm-cov and preferably rustup toolchain.)
 
 .PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov
-.PHONY: test pytest-deps pytest
+.PHONY: test pytest-deps pytest check-ebpf
 .PHONY: clean clean-bindings clean-cov clean-ebpf
