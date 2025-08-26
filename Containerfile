@@ -5,7 +5,6 @@ WORKDIR /retis
 
 RUN dnf config-manager --set-enabled crb
 RUN dnf install -y \
-    cargo \
     clang \
     elfutils-libelf-devel \
     git \
@@ -15,6 +14,9 @@ RUN dnf install -y \
     make \
     python3-devel \
     zlib-devel
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Only the allowlisted files are copied, see .containerignore for more details.
 COPY . /retis
