@@ -71,7 +71,7 @@ enum {
  * ```
  * #include <common.h>
  *
- * DEFINE_HOOK(AND_OR_SEL, FILTER_FLAG1 | FILTER_FLAG2 | ...,
+ * DEFINE_NAMED_HOOK(hook_name, AND_OR_SEL, FILTER_FLAG1 | FILTER_FLAG2 | ...,
  *	do_something(ctx);
  *	return 0;
  * )
@@ -81,9 +81,9 @@ enum {
  *
  * Do not forget to add the hook to build.rs
  */
-#define DEFINE_HOOK(fmode, fflags, statements)					\
+#define DEFINE_NAMED_HOOK(hook_name, fmode, fflags, statements)			\
 	SEC("ext/hook")								\
-	int hook(struct retis_context *ctx, struct retis_raw_event *event)	\
+	int hook_name(struct retis_context *ctx, struct retis_raw_event *event) \
 	{									\
 		/* Let the verifier be happy */					\
 		if (!ctx || !event)						\
@@ -94,6 +94,12 @@ enum {
 			return 0;						\
 		statements							\
 	}
+
+/* Simple wrapper for DEFINE_NAMED_HOOK() that use file base name as
+ * default name.
+ */
+#define DEFINE_HOOK(fmode, fflags, statements)				\
+	DEFINE_NAMED_HOOK(__PROG_NAME, fmode, fflags, statements)
 
 /* Helper that defines a hook that doesn't depend on any filtering
  * result and runs regardless.  Filtering outcome is still available
@@ -114,7 +120,8 @@ enum {
  *
  * Do not forget to add the hook to build.rs
  */
-#define DEFINE_HOOK_RAW(statements) DEFINE_HOOK(F_AND, 0, statements)
+#define DEFINE_HOOK_RAW(statements)				\
+	DEFINE_NAMED_HOOK(__PROG_NAME, F_AND, 0, statements)
 
 /* Number of hooks installed, used to micro-optimize the call chain */
 const volatile u32 nhooks = 0;
@@ -153,14 +160,17 @@ int ctx_hook(struct retis_context *ctx)
 	return ret;
 }
 
-#define DEFINE_CTX_HOOK(statements)						\
+#define DEFINE_NAMED_CTX_HOOK(hook_name, statements)				\
 	SEC("ext/hook")								\
-	int hook(struct retis_context *ctx)					\
+	int hook_name(struct retis_context *ctx)				\
 	{									\
 		if (!ctx)							\
 			return 0;						\
 		statements							\
 	}
+
+#define DEFINE_CTX_HOOK(statements)				\
+	DEFINE_NAMED_CTX_HOOK(__PROG_NAME, statements)
 
 static __always_inline int extend_ctx_nft(struct retis_context *ctx)
 {
