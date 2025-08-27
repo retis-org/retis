@@ -16,6 +16,7 @@ if command -v podman >/dev/null; then
 		exit -1
 	fi
 elif command -v docker >/dev/null; then
+	docker pull $RETIS_IMAGE:$RETIS_TAG &>/dev/null
 	runtime=docker
 else
 	echo "No container runtime detected. Please install 'podman' or 'docker'."
