@@ -788,7 +788,7 @@ impl RawPacket {
         }
 
         if geneve.get_options_len() > 0 {
-            write!(f, " opts_len {}", geneve.get_options_len())?;
+            write!(f, " opts_len {}", geneve.get_options_len() * 4)?;
         }
 
         write!(f, " ")?;
