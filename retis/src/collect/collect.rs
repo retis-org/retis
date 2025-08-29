@@ -341,27 +341,25 @@ impl Collectors {
         Ok(())
     }
 
-    // Generate an initial event with the startup section.
-    fn initial_event(&mut self, cmdline: &str) -> Result<()> {
+    // Generate a startup event section. This is used at post-processing time to
+    // have insights about the collection environment.
+    fn startup_event(&self, cmdline: &str) -> Result<StartupEvent> {
         let uname = uname().map_err(|e| anyhow!("Failed to get system information: {e}"))?;
         let release = uname.release().to_string_lossy();
         let version = uname.version().to_string_lossy();
         let machine = uname.machine().to_string_lossy();
 
-        self.events_factory.add_event(|event| {
-            event.startup = Some(StartupEvent {
-                retis_version: option_env!("RELEASE_VERSION")
-                    .unwrap_or("unspec")
-                    .to_string(),
-                cmdline: cmdline.to_string(),
-                clock_monotonic_offset: self.monotonic_offset,
-                machine: MachineInfo {
-                    kernel_release: release.to_string(),
-                    kernel_version: version.to_string(),
-                    hardware_name: machine.to_string(),
-                },
-            });
-            Ok(())
+        Ok(StartupEvent {
+            retis_version: option_env!("RELEASE_VERSION")
+                .unwrap_or("unspec")
+                .to_string(),
+            cmdline: cmdline.to_string(),
+            clock_monotonic_offset: self.monotonic_offset,
+            machine: MachineInfo {
+                kernel_release: release.to_string(),
+                kernel_version: version.to_string(),
+                hardware_name: machine.to_string(),
+            },
         })
     }
 
@@ -490,7 +488,6 @@ impl Collectors {
         let mut section_factories = section_factories()?;
 
         self.run.register_term_signals()?;
-        self.initial_event(&main_config.cmdline)?;
         self.init_collectors(&mut section_factories, collect)?;
         self.config_filters(collect)?;
         self.register_probes(collect, main_config)?;
@@ -542,7 +539,7 @@ impl Collectors {
     /// Starts the processing loop and block until we get a single SIGINT
     /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
     /// collector cmd loop.
-    pub(super) fn process(&mut self, collect: &Collect) -> Result<()> {
+    pub(super) fn process(&mut self, collect: &Collect, main_config: &MainConfig) -> Result<()> {
         let mut printers = Vec::new();
 
         // Write events to stdout if we don't write to a file (--out) or if
@@ -566,6 +563,13 @@ impl Collectors {
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
+            // When events are stored for later post-processing, include a
+            // startup event.
+            self.events_factory.add_event(|event| {
+                event.startup = Some(self.startup_event(&main_config.cmdline)?);
+                Ok(())
+            })?;
+
             printers.push(PrintEvent::new(
                 Box::new(BufWriter::new(
                     OpenOptions::new()

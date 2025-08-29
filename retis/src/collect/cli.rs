@@ -172,7 +172,7 @@ impl SubCommandParserRunner for Collect {
         collectors.config(self, main_config)?;
 
         // Starts a loop.
-        collectors.process(self)?;
+        collectors.process(self, main_config)?;
 
         Ok(())
     }
