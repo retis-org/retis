@@ -5,7 +5,7 @@ use std::{collections::VecDeque, sync::Mutex};
 
 use anyhow::Result;
 
-use crate::{events::*, helpers::time::monotonic_timestamp};
+use crate::{events::*, helpers::time::*};
 
 /// Retis events factory; allowing collectors and Retis core parts to generate
 /// events and augment the collection.
@@ -42,4 +42,23 @@ impl RetisEventsFactory {
         self.queue.lock().unwrap().push_front(event);
         Ok(())
     }
+}
+
+/// Generate an event with the startup section. This is used at
+/// post-processing time to have insights about the collection environment.
+pub(crate) fn startup_event() -> Result<Event> {
+    let mut event = Event::new();
+    event.common = Some(CommonEvent {
+        timestamp: monotonic_timestamp()?,
+        ..Default::default()
+    });
+
+    event.startup = Some(StartupEvent {
+        retis_version: option_env!("RELEASE_VERSION")
+            .unwrap_or("unspec")
+            .to_string(),
+        clock_monotonic_offset: monotonic_clock_offset()?,
+    });
+
+    Ok(event)
 }

@@ -2,8 +2,7 @@
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::{HashMap, HashSet},
-    fs::OpenOptions,
-    io::{self, BufWriter},
+    io,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::Arc,
@@ -26,7 +25,7 @@ use crate::{
     cli::{CliDisplayFormat, MainConfig},
     collect::collector::section_factories,
     core::{
-        events::{BpfEventsFactory, EventResult, RetisEventsFactory, SectionFactories},
+        events::*,
         filters::{
             filters::{BpfFilter, Filter},
             meta::filter::FilterMeta,
@@ -41,7 +40,7 @@ use crate::{
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
     events::*,
-    helpers::{signals::Running, time::*},
+    helpers::{file_rotate::*, signals::Running, time::*},
     process::display::*,
 };
 
@@ -335,19 +334,6 @@ impl Collectors {
         Ok(())
     }
 
-    // Generate an initial event with the startup section.
-    fn initial_event(&mut self) -> Result<()> {
-        self.events_factory.add_event(|event| {
-            event.startup = Some(StartupEvent {
-                retis_version: option_env!("RELEASE_VERSION")
-                    .unwrap_or("unspec")
-                    .to_string(),
-                clock_monotonic_offset: monotonic_clock_offset()?,
-            });
-            Ok(())
-        })
-    }
-
     fn config_filters(&mut self, collect: &Collect) -> Result<()> {
         // Initialize tracking & filters.
         if !cfg!(test) && self.known_kernel_types.contains("struct sk_buff *") {
@@ -472,7 +458,6 @@ impl Collectors {
         let mut section_factories = section_factories()?;
 
         self.run.register_term_signals()?;
-        self.initial_event()?;
         self.init_collectors(&mut section_factories, collect)?;
         self.config_filters(collect)?;
         self.register_probes(collect, main_config)?;
@@ -543,14 +528,19 @@ impl Collectors {
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
             printers.push(PrintEvent::new(
-                Box::new(BufWriter::new(
-                    OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(out)
-                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-                )),
+                Box::new(
+                    RotateWriter::new(
+                        out,
+                        match &collect.out_rotate {
+                            Some(s) => Rotation::from_str(s)?,
+                            None => Rotation::None,
+                        },
+                        // When events are stored for later post-processing,
+                        // include a startup event.
+                        Some(serde_json::to_vec(&startup_event()?)?),
+                    )
+                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+                ),
                 PrintEventFormat::Json,
             ));
         }
