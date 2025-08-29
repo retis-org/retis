@@ -335,16 +335,14 @@ impl Collectors {
         Ok(())
     }
 
-    // Generate an initial event with the startup section.
-    fn initial_event(&mut self) -> Result<()> {
-        self.events_factory.add_event(|event| {
-            event.startup = Some(StartupEvent {
-                retis_version: option_env!("RELEASE_VERSION")
-                    .unwrap_or("unspec")
-                    .to_string(),
-                clock_monotonic_offset: monotonic_clock_offset()?,
-            });
-            Ok(())
+    // Generate a startup event section. This is used at post-processing time to
+    // have insights about the collection environment.
+    fn startup_event() -> Result<StartupEvent> {
+        Ok(StartupEvent {
+            retis_version: option_env!("RELEASE_VERSION")
+                .unwrap_or("unspec")
+                .to_string(),
+            clock_monotonic_offset: monotonic_clock_offset()?,
         })
     }
 
@@ -472,7 +470,6 @@ impl Collectors {
         let mut section_factories = section_factories()?;
 
         self.run.register_term_signals()?;
-        self.initial_event()?;
         self.init_collectors(&mut section_factories, collect)?;
         self.config_filters(collect)?;
         self.register_probes(collect, main_config)?;
@@ -542,6 +539,13 @@ impl Collectors {
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
+            // When events are stored for later post-processing, include a
+            // startup event.
+            self.events_factory.add_event(|event| {
+                event.startup = Some(Self::startup_event()?);
+                Ok(())
+            })?;
+
             printers.push(PrintEvent::new(
                 Box::new(BufWriter::new(
                     OpenOptions::new()
