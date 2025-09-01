@@ -40,7 +40,7 @@ int probe_kprobe(struct pt_regs *ctx)
 	/* Check if cookies can be set and retrieved from kprobes, otherwise
 	 * fallback to getting the symbol address using our own helper.
 	 */
-	if (bpf_core_field_exists(((struct bpf_kprobe_multi_link *) 0)->cookies))
+	if (kprobe_multi_has_cookies())
 		context.ksym = bpf_get_attach_cookie(ctx);
 	else
 		context.ksym = kprobe_get_func_ip(ctx);
