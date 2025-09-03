@@ -25,7 +25,7 @@ We can see in the above that the table "firewalld" (handle 2) was traversed and
 accept rules were hit:
 
 - Chain "filter_PREROUTING" (handle 164) default policy (accept) was hit.
-- Chain "filter_PREROUTING" (handle 165) had one of its rules hit (handle 169)
+- Chain "filter_INPUT" (handle 165) had one of its rules hit (handle 169)
   which is an accept action.
 
 The Netfilter rule set can be dumped including handles, by using the following
