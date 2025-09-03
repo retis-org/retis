@@ -31,9 +31,3 @@
 - As explained in the [filtering section](https://retis.readthedocs.io/en/stable/#filtering)
   filters are eventually translated to eBPF instructions. Currently, the maximum
   allowed size for an eBPF filter is 4096 instructions.
-
-- Some fields present in the packet might not be reported when probes are early
-  in the stack, while being shown in later ones. This is because Retis probes
-  rely on the networking stack knowledge of the packet and if some parts weren't
-  processed yet they can't be reported. E.g. TCP ports won't be reported from
-  `kprobe:ip_rcv`.
