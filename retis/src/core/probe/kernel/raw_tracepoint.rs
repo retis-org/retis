@@ -33,6 +33,7 @@ pub(crate) struct RawTracepointBuilder<'a> {
     ctx_hook: Option<Hook>,
     links: Vec<libbpf_rs::Link>,
     map_fds: Vec<(String, RawFd)>,
+    stack_sz: u32,
 }
 
 impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
@@ -54,10 +55,12 @@ impl<'a> ProbeBuilder for RawTracepointBuilder<'a> {
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         ctx_hook: Option<Hook>,
+        stack_sz: u32,
     ) -> Result<()> {
         self.map_fds = map_fds;
         self.hooks = hooks;
         self.ctx_hook = ctx_hook;
+        self.stack_sz = stack_sz;
 
         Ok(())
     }
@@ -126,6 +129,7 @@ impl<'a> RawTracepointBuilder<'a> {
         rodata.nargs = nargs;
         rodata.nhooks = self.hooks.len() as u32;
         rodata.log_level = log::max_level() as u8;
+        rodata.THREAD_SIZE = self.stack_sz;
 
         if let Some(ksym) = ksym {
             rodata.ksym = ksym;
@@ -231,7 +235,7 @@ mod tests {
         let mut builder = RawTracepointBuilder::new().unwrap();
 
         // It's for now, the probes below won't do much.
-        assert!(builder.init(Vec::new(), Vec::new(), None).is_ok());
+        assert!(builder.init(Vec::new(), Vec::new(), None, 4096).is_ok());
         assert!(builder
             .add_probe(Probe::raw_tracepoint(Symbol::from_name("skb:kfree_skb").unwrap()).unwrap())
             .is_ok());
