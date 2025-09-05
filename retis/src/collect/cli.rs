@@ -22,15 +22,16 @@ pub(crate) struct Collect {
     #[arg(
         short,
         long,
-        value_parser=PossibleValuesParser::new([
-            "skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct", "dev", "ns",
+        value_parser = PossibleValuesParser::new([
+            "auto", "skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct", "dev", "ns",
         ]),
-        value_delimiter=',',
+        value_delimiter = ',',
+        default_value = "auto",
         help = "Comma-separated list of collectors to enable.
 
-If this is not set all collectors are enabled, unless a prerequisite is missing."
+If 'auto' is in the list, all collectors not explicitly added are enabled if their prerequisites are met."
     )]
-    pub(super) collectors: Option<Vec<String>>,
+    pub(super) collectors: Vec<String>,
     // Use the plural in the struct but singular for the cli parameter as we're
     // dealing with a list here.
     #[arg(

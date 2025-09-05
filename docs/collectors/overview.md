@@ -4,11 +4,15 @@ Collectors are optional data retrievers and event section producers used in the
 collection mode (the `collect` sub-command). They are responsible of handling
 specific data (eg. `skb`) or logical parts of the stack (eg. `ct`).
 
-They can be enabled explicitly using the `--collectors` argument or
-automatically started when that argument is not given. When started
-automatically collectors check for prerequisites and can opt-out of the
-collection (eg. the `ovs` collector won't run if OpenvSwitch is not used on the
-target machine).
+The set of collectors to use is controlled by the `--collectors` argument. If
+collectors are explicitly requested they become mandatory. If the `auto` special
+key work is used (this is the default value), all collectors are started if
+their prerequisites are met. Both `auto` and explicit collectors can be mixed,
+in which case some collectors will be required while others used only if their
+prerequisites are met. Setting `--collectors skb,auto` will require the `skb`
+collector to start and make Retis to fail otherwise, while allowing for example
+to put the `ovs` collector aside if Open vSwitch is not used on the target
+machine.
 
 The event sections produced by collectors do not always map 1 to 1 and are
 documented in their [own section](../events/intro.md).
