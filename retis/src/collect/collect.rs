@@ -258,26 +258,21 @@ impl Collectors {
                 .set_probe_opt(probe::ProbeOption::ProbeStack)?;
         }
 
-        let collectors = match &collect.collectors {
-            Some(collectors) => collectors
-                .iter()
-                .map(|c| c.as_ref())
-                .collect::<HashSet<_>>(),
-            None => HashSet::from([
-                "skb-tracking",
-                "skb",
-                "skb-drop",
-                "ovs",
-                "nft",
-                "ct",
-                "dev",
-                "ns",
-            ]),
-        };
+        let collectors = &[
+            "skb-tracking",
+            "skb",
+            "skb-drop",
+            "ovs",
+            "nft",
+            "ct",
+            "dev",
+            "ns",
+        ];
+        let auto = collect.collectors.iter().any(|c| c == "auto");
 
         // Try initializing all collectors.
         for name in collectors {
-            let mut c: Box<dyn Collector> = match name {
+            let mut c: Box<dyn Collector> = match *name {
                 "skb-tracking" => Box::new(SkbTrackingCollector::new()?),
                 "skb" => Box::new(SkbCollector::new()?),
                 "skb-drop" => Box::new(SkbDropCollector::new()?),
@@ -289,11 +284,15 @@ impl Collectors {
                 _ => bail!("Unknown collector {name}"),
             };
 
+            let required = collect.collectors.iter().any(|c| c == *name);
+            if !auto && !required {
+                continue;
+            }
+
             // Check if the collector can run (prerequisites are met).
             if let Err(e) = c.can_run(collect) {
-                // Do not issue an error if the list of collectors was set by
-                // default.
-                if collect.collectors.is_none() {
+                // Do not issue an error if the collector is not required.
+                if !required {
                     debug!("Cannot run collector {name}: {e}");
                     continue;
                 } else {
@@ -322,7 +321,7 @@ impl Collectors {
 
         //  If the default set of collectors is used, print the list of those
         //  started.
-        if collect.collectors.is_none() {
+        if auto {
             info!(
                 "Collector(s) started: {}",
                 self.collectors
@@ -367,7 +366,7 @@ impl Collectors {
         //   might add probes and we could be interested in getting those only.
         if main_config.profile.is_empty()
             && collect.probes.is_empty()
-            && collect.collectors.is_none()
+            && collect.collectors.eq(&["auto"])
         {
             let mut probes = if collect.probe_stack {
                 // If --probe-stack is used, use skb:consume_skb & skb:kfree_skb
