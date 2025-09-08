@@ -62,7 +62,7 @@ impl CompatVersion {
         for (req, version) in VERSION_MATCHES {
             let req = VersionReq::parse(req)?;
             if req.matches(&retis_version) {
-                log::debug!("Detected compatibilty version {version:?}");
+                log::debug!("Detected compatibility version {version:?}");
                 return Ok(*version);
             }
         }

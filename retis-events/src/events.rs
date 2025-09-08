@@ -38,7 +38,7 @@ use crate::{display::*, *};
 /// Full event. Internal representation
 #[derive(Default)]
 #[event_section]
-// For backwards compatiblity reasons, we keep section names in kebab-case.
+// For backwards compatibility reasons, we keep section names in kebab-case.
 #[serde(rename_all = "kebab-case")]
 pub struct Event {
     /// Common section.
