@@ -53,6 +53,7 @@ struct {
 enum {
 	RETIS_F_PASS(PACKET, 0),
 	RETIS_F_PASS(META, 1),
+	RETIS_F_PASS(STACK, 2),
 };
 
 /* Filters chain is an and */
@@ -89,9 +90,10 @@ enum {
 		/* Let the verifier be happy */					\
 		if (!ctx || !event)						\
 			return 0;						\
-		if (!((fmode == F_OR) ?						\
-		      (ctx->flags & (fflags)) :				\
-		      ((ctx->flags & (fflags)) == (fflags))))		\
+		if (!(ctx->flags & RETIS_F_STACK_PASS) &&			\
+		    !((fmode == F_OR) ?						\
+		      (ctx->flags & (fflags)) :					\
+		      ((ctx->flags & (fflags)) == (fflags))))			\
 			return 0;						\
 		statements							\
 	}
@@ -339,7 +341,9 @@ static __always_inline int chain(struct retis_context *ctx)
 	skb = retis_get_sk_buff(ctx);
 	if (skb)
 		ctx->flags = filter(skb);
-	else if (!stack_is_tracked(ctx->stack_base))
+	else if (stack_is_tracked(ctx->stack_base))
+		ctx->flags = RETIS_F_STACK_PASS;
+	else
 		return 0;
 
 	/* Track the skb. Note that this is done *after* filtering! If no skb is
