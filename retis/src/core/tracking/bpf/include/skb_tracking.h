@@ -1,5 +1,5 @@
-#ifndef __CORE_FILTERS_SKB_TRACKING__
-#define __CORE_FILTERS_SKB_TRACKING__
+#ifndef __CORE_SKB_TRACKING__
+#define __CORE_SKB_TRACKING__
 
 #include <vmlinux.h>
 #include <bpf/bpf_core_read.h>
@@ -231,4 +231,4 @@ static __always_inline bool skb_is_tracked(struct sk_buff *skb)
 	return skb_tracking_info(skb) != NULL;
 }
 
-#endif /* __CORE_FILTERS_SKB_TRACKING__ */
+#endif /* __CORE_SKB_TRACKING__ */
