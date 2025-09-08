@@ -68,7 +68,7 @@ impl PyEvent {
     }
 
     /// Allows to use the object as a dictionary, e.g. `e['skb']`.
-    /// The use of direct attribute access is prefered, e.g: `e.skb`.
+    /// The use of direct attribute access is preferred, e.g: `e.skb`.
     fn __getitem__<'a>(&'a self, py: Python<'a>, attr: &str) -> PyResult<Py<PyAny>> {
         let item = self
             .__getattr__(py, attr)
