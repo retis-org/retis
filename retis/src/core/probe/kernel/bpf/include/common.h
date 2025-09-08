@@ -12,6 +12,7 @@
 #include <packet_filter.h>
 #include <meta_filter.h>
 #include <skb_tracking.h>
+#include <stack_tracking.h>
 
 /* Kernel section of the event data. */
 struct kernel_event {
@@ -294,7 +295,7 @@ static __always_inline u32 filter(struct sk_buff *skb)
 		!!filter_l3(&fctx) << RETIS_F_PACKET_PASS_SH;
 
 next_filter:
-	filters_ret |= !!meta_filter(skb) << RETIS_F_META_PASS_SH;
+	filters_ret |= !!filter_meta(skb) << RETIS_F_META_PASS_SH;
 ret:
 	return filters_ret;
 }
@@ -337,7 +338,6 @@ static __always_inline int chain(struct retis_context *ctx)
 	if (ret)
 		log_warning("ctx extension failed: %d", ret);
 
-
 	skb = retis_get_sk_buff(ctx);
 	if (skb)
 		ctx->filters_ret = filter(skb);
@@ -351,6 +351,15 @@ static __always_inline int chain(struct retis_context *ctx)
 	 */
 	if (RETIS_TRACKABLE(ctx->filters_ret))
 		track_skb_start(ctx);
+	else if (skb)
+		/* Terminate any potentially existing entry not
+		 * associated with a tracked skb. Blind termination
+		 * approach is supposed to be more performing in the
+		 * worst case and will lead to a simple lookup failure
+		 * in most cases. This acts as packet path garbage
+		 * collection (e.g. skb_tracking stale entry hanging).
+		 */
+		track_stack_end(ctx->stack_base);
 
 	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
 	 * to allocate and fill an event to drop it later on.

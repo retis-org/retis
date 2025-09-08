@@ -77,6 +77,7 @@ struct retis_context {
 	struct retis_regs regs;
 	/* Pointer to the original ctx. Needed for helper calls. */
 	void *orig_ctx;
+	u64 stack_base;
 	/* Contains the bits identifying what filters yield a hit outcome.
 	 * A bit is set means that the filter matched the data based on its
 	 * criteria.

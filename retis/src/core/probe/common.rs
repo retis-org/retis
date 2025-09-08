@@ -1,9 +1,9 @@
 //! # Common
 //!
 //! Module providing infrastructure shared by all probes
-use anyhow::Result;
+use anyhow::{bail, Result};
 
-use crate::core::probe::PROBE_MAX;
+use crate::core::{inspect, probe::PROBE_MAX};
 
 // Please keep in sync with its BPF counterpart in bpf/include/common_defs.h
 #[repr(C)]
@@ -66,4 +66,30 @@ pub(crate) fn init_counters_map() -> Result<libbpf_rs::MapHandle> {
         PROBE_MAX as u32,
         &opts,
     )?)
+}
+
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn get_thread_size() -> Result<u32> {
+    let inspector = inspect::inspector()?;
+
+    let get_stack_addr = |syms: &[&str]| -> Result<u64> {
+        let addr: Vec<_> = syms
+            .iter()
+            .filter_map(|sym| inspector.kernel.get_symbol_addr(sym).ok())
+            .collect();
+
+        if addr.len() != 1 {
+            bail!(
+                "Cannot retrieve init stack address (found {} entries)",
+                addr.len()
+            );
+        }
+
+        Ok(addr[0])
+    };
+
+    let start_addr = get_stack_addr(&["__start_init_stack", "__start_init_task"])?;
+    let end_addr = get_stack_addr(&["__end_init_stack", "__end_init_task"])?;
+
+    Ok((end_addr - start_addr) as u32)
 }

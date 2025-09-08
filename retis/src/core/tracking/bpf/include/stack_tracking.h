@@ -1,0 +1,73 @@
+#ifndef __CORE_STACK_TRACKING__
+#define __CORE_STACK_TRACKING__
+
+#include <vmlinux.h>
+#include <bpf/bpf_core_read.h>
+#include <bpf/bpf_tracing.h>
+
+#include <events.h>
+#include <common_defs.h>
+#include <retis_context.h>
+
+const volatile unsigned int THREAD_SIZE;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_LRU_HASH);
+	__uint(max_entries, 8192);
+	__type(key, u64);
+	__type(value, u64);
+} stack_tracking_map SEC(".maps");
+
+/* we have to pass around `u64 *` otherwise
+ * this will fail for the non-kprobe case (&ctx)
+ */
+__noinline u64 get_base_addr(u64 *saddr)
+{
+	if (!saddr)
+		return 0;
+
+	return *saddr & ~(THREAD_SIZE - 1UL);
+}
+
+static __always_inline u64 get_stack_addr(void *ctx, enum kernel_probe_type type)
+{
+	u64 addr = type == KERNEL_PROBE_TRACEPOINT
+		? (u64)ctx
+		: PT_REGS_SP((struct pt_regs *)ctx);
+
+	/* Sanity check mostly against pt_regs. */
+	if (!addr)
+		log_error("Unexpected kernel stack base address (0).");
+
+	return addr;
+}
+
+static __always_inline u64 get_stack_base(void *ctx, enum kernel_probe_type type)
+{
+	u64 stack_addr = get_stack_addr(ctx, type);
+
+	return get_base_addr(&stack_addr);
+}
+
+static __always_inline u64 track_stack_start(u64 stack_base)
+{
+	u64 addr = stack_base;
+
+	if (!bpf_map_update_elem(&stack_tracking_map, &stack_base,
+				 &addr, BPF_ANY))
+		return addr;
+
+	return 0;
+}
+
+static __always_inline long track_stack_end(u64 stack_base)
+{
+	return bpf_map_delete_elem(&stack_tracking_map, &stack_base);
+}
+
+static __always_inline bool stack_is_tracked(u64 stack_base)
+{
+	return bpf_map_lookup_elem(&stack_tracking_map, &stack_base) != NULL;
+}
+
+#endif /* __CORE_STACK_TRACKING__ */

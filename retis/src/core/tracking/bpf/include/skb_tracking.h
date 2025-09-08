@@ -5,6 +5,7 @@
 #include <bpf/bpf_core_read.h>
 
 #include <retis_context.h>
+#include <stack_tracking.h>
 
 /* Tracking configuration to provide hints about what the probed function does
  * for some special handling scenarios.
@@ -45,6 +46,8 @@ struct tracking_info {
 	u64 last_seen;
 	/* Original head address; useful when the head is invalidated */
 	u64 orig_head;
+	/* Reference to stack_tracking_map */
+	u64 stack_ref;
 } __binding;
 struct {
 	__uint(type, BPF_MAP_TYPE_HASH);
@@ -73,7 +76,8 @@ static __always_inline struct tracking_info *skb_tracking_info(struct sk_buff *s
 
 static __always_inline int track_skb_start(struct retis_context *ctx)
 {
-	bool inv_head = false, no_tracking = false;
+	bool inv_head = false, no_tracking = false, free = false,
+		deferred_update = false;
 	struct tracking_info *ti = NULL, new;
 	struct tracking_config *cfg;
 	u64 head, ksym = ctx->ksym;
@@ -93,6 +97,7 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 	if (cfg) {
 		inv_head = cfg->inv_head;
 		no_tracking = cfg->no_tracking;
+		free = cfg->free;
 	}
 
 	head = (u64)BPF_CORE_READ(skb, head);
@@ -137,16 +142,30 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 
 		ti = &new;
 		ti->timestamp = ctx->timestamp;
-		ti->last_seen = ctx->timestamp;
 		ti->orig_head = head;
+		ti->stack_ref = 0;
 
-		bpf_map_update_elem(&tracking_map, &head, &new, BPF_NOEXIST);
+		deferred_update = true;
 	}
 
 	/* Track when we last saw this skb, as it'll be useful to garbage
 	 * collect tracking map entries if we miss some events.
 	 */
 	ti->last_seen = ctx->timestamp;
+
+	/* If the skb gets tracked but the stack_base doesn't match, it
+	 * may mean that a packet got queued and handled in a
+	 * different context in terms of stack.  cfg->free is an
+	 * exception as we want to keep the old reference and consume
+	 * it to delete the original stack_id entry in the case of
+	 * deallocation happening in different contexts (e.g. deferred
+	 * deallocation).
+	 */
+	if (!free && ti->stack_ref != ctx->stack_base)
+		ti->stack_ref = track_stack_start(ctx->stack_base);
+
+	if (deferred_update)
+		bpf_map_update_elem(&tracking_map, &head, ti, BPF_NOEXIST);
 
 	/* If the function invalidates the skb head, we can't know what will be
 	 * the new head value. Temporarily track the skb using its skb address.
@@ -161,6 +180,7 @@ static __always_inline int track_skb_end(struct retis_context *ctx)
 {
 	struct tracking_config *cfg;
 	u64 head, ksym = ctx->ksym;
+	struct tracking_info *ti;
 	struct sk_buff *skb;
 
 	cfg = bpf_map_lookup_elem(&tracking_config_map, &ksym);
@@ -189,6 +209,15 @@ static __always_inline int track_skb_end(struct retis_context *ctx)
 		if (!stolen)
 			return 0;
 	}
+
+	ti = bpf_map_lookup_elem(&tracking_map, &head);
+	/* Remove the stack tracking entry only if the free is not
+	 * deferred, otherwise this would be racy requiring some way
+	 * to synchronize the access, meaning we try hard to not remove
+	 * entries used elsewhere.
+	 */
+	if (ti && ctx->stack_base == ti->stack_ref)
+		track_stack_end(ti->stack_ref);
 
 	/* Skb is freed, remove it from our tracking list. */
 	bpf_map_delete_elem(&tracking_map, &head);
