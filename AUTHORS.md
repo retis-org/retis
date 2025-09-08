@@ -8,7 +8,9 @@ In alphabetical order:
 - Antoine Tenart
 - Benjamin A. Beasley
 - Daniel Mendes
+- Eelco Chaudron
 - Fernando Fernandez Mancera
+- Guillaume Nault
 - Hangbin Liu
 - Ilya Maximets
 - Paolo Valerio
