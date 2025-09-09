@@ -1352,7 +1352,7 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "retis"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "anyhow",
  "base64",
@@ -1400,7 +1400,7 @@ dependencies = [
 
 [[package]]
 name = "retis-derive"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "quote",
  "syn 2.0.104",
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "retis-events"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "anyhow",
  "base64",
@@ -1427,7 +1427,7 @@ dependencies = [
 
 [[package]]
 name = "retis-pnet"
-version = "1.6.1"
+version = "1.6.2"
 dependencies = [
  "pnet_macros",
  "pnet_macros_support",
