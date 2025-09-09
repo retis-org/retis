@@ -781,16 +781,16 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "libbpf-cargo"
-version = "0.25.0"
+version = "0.26.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "626c6fbcb5088716de86d0ccbdccedc17b13e59f41a605a3274029335e71fcbb"
+checksum = "8f67e781e4af482d9fb558bcf9fe601c8f1188614d08694ceb4c2f0b35b5fd3f"
 dependencies = [
  "anyhow",
  "cargo_metadata",
  "clap",
  "libbpf-rs",
  "libbpf-sys",
- "memmap2 0.5.10",
+ "memmap2",
  "serde",
  "serde_json",
  "tempfile",
@@ -800,9 +800,9 @@ dependencies = [
 
 [[package]]
 name = "libbpf-rs"
-version = "0.25.0"
+version = "0.26.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e23d252d93e246c8787198369f06806c99c5077b5295be29505295f4e5426dc4"
+checksum = "7129813a2bcf27f1751fa7bf88bee2e2e2cd81a41c0b9cf6a5aab16ab150ab2f"
 dependencies = [
  "bitflags 2.9.1",
  "libbpf-sys",
@@ -812,9 +812,9 @@ dependencies = [
 
 [[package]]
 name = "libbpf-sys"
-version = "1.5.1+v1.5.1"
+version = "1.6.1+v1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "912fae30b08bcbdb861d4b85bd09c05352c0ac9d7b93765ced5ca23709e7e590"
+checksum = "e351855cbd724ac341b2a1c163568808e72acd930c491a921331c2e5347390d3"
 dependencies = [
  "cc",
  "nix",
@@ -864,15 +864,6 @@ name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
-
-[[package]]
-name = "memmap2"
-version = "0.5.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83faa42c0a078c393f6b29d5db232d8be22776a891f8f56e5284faee4a20b327"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "memmap2"
@@ -1370,7 +1361,7 @@ dependencies = [
  "libbpf-sys",
  "libc",
  "log",
- "memmap2 0.9.7",
+ "memmap2",
  "memoffset",
  "nix",
  "once_cell",
