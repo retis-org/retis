@@ -15,7 +15,7 @@ $ retis --help
 
 ### Container image
 
-We provide a script to run Retis in a container,
+We provide a script to run Retis in a container for x86_64 and aarch64 targets,
 [retis_in_container.sh](https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh).
 The current directory is mounted with read-write permissions to the container
 working directory. This allows Retis to read and write files (eg. events, pcap).
