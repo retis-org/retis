@@ -79,7 +79,7 @@ impl EventParser {
     }
 
     /// Parse & process a single Retis event.
-    fn parse(&mut self, event: &Event) -> Result<Vec<Block<'_>>> {
+    fn parse(&mut self, event: &Event, fixups: bool) -> Result<Vec<Block<'_>>> {
         // Having a common & a kernel section is mandatory for now, seeing a
         // filtered event w/o one of those is bogus.
         let common = event
@@ -150,15 +150,34 @@ impl EventParser {
             }
         };
 
-        // Add the packet itself.
+        // Add the packet itself. If VLAN h/w offload information is there,
+        // insert it in the payload.
+        let mut data = packet.data.0.clone();
+        let mut len = packet.len;
+        match &event.skb {
+            Some(skb) if fixups && skb.vlan_accel.is_some() => {
+                // Unwrap as we just made sure the section is there.
+                let vlan_accel = skb.vlan_accel.as_ref().unwrap();
+                let tag = (vlan_accel.proto as u32) << 16
+                    | ((vlan_accel.pcp & 0x7) as u32) << 13
+                    | (vlan_accel.dei as u32) << 12
+                    | (vlan_accel.vid & 0xfff) as u32;
+
+                data.splice(12..12, tag.to_be_bytes());
+
+                len += 4;
+            }
+            _ => (),
+        }
+
         v.push(
             EnhancedPacketBlock {
                 interface_id: id,
                 timestamp: Duration::from_nanos(i64::from(
                     TimeSpec::new(0, common.timestamp as i64) + self.ts_off.unwrap_or_default(),
                 ) as u64),
-                original_len: packet.len,
-                data: Cow::Borrowed(&packet.data.0),
+                original_len: len,
+                data: Cow::Owned(data),
                 options: vec![EnhancedPacketOption::Comment(Cow::Owned(format!(
                     "probe={}:{}",
                     &kernel.probe_type, &kernel.symbol
@@ -215,6 +234,12 @@ pub(crate) struct Pcap {
         help = "Write the generated PCAP output to a file rather than stdout"
     )]
     pub(super) out: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "Post-processing might be performed on events when generating a PCAP output. This disable such fixups to keep the PCAP output entirely in sync with the events from the input. List of fixups:
+- VLAN hardware acceleration: if available (the vlan_accel section of the skb event section is present), a VLAN header is inserted in the packet payload."
+    )]
+    pub(super) no_fixups: bool,
     #[arg(default_value = "retis.data", help = "File from which to read events")]
     pub(super) input: PathBuf,
 }
@@ -275,6 +300,7 @@ impl SubCommandParserRunner for Pcap {
 
         handle_events(
             self.input.as_path(),
+            !self.no_fixups,
             &filter,
             &mut EventParser::new(),
             write_block,
@@ -286,6 +312,7 @@ impl SubCommandParserRunner for Pcap {
 /// Internal logic to retrieve our events to feed the parser.
 fn handle_events<F>(
     input: &Path,
+    fixups: bool,
     filter: &dyn Fn(&str, &str) -> bool,
     parser: &mut EventParser,
     mut writer_callback: F,
@@ -313,7 +340,7 @@ where
                     matched = true;
 
                     // Parse the event and then write the pcap blocks to the file.
-                    let parsed_blocks = parser.parse(&event)?;
+                    let parsed_blocks = parser.parse(&event, fixups)?;
                     for b in parsed_blocks {
                         writer_callback(&b)?;
                     }
@@ -500,6 +527,7 @@ mod tests {
             };
             match handle_events(
                 Path::new(file_path),
+                false,
                 &filter,
                 &mut EventParser::new(),
                 write_blocks,
