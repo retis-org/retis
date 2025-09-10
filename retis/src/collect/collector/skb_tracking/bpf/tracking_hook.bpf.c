@@ -1,3 +1,4 @@
+#include "stack_tracking.h"
 #include <vmlinux.h>
 #include <bpf/bpf_core_read.h>
 
@@ -14,12 +15,17 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	struct skb_tracking_event *e;
 	struct tracking_info *ti;
 	struct sk_buff *skb;
+	u64 skb_ref;
 
 	skb = retis_get_sk_buff(ctx);
-	if (!skb)
-		return 0;
 
-	ti = skb_tracking_info(skb);
+	if (!skb) {
+		skb_ref = stack_get_skb_ref(ctx->stack_base);
+		ti = skb_tracking_info(&skb_ref);
+	} else {
+		ti = skb_tracking_info_by_skb(skb);
+	}
+
 	if (!ti)
 		return 0;
 
