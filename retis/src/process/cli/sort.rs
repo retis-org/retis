@@ -4,7 +4,7 @@
 
 use std::{
     fs::OpenOptions,
-    io::{stdout, BufWriter},
+    io::{self, stdout, BufWriter, ErrorKind},
     path::PathBuf,
 };
 
@@ -148,9 +148,20 @@ impl SubCommandParserRunner for Sort {
                         while series.len() >= self.max_buffer {
                             // Flush the oldest series
                             match series.pop_oldest()? {
-                                Some(series) => printers
-                                    .iter_mut()
-                                    .try_for_each(|p| p.process_one(&series))?,
+                                Some(series) => {
+                                    for p in printers.iter_mut() {
+                                        if let Err(e) = p.process_one(&series) {
+                                            match e.downcast_ref::<io::Error>() {
+                                                Some(io_error)
+                                                    if io_error.kind() == ErrorKind::BrokenPipe =>
+                                                {
+                                                    return Ok(());
+                                                }
+                                                _ => return Err(e),
+                                            }
+                                        }
+                                    }
+                                }
                                 None => break,
                             };
                         }
@@ -162,9 +173,18 @@ impl SubCommandParserRunner for Sort {
         // Flush remaining events
         while series.len() > 0 {
             match series.pop_oldest()? {
-                Some(series) => printers
-                    .iter_mut()
-                    .try_for_each(|p| p.process_one(&series))?,
+                Some(series) => {
+                    for p in printers.iter_mut() {
+                        if let Err(e) = p.process_one(&series) {
+                            match e.downcast_ref::<io::Error>() {
+                                Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
+                                    return Ok(());
+                                }
+                                _ => return Err(e),
+                            }
+                        }
+                    }
+                }
                 None => break,
             };
         }
