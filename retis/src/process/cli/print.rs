@@ -3,7 +3,10 @@
 //! Print is a simple post-processing command that just parses events and prints them back to
 //! stdout
 
-use std::{io::stdout, path::PathBuf};
+use std::{
+    io::{self, stdout, ErrorKind},
+    path::PathBuf,
+};
 
 use anyhow::Result;
 use clap::Parser;
@@ -60,7 +63,16 @@ impl SubCommandParserRunner for Print {
 
                 while run.running() {
                     match factory.next_event()? {
-                        Some(event) => event_output.process_one(&event)?,
+                        Some(event) => {
+                            if let Err(e) = event_output.process_one(&event) {
+                                match e.downcast_ref::<io::Error>() {
+                                    Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
+                                        break
+                                    }
+                                    _ => return Err(e),
+                                }
+                            }
+                        }
                         None => break,
                     }
                 }
@@ -72,7 +84,16 @@ impl SubCommandParserRunner for Print {
 
                 while run.running() {
                     match factory.next_series()? {
-                        Some(series) => series_output.process_one(&series)?,
+                        Some(series) => {
+                            if let Err(e) = series_output.process_one(&series) {
+                                match e.downcast_ref::<io::Error>() {
+                                    Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
+                                        break
+                                    }
+                                    _ => return Err(e),
+                                }
+                            }
+                        }
                         None => break,
                     }
                 }
