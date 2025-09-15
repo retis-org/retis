@@ -1,10 +1,10 @@
-FROM quay.io/centos/centos:stream9 as builder
+ARG BASE_IMAGE=quay.io/centos/centos:stream9
+FROM ${BASE_IMAGE} as builder
 
 WORKDIR /retis
 
 RUN dnf config-manager --set-enabled crb
 RUN dnf install -y \
-    cargo \
     clang \
     elfutils-libelf-devel \
     git \
@@ -15,6 +15,9 @@ RUN dnf install -y \
     python3-devel \
     zlib-devel
 
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -qy
+ENV PATH="/root/.cargo/bin:${PATH}"
+
 # Only the allowlisted files are copied, see .containerignore for more details.
 COPY . /retis
 
@@ -22,7 +25,7 @@ COPY . /retis
 RUN make clean-ebpf && make CARGO_CMD_OPTS=--locked V=1 release -j$(nproc)
 
 # Final image
-FROM quay.io/centos/centos:stream9
+FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.authors="https://github.com/retis-org"
 
