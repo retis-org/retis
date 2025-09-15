@@ -53,9 +53,7 @@ impl FileEventsFactory {
     pub fn is_compat(&self) -> bool {
         self.compat_version != CompatVersion::LATEST
     }
-}
 
-impl FileEventsFactory {
     /// Retrieve the next event or None if we've reached the end of the file.
     /// It returns an error if the file contains sorted EventSeries.
     pub fn next_event(&mut self) -> Result<Option<Event>> {
