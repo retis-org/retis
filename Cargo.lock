@@ -1405,6 +1405,7 @@ dependencies = [
  "base64",
  "chrono",
  "log",
+ "nix",
  "once_cell",
  "pyo3",
  "retis-derive",
