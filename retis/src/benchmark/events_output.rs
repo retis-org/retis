@@ -3,7 +3,7 @@ use std::{fs::OpenOptions, time::Instant};
 use anyhow::{bail, Result};
 
 use crate::{
-    events::{file::FileEventsFactory, *},
+    events::{helpers::file::FileEventsFactory, *},
     process::{display::*, series::EventSorter, tracking::AddTracking},
 };
 

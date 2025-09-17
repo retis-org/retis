@@ -11,7 +11,7 @@ use clap::Parser;
 use crate::{
     cli::*,
     events::{
-        file::{FileEventsFactory, FileType},
+        helpers::file::{FileEventsFactory, FileType},
         *,
     },
     helpers::signals::Running,
