@@ -3,7 +3,7 @@
 //! This module contains python bindings for retis events so that they can
 //! be inspected in post-processing tools written in python.
 
-use std::{collections::HashMap, ffi::CString, path::PathBuf};
+use std::{collections::HashMap, ffi::CString, fs::File, path::PathBuf};
 
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError},
@@ -215,8 +215,10 @@ pub(crate) struct PyEventReader {
 impl PyEventReader {
     #[new]
     pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
-        let factory =
-            FileEventsFactory::new(path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let factory = FileEventsFactory::new(Box::new(
+            File::open(path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        ))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         if matches!(factory.file_type(), FileType::Series) {
             return Err(PyRuntimeError::new_err(
@@ -272,8 +274,10 @@ pub(crate) struct PySeriesReader {
 impl PySeriesReader {
     #[new]
     pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
-        let factory =
-            FileEventsFactory::new(path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let factory = FileEventsFactory::new(Box::new(
+            File::open(path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        ))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         if matches!(factory.file_type(), FileType::Event) {
             return Err(PyRuntimeError::new_err(
@@ -336,8 +340,10 @@ pub(crate) struct PyEventFile {
 impl PyEventFile {
     #[new]
     pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
-        let temp =
-            FileEventsFactory::new(&path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let temp = FileEventsFactory::new(Box::new(
+            File::open(&path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        ))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         let ftype = temp.file_type();
         Ok(PyEventFile {
             path,

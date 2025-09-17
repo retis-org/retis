@@ -3,7 +3,7 @@
 //! Sort rearranges the events so they are grouped by skb tracking id (or OVS queue_id if present)
 
 use std::{
-    fs::OpenOptions,
+    fs::{File, OpenOptions},
     io::{self, stdout, BufWriter, ErrorKind},
     path::PathBuf,
 };
@@ -76,7 +76,7 @@ impl SubCommandParserRunner for Sort {
         run.register_term_signals()?;
 
         // Create event factory.
-        let mut factory = FileEventsFactory::new(self.input.as_path())?;
+        let mut factory = FileEventsFactory::new(Box::new(File::open(self.input.as_path())?))?;
 
         if matches!(factory.file_type(), FileType::Series) {
             log::info!("File already sorted");

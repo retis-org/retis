@@ -1,4 +1,7 @@
-use std::{fs::OpenOptions, time::Instant};
+use std::{
+    fs::{File, OpenOptions},
+    time::Instant,
+};
 
 use anyhow::{bail, Result};
 
@@ -16,7 +19,9 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     // PrintEvent benchmark
 
-    let mut factory = FileEventsFactory::new("retis/test_data/test_events_bench.json")?;
+    let mut factory = FileEventsFactory::new(Box::new(File::open(
+        "retis/test_data/test_events_bench.json",
+    )?))?;
     let event = match factory.next_event()? {
         Some(event) => event,
         _ => bail!("Could not get event from test file"),
@@ -57,7 +62,9 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     // PrintSeries benchmark
 
-    let mut factory = FileEventsFactory::new("retis/test_data/test_events_bench.json")?;
+    let mut factory = FileEventsFactory::new(Box::new(File::open(
+        "retis/test_data/test_events_bench.json",
+    )?))?;
     let mut tracker = AddTracking::new();
     let mut series = EventSorter::new();
 
