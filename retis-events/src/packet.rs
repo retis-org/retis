@@ -14,7 +14,7 @@ use {
     std::ffi::CString,
 };
 
-use super::*;
+use crate::*;
 
 /// Packet section. Contains the raw packet and related metadata.
 #[event_section(SectionId::Packet)]
@@ -156,7 +156,7 @@ impl RawPacket {
         format: &DisplayFormat,
         eth: &EthernetPacket,
     ) -> FmtResult<()> {
-        let etype = match helpers::etype_str(eth.get_ethertype()) {
+        let etype = match helpers::net::etype_str(eth.get_ethertype()) {
             Some(etype) => etype,
             // We can report non-Ethernet packets, sanity check they look like
             // one. We could still get invalid ones, if the data at the right
@@ -224,7 +224,7 @@ impl RawPacket {
         )?;
 
         let ethertype = vlan.get_ethertype();
-        match helpers::etype_str(ethertype) {
+        match helpers::net::etype_str(ethertype) {
             Some(etype) => write!(f, " ethertype {etype} ({:#06x})", ethertype.0)?,
             None => write!(f, " ethertype ({:#06x})", ethertype.0)?,
         }
@@ -387,7 +387,7 @@ impl RawPacket {
         }
 
         let protocol = ip.get_next_level_protocol();
-        match helpers::protocol_str(protocol) {
+        match helpers::net::protocol_str(protocol) {
             Some(proto) => write!(f, " proto {proto} ({})", protocol.0)?,
             None => write!(f, " proto ({})", protocol.0)?,
         }
@@ -473,7 +473,7 @@ impl RawPacket {
             return Ok(());
         }
 
-        match helpers::protocol_str(protocol) {
+        match helpers::net::protocol_str(protocol) {
             Some(proto) => write!(f, " proto {proto} ({})", protocol.0)?,
             None => write!(f, " proto ({})", protocol.0)?,
         }
@@ -824,7 +824,7 @@ impl RawPacket {
         )?;
 
         let protocol = ah.get_next_header();
-        match helpers::protocol_str(protocol) {
+        match helpers::net::protocol_str(protocol) {
             Some(proto) => write!(f, " proto {proto} ({})", protocol.0)?,
             None => write!(f, " proto ({})", protocol.0)?,
         }
@@ -900,7 +900,7 @@ impl RawPacket {
 
         let protocol = geneve.get_protocol();
         if format.print_ll {
-            match helpers::etype_str(protocol) {
+            match helpers::net::etype_str(protocol) {
                 Some(etype) => write!(f, " proto {etype} ({:#06x})", protocol.0)?,
                 None => write!(f, " proto ({:#06x})", protocol.0)?,
             }

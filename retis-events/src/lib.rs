@@ -6,18 +6,8 @@
 
 pub mod events;
 pub use events::*;
-
 pub mod display;
 pub use display::*;
-
-pub(crate) mod compat;
-
-pub mod file;
-pub mod helpers;
-#[cfg(feature = "python")]
-pub mod python;
-#[cfg(feature = "python-embed")]
-pub mod python_embed;
 
 pub mod common;
 pub use common::*;
@@ -35,8 +25,6 @@ pub mod ovs;
 pub use ovs::*;
 pub mod packet;
 pub use packet::*;
-pub mod time;
-pub use time::*;
 pub mod skb;
 pub use skb::*;
 pub mod skb_drop;
@@ -46,12 +34,17 @@ pub use skb_tracking::*;
 pub mod user;
 pub use user::*;
 
+pub(crate) mod compat;
+pub mod file;
+pub mod helpers;
+#[cfg(feature = "python")]
+pub mod python;
+
 // Re-export derive macros.
 use retis_derive::*;
 
 #[cfg(feature = "python-lib")]
 use pyo3::prelude::*;
-
 #[cfg(feature = "python-lib")]
 #[pymodule]
 fn retis(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {

@@ -8,7 +8,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Result};
 
-use super::{
+use crate::{
     compat::{json, CompatVersion},
     Event, EventSeries,
 };

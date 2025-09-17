@@ -13,7 +13,7 @@ use clap::Parser;
 
 use crate::{
     cli::*,
-    events::{file::FileEventsFactory, *},
+    events::{file::*, *},
     helpers::signals::Running,
     process::{display::*, series::EventSorter, tracking::AddTracking},
 };
@@ -78,7 +78,7 @@ impl SubCommandParserRunner for Sort {
         // Create event factory.
         let mut factory = FileEventsFactory::new(self.input.as_path())?;
 
-        if matches!(factory.file_type(), file::FileType::Series) {
+        if matches!(factory.file_type(), FileType::Series) {
             log::info!("File already sorted");
             return Ok(());
         }
