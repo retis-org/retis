@@ -40,8 +40,8 @@ use crate::{
         },
         tracking::{gc::TrackingGC, skb_tracking::init_tracking},
     },
-    events::*,
-    helpers::{signals::Running, time::*},
+    events::{helpers::time::*, *},
+    helpers::signals::Running,
     process::display::*,
 };
 
