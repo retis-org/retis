@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{helpers::U128, *};
+use super::{helpers::types::U128, *};
 use crate::{event_section, event_type, Formatter};
 
 #[event_type]

@@ -16,7 +16,7 @@ use crate::{
         inspect::inspector,
     },
     event_section_factory,
-    events::{helpers::U128, *},
+    events::{helpers::types::U128, *},
     helpers,
 };
 

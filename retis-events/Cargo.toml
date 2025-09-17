@@ -8,8 +8,8 @@ edition.workspace = true
 
 [features]
 python = ["retis-derive/python"]
-python-embed = ["python", "pyo3/auto-initialize"]
 python-lib = ["python", "pyo3/extension-module", "pyo3/abi3-py38"]
+python-shell = ["python", "pyo3/auto-initialize"]
 test-events = []
 
 [lib]

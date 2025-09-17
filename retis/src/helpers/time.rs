@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use nix::time::{clock_gettime, ClockId};
 
-use crate::events::TimeSpec;
+use crate::events::helpers::time::TimeSpec;
 
 /// Returns the monotonic timestamp in nanoseconds.
 pub(crate) fn monotonic_timestamp() -> Result<u64> {
