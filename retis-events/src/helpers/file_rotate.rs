@@ -1,17 +1,17 @@
 /// # Writer handling file rotation
 use std::{
     fs::{self, File, OpenOptions},
-    io::{self, BufWriter, Write},
+    io::{self, BufWriter, Read, Seek, SeekFrom, Write},
     ops::Drop,
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use log::error;
 
 use crate::{helpers::time::*, *};
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum RotationPolicy {
     None,
     Size(usize),
@@ -146,4 +146,80 @@ pub(crate) fn startup_event() -> Result<Event> {
     });
 
     Ok(event)
+}
+
+/// Given a file name, reads it following a rotation policy. The rotation policy
+/// is detected automatically.
+pub struct RotateReader {
+    inner: File,
+    rotation: RotationPolicy,
+    target: PathBuf,
+    target_index: usize,
+}
+
+impl RotateReader {
+    pub fn new<P: AsRef<Path>>(file: P) -> Result<Self> {
+        let (target, rotation) = Self::detect_rotation(file.as_ref())?;
+        log::debug!(
+            "Opening {} with rotation policy {rotation:?}",
+            target.display()
+        );
+
+        Ok(Self {
+            inner: File::open(&target)?,
+            rotation,
+            target: file.as_ref().to_path_buf(),
+            target_index: 0,
+        })
+    }
+
+    /// Detects a rotation policy given an input file name.
+    fn detect_rotation(file: &Path) -> Result<(PathBuf, RotationPolicy)> {
+        let target = file.to_path_buf();
+        if target.is_file() {
+            return Ok((target, RotationPolicy::None));
+        }
+
+        // TODO: switch to `add_extension` when stabilized.
+        let target = PathBuf::from(format!("{}0", target.display()));
+        if target.is_file() {
+            return Ok((target, RotationPolicy::Size(0)));
+        }
+
+        Err(anyhow!("{} not found", file.display()))
+    }
+}
+
+impl Read for RotateReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        if read > 0 {
+            return Ok(read);
+        }
+
+        // EOF reached,come up with next file to open (if any).
+        let target = match self.rotation {
+            RotationPolicy::None => return Ok(0),
+            RotationPolicy::Size(_) => {
+                self.target_index += 1;
+                PathBuf::from(format!("{}{}", self.target.display(), self.target_index))
+            }
+        };
+
+        // Last file was processed.
+        if !target.is_file() {
+            return Ok(0);
+        }
+        self.inner = File::open(&target)?;
+
+        // Try reading again.
+        self.read(buf)
+    }
+}
+
+impl Seek for RotateReader {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        // We only support seeking in the current file.
+        self.inner.seek(pos)
+    }
 }
