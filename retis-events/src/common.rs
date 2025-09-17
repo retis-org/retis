@@ -2,7 +2,7 @@ use std::fmt;
 
 use chrono::{DateTime, Utc};
 
-use crate::*;
+use crate::{helpers::time::TimeSpec, *};
 
 /// Startup event section. Contains global information about a collection as a
 /// whole, with data gathered at collection startup time.
