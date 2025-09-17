@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs::{File, OpenOptions},
     io::Write,
-    path::{Path, PathBuf},
+    path::PathBuf,
     time::Duration,
 };
 
@@ -28,8 +28,8 @@ use schemars::{schema_for, Schema};
 use crate::{
     cli::*,
     core::{kernel::Symbol, probe::kernel::utils::*},
-    events::{file::FileEventsFactory, helpers::time::TimeSpec, *},
-    helpers::signals::Running,
+    events::{helpers::time::TimeSpec, *},
+    helpers::{file_rotate::*, signals::Running},
 };
 
 /// Statistics of the event parser about events (processed, skipped, etc).
@@ -245,8 +245,11 @@ pub(crate) struct Pcap {
         help = "Write the generated PCAP output to a file rather than stdout"
     )]
     pub(super) out: Option<PathBuf>,
-    #[arg(default_value = "retis.data", help = "File from which to read events")]
-    pub(super) input: PathBuf,
+    #[arg(help = "File from which to read events:
+- If a file name is given, it is read and processing stops at EOF. E.g. 'retis.data'.
+- If '..' is appended to a file name, it is read and if it is a split file following ones will be read at EOF (if any). E.g. 'retis.data.2..'.
+[default: 'retis.data..', then 'retis.data.0..']")]
+    pub(super) input: Option<PathBuf>,
     #[arg(short, long, help = "List probes that are available in the input file")]
     pub(super) list_probes: bool,
     #[arg(
@@ -260,7 +263,7 @@ pub(crate) struct Pcap {
 impl SubCommandParserRunner for Pcap {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
         if self.list_probes {
-            let probes = list_probes(self.input.as_path())?;
+            let probes = list_probes(self.input.as_ref())?;
             probes.iter().for_each(|p| println!("{p}"));
             return Ok(());
         }
@@ -303,7 +306,7 @@ impl SubCommandParserRunner for Pcap {
         };
 
         handle_events(
-            self.input.as_path(),
+            self.input.as_ref(),
             &filter,
             &mut EventParser::new(),
             write_block,
@@ -314,7 +317,7 @@ impl SubCommandParserRunner for Pcap {
 
 /// Internal logic to retrieve our events to feed the parser.
 fn handle_events<F>(
-    input: &Path,
+    input: Option<&PathBuf>,
     filter: &dyn Fn(&str, &str) -> bool,
     parser: &mut EventParser,
     mut writer_callback: F,
@@ -327,7 +330,7 @@ where
     run.register_term_signals()?;
 
     // Start our events factory.
-    let mut factory = FileEventsFactory::new(input)?;
+    let mut factory = factory_from_retis_data(input)?;
 
     // See if we matched (not processed!) at least one event.
     let mut matched = false;
@@ -364,7 +367,7 @@ where
 
 /// List the probes that are available in the input. Only add probes from events
 /// that pass the sanity check.
-fn list_probes(input: &Path) -> Result<Vec<String>> {
+fn list_probes(input: Option<&PathBuf>) -> Result<Vec<String>> {
     let mut probe_set: HashSet<String> = HashSet::new();
 
     // Create running instance that will handle signal termination.
@@ -372,7 +375,7 @@ fn list_probes(input: &Path) -> Result<Vec<String>> {
     run.register_term_signals()?;
 
     // Start our events factory.
-    let mut factory = FileEventsFactory::new(input)?;
+    let mut factory = factory_from_retis_data(input)?;
 
     while run.running() {
         match factory.next_event()? {
@@ -411,6 +414,8 @@ fn list_probes(input: &Path) -> Result<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     #[test]
@@ -621,7 +626,7 @@ mod tests {
                 Ok(())
             };
             match handle_events(
-                Path::new(file_path),
+                Some(&PathBuf::from(file_path)),
                 &filter,
                 &mut EventParser::new(),
                 write_blocks,
@@ -688,7 +693,7 @@ mod tests {
             ),
         ];
         for (file_path, expected_res) in test_cases.into_iter() {
-            match list_probes(Path::new(file_path)) {
+            match list_probes(Some(&PathBuf::from(file_path))) {
                 Ok(v) => match expected_res {
                     Ok(expected_v) => assert_eq!(v, expected_v),
                     Err(expected_e) => {

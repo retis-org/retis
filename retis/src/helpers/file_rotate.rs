@@ -1,10 +1,10 @@
 /// # Writer handling file rotation
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use anyhow::{anyhow, bail, Result};
 use regex::Regex;
 
-use crate::events::file::rotate::*;
+use crate::events::file::{rotate::*, *};
 
 /// Convert an str representation of a limit to a `RotationPolicy`.
 /// Accepted values are numbers suffixed with a unit size (MB or GB).
@@ -29,4 +29,36 @@ pub(crate) fn rotation_policy_from_str(limit: &str) -> Result<RotationPolicy> {
     }
 
     Ok(RotationPolicy::Size { limit })
+}
+
+/// Given an "input" command line option (e.g. from the "print" or "sort"
+/// sub-commands), returns a `FileEventsFactory`. This handles the following
+/// cases:
+/// - No input is given: use the default behavior ("retis.data.." then
+///   "retis.data.0..").
+/// - A range is given: use `RotateReader` as the underlying reader.
+/// - A single file is given: use a non-rotate reader.
+pub(crate) fn factory_from_retis_data(input: Option<&PathBuf>) -> Result<FileEventsFactory> {
+    match input {
+        Some(input) => {
+            let input = input
+                .to_str()
+                .ok_or_else(|| anyhow!("Cannot convert input file to str"))?;
+
+            match input.strip_suffix("..") {
+                // E.g. "retis.data.."
+                Some(input) => FileEventsFactory::new(Box::new(RotateReader::new(
+                    PathBuf::from(input),
+                    false,
+                )?)),
+                // E.g. "retis.data"
+                None => FileEventsFactory::from_path(input),
+            }
+        }
+        // Default behavior.
+        None => FileEventsFactory::new(Box::new(RotateReader::new(
+            PathBuf::from("retis.data"),
+            true,
+        )?)),
+    }
 }
