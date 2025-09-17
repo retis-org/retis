@@ -1,15 +1,15 @@
 //! Handles the file (json) to Rust event retrieval and the unmarshaling process.
 
 use std::{
-    fs::File,
     io::{BufRead, BufReader, Seek},
     path::Path,
 };
 
 use anyhow::{anyhow, bail, Result};
 
-use super::{
+use crate::{
     compat::{json, CompatVersion},
+    helpers::file_rotate::RotateReader,
     Event, EventSeries,
 };
 
@@ -25,7 +25,7 @@ pub enum FileType {
 /// File events factory retrieving and unmarshaling events
 /// parts.
 pub struct FileEventsFactory {
-    reader: BufReader<File>,
+    reader: BufReader<RotateReader>,
     filetype: FileType,
     compat_version: CompatVersion,
 }
@@ -35,10 +35,7 @@ impl FileEventsFactory {
     where
         P: AsRef<Path>,
     {
-        let mut reader = BufReader::new(
-            File::open(&file)
-                .map_err(|e| anyhow!("Could not open {}: {e}", file.as_ref().display()))?,
-        );
+        let mut reader = BufReader::new(RotateReader::new(&file)?);
         let (filetype, compat_version) = Self::detect_type(&mut reader)?;
 
         Ok(FileEventsFactory {
@@ -53,9 +50,7 @@ impl FileEventsFactory {
     pub fn is_compat(&self) -> bool {
         self.compat_version != CompatVersion::LATEST
     }
-}
 
-impl FileEventsFactory {
     /// Retrieve the next event or None if we've reached the end of the file.
     /// It returns an error if the file contains sorted EventSeries.
     pub fn next_event(&mut self) -> Result<Option<Event>> {

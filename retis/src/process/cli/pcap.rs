@@ -24,7 +24,10 @@ use pcap_file::{
 use crate::{
     cli::*,
     core::{kernel::Symbol, probe::kernel::utils::*},
-    events::{file::FileEventsFactory, *},
+    events::{
+        helpers::{file::FileEventsFactory, time::TimeSpec},
+        *,
+    },
     helpers::signals::Running,
 };
 
