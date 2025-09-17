@@ -76,7 +76,7 @@ impl SubCommandParserRunner for Sort {
         run.register_term_signals()?;
 
         // Create event factory.
-        let mut factory = FileEventsFactory::new(self.input.as_path())?;
+        let mut factory = FileEventsFactory::from_path(self.input.as_path())?;
 
         if matches!(factory.file_type(), FileType::Series) {
             log::info!("File already sorted");
