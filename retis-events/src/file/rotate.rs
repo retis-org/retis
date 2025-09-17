@@ -1,16 +1,17 @@
 /// # Writer handling file rotation
 use std::{
+    ffi::OsStr,
     fs::{self, File, OpenOptions},
-    io::{self, BufWriter, Write},
+    io::{self, BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write},
     ops::Drop,
     path::{Path, PathBuf},
 };
 
 use anyhow::{anyhow, Result};
-use log::{error, info};
+use log::{error, info, warn};
 use nix::sys::utsname::uname;
 
-use crate::{helpers::time::*, *};
+use crate::{compat::json, file::guess_version, helpers::time::*, *};
 
 /// Rotation policy
 ///
@@ -207,4 +208,154 @@ pub(crate) fn startup_event(
     });
 
     Ok(event)
+}
+
+/// Given a file name, reads it following a rotation policy. The rotation policy
+/// is detected automatically.
+pub struct RotateReader {
+    inner: File,
+    // Controls how rotation is done.
+    policy: Option<RotationPolicy>,
+    // Target file name for the output. Will be suffixed following the rotation
+    // policy rules.
+    target: PathBuf,
+    // Index of the next file to read.
+    next_index: u32,
+}
+
+impl RotateReader {
+    pub fn new<P: AsRef<Path>>(file: P, try_split: bool) -> Result<Self> {
+        let (target, index, policy) = Self::detect_policy(file.as_ref(), try_split)?;
+        if let Some(policy) = &policy {
+            log::debug!(
+                "Opening {} with rotation policy {policy:?}",
+                target.display()
+            );
+        }
+
+        Ok(Self {
+            inner: Self::open_file(&target, index, policy)?
+                .ok_or_else(|| anyhow!("Could not open {}", target.display()))?,
+            policy,
+            target,
+            next_index: index + 1,
+        })
+    }
+
+    /// Detects a rotation policy given an input file name.
+    fn detect_policy(
+        path: &Path,
+        try_split: bool,
+    ) -> Result<(PathBuf, u32, Option<RotationPolicy>)> {
+        // First, try the target file.
+        if path.is_file() {
+            return Self::detect_policy_from_events(&path.to_path_buf());
+        }
+
+        // If allowed, fallback to trying using a known split file extension.
+        if try_split {
+            let target = PathBuf::from(format!("{}.0", path.display()));
+            if target.is_file() {
+                return Self::detect_policy_from_events(&target);
+            }
+        }
+
+        Err(anyhow!("Cannot open {}", path.display()))
+    }
+
+    /// Given a file, detect the rotation policy reading the startup event, if
+    /// any. It's important to check for the file existence before to throw real
+    /// errors from this.
+    ///
+    /// Returns the target file base (filename w/o the split extension), index
+    /// and rotation policy).
+    fn detect_policy_from_events(path: &PathBuf) -> Result<(PathBuf, u32, Option<RotationPolicy>)> {
+        // Use a temporary BufReader to benefit from the `read_line`
+        // implementation.
+        let mut reader = BufReader::new(File::open(path)?);
+        let mut path = path.clone();
+
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 {
+            // File is empty, which is valid from our PoV here.
+            return Ok((path, 0, None));
+        }
+
+        // Get the startup event in a 2-step way, to allow for backward
+        // compatibility logic to kick in.
+        let event: Event = match serde_json::from_str(line.as_str())? {
+            serde_json::Value::Object(ref obj) => {
+                json::from_str(line.as_str(), guess_version(obj)?)?
+            }
+            // Not supporting stored series here.
+            _ => return Ok((path, 0, None)),
+        };
+
+        if let Some(startup) = event.startup {
+            if let Some(split) = startup.split_file {
+                match split.policy {
+                    RotationPolicy::Size { .. } => {
+                        if path.extension()
+                            == Some(<String as AsRef<OsStr>>::as_ref(&format!("{}", split.id)))
+                        {
+                            path.set_extension("");
+                            return Ok((path, split.id, Some(split.policy)));
+                        } else {
+                            warn!("File extension does not match the rotation policy");
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok((path, 0, None))
+    }
+
+    fn open_file(
+        target: &Path,
+        index: u32,
+        policy: Option<RotationPolicy>,
+    ) -> io::Result<Option<File>> {
+        let target = match policy {
+            Some(RotationPolicy::Size { .. }) => {
+                PathBuf::from(format!("{}.{index}", target.display()))
+            }
+            None => target.to_path_buf(),
+        };
+        if !target.is_file() {
+            return Ok(None);
+        }
+        Ok(Some(File::open(target)?))
+    }
+}
+
+impl Read for RotateReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let read = self.inner.read(buf)?;
+        if read > 0 {
+            return Ok(read);
+        }
+
+        if self.policy.is_none() {
+            return Ok(0);
+        }
+
+        // EOF reached, come up with next file to open (if any).
+        self.inner = match Self::open_file(&self.target, self.next_index, self.policy)? {
+            Some(file) => file,
+            // Last file was processed.
+            None => return Ok(0),
+        };
+        self.next_index += 1;
+
+        // Try reading again.
+        self.read(buf)
+    }
+}
+
+impl Seek for RotateReader {
+    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+        // We only support seeking in the current file.
+        self.inner.seek(pos)
+    }
 }

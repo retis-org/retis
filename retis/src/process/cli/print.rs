@@ -3,31 +3,24 @@
 //! Print is a simple post-processing command that just parses events and prints them back to
 //! stdout
 
-use std::{
-    io::{self, stdout, ErrorKind},
-    path::PathBuf,
-};
+use std::io::{self, stdout, ErrorKind};
 
 use anyhow::Result;
 use clap::Parser;
 
 use crate::{
     cli::*,
-    events::{
-        file::{FileEventsFactory, FileType},
-        *,
-    },
-    helpers::signals::Running,
+    events::{file::*, *},
+    helpers::{file_rotate::InputDataFile, signals::Running},
     process::display::*,
 };
 
 #[derive(Parser, Debug, Default)]
 #[command(name = "print", about = "Print stored events to stdout.")]
 pub(crate) struct Print {
-    /// File from which to read events.
-    #[arg(default_value = "retis.data")]
-    pub(super) input: PathBuf,
-    #[arg(long, help = "Format used when printing an event.")]
+    #[arg(help = InputDataFile::help())]
+    pub(super) input: Option<InputDataFile>,
+    #[arg(long, help = "Format used when printing an event")]
     #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
     pub(super) format: CliDisplayFormat,
     #[arg(long, help = "Print the time as UTC")]
@@ -43,7 +36,7 @@ impl SubCommandParserRunner for Print {
         run.register_term_signals()?;
 
         // Create event factory.
-        let mut factory = FileEventsFactory::new(self.input.as_path())?;
+        let mut factory = self.input.clone().unwrap_or_default().to_factory()?;
 
         // Format.
         let format = DisplayFormat::new()

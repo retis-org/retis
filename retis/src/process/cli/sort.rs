@@ -14,7 +14,7 @@ use clap::Parser;
 use crate::{
     cli::*,
     events::{file::*, *},
-    helpers::signals::Running,
+    helpers::{file_rotate::InputDataFile, signals::Running},
     process::{display::*, series::EventSorter, tracking::AddTracking},
 };
 
@@ -30,8 +30,8 @@ const DEFAULT_BUFFER: usize = 1000;
 Reads events and arranges them by tracking id. The output is a number of \"event sets\". An event set is a list of events that share the same tracking id (i.e: belong to the same packet)."
 )]
 pub(crate) struct Sort {
-    #[arg(default_value = "retis.data", help = "File from which to read events")]
-    pub(super) input: PathBuf,
+    #[arg(help = InputDataFile::help())]
+    pub(super) input: Option<InputDataFile>,
 
     #[arg(
         long,
@@ -76,7 +76,8 @@ impl SubCommandParserRunner for Sort {
         run.register_term_signals()?;
 
         // Create event factory.
-        let mut factory = FileEventsFactory::new(self.input.as_path())?;
+        let input = self.input.clone().unwrap_or_default();
+        let mut factory = input.to_factory()?;
 
         if matches!(factory.file_type(), FileType::Series) {
             log::info!("File already sorted");
@@ -92,17 +93,23 @@ impl SubCommandParserRunner for Sort {
                 bail!("Storing sorted events is not supported (input event format is too old, remove `--out`)");
             }
 
-            let out = match out.canonicalize() {
-                Ok(out) => out,
-                // If the file doesn't exist we can't use fs::canonicalize() but it is not needed
-                // as that means it is not the input file.
-                Err(_) => out.clone(),
-            };
+            // Try to detect if the same file is used for the input and the
+            // output, as this would result in the deletion of the original
+            // file and the loss of data.
+            //
+            // Due to the default input file logic and the range format, we
+            // only due this check best-effort.
+            if let Ok(input) = &input.path.canonicalize() {
+                let out = match out.canonicalize() {
+                    Ok(out) => out,
+                    // If the file doesn't exist we can't use fs::canonicalize() but it is not needed
+                    // as that means it is not the input file.
+                    Err(_) => out.to_path_buf(),
+                };
 
-            // Make sure we don't use the same file as the result will be the deletion of the
-            // original files. If the input file doesn't exist we will raise an error.
-            if out.eq(&self.input.canonicalize()?) {
-                bail!("Cannot sort a file in-place. Please specify an output file that's different to the input one.");
+                if out.eq(input) {
+                    bail!("Cannot sort a file in-place. Please specify an output file that's different to the input one.");
+                }
             }
 
             printers.push(PrintSeries::new(
@@ -111,7 +118,7 @@ impl SubCommandParserRunner for Sort {
                         .create(true)
                         .write(true)
                         .truncate(true)
-                        .open(&out)
+                        .open(out)
                         .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
                 )),
                 PrintEventFormat::Json,

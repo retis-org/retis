@@ -2,7 +2,7 @@
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Seek},
+    io::{BufRead, BufReader, Read, Seek},
     path::Path,
 };
 
@@ -22,23 +22,29 @@ pub enum FileType {
     Series,
 }
 
+pub trait ReadSeek: Read + Seek + Send + Sync {}
+impl<T> ReadSeek for T where T: Read + Seek + Send + Sync {}
+
 /// File events factory retrieving and unmarshaling events
 /// parts.
 pub struct FileEventsFactory {
-    reader: BufReader<File>,
+    reader: BufReader<Box<dyn ReadSeek>>,
     filetype: FileType,
     compat_version: CompatVersion,
 }
 
 impl FileEventsFactory {
-    pub fn new<P>(file: P) -> Result<Self>
+    pub fn from_path<P>(file: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {
-        let mut reader = BufReader::new(
-            File::open(&file)
-                .map_err(|e| anyhow!("Could not open {}: {e}", file.as_ref().display()))?,
-        );
+        Self::new(Box::new(File::open(&file).map_err(|e| {
+            anyhow!("Could not open {}: {e}", file.as_ref().display())
+        })?))
+    }
+
+    pub fn new(reader: Box<dyn ReadSeek>) -> Result<Self> {
+        let mut reader = BufReader::new(reader);
         let (filetype, compat_version) = Self::detect_type(&mut reader)?;
 
         Ok(FileEventsFactory {
@@ -103,24 +109,13 @@ impl FileEventsFactory {
             .map_err(|e| anyhow!("Failed to parse event file: {:?}", e))?;
 
         Ok(match first {
-            serde_json::Value::Object(ref obj) => (FileType::Event, Self::guess_version(obj)?),
+            serde_json::Value::Object(ref obj) => (FileType::Event, guess_version(obj)?),
             serde_json::Value::Array(mut vec) => match vec.pop() {
-                Some(serde_json::Value::Object(ref map)) => {
-                    (FileType::Series, Self::guess_version(map)?)
-                }
+                Some(serde_json::Value::Object(ref map)) => (FileType::Series, guess_version(map)?),
                 _ => bail!("Invalid or missing events"),
             },
             _ => bail!("File contains invalid json data"),
         })
-    }
-
-    fn guess_version(val: &serde_json::Map<String, serde_json::Value>) -> Result<CompatVersion> {
-        if let Some(serde_json::Value::Object(startup)) = val.get("startup") {
-            if let Some(serde_json::Value::String(version)) = startup.get("retis_version") {
-                return CompatVersion::from_retis_version(version);
-            }
-        }
-        Err(anyhow!("Cannot find version in startup event"))
     }
 
     pub fn file_type(&self) -> &FileType {
@@ -128,12 +123,26 @@ impl FileEventsFactory {
     }
 }
 
+/// Guess an event compatibility version given a first partially marshalled
+/// event.
+pub(crate) fn guess_version(
+    val: &serde_json::Map<String, serde_json::Value>,
+) -> Result<CompatVersion> {
+    if let Some(serde_json::Value::Object(startup)) = val.get("startup") {
+        if let Some(serde_json::Value::String(version)) = startup.get("retis_version") {
+            return CompatVersion::from_retis_version(version);
+        }
+    }
+    Err(anyhow!("Cannot find version in startup event"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn read_from_file() {
-        let mut fact = FileEventsFactory::new("test_data/test_events.json").unwrap();
+        let mut fact = FileEventsFactory::from_path("test_data/test_events.json").unwrap();
 
         let mut events = Vec::new();
         while let Some(event) = fact.next_event().unwrap() {
