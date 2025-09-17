@@ -5,7 +5,7 @@ use std::{collections::VecDeque, sync::Mutex};
 
 use anyhow::Result;
 
-use crate::{events::*, helpers::time::monotonic_timestamp};
+use crate::events::{helpers::time::*, *};
 
 /// Retis events factory; allowing collectors and Retis core parts to generate
 /// events and augment the collection.
