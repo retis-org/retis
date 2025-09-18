@@ -3,7 +3,7 @@ use std::fmt;
 use super::*;
 use crate::{event_section, Formatter};
 
-/// Skb drop event section.
+/// Device event
 #[derive(Default)]
 #[event_section(SectionId::Dev)]
 pub struct DevEvent {
