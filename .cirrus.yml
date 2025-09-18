@@ -43,6 +43,11 @@ unittest_task:
     mkdocs build --site-dir="/tmp/mkdocs-build"
     rm -rf /tmp/mkdocs-build
     deactivate && rm -rf .venv
+  schema_generate_script:
+    - ./target/debug/retis schema > retis_schema.json
+  schema_artifacts:
+    path: "retis_schema.json"
+
 benchmark_task:
   << : *cargo_task_template
   container:
@@ -195,3 +200,21 @@ manual_test_funtional_task:
   up_script: *vagrant_up
   guest_info_script: *guest_info
   test_script: *functional_test
+
+wireshark_plugin_task:
+  name: Build and test wireshark plugin
+  depends_on: unittest
+  container:
+    image: fedora:41
+  setup_script:
+    - dnf install -y gcc make pkg-config wireshark-cli wireshark-devel json-c-devel unzip
+    - curl -L -O https://api.cirrus-ci.com/v1/artifact/build/$CIRRUS_BUILD_ID/schema.zip
+    - unzip schema.zip && mv retis_schema.json retis/test_data
+  build_script:
+    - make wireshark
+    - WIRESHARK_PLUGIN_BASE_DIR=/usr/lib64/wireshark/plugins/ make wireshark-install
+  test_script:
+    - test $(tshark -r retis/test_data/test_events_packets.pcap -V | grep -c "Retis Metadata") -eq 26
+    - test $(tshark -r retis/test_data/test_events_packets.pcap -o "retis.schema:retis/test_data/retis_schema.json" -Y 'retis.ct.state=="new"' | wc -l ) -eq 1
+  plugin_artifacts:
+    path: "tools/wireshark/*.so"
