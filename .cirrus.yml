@@ -43,6 +43,7 @@ unittest_task:
     mkdocs build --site-dir="/tmp/mkdocs-build"
     rm -rf /tmp/mkdocs-build
     deactivate && rm -rf .venv
+
 benchmark_task:
   << : *cargo_task_template
   container:
@@ -195,3 +196,17 @@ manual_test_funtional_task:
   up_script: *vagrant_up
   guest_info_script: *guest_info
   test_script: *functional_test
+
+wireshark_plugin_task:
+  name: Build Wireshark plugin
+  container:
+    image: quay.io/centos/centos:stream10
+  setup_script:
+    - dnf config-manager --set-enabled crb
+    - dnf install -y gcc make pkg-config wireshark-devel json-c-devel
+  build_script:
+    - make wireshark
+  test_script:
+    - test -f tools/wireshark/retis.so
+  plugin_artifacts:
+    path: "tools/wireshark/*.so"
