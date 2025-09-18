@@ -74,6 +74,9 @@ static expert_field ei_retis_schema_parse_error = EI_INIT;
 static expert_field ei_retis_field_not_in_schema = EI_INIT;
 static expert_field ei_retis_schema_block_empty = EI_INIT;
 
+/* User preference: schema file */
+static const char *schema_file_path = NULL;
+
 /* Whether columns have been reloaded yet. */
 static bool cols_reloaded = false;
 
@@ -467,7 +470,7 @@ static int dissect_retis_schema_custom_block(tvbuff_t *tvb, packet_info *pinfo,
 	enum json_tokener_error error;
 	const char *json_schema_str;
 
-	if (schema) {
+	if (schema && (!schema_file_path || schema_file_path[0] != '0')) {
 		/* Columns and their values are processed before the first
 		 * dissector is called. This causes an issue if a column refers
 		 * to fields that are not yet registered with the retis
@@ -545,6 +548,73 @@ static int dissect_retis_schema_custom_block(tvbuff_t *tvb, packet_info *pinfo,
 	}
 
 	return tvb_captured_length(tvb);
+}
+
+static void pref_retis_schema(void)
+{
+	enum json_tokener_error error;
+	char *buffer = NULL;
+	size_t file_size;
+	FILE *f;
+
+	if (!schema_file_path)
+		return;
+
+	if (schema) {
+		ws_warning("Hot change of schema is not supported");
+		return;
+	}
+
+	f = fopen(schema_file_path, "r");
+	if (!f) {
+		ws_warning("Failed to open configured schema file: %s", schema_file_path);
+		return;
+	}
+
+	if (fseek(f, 0, SEEK_END) != 0) {
+		ws_warning("Failed to seek to end of configured schema file: %s",
+			   g_strerror(errno));
+		fclose(f);
+		return;
+	}
+
+	file_size = ftell(f);
+	if (file_size == -1) {
+		ws_warning("Failed to get configured schema file size: %s",
+			   g_strerror(errno));
+		fclose(f);
+		return;
+	}
+	rewind(f);
+
+	buffer = g_malloc(file_size + 1);
+	if (fread(buffer, 1, file_size, f) != file_size) {
+		ws_warning("Failed to read configured schema file: %s", g_strerror(errno));
+		g_free(buffer);
+		fclose(f);
+		return;
+	}
+	buffer[file_size] = '\0';
+	fclose(f);
+
+	schema = json_tokener_parse_verbose(buffer, &error);
+	g_free(buffer);
+
+	if (!schema) {
+		ws_warning("Failed to parse configured schema file as JSON: %s",
+			   json_tokener_error_desc(error));
+		return;
+	}
+
+	if (register_retis_fields_from_schema_json(NULL, NULL, NULL)) {
+		ws_warning("Retis configured schema parsed but failed to register"
+				"  fields with epan.");
+		json_object_put(schema);
+		schema = NULL;
+		return;
+	}
+
+	ws_info("Successfully loaded schema from file: %s", schema_file_path);
 }
 
 static void populate_retis_subtree(proto_tree *tree, tvbuff_t *tvb,
@@ -753,6 +823,7 @@ static void retis_cleanup()
 static void proto_register_retis(void)
 {
 	expert_module_t *expert_retis;
+	module_t *module;
 
 	if (proto_retis != -1) {
 		return;
@@ -791,6 +862,14 @@ static void proto_register_retis(void)
 		    "retis schema block is empty", EXPFILL } },
 	};
 	expert_register_field_array(expert_retis, ei, array_length(ei));
+
+	/* User preferences registration */
+	module = prefs_register_protocol(proto_retis, &pref_retis_schema);
+	prefs_register_filename_preference(
+		module, "schema", "Retis event schema",
+		"File path of the file containing a Retis schema that will "
+		"override the one present in the Retis capture",
+		&schema_file_path, false);
 }
 
 static void proto_reg_handoff_retis(void)
