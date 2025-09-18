@@ -35,6 +35,7 @@ unittest_task:
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
     git remote update origin
     make check-ebpf BASE_COMMIT=origin/$CIRRUS_BASE_BRANCH
+  
 benchmark_task:
   << : *cargo_task_template
   container:
@@ -187,3 +188,17 @@ manual_test_funtional_task:
   up_script: *vagrant_up
   guest_info_script: *guest_info
   test_script: *functional_test
+
+wireshark_plugin_task:
+  name: Build Wireshark plugin
+  container:
+    image: quay.io/centos/centos:stream10
+  setup_script:
+    - dnf config-manager --set-enabled crb
+    - dnf install -y gcc make pkg-config wireshark-devel json-c-devel
+  build_script:
+    - make wireshark
+  test_script:
+    - test -f tools/wireshark/retis.so
+  plugin_artifacts:
+    path: "tools/wireshark/*.so"
