@@ -59,6 +59,8 @@ plugin. Using this option, `tshark` can be used to filter on retis data, e.g:
 tshark -r some.pcap -o "retis.schema:schema.json" -Y 'retis.ct.state=="new"'
 ```
 
+The schema file can be generated using `retis schema`.
+
 #### TCP sequence analysis
 
 Retis captures will contain the same packet multiple times because Retis generates
