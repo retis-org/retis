@@ -204,7 +204,7 @@ impl EventParser {
     }
 
     /// Parse & process a single Retis event.
-    fn parse(&mut self, event: &Event) -> Result<Vec<Block<'_>>> {
+    fn parse(&mut self, event: &mut Event) -> Result<Vec<Block<'_>>> {
         // Having a common & a kernel section is mandatory for now, seeing a
         // filtered event w/o one of those is bogus.
         let common = event
@@ -214,10 +214,16 @@ impl EventParser {
 
         self.stats.processed += 1;
 
+        let comment = format!(
+            "{}",
+            event.display(&DisplayFormat::new().multiline(true), &FormatterConf::new())
+        );
+
         // The packet section is mandatory for us to generate PCAP events, but
         // it might not be present in some filtered events. Stats are kept to
-        // inform the user.
-        let packet = some_or_return!(&event.packet, self.stats.missing_packet);
+        // inform the user. Removing the packet from the event to avoid adding it
+        // to the pcapng file twice.
+        let packet = some_or_return!(event.packet.take(), self.stats.missing_packet);
 
         let mut v = Vec::new();
 
@@ -229,8 +235,6 @@ impl EventParser {
 
         let id = self.process_interface(event, &mut v)?;
 
-        let format = DisplayFormat::new().multiline(true);
-
         // Add the packet itself.
         v.push(
             EnhancedPacketBlock {
@@ -241,10 +245,7 @@ impl EventParser {
                 original_len: packet.len,
                 data: Cow::Borrowed(&packet.data.0),
                 options: vec![
-                    EnhancedPacketOption::Comment(Cow::Owned(format!(
-                        "{}",
-                        event.display(&format, &FormatterConf::new())
-                    ))),
+                    EnhancedPacketOption::Comment(Cow::Owned(comment)),
                     EnhancedPacketOption::CustomUtf8(CustomUtf8Option {
                         code: 2988, // Custom Option containing a UTF-8 string.
                         pen: RETIS_PEN,
@@ -387,7 +388,7 @@ where
     let mut matched = false;
     while run.running() {
         match factory.next_event()? {
-            Some(event) => {
+            Some(mut event) => {
                 if let Some(kernel) = &event.kernel {
                     // Check the event is matching the requested symbol.
                     if !filter(&kernel.probe_type, &kernel.symbol) {
@@ -396,7 +397,7 @@ where
                     matched = true;
 
                     // Parse the event and then write the pcap blocks to the file.
-                    let parsed_blocks = parser.parse(&event)?;
+                    let parsed_blocks = parser.parse(&mut event)?;
                     for b in parsed_blocks {
                         writer_callback(&b)?;
                     }
@@ -513,7 +514,7 @@ mod tests {
                                 code: 2988,
                                 pen: RETIS_PEN,
                                 value: Cow::Owned(String::from(
-                                    r#"{"common":{"timestamp":30419169125909,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"packet":{"len":98,"capture_len":98,"data":"+ly9jswBpsIRcVlFCABFAABUo/lAAEABG0nAqH0KwKh9CwgAQFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="},"skb":{"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":1,"inum":4026531840},"dev":{"name":"veth-ns01-ovs","ifindex":10,"rx_ifindex":10},"ovs":{"event_type":"upcall_return","upcall_ts":30419169098548,"upcall_cpu":6,"ret":0}}"#,
+                                    r#"{"common":{"timestamp":30419169125909,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"skb":{"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":1,"inum":4026531840},"dev":{"name":"veth-ns01-ovs","ifindex":10,"rx_ifindex":10},"ovs":{"event_type":"upcall_return","upcall_ts":30419169098548,"upcall_cpu":6,"ret":0}}"#,
                                 )),
                             }),
                         ],
@@ -550,7 +551,7 @@ mod tests {
                                 code: 2988,
                                 pen: RETIS_PEN,
                                 value: Cow::Owned(String::from(
-                                    r#"{"common":{"timestamp":30419169372774,"smp_id":6,"task":{"pid":985,"tgid":995,"comm":"handler8"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169353765,"skb":18446619372874142208},"packet":{"len":98,"capture_len":98,"data":"psIRcVlF+ly9jswBCABFAABUTCMAAEABsx/AqH0LwKh9CgAASFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="},"skb":{"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2753213483,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":1,"inum":4026531840},"dev":{"name":"veth-ns02-ovs","ifindex":12,"rx_ifindex":12},"ovs":{"event_type":"upcall_return","upcall_ts":30419169364667,"upcall_cpu":6,"ret":0}}"#,
+                                    r#"{"common":{"timestamp":30419169372774,"smp_id":6,"task":{"pid":985,"tgid":995,"comm":"handler8"}},"kernel":{"symbol":"ovs_dp_upcall","probe_type":"kretprobe"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169353765,"skb":18446619372874142208},"skb":{"meta":{"len":98,"data_len":0,"hash":2116835702,"ip_summed":0,"csum":2753213483,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":1,"inum":4026531840},"dev":{"name":"veth-ns02-ovs","ifindex":12,"rx_ifindex":12},"ovs":{"event_type":"upcall_return","upcall_ts":30419169364667,"upcall_cpu":6,"ret":0}}"#,
                                 )),
                             }),
                         ],
@@ -600,7 +601,7 @@ mod tests {
                                 code: 2988,
                                 pen: RETIS_PEN,
                                 value: Cow::Owned(String::from(
-                            r#"{"common":{"timestamp":30419169061793,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"net:net_dev_start_xmit","probe_type":"raw_tracepoint"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"packet":{"len":98,"capture_len":98,"data":"+ly9jswBpsIRcVlFCABFAABUo/lAAEABG0nAqH0KwKh9CwgAQFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="},"skb":{"meta":{"len":98,"data_len":0,"hash":0,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":3,"inum":4026532741},"dev":{"name":"veth-ns01","ifindex":11},"ct":{"state":"new","zone_id":0,"zone_dir":"Default","orig":{"ip":{"src":"192.168.125.10","dst":"192.168.125.11","version":"v4"},"proto":{"icmp":{"code":0,"type":8,"id":29004}}},"reply":{"ip":{"src":"192.168.125.11","dst":"192.168.125.10","version":"v4"},"proto":{"icmp":{"code":0,"type":0,"id":29004}}},"mark":0,"ct_status":8}}"#)),
+                            r#"{"common":{"timestamp":30419169061793,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"net:net_dev_start_xmit","probe_type":"raw_tracepoint"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"skb":{"meta":{"len":98,"data_len":0,"hash":0,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":3,"inum":4026532741},"dev":{"name":"veth-ns01","ifindex":11},"ct":{"state":"new","zone_id":0,"zone_dir":"Default","orig":{"ip":{"src":"192.168.125.10","dst":"192.168.125.11","version":"v4"},"proto":{"icmp":{"code":0,"type":8,"id":29004}}},"reply":{"ip":{"src":"192.168.125.11","dst":"192.168.125.10","version":"v4"},"proto":{"icmp":{"code":0,"type":0,"id":29004}}},"mark":0,"ct_status":8}}"#)),
                             }),
                         ],
                     }),
@@ -636,7 +637,7 @@ mod tests {
                                 code: 2988,
                                 pen: RETIS_PEN,
                                 value: Cow::Owned(String::from(
-                                    r#"{"common":{"timestamp":30419169082348,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"net:netif_receive_skb","probe_type":"raw_tracepoint"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"packet":{"len":98,"capture_len":98,"data":"+ly9jswBpsIRcVlFCABFAABUo/lAAEABG0nAqH0KwKh9CwgAQFpxTAAB7f3ZZwAAAACzHw0AAAAAABAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc="},"skb":{"meta":{"len":84,"data_len":0,"hash":0,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":1,"inum":4026531840},"dev":{"name":"veth-ns01-ovs","ifindex":10}}"#
+                                    r#"{"common":{"timestamp":30419169082348,"smp_id":6,"task":{"pid":11330,"tgid":11330,"comm":"ping"}},"kernel":{"symbol":"net:netif_receive_skb","probe_type":"raw_tracepoint"},"skb-tracking":{"orig_head":18446619372617628672,"timestamp":30419169061793,"skb":18446619372874141952},"skb":{"meta":{"len":84,"data_len":0,"hash":0,"ip_summed":0,"csum":2770033380,"csum_level":0,"priority":0},"data_ref":{"nohdr":false,"cloned":false,"fclone":0,"users":1,"dataref":1}},"netns":{"cookie":1,"inum":4026531840},"dev":{"name":"veth-ns01-ovs","ifindex":10}}"#
                                 )),
                             }),
                         ],
