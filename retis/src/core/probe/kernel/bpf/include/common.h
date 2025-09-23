@@ -62,7 +62,7 @@ enum {
 
 #define RETIS_ALL_FILTERS	(RETIS_F_PACKET_PASS | RETIS_F_META_PASS)
 
-#define RETIS_TRACKABLE(mask)	(!(mask ^ RETIS_ALL_FILTERS))
+#define RETIS_TRACKABLE(ctx)	(!(ctx->filters_ret ^ RETIS_ALL_FILTERS))
 
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
@@ -349,7 +349,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	 * logic runs even if later ops fail: we don't want to miss information
 	 * because of non-fatal errors!
 	 */
-	if (RETIS_TRACKABLE(ctx->filters_ret))
+	if (RETIS_TRACKABLE(ctx))
 		track_skb_start(ctx);
 	else if (skb)
 		/* Terminate any potentially existing entry not
@@ -437,7 +437,7 @@ exit:
 	/* Cleanup stage while tracking an skb. If no skb is available this is a
 	 * no-op.
 	 */
-	if (RETIS_TRACKABLE(ctx->filters_ret))
+	if (RETIS_TRACKABLE(ctx))
 		track_skb_end(ctx);
 
 	return 0;
