@@ -138,13 +138,3 @@ from the above (if events were stored).
 $ retis -p nft-dropmon collect -o
 $ retis -p nft-dropmon pcap -o retis.pcap
 ```
-
-## Pcap
-
-Profile enabling a set of options to collect events for later post-processing
-conversion into the `pcap-ng` format using the `pcap` sub-command.
-
-```none
-$ retis -p pcap collect ...
-$ retis -p pcap,generic collect
-```

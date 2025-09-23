@@ -1,6 +1,0 @@
-version: 1.0
-name: pcap
-about: Minimum set of options to properly collect data for later PCAP generation
-collect:
-  - args:
-      collectors: skb,dev,ns
