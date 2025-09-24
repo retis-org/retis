@@ -11,15 +11,15 @@ use log::warn;
 
 use crate::{
     bindings::{
-        kernel_enqueue_uapi::upcall_enqueue_event,
-        kernel_exec_tp_uapi::{
+        kernel_enqueue_hook_uapi::upcall_enqueue_event,
+        kernel_exec_tp_hook_uapi::{
             exec_ct, exec_drop, exec_event, exec_output, exec_recirc, exec_track_event,
         },
-        kernel_flow_tbl_lookup_ret_uapi::flow_lookup_ret_event,
-        kernel_upcall_ret_uapi::upcall_ret_event,
-        kernel_upcall_tp_uapi::upcall_event,
+        kernel_flow_tbl_lookup_ret_hook_uapi::flow_lookup_ret_event,
+        kernel_upcall_ret_hook_uapi::upcall_ret_event,
+        kernel_upcall_tp_hook_uapi::upcall_event,
         ovs_operation_uapi::ovs_operation_event,
-        user_recv_upcall_uapi::recv_upcall_event,
+        user_recv_upcall_hook_uapi::recv_upcall_event,
     },
     core::{
         events::{
