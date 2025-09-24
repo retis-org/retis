@@ -64,24 +64,26 @@ const volatile u8 log_level = LOG_INFO;
  * {error,slow} path.
  * Useful exceptions must use a high log level (ideally LOG_TRACE).
  */
-#define retis_log(lvl, fmt, args...)					\
-({									\
-	if (lvl <= log_level) {						\
-		struct retis_log_event *__log =				\
-			bpf_ringbuf_reserve(&log_map, sizeof(struct retis_log_event), 0); \
-		if (__log) {						\
-			__log->level = lvl;				\
-			BPF_SNPRINTF(__log->msg, sizeof(__log->msg), fmt, args); \
-			bpf_ringbuf_submit(__log, BPF_RB_FORCE_WAKEUP);	\
-		}							\
-	}								\
+#define retis_log(lvl, fmt, args...) \
+({ \
+	if (lvl <= log_level) { \
+		struct retis_log_event *__log = \
+		bpf_ringbuf_reserve(&log_map, \
+				    sizeof(struct retis_log_event), 0); \
+		if (__log) { \
+			__log->level = lvl; \
+			BPF_SNPRINTF(__log->msg, sizeof(__log->msg), fmt, \
+				     ##args); \
+			bpf_ringbuf_submit(__log, BPF_RB_FORCE_WAKEUP); \
+		} \
+	} \
 })
 
-#define log_error(fmt, args...)	retis_log(LOG_ERROR, fmt, args)
-#define log_warning(fmt, args...)	retis_log(LOG_WARN, fmt, args)
-#define log_info(fmt, args...)		retis_log(LOG_INFO, fmt, args)
-#define log_debug(fmt, args...)	retis_log(LOG_DEBUG, fmt, args)
-#define log_trace(fmt, args...)	retis_log(LOG_TRACE, fmt, args)
+#define log_error(fmt, args...)	retis_log(LOG_ERROR, fmt, ##args)
+#define log_warning(fmt, args...)	retis_log(LOG_WARN, fmt, ##args)
+#define log_info(fmt, args...)		retis_log(LOG_INFO, fmt, ##args)
+#define log_debug(fmt, args...)	retis_log(LOG_DEBUG, fmt, ##args)
+#define log_trace(fmt, args...)	retis_log(LOG_TRACE, fmt, ##args)
 
 struct retis_counters_key {
 	/* Symbol address. */
