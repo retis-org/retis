@@ -10,8 +10,9 @@ BINDING_DEF(RAW_EVENT_DATA_SIZE, 2048 - 2 /* Remove the size field */)
 BINDING_DEF(LOG_EVENTS_MAX, 128)
 
 struct retis_log_event {
+	u64 ts;
 	u8 level;
-	char msg[127];
+	char msg[119];
 } __binding;
 
 /* We're using the factory identifiers defined in retis-events.
