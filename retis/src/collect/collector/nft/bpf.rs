@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 use crate::{
-    bindings::nft_uapi::*,
+    bindings::nft_hook_uapi::*,
     core::events::{
         parse_single_raw_section, BpfRawSection, EventSectionFactory, FactoryId,
         RawEventSectionFactory,
