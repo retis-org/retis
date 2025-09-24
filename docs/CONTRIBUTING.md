@@ -65,10 +65,6 @@ shape the actual behavior.
 
 ## Code contribution
 
-Looking for topics to work on? Please have a look at the issues triaged as
-[good first issues](https://github.com/retis-org/retis/issues?q=is%3Aissue+is%3Aopen+label%3A"good+first+issue")
-and/or [help wanted](https://github.com/retis-org/retis/issues?q=is%3Aissue+is%3Aopen+label%3A"help+wanted").
-
 ### Guidelines
 
 1. Follow the [coding style](#coding-style).
