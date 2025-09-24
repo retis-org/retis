@@ -254,7 +254,7 @@ impl BpfEventsFactory {
             };
 
             match raw_to_string!(&log_event.msg) {
-                Ok(msg) => log!(log_level, "[eBPF] {msg}"),
+                Ok(msg) => log!(log_level, "[eBPF] {} {msg}", log_event.ts),
                 Err(e) => error!("Unable to convert eBPF log string: {e}"),
             }
 

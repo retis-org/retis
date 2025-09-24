@@ -72,6 +72,7 @@ const volatile u8 log_level = LOG_INFO;
 				    sizeof(struct retis_log_event), 0); \
 		if (__log) { \
 			__log->level = lvl; \
+			__log->ts = bpf_ktime_get_ns(); \
 			BPF_SNPRINTF(__log->msg, sizeof(__log->msg), fmt, \
 				     ##args); \
 			bpf_ringbuf_submit(__log, BPF_RB_FORCE_WAKEUP); \

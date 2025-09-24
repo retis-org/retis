@@ -15,8 +15,9 @@ pub type enum_LOG_EVENTS_MAX = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct retis_log_event {
+    pub ts: u64_,
     pub level: u8_,
-    pub msg: [::std::os::raw::c_char; 127usize],
+    pub msg: [::std::os::raw::c_char; 119usize],
 }
 impl Default for retis_log_event {
     fn default() -> Self {
