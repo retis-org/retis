@@ -13,7 +13,7 @@ use serde_json::json;
 
 use super::{bpf::*, nft_hook};
 use crate::{
-    bindings::nft_uapi::nft_config,
+    bindings::nft_hook_uapi::nft_config,
     collect::{cli::Collect, Collector},
     core::{
         events::*,

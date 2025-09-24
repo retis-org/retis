@@ -27,13 +27,13 @@ impl Default for retis_probe_offsets {
 
 unsafe impl plain::Plain for retis_probe_config {}
 
-pub(crate) mod ct_uapi;
-use ct_uapi::ct_event;
+pub(crate) mod ct_hook_uapi;
+use ct_hook_uapi::ct_event;
 
 unsafe impl plain::Plain for ct_event {}
 
-pub(crate) mod nft_uapi;
-use nft_uapi::nft_offsets;
+pub(crate) mod nft_hook_uapi;
+use nft_hook_uapi::nft_offsets;
 
 impl Default for nft_offsets {
     fn default() -> Self {
@@ -59,15 +59,15 @@ pub(crate) mod tracking_hook_uapi;
 pub(crate) mod if_vlan_uapi;
 pub(crate) mod skb_hook_uapi;
 
-pub(crate) mod kernel_enqueue_uapi;
-pub(crate) mod kernel_exec_tp_uapi;
-pub(crate) mod kernel_upcall_ret_uapi;
-pub(crate) mod kernel_upcall_tp_uapi;
+pub(crate) mod kernel_enqueue_hook_uapi;
+pub(crate) mod kernel_exec_tp_hook_uapi;
+pub(crate) mod kernel_upcall_ret_hook_uapi;
+pub(crate) mod kernel_upcall_tp_hook_uapi;
 
-pub(crate) mod kernel_flow_tbl_lookup_ret_uapi;
+pub(crate) mod kernel_flow_tbl_lookup_ret_hook_uapi;
 pub(crate) mod ovs_common_uapi;
 pub(crate) mod ovs_operation_uapi;
-pub(crate) mod user_recv_upcall_uapi;
+pub(crate) mod user_recv_upcall_hook_uapi;
 
 pub(crate) mod dev_hook_uapi;
 pub(crate) mod netns_hook_uapi;
