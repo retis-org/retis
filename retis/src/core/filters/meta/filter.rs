@@ -34,20 +34,15 @@ struct LhsNode {
 
 type Lhs = Vec<LhsNode>;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 enum RelOp {
     Eq,
     Gt,
     Lt,
     Ge,
     Le,
+    #[default]
     Ne,
-}
-
-impl Default for RelOp {
-    fn default() -> Self {
-        Self::Ne
-    }
 }
 
 impl fmt::Display for RelOp {
