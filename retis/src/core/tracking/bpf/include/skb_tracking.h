@@ -56,8 +56,14 @@ struct {
 	__type(value, struct tracking_info);
 } tracking_map SEC(".maps");
 
+static __always_inline struct tracking_info *skb_tracking_info(u64 *key)
+{
+	return *key ? bpf_map_lookup_elem(&tracking_map, key) : NULL;
+}
+
 /* Must be called with a valid skb pointer */
-static __always_inline struct tracking_info *skb_tracking_info(struct sk_buff *skb)
+static __always_inline
+struct tracking_info *skb_tracking_info_by_skb(struct sk_buff *skb)
 {
 	struct tracking_info *ti = NULL;
 	u64 head;
@@ -66,18 +72,17 @@ static __always_inline struct tracking_info *skb_tracking_info(struct sk_buff *s
 	if (!head)
 		return 0;
 
-	ti = bpf_map_lookup_elem(&tracking_map, &head);
+	ti = skb_tracking_info(&head);
 	if (!ti)
 		/* It might be temporarily stored it using its skb address. */
-		ti = bpf_map_lookup_elem(&tracking_map, (u64 *)&skb);
+		ti = skb_tracking_info((u64 *)&skb);
 
 	return ti;
 }
 
 static __always_inline int track_skb_start(struct retis_context *ctx)
 {
-	bool inv_head = false, no_tracking = false, free = false,
-		deferred_update = false;
+	bool inv_head = false, no_tracking = false, deferred_update = false;
 	struct tracking_info *ti = NULL, new;
 	struct tracking_config *cfg;
 	u64 head, ksym = ctx->ksym;
@@ -97,7 +102,6 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 	if (cfg) {
 		inv_head = cfg->inv_head;
 		no_tracking = cfg->no_tracking;
-		free = cfg->free;
 	}
 
 	head = (u64)BPF_CORE_READ(skb, head);
@@ -155,14 +159,16 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 
 	/* If the skb gets tracked but the stack_base doesn't match, it
 	 * may mean that a packet got queued and handled in a
-	 * different context in terms of stack.  cfg->free is an
-	 * exception as we want to keep the old reference and consume
-	 * it to delete the original stack_id entry in the case of
-	 * deallocation happening in different contexts (e.g. deferred
-	 * deallocation).
+	 * different context in terms of stack.
 	 */
-	if (!free && ti->stack_ref != ctx->stack_base)
-		ti->stack_ref = track_stack_start(ctx->stack_base);
+	if (ti->stack_ref != ctx->stack_base)
+		ti->stack_ref = ctx->stack_base;
+
+	if (!track_stack_update(ctx->stack_base,
+			       inv_head
+			       ? (u64)skb
+			       : (u64)head))
+		log_error("While tracking stack. Unable to update the entry");
 
 	if (deferred_update)
 		bpf_map_update_elem(&tracking_map, &head, ti, BPF_NOEXIST);
@@ -228,7 +234,7 @@ static __always_inline int track_skb_end(struct retis_context *ctx)
 /* Must be called with a valid skb pointer */
 static __always_inline bool skb_is_tracked(struct sk_buff *skb)
 {
-	return skb_tracking_info(skb) != NULL;
+	return skb_tracking_info_by_skb(skb) != NULL;
 }
 
 #endif /* __CORE_SKB_TRACKING__ */

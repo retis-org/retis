@@ -53,6 +53,7 @@ struct {
 enum {
 	RETIS_F_PASS(PACKET, 0),
 	RETIS_F_PASS(META, 1),
+	RETIS_F_PASS(STACK, 2),
 };
 
 /* Filters chain is an and */
@@ -339,6 +340,8 @@ static __always_inline int chain(struct retis_context *ctx)
 	skb = retis_get_sk_buff(ctx);
 	if (skb)
 		ctx->flags = filter(skb);
+	else if (stack_is_tracked(ctx->stack_base))
+		ctx->flags = RETIS_F_STACK_PASS;
 
 	/* Track the skb. Note that this is done *after* filtering! If no skb is
 	 * available this is a no-op.

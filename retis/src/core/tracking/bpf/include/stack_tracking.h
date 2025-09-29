@@ -49,11 +49,11 @@ static __always_inline u64 get_stack_base(void *ctx, enum kernel_probe_type type
 	return get_base_addr(&stack_addr);
 }
 
-static __always_inline u64 track_stack_start(u64 stack_base)
+static __always_inline u64 track_stack_update(u64 key, u64 value)
 {
-	u64 addr = stack_base;
+	u64 addr = value;
 
-	if (!bpf_map_update_elem(&stack_tracking_map, &stack_base,
+	if (!bpf_map_update_elem(&stack_tracking_map, &key,
 				 &addr, BPF_ANY))
 		return addr;
 
@@ -65,9 +65,20 @@ static __always_inline long track_stack_end(u64 stack_base)
 	return bpf_map_delete_elem(&stack_tracking_map, &stack_base);
 }
 
+static __always_inline u64 stack_get_skb_ref(u64 stack_base)
+{
+	u64 *val;
+
+	val = bpf_map_lookup_elem(&stack_tracking_map, &stack_base);
+	if (!val)
+		return 0;
+
+	return *val;
+}
+
 static __always_inline bool stack_is_tracked(u64 stack_base)
 {
-	return bpf_map_lookup_elem(&stack_tracking_map, &stack_base) != NULL;
+	return stack_get_skb_ref(stack_base);
 }
 
 #endif /* __CORE_STACK_TRACKING__ */

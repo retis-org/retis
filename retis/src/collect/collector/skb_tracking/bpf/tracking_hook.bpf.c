@@ -19,7 +19,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	if (!skb)
 		return 0;
 
-	ti = skb_tracking_info(skb);
+	ti = skb_tracking_info_by_skb(skb);
 	if (!ti)
 		return 0;
 
