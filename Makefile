@@ -10,6 +10,11 @@ ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET)
 RELEASE_VERSION = $(shell tools/localversion)
 RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
 RELEASE_FLAGS = -Dwarnings
+# The flag below must be passed to the linker because
+# there's an issue that strips a section required for the
+# tests (.stapsdt.base). This is a temporary workaround and
+# will be removed once the issue gets fixed.
+RUSTFLAGS_KEEP_SECS := -Clink-arg=-Wl,--no-gc-sections
 
 # Needs to be set because of PT_REGS_PARMx() and any other target
 # specific facility.
@@ -133,9 +138,9 @@ release: ebpf
 test: ebpf
 ifeq ($(COV),1)
 	$(CARGO) llvm-cov clean --workspace -q
-	$(call build,llvm-cov $(if $(VERBOSITY),,-q),running tests with coverage)
+	$(call build,llvm-cov $(if $(VERBOSITY),,-q),running tests with coverage,$(RUSTFLAGS_KEEP_SECS))
 else
-	$(call build,test,building and running tests)
+	$(call build,test,building and running tests,$(RUSTFLAGS_KEEP_SECS))
 endif
 
 bench: ebpf
