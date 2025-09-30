@@ -2,7 +2,7 @@ use std::ops;
 
 use chrono::{DateTime, Utc};
 
-use crate::event_type;
+use crate::{event_type, TimeFormat};
 
 /// Representation of `struct timespec` to hold time values.
 #[event_type]
@@ -76,6 +76,24 @@ impl From<TimeSpec> for DateTime<Utc> {
 impl From<TimeSpec> for i64 {
     fn from(ts: TimeSpec) -> Self {
         ts.sec * TimeSpec::NSECS_IN_SEC + ts.nsec
+    }
+}
+
+pub fn format_date_time(
+    format: TimeFormat,
+    timestamp: u64,
+    monotonic_offset: Option<TimeSpec>,
+) -> String {
+    match format {
+        TimeFormat::MonotonicTimestamp => timestamp.to_string(),
+        TimeFormat::UtcDate => match monotonic_offset {
+            Some(offset) => {
+                let timestamp = TimeSpec::new(0, timestamp as i64) + offset;
+                let time: DateTime<Utc> = timestamp.into();
+                format!("{}", time.format("%F %T.%6f"))
+            }
+            None => timestamp.to_string(),
+        },
     }
 }
 

@@ -475,6 +475,13 @@ impl Collectors {
         self.init_collectors(&mut section_factories, collect)?;
         self.config_filters(collect)?;
         self.register_probes(collect, main_config)?;
+
+        let formatter = if collect.utc {
+            TimeFormat::UtcDate
+        } else {
+            Default::default()
+        };
+        self.factory.config_logger(formatter)?;
         self.start_collectors(section_factories)?;
 
         Ok(())

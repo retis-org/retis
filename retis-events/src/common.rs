@@ -1,7 +1,5 @@
 use std::fmt;
 
-use chrono::{DateTime, Utc};
-
 use crate::*;
 
 /// Startup event section. Contains global information about a collection as a
@@ -46,17 +44,11 @@ pub struct CommonEvent {
 
 impl EventFmt for CommonEvent {
     fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
-        match format.time_format {
-            TimeFormat::MonotonicTimestamp => write!(f, "{}", self.timestamp)?,
-            TimeFormat::UtcDate => match format.monotonic_offset {
-                Some(offset) => {
-                    let timestamp = TimeSpec::new(0, self.timestamp as i64) + offset;
-                    let time: DateTime<Utc> = timestamp.into();
-                    write!(f, "{}", time.format("%F %T.%6f"))?;
-                }
-                None => write!(f, "{}", self.timestamp)?,
-            },
-        }
+        write!(
+            f,
+            "{}",
+            format_date_time(format.time_format, self.timestamp, format.monotonic_offset)
+        )?;
 
         if let Some(smp_id) = self.smp_id {
             write!(f, " ({smp_id})")?;
