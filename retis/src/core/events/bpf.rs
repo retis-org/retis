@@ -19,10 +19,7 @@ use log::{error, log, Level};
 use plain::Plain;
 
 use crate::{
-    bindings::events_uapi::*,
-    event_section_factory,
-    events::*,
-    helpers::{signals::Running, time::monotonic_clock_offset},
+    bindings::events_uapi::*, event_section_factory, events::*, helpers::signals::Running,
 };
 
 /// Raw event sections for common.
@@ -147,10 +144,9 @@ impl BpfEventsFactory {
     }
 
     /// Configure logger timestamp formatting
-    pub(crate) fn config_logger(&mut self, format: TimeFormat) -> Result<()> {
+    pub(crate) fn config_logger(&mut self, format: TimeFormat, monotonic_offset: Option<TimeSpec>) {
         self.time_format = format;
-        self.monotonic_offset = Some(monotonic_clock_offset()?);
-        Ok(())
+        self.monotonic_offset = monotonic_offset;
     }
 
     /// Get the events map fd for reuse.
@@ -487,8 +483,11 @@ impl BpfEventsFactory {
     pub(crate) fn new() -> Result<BpfEventsFactory> {
         Ok(BpfEventsFactory {})
     }
-    pub(crate) fn config_logger(&mut self, _format: TimeFormat) -> Result<()> {
-        Ok(())
+    pub(crate) fn config_logger(
+        &mut self,
+        _formatter: TimeFormat,
+        _monotonic_offset: Option<TimeSpec>,
+    ) {
     }
     pub(crate) fn map_fd(&self) -> i32 {
         0
