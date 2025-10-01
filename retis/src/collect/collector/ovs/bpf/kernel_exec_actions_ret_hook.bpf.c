@@ -3,11 +3,10 @@
 
 /* Hook for kretprobe:ovs_packet_cmd_execute. */
 DEFINE_HOOK_RAW(
-	u64 tid = bpf_get_current_pid_tgid();
-
+	u64 sb = ctx->stack_base;
 	/* The execute command has finished. Remove the entry from the
 	* inflight_exec map. */
-	bpf_map_delete_elem(&inflight_exec, &tid);
+	bpf_map_delete_elem(&inflight_exec, &sb);
 	return 0;
 )
 

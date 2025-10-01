@@ -47,6 +47,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         ctx_hook: Option<Hook>,
+        stack_sz: u32,
     ) -> Result<()> {
         if self.skel.is_some() {
             bail!("Kprobe builder already initialized");
@@ -62,6 +63,7 @@ impl<'a> ProbeBuilder for KprobeBuilder<'a> {
         rodata.kretprobe = self.kretprobe;
         rodata.nhooks = hooks.len() as u32;
         rodata.log_level = log::max_level() as u8;
+        rodata.THREAD_SIZE = stack_sz;
 
         reuse_map_fds(skel.open_object_mut(), &map_fds)?;
 
@@ -259,7 +261,7 @@ mod tests {
 
         let mut builder = KprobeBuilder::new().unwrap();
 
-        assert!(builder.init(Vec::new(), Vec::new(), None).is_ok());
+        assert!(builder.init(Vec::new(), Vec::new(), None, 4096).is_ok());
         assert!(builder
             .add_probe(Probe::kprobe(Symbol::from_name("consume_skb").unwrap()).unwrap())
             .is_ok());

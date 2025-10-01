@@ -38,7 +38,9 @@ use crate::{
             kernel::{probe_stack::ProbeStack, utils::probe_from_cli},
             *,
         },
-        tracking::{gc::TrackingGC, skb_tracking::init_tracking},
+        tracking::{
+            gc::TrackingGC, skb_tracking::init_tracking, stack_tracking::init_stack_tracking,
+        },
     },
     events::*,
     helpers::{signals::Running, time::*},
@@ -106,8 +108,9 @@ pub(crate) struct Collectors {
     known_kernel_types: HashSet<String>,
     run: Running,
     tracking_gc: Option<TrackingGC>,
-    // Keep a reference on the tracking configuration map.
+    // Keep a reference on both the skb and stack tracking configuration maps.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
+    stack_tracking_config_map: Option<libbpf_rs::MapHandle>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
     // Did we mount tracefs/debugfs ourselves? If so, contains the target dir.
@@ -127,6 +130,7 @@ impl Collectors {
             run: Running::new(),
             tracking_gc: None,
             tracking_config_map: None,
+            stack_tracking_config_map: None,
             events_factory: Arc::new(RetisEventsFactory::default()),
             mounted: None,
         })
@@ -353,6 +357,7 @@ impl Collectors {
             let (gc, map) = init_tracking(self.probes.builder_mut()?)?;
             self.tracking_gc = Some(gc);
             self.tracking_config_map = Some(map);
+            self.stack_tracking_config_map = Some(init_stack_tracking(self.probes.builder_mut()?)?);
         }
         Self::setup_filters(self.probes.builder_mut()?, collect)
     }

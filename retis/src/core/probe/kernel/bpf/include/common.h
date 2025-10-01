@@ -12,6 +12,7 @@
 #include <packet_filter.h>
 #include <meta_filter.h>
 #include <skb_tracking.h>
+#include <stack_tracking.h>
 
 /* Kernel section of the event data. */
 struct kernel_event {
@@ -52,6 +53,7 @@ struct {
 enum {
 	RETIS_F_PASS(PACKET, 0),
 	RETIS_F_PASS(META, 1),
+	RETIS_F_PASS(STACK, 2),
 };
 
 /* Filters chain is an and */
@@ -61,7 +63,7 @@ enum {
 
 #define RETIS_ALL_FILTERS	(RETIS_F_PACKET_PASS | RETIS_F_META_PASS)
 
-#define RETIS_TRACKABLE(mask)	(!(mask ^ RETIS_ALL_FILTERS))
+#define RETIS_TRACKABLE(ctx)	(!(ctx->flags ^ RETIS_ALL_FILTERS))
 
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
@@ -78,8 +80,6 @@ enum {
  *
  * char __license[] SEC("license") = "GPL";
  * ```
- *
- * Do not forget to add the hook to build.rs
  */
 #define DEFINE_NAMED_HOOK(hook_name, fmode, fflags, statements)			\
 	SEC("ext/hook")								\
@@ -89,8 +89,8 @@ enum {
 		if (!ctx || !event)						\
 			return 0;						\
 		if (!((fmode == F_OR) ?						\
-		      (ctx->filters_ret & (fflags)) :				\
-		      ((ctx->filters_ret & (fflags)) == (fflags))))		\
+		      (ctx->flags & (fflags)) :				\
+		      ((ctx->flags & (fflags)) == (fflags))))		\
 			return 0;						\
 		statements							\
 	}
@@ -103,7 +103,7 @@ enum {
 
 /* Helper that defines a hook that doesn't depend on any filtering
  * result and runs regardless.  Filtering outcome is still available
- * through ctx->filters_ret for actions that need special handling not
+ * through ctx->flags for actions that need special handling not
  * covered by DEFINE_HOOK([F_AND|F_OR], flags, ...).
  *
  * To define a hook in a collector hook, say hook.bpf.c,
@@ -117,8 +117,6 @@ enum {
  *
  * char __license[] SEC("license") = "GPL";
  * ```
- *
- * Do not forget to add the hook to build.rs
  */
 #define DEFINE_HOOK_RAW(statements)				\
 	DEFINE_NAMED_HOOK(__PROG_NAME, F_AND, 0, statements)
@@ -131,7 +129,7 @@ const volatile u32 nhooks = 0;
  * it. Credits to the XDP dispatcher.
  */
 #define HOOK(x)									\
-	__attribute__ ((noinline))						\
+	__noinline								\
 	int hook##x(struct retis_context *ctx, struct retis_raw_event *event) {	\
 		volatile int ret = 0;						\
 		if (!ctx || !event)						\
@@ -151,7 +149,7 @@ HOOK(9)
 /* Keep in sync with its Rust counterpart in crate::core::probe::kernel */
 #define HOOK_MAX 10
 
-__attribute__ ((noinline))
+__noinline
 int ctx_hook(struct retis_context *ctx)
 {
 	volatile int ret = 0;
@@ -250,25 +248,22 @@ FILTER(l2)
 FILTER(l3)
 FILTER(meta)
 
-static __always_inline void filter(struct retis_context *ctx)
+static __always_inline u32 filter(struct sk_buff *skb)
 {
 	struct retis_packet_filter_ctx fctx = {};
-	struct sk_buff *skb;
+	u32 flags = 0;
 	char *head;
 
-	skb = retis_get_sk_buff(ctx);
 	if (!skb)
-		return;
+		return 0;
 	/* Special case the packet filtering logic if the skb is already
 	 * tracked. This helps in may ways, including:
 	 * - Performances.
 	 * - Following packet transformations.
 	 * - Filtering packets when the whole data isn't available anymore.
 	 */
-	if (skb_is_tracked(skb)) {
-		ctx->filters_ret |= RETIS_ALL_FILTERS;
-		return;
-	}
+	if (skb_is_tracked(skb))
+		return RETIS_ALL_FILTERS;
 
 	head = (char *)BPF_CORE_READ(skb, head);
 	fctx.len = BPF_CORE_READ(skb, len);
@@ -281,23 +276,23 @@ static __always_inline void filter(struct retis_context *ctx)
 	 */
 	if (is_mac_data_valid(skb)) {
 		fctx.data = head + BPF_CORE_READ(skb, mac_header);
-		ctx->filters_ret |=
-			!!filter_l2(&fctx) << RETIS_F_PACKET_PASS_SH;
+		flags |= !!filter_l2(&fctx) << RETIS_F_PACKET_PASS_SH;
 		goto next_filter;
 	}
 
 	if (!is_network_data_valid(skb))
-		return;
+		goto ret;
 
 	fctx.data = head + BPF_CORE_READ(skb, network_header);
 	/* L3 filter can be a nop, meaning the criteria are not enough to
 	 * express a match in terms of L3 only.
 	 */
-	ctx->filters_ret |=
-		!!filter_l3(&fctx) << RETIS_F_PACKET_PASS_SH;
+	flags |= !!filter_l3(&fctx) << RETIS_F_PACKET_PASS_SH;
 
 next_filter:
-	ctx->filters_ret |= (!!filter_meta(skb)) << RETIS_F_META_PASS_SH;
+	flags |= !!filter_meta(skb) << RETIS_F_META_PASS_SH;
+ret:
+	return flags;
 }
 
 /* The chaining function, which contains all our core probe logic. This is
@@ -316,6 +311,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct kernel_event *k;
+	struct sk_buff *skb;
 	int ret;
 
 	/* Check if the collection is enabled, otherwise bail out. Once we have
@@ -337,7 +333,11 @@ static __always_inline int chain(struct retis_context *ctx)
 	if (ret)
 		log_warning("ctx extension failed: %d", ret);
 
-	filter(ctx);
+	skb = retis_get_sk_buff(ctx);
+	if (skb)
+		ctx->flags = filter(skb);
+	else if (stack_is_tracked(ctx->stack_base))
+		ctx->flags = RETIS_F_STACK_PASS;
 
 	/* Track the skb. Note that this is done *after* filtering! If no skb is
 	 * available this is a no-op.
@@ -346,8 +346,17 @@ static __always_inline int chain(struct retis_context *ctx)
 	 * logic runs even if later ops fail: we don't want to miss information
 	 * because of non-fatal errors!
 	 */
-	if (RETIS_TRACKABLE(ctx->filters_ret))
+	if (RETIS_TRACKABLE(ctx))
 		track_skb_start(ctx);
+	else if (skb)
+		/* Terminate any potentially existing entry not
+		 * associated with a tracked skb. Blind termination
+		 * approach is supposed to be more performing in the
+		 * worst case and will lead to a simple lookup failure
+		 * in most cases. This acts as packet path garbage
+		 * collection (e.g. skb_tracking stale entry hanging).
+		 */
+		track_stack_end(ctx->stack_base);
 
 	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
 	 * to allocate and fill an event to drop it later on.
@@ -425,7 +434,7 @@ exit:
 	/* Cleanup stage while tracking an skb. If no skb is available this is a
 	 * no-op.
 	 */
-	if (RETIS_TRACKABLE(ctx->filters_ret))
+	if (RETIS_TRACKABLE(ctx))
 		track_skb_end(ctx);
 
 	return 0;

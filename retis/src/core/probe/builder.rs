@@ -27,6 +27,7 @@ pub(super) trait ProbeBuilder {
         map_fds: Vec<(String, RawFd)>,
         hooks: Vec<Hook>,
         ctx_hook: Option<Hook>,
+        stack_sz: u32,
     ) -> Result<()>;
     /// Add a probe to the probe builder.
     fn add_probe(&mut self, probe: Probe) -> Result<()>;

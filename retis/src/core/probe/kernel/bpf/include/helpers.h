@@ -1,6 +1,8 @@
 #ifndef __CORE_PROBE_KERNEL_BPF_HELPERS__
 #define __CORE_PROBE_KERNEL_BPF_HELPERS__
 
+#include <vmlinux.h>
+
 #include <bpf/bpf_tracing.h>
 
 #define MIN(a, b)	(((a) < (b)) ? (a) : (b))
@@ -11,7 +13,16 @@
 #define BUILD_BUG_ON(cond)
 #endif
 
+enum bpf_attach_type___x { BPF_TRACE_KPROBE_MULTI };
+
 enum bpf_func_id___x { BPF_FUNC_get_func_ip___5_15_0 = 42 };
+
+static __always_inline bool kprobe_multi_has_cookies(void)
+{
+	return bpf_core_enum_value_exists(enum bpf_attach_type___x,
+					  BPF_TRACE_KPROBE_MULTI) &&
+		bpf_core_field_exists(((struct bpf_kprobe_multi_link *)0)->cookies);
+}
 
 /* The following helper retrieves the function IP in kprobes.
  *

@@ -107,7 +107,7 @@ DEFINE_HOOK_RAW(
 	struct sw_flow_key *key;
 	struct exec_event *exec;
 	struct execute_actions_ctx *ectx;
-	u64 tid = bpf_get_current_pid_tgid();
+	u64 sb = ctx->stack_base;
 
 	key = (struct sw_flow_key *) ctx->regs.reg[2];
 	if (!key)
@@ -117,7 +117,7 @@ DEFINE_HOOK_RAW(
 	if (!attr)
 		return 0;
 
-	ectx = bpf_map_lookup_elem(&inflight_exec, &tid);
+	ectx = bpf_map_lookup_elem(&inflight_exec, &sb);
 	/* Filtering is done at the ovs_execute_actions kprobe. */
 	if (!ectx)
 		return 0;

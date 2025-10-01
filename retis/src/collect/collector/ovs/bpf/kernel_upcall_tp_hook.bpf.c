@@ -15,7 +15,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	struct dp_upcall_info *upcall;
 	struct upcall_context uctx = {};
 	struct upcall_event *upcall_event;
-	u64 tid = bpf_get_current_pid_tgid();
+	u64 sb = ctx->stack_base;
 
 	upcall = (struct dp_upcall_info *) ctx->regs.reg[3];
 	if (!upcall)
@@ -35,7 +35,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 	uctx.ts = ctx->timestamp;
 	uctx.cpu = upcall_event->cpu;
 
-	if (!bpf_map_update_elem(&inflight_upcalls, &tid, &uctx, BPF_ANY))
+	if (!bpf_map_update_elem(&inflight_upcalls, &sb, &uctx, BPF_ANY))
 		return 0;
 
 	return 0;
