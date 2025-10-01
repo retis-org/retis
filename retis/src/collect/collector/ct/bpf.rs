@@ -7,7 +7,7 @@ use btf_rs::Type;
 use std::net::Ipv6Addr;
 
 use crate::{
-    bindings::ct_uapi::*,
+    bindings::ct_hook_uapi::*,
     core::{
         events::{
             parse_raw_section, BpfRawSection, EventSectionFactory, FactoryId,

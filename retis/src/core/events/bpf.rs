@@ -94,6 +94,10 @@ pub(crate) struct BpfEventsFactory {
     handle: Option<thread::JoinHandle<()>>,
     log_handle: Option<thread::JoinHandle<()>>,
     run_state: Running,
+    /// Time formatter selector.
+    time_format: TimeFormat,
+    /// Offset of the monotonic clock to the wall-clock time.
+    monotonic_offset: Option<TimeSpec>,
 }
 
 #[cfg(not(test))]
@@ -134,7 +138,15 @@ impl BpfEventsFactory {
             handle: None,
             log_handle: None,
             run_state: Running::new(),
+            time_format: Default::default(),
+            monotonic_offset: None,
         })
+    }
+
+    /// Configure logger timestamp formatting
+    pub(crate) fn config_logger(&mut self, format: TimeFormat, monotonic_offset: Option<TimeSpec>) {
+        self.time_format = format;
+        self.monotonic_offset = monotonic_offset;
     }
 
     /// Get the events map fd for reuse.
@@ -220,6 +232,8 @@ impl BpfEventsFactory {
         };
 
         let run_state = self.run_state.clone();
+        let time_format = self.time_format;
+        let monotonic_offset = self.monotonic_offset;
         // Closure to handle the log events coming from the BPF part.
         let process_log = move |data: &[u8]| -> i32 {
             if data.len() != mem::size_of::<retis_log_event>() {
@@ -254,7 +268,13 @@ impl BpfEventsFactory {
             };
 
             match raw_to_string!(&log_event.msg) {
-                Ok(msg) => log!(log_level, "[eBPF] {msg}"),
+                Ok(msg) => {
+                    log!(
+                        log_level,
+                        "[eBPF] {} {msg}",
+                        format_date_time(time_format, log_event.ts, monotonic_offset)
+                    );
+                }
                 Err(e) => error!("Unable to convert eBPF log string: {e}"),
             }
 
@@ -462,6 +482,12 @@ pub(crate) struct BpfEventsFactory;
 impl BpfEventsFactory {
     pub(crate) fn new() -> Result<BpfEventsFactory> {
         Ok(BpfEventsFactory {})
+    }
+    pub(crate) fn config_logger(
+        &mut self,
+        _formatter: TimeFormat,
+        _monotonic_offset: Option<TimeSpec>,
+    ) {
     }
     pub(crate) fn map_fd(&self) -> i32 {
         0

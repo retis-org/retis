@@ -115,6 +115,8 @@ pub(crate) struct Collectors {
     events_factory: Arc<RetisEventsFactory>,
     // Did we mount tracefs/debugfs ourselves? If so, contains the target dir.
     mounted: Option<PathBuf>,
+    // Monotonic clock offset stored once and reused.
+    monotonic_offset: TimeSpec,
 }
 
 impl Collectors {
@@ -133,6 +135,7 @@ impl Collectors {
             stack_tracking_config_map: None,
             events_factory: Arc::new(RetisEventsFactory::default()),
             mounted: None,
+            monotonic_offset: monotonic_clock_offset()?,
         })
     }
 
@@ -345,7 +348,7 @@ impl Collectors {
                 retis_version: option_env!("RELEASE_VERSION")
                     .unwrap_or("unspec")
                     .to_string(),
-                clock_monotonic_offset: monotonic_clock_offset()?,
+                clock_monotonic_offset: self.monotonic_offset,
             });
             Ok(())
         })
@@ -480,6 +483,12 @@ impl Collectors {
         self.init_collectors(&mut section_factories, collect)?;
         self.config_filters(collect)?;
         self.register_probes(collect, main_config)?;
+        let (formatter, offset) = if collect.utc {
+            (TimeFormat::UtcDate, Some(self.monotonic_offset))
+        } else {
+            Default::default()
+        };
+        self.factory.config_logger(formatter, offset);
         self.start_collectors(section_factories)?;
 
         Ok(())
@@ -535,7 +544,7 @@ impl Collectors {
                 } else {
                     TimeFormat::MonotonicTimestamp
                 })
-                .monotonic_offset(monotonic_clock_offset()?)
+                .monotonic_offset(self.monotonic_offset)
                 .print_ll(collect.print_ll);
 
             printers.push(PrintEvent::new(
