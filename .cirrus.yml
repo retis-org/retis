@@ -9,7 +9,7 @@ cargo_task_tempate: &cargo_task_template
       - cat Cargo.lock
   setup_script:
     - apt-get update
-    - apt-get -y install llvm clang curl libelf-dev libpcap-dev locales python3-pip make jq
+    - apt-get -y install llvm clang curl libelf-dev libpcap-dev locales python3-pip python3-venv make jq
     - ln -s /usr/include/asm-generic /usr/include/asm
     - rustup component add rustfmt
     - rustup component add clippy
@@ -35,6 +35,14 @@ unittest_task:
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
     git remote update origin
     make check-ebpf BASE_COMMIT=origin/$CIRRUS_BASE_BRANCH
+  doc_check_script: |
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python3 -m pip install -r docs/requirements.txt
+    # Build and delete given the lack of dry run options.
+    mkdocs build --site-dir="/tmp/mkdocs-build"
+    rm -rf /tmp/mkdocs-build
+    deactivate && rm -rf .venv
 benchmark_task:
   << : *cargo_task_template
   container:
