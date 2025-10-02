@@ -123,6 +123,10 @@ impl Collector for NftCollector {
         Ok(Self::default())
     }
 
+    fn known_kernel_types(&self) -> Option<Vec<&'static str>> {
+        Some(vec!["struct nft_traceinfo *"])
+    }
+
     fn can_run(&mut self, cli: &Collect) -> Result<()> {
         let inspector = inspect::inspector()?;
 
