@@ -20,6 +20,9 @@
 
 ## Blog articles
 
+- [Filtering packets from anywhere in the networking stack](https://developers.redhat.com/articles/2025/10/02/filtering-packets-anywhere-networking-stack)
+  describes the filtering concepts adopted by Retis, the associated
+  expectations and interactions.
 - [Dumping packets from anywhere in the networking stack](https://developers.redhat.com/articles/2025/01/09/dumping-packets-anywhere-networking-stack)
   shows how to use the pcap sub-command to inspect packets at post-processing
   time with external tools, such as tcpdump and wireshark.
