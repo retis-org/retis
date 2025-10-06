@@ -1,5 +1,5 @@
 [workspace.package]
-version = "1.6.2"
+version = "1.6.3"
 license = "GPL-2.0-only"
 repository = "https://github.com/retis-org/retis-org"
 homepage = "https://github.com/retis-org/retis-org"
