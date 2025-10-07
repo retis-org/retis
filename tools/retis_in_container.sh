@@ -18,6 +18,10 @@ if command -v podman >/dev/null; then
 elif command -v docker >/dev/null; then
 	docker pull $RETIS_IMAGE:$RETIS_TAG &>/dev/null
 	runtime=docker
+	# Mount permission is disabled in the default Docker AppArmor profile,
+	# but is needed to mount tracefs/debugfs.
+	[[ $@ =~ "--allow-system-changes" ]] && \
+		extra_args="--security-opt apparmor=unconfined"
 else
 	echo "No container runtime detected. Please install 'podman' or 'docker'."
 	exit -1
