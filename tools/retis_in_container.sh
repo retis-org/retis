@@ -42,7 +42,7 @@ for kconfig in /proc/config.gz \
         kconfig_map="$kconfig_map -v ${kconfig}:${kconfig}:ro"
 	# Map the first item to /kconfig to support older versions of the container
 	# image.
-	[[ -z $kconfig_legacy_map ]] && kconfig_legacy_map="-v ${kconfig}:/kconfig"
+	[[ -z $kconfig_legacy_map ]] && kconfig_legacy_map="-v ${kconfig}:/kconfig:ro"
     fi
 done
 if [[ -z $kconfig_map ]]; then
