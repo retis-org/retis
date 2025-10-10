@@ -46,7 +46,7 @@ impl EventFmt for PacketEvent {
 /// Represents a raw packet. Stored internally as a `Vec<u8>`.
 /// We don't use #[event_type] as we're implementing serde::Serialize and
 /// serde::Deserialize manually.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, schemars::JsonSchema)]
 #[cfg_attr(feature = "python", pyclass)]
 pub struct RawPacket(pub Vec<u8>);
 
