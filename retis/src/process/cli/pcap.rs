@@ -24,7 +24,10 @@ use pcap_file::{
 use crate::{
     cli::*,
     core::{kernel::Symbol, probe::kernel::utils::*},
-    events::{file::FileEventsFactory, *},
+    events::{
+        helpers::{file::FileEventsFactory, time::TimeSpec},
+        *,
+    },
     helpers::signals::Running,
 };
 
@@ -298,7 +301,7 @@ where
     run.register_term_signals()?;
 
     // Start our events factory.
-    let mut factory = FileEventsFactory::new(input)?;
+    let mut factory = FileEventsFactory::new(Box::new(File::open(input)?))?;
 
     // See if we matched (not processed!) at least one event.
     let mut matched = false;
@@ -343,7 +346,7 @@ fn list_probes(input: &Path) -> Result<Vec<String>> {
     run.register_term_signals()?;
 
     // Start our events factory.
-    let mut factory = FileEventsFactory::new(input)?;
+    let mut factory = FileEventsFactory::new(Box::new(File::open(input)?))?;
 
     while run.running() {
         match factory.next_event()? {

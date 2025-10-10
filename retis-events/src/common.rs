@@ -1,6 +1,9 @@
 use std::fmt;
 
-use crate::*;
+use crate::{
+    helpers::{file_rotate::RotationPolicy, time::*},
+    *,
+};
 
 /// Startup event section. Contains global information about a collection as a
 /// whole, with data gathered at collection startup time.
@@ -10,12 +13,24 @@ pub struct StartupEvent {
     pub retis_version: String,
     /// CLOCK_MONOTONIC offset in regards to local machine time.
     pub clock_monotonic_offset: TimeSpec,
+    /// Information about the split file, if any.
+    pub split_file: Option<SplitFile>,
 }
 
 impl EventFmt for StartupEvent {
     fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         write!(f, "Retis version {}", self.retis_version)
     }
+}
+
+/// Information about a partial event file generated while splitting the full
+/// collection into multiple files.
+#[event_type]
+pub struct SplitFile {
+    /// Split file id in the set of split files; first one is "0".
+    pub id: u32,
+    /// Rotation policy used when generating files.
+    pub policy: RotationPolicy,
 }
 
 /// Information about a given task.

@@ -3,8 +3,8 @@
 //! Sort rearranges the events so they are grouped by skb tracking id (or OVS queue_id if present)
 
 use std::{
-    fs::OpenOptions,
-    io::{stdout, BufWriter},
+    fs::{File, OpenOptions},
+    io::{self, stdout, BufWriter, ErrorKind},
     path::PathBuf,
 };
 
@@ -13,7 +13,7 @@ use clap::Parser;
 
 use crate::{
     cli::*,
-    events::{file::FileEventsFactory, *},
+    events::{helpers::file::*, *},
     helpers::signals::Running,
     process::{display::*, series::EventSorter, tracking::AddTracking},
 };
@@ -76,9 +76,9 @@ impl SubCommandParserRunner for Sort {
         run.register_term_signals()?;
 
         // Create event factory.
-        let mut factory = FileEventsFactory::new(self.input.as_path())?;
+        let mut factory = FileEventsFactory::new(Box::new(File::open(self.input.as_path())?))?;
 
-        if matches!(factory.file_type(), file::FileType::Series) {
+        if matches!(factory.file_type(), FileType::Series) {
             log::info!("File already sorted");
             return Ok(());
         }
@@ -148,9 +148,20 @@ impl SubCommandParserRunner for Sort {
                         while series.len() >= self.max_buffer {
                             // Flush the oldest series
                             match series.pop_oldest()? {
-                                Some(series) => printers
-                                    .iter_mut()
-                                    .try_for_each(|p| p.process_one(&series))?,
+                                Some(series) => {
+                                    for p in printers.iter_mut() {
+                                        if let Err(e) = p.process_one(&series) {
+                                            match e.downcast_ref::<io::Error>() {
+                                                Some(io_error)
+                                                    if io_error.kind() == ErrorKind::BrokenPipe =>
+                                                {
+                                                    return Ok(());
+                                                }
+                                                _ => return Err(e),
+                                            }
+                                        }
+                                    }
+                                }
                                 None => break,
                             };
                         }
@@ -162,9 +173,18 @@ impl SubCommandParserRunner for Sort {
         // Flush remaining events
         while series.len() > 0 {
             match series.pop_oldest()? {
-                Some(series) => printers
-                    .iter_mut()
-                    .try_for_each(|p| p.process_one(&series))?,
+                Some(series) => {
+                    for p in printers.iter_mut() {
+                        if let Err(e) = p.process_one(&series) {
+                            match e.downcast_ref::<io::Error>() {
+                                Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
+                                    return Ok(());
+                                }
+                                _ => return Err(e),
+                            }
+                        }
+                    }
+                }
                 None => break,
             };
         }

@@ -3,7 +3,7 @@
 //! This module contains python bindings for retis events so that they can
 //! be inspected in post-processing tools written in python.
 
-use std::{collections::HashMap, ffi::CString, path::PathBuf};
+use std::{collections::HashMap, ffi::CString, fs::File, path::PathBuf};
 
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError},
@@ -11,7 +11,7 @@ use pyo3::{
     types::{IntoPyDict, PyBool, PyList},
 };
 
-use super::*;
+use crate::{helpers::file::*, *};
 
 /// Python representation of an Event.
 ///
@@ -208,17 +208,19 @@ impl PyEventSeries {
 /// ```
 #[pyclass(name = "EventReader")]
 pub(crate) struct PyEventReader {
-    pub(crate) factory: file::FileEventsFactory,
+    pub(crate) factory: FileEventsFactory,
 }
 
 #[pymethods]
 impl PyEventReader {
     #[new]
     pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
-        let factory = file::FileEventsFactory::new(path)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let factory = FileEventsFactory::new(Box::new(
+            File::open(path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        ))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-        if matches!(factory.file_type(), file::FileType::Series) {
+        if matches!(factory.file_type(), FileType::Series) {
             return Err(PyRuntimeError::new_err(
                 "Cannot create a EventReader from a sorted file. Use an SeriesReader instead",
             ));
@@ -265,17 +267,19 @@ impl PyEventReader {
 /// ```
 #[pyclass(name = "SeriesReader")]
 pub(crate) struct PySeriesReader {
-    factory: file::FileEventsFactory,
+    factory: FileEventsFactory,
 }
 
 #[pymethods]
 impl PySeriesReader {
     #[new]
     pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
-        let factory = file::FileEventsFactory::new(path)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let factory = FileEventsFactory::new(Box::new(
+            File::open(path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        ))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
-        if matches!(factory.file_type(), file::FileType::Event) {
+        if matches!(factory.file_type(), FileType::Event) {
             return Err(PyRuntimeError::new_err(
                 "Cannot create a SeriesReader from an unsorted file. Use an EventReader instead",
             ));
@@ -329,15 +333,17 @@ impl PySeriesReader {
 #[pyclass(name = "EventFile")]
 pub(crate) struct PyEventFile {
     path: PathBuf,
-    ftype: file::FileType,
+    ftype: FileType,
 }
 
 #[pymethods]
 impl PyEventFile {
     #[new]
     pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
-        let temp = file::FileEventsFactory::new(&path)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let temp = FileEventsFactory::new(Box::new(
+            File::open(&path).map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        ))
+        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         let ftype = temp.file_type();
         Ok(PyEventFile {
             path,
@@ -348,8 +354,8 @@ impl PyEventFile {
     // Returns whether the file is sorted.
     pub(crate) fn sorted(&self) -> PyResult<bool> {
         match self.ftype {
-            file::FileType::Series => Ok(true),
-            file::FileType::Event => Ok(false),
+            FileType::Series => Ok(true),
+            FileType::Event => Ok(false),
         }
     }
 

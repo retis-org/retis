@@ -3,15 +3,18 @@
 //! Print is a simple post-processing command that just parses events and prints them back to
 //! stdout
 
-use std::{io::stdout, path::PathBuf};
+use std::{
+    io::{self, stdout, ErrorKind},
+    path::PathBuf,
+};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 
 use crate::{
     cli::*,
     events::{
-        file::{FileEventsFactory, FileType},
+        helpers::{file::*, file_rotate::*},
         *,
     },
     helpers::signals::Running,
@@ -21,10 +24,17 @@ use crate::{
 #[derive(Parser, Debug, Default)]
 #[command(name = "print", about = "Print stored events to stdout.")]
 pub(crate) struct Print {
-    /// File from which to read events.
-    #[arg(default_value = "retis.data")]
-    pub(super) input: PathBuf,
-    #[arg(long, help = "Format used when printing an event.")]
+    #[arg(
+        help = "File from which to read events. By default both the single default filename and its split version are used.
+
+When reading a split file, the next one in the set will be read after EOF if:
+- Not explicitly setting this parameter (aka using the default behavior).
+- Or appending '..' to the file name, e.g. `retis.data.1..`.
+
+[default: retis.data + retis.data.0]"
+    )]
+    pub(super) input: Option<PathBuf>,
+    #[arg(long, help = "Format used when printing an event")]
     #[clap(value_enum, default_value_t=CliDisplayFormat::MultiLine)]
     pub(super) format: CliDisplayFormat,
     #[arg(long, help = "Print the time as UTC")]
@@ -39,8 +49,21 @@ impl SubCommandParserRunner for Print {
         let run = Running::new();
         run.register_term_signals()?;
 
+        // Parse input file path and set default value if none.
+        let input = match &self.input {
+            Some(input) => input
+                .to_str()
+                .ok_or_else(|| anyhow!("Cannot convert input file to str"))?,
+            None => "retis.data",
+        };
+        let (input, follow_policy) = match input.strip_suffix("..") {
+            Some(stripped) => (stripped, true),
+            None => (input, self.input.is_none()),
+        };
+
         // Create event factory.
-        let mut factory = FileEventsFactory::new(self.input.as_path())?;
+        let reader = RotateReader::new(PathBuf::from(input), self.input.is_none(), follow_policy)?;
+        let mut factory = FileEventsFactory::new(Box::new(reader))?;
 
         // Format.
         let format = DisplayFormat::new()
@@ -60,7 +83,16 @@ impl SubCommandParserRunner for Print {
 
                 while run.running() {
                     match factory.next_event()? {
-                        Some(event) => event_output.process_one(&event)?,
+                        Some(event) => {
+                            if let Err(e) = event_output.process_one(&event) {
+                                match e.downcast_ref::<io::Error>() {
+                                    Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
+                                        break
+                                    }
+                                    _ => return Err(e),
+                                }
+                            }
+                        }
                         None => break,
                     }
                 }
@@ -72,7 +104,16 @@ impl SubCommandParserRunner for Print {
 
                 while run.running() {
                     match factory.next_series()? {
-                        Some(series) => series_output.process_one(&series)?,
+                        Some(series) => {
+                            if let Err(e) = series_output.process_one(&series) {
+                                match e.downcast_ref::<io::Error>() {
+                                    Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
+                                        break
+                                    }
+                                    _ => return Err(e),
+                                }
+                            }
+                        }
                         None => break,
                     }
                 }

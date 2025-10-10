@@ -1,4 +1,4 @@
-use std::io::{ErrorKind, Write};
+use std::io::Write;
 
 use anyhow::Result;
 
@@ -38,11 +38,7 @@ impl PrintEvent {
                     if format.multiline {
                         event.push('\n');
                     }
-                    if let Err(e) = self.writer.write_all(event.as_bytes()) {
-                        if e.kind() != ErrorKind::BrokenPipe {
-                            return Err(e.into());
-                        }
-                    }
+                    self.writer.write_all(event.as_bytes())?;
                 }
             }
             PrintEventFormat::Json => {
@@ -99,11 +95,7 @@ impl PrintSeries {
                 if !content.is_empty() {
                     content.push('\n');
 
-                    if let Err(e) = self.writer.write_all(content.as_bytes()) {
-                        if e.kind() != ErrorKind::BrokenPipe {
-                            return Err(e.into());
-                        }
-                    }
+                    self.writer.write_all(content.as_bytes())?;
                 }
             }
             PrintEventFormat::Json => {
