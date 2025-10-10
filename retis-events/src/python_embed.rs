@@ -28,12 +28,17 @@ pub fn shell_execute(file: PathBuf, script: Option<&PathBuf>, args: &[String]) -
 
     Python::with_gil(|py| -> PyResult<()> {
         let shell = PyShell::new(py, event_file)?;
-        if let Some(script) = script {
-            let script = fs::read_to_string(script)?;
-            shell.run(&CString::new(script)?, &argv)
-        } else {
-            shell.interact()
+        let ret = match script {
+            Some(script) => {
+                let script = fs::read_to_string(script)?;
+                shell.run(&CString::new(script)?, &argv)
+            }
+            None => shell.interact(),
+        };
+        if let Err(e) = &ret {
+            e.display(py);
         }
+        ret
     })?;
     Ok(())
 }
