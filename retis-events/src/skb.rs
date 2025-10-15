@@ -28,7 +28,7 @@ impl EventFmt for SkbEvent {
                 space.write(f)?;
                 write!(f, "vlan_accel (")?;
 
-                match helpers::etype_str(EtherType::new(vlan.proto)) {
+                match helpers::net::etype_str(EtherType::new(vlan.proto)) {
                     Some(etype) => write!(f, "ethertype {etype} ({:#06x})", vlan.proto)?,
                     None => write!(f, "ethertype ({:#06x})", vlan.proto)?,
                 }
