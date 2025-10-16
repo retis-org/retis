@@ -69,6 +69,7 @@ impl EventCompatibility for serde_json::Value {
                     .ok_or_else(|| anyhow!("Failed to convert {val} to a serde_json Number"))?,
             ),
             CompatValue::String(val) => serde_json::Value::String(val.to_string()),
+            CompatValue::Section => serde_json::Value::Object(serde_json::Map::new()),
         };
 
         match target {

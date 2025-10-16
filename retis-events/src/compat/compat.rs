@@ -151,7 +151,8 @@ pub(crate) enum CompatValue {
     Int(i64),
     Uint(u64),
     String(&'static str),
-    // TODO: event sections?
+    // Non-leaf compound types
+    Section,
 }
 
 /// Fields to remove/add/move are pointed by `target`s. They are expressed as a
