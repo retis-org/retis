@@ -75,7 +75,7 @@ impl EventCompatibility for serde_json::Value {
         match target {
             serde_json::Value::Object(map) => {
                 if map.contains_key(leaf) {
-                    bail!("Destination field ('{target}') already exists')");
+                    bail!("Destination field ('{target}') already exists");
                 }
                 let _ = map.insert(leaf.to_string(), value);
             }
