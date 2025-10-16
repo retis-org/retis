@@ -114,10 +114,7 @@ pub(crate) fn compatibility_fixup(
     let fixups = FIXUPS
         .iter()
         .enumerate()
-        .filter_map(|(i, fixup)| match i {
-            x if x >= boundary => Some(fixup),
-            _ => None,
-        })
+        .filter_map(|(i, fixup)| if i > boundary { Some(fixup) } else { None })
         .flat_map(|fixup| fixup.iter())
         .collect::<Vec<&CompatFixup>>();
 
