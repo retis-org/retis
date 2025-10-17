@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf};
 
 use anyhow::{bail, Result};
-use clap::{arg, Parser};
+use clap::Parser;
 
 use crate::{cli::*, events::python_embed::shell_execute};
 

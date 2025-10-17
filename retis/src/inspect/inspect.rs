@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::{arg, Parser};
+use clap::Parser;
 
 use crate::{
     cli::*,

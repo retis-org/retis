@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Context, Result};
-use clap::{arg, Parser};
+use clap::Parser;
 use libbpf_rs::MapCore;
 use log::warn;
 

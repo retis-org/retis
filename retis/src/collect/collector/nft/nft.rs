@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
-use clap::{arg, builder::PossibleValuesParser, Parser};
+use clap::{builder::PossibleValuesParser, Parser};
 use libbpf_rs::MapCore;
 use log::info;
 use serde_json::json;

@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
-use clap::{arg, Args, Parser};
+use clap::{Args, Parser};
 use log::{info, warn};
 use pcap_file::{
     pcapng::{
