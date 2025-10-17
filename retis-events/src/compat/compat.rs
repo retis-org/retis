@@ -18,6 +18,11 @@ const FIXUPS: &[&[CompatFixup]] = &[
         Move("skb/ns", "netns"),
         Move("packet/raw", "packet/data"),
     ],
+    /* CompatVersion::V2 */
+    &[Add(
+        "startup/kernel_version",
+        CompatValue::String(String::new()),
+    )],
 ];
 
 enum CompatFixup<'a> {
@@ -44,16 +49,19 @@ pub(crate) enum CompatVersion {
     V0 = 0,
     /* v1.6.x.. */
     V1,
+    /* v1.7.x.. */
+    V2,
 }
 
 // Retis versions to internal compat version table.
 const VERSION_MATCHES: &[(&str, CompatVersion)] = &[
     (">= 1.5.0, < 1.6.0", CompatVersion::V0),
-    (">= 1.6.0", CompatVersion::V1),
+    (">= 1.6.0, < 1.7.0", CompatVersion::V1),
+    (">= 1.7.0", CompatVersion::V2),
 ];
 
 impl CompatVersion {
-    pub const LATEST: Self = Self::V1;
+    pub const LATEST: Self = Self::V2;
 
     /// Create a compatibility version representation given a Retis version.
     pub(crate) fn from_retis_version(retis_version: &str) -> Result<Self> {
@@ -114,10 +122,7 @@ pub(crate) fn compatibility_fixup(
     let fixups = FIXUPS
         .iter()
         .enumerate()
-        .filter_map(|(i, fixup)| match i {
-            x if x >= boundary => Some(fixup),
-            _ => None,
-        })
+        .filter_map(|(i, fixup)| if i > boundary { Some(fixup) } else { None })
         .flat_map(|fixup| fixup.iter())
         .collect::<Vec<&CompatFixup>>();
 

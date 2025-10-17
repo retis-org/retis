@@ -10,11 +10,21 @@ pub struct StartupEvent {
     pub retis_version: String,
     /// CLOCK_MONOTONIC offset in regards to local machine time.
     pub clock_monotonic_offset: TimeSpec,
+    /// Kernel release version while collecting events.
+    pub kernel_version: String,
 }
 
 impl EventFmt for StartupEvent {
-    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
-        write!(f, "Retis version {}", self.retis_version)
+    fn event_fmt(&self, f: &mut Formatter, d: &DisplayFormat) -> fmt::Result {
+        let sep = if d.multiline { "\n" } else { " " };
+
+        write!(f, "Retis version {}", self.retis_version)?;
+
+        if !self.kernel_version.is_empty() {
+            write!(f, "{sep}Kernel version {}", self.kernel_version)?;
+        }
+
+        Ok(())
     }
 }
 
