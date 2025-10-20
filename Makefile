@@ -201,15 +201,7 @@ check-rust:
 check-ebpf:
 	$(call out_console,CHECKPATCH,checking eBPF coding style ...)
 	base_hash=$$(git merge-base $${BASE_COMMIT:-main} HEAD); \
-	COMMIT_RANGE=$$(git rev-list --no-merges --reverse $${base_hash}..HEAD); \
-	for commit in $$COMMIT_RANGE; do \
-	    pretty_commit=$$(git -P show -s --format="%h (\"%s\")" --abbrev=12 $${commit}); \
-	    echo "Commit $${pretty_commit}"; \
-	    printf -- '-%0.s' $$(seq 1 $${#pretty_commit}); \
-	    echo "-------"; \
-	    git show --format=email $${commit} -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=SPDX_LICENSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || restyle=$$?; \
-	    echo; \
-	done; \
+	git diff $${base_hash} -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=SPDX_LICENSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || restyle=$$?; \
 	[ -z "$$restyle" ]
 
 check-python:
