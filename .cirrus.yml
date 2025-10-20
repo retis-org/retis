@@ -188,6 +188,7 @@ functional_task:
   test_script: &functional_test
     - ssh -tt ${DISTRO} "env CARGO_CMD_OPTS=$CARGO_CMD_OPTS bash --login -exc 'cd /vagrant && make V=1'"
     - ssh -tt ${DISTRO} "cd /vagrant/tests && sudo python3 -m pytest ${TEST_EXTRA_ARGS}"
+    - ssh -tt ${DISTRO} "bash --login -exc 'cd /vagrant && sudo make functional-tests'"
 
 # Manual trigger for non-PR branches.
 manual_test_funtional_task:
