@@ -139,12 +139,11 @@ do the relevant changes in there.
 
 1. Before opening the pull-request, test the changes. Yes, even for those simple
    one-liner last minute changes.
-1. Check the following commands do not return an error:
-   1. `cargo fmt --check`
-   1. `cargo clippy -- -D warnings`
-   1. `make lint-ebpf`
+1. Check for format & lint issues, `make lints`.
+1. Optionally check for tests and/or functional issues:
    1. `make test V=1`, or to include runtime tests,
-      `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=sudo CARGO_CMD_OPTS="--features=test_cap_bpf" make test V=1`
+      `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=sudo CARGO_CMD_OPTS="--features=test_cap_bpf" make test V=1`.
+   1. `sudo make functional-tests`.
    1. `make pytest V=1`
 1. Make sure commits are
    [signed off](https://www.kernel.org/doc/html/latest/process/submitting-patches.html?highlight=signed%20off#developer-s-certificate-of-origin-1-1).
