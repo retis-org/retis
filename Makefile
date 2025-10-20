@@ -143,6 +143,15 @@ else
 	$(call build,test,building and running tests,$(RUSTFLAGS_KEEP_SECS))
 endif
 
+functional-tests:
+	for script in tests/next/*.sh; do \
+		[ "$$LIST_TESTS" == "1" ] && echo "$$script:"; \
+		$$script; \
+	done
+
+functional-tests-list: export LIST_TESTS=1
+functional-tests-list: functional-tests
+
 bench: ebpf
 	$(call build,build -F benchmark --release,building benchmarks)
 
@@ -236,6 +245,8 @@ help:
 	$(call help_once,                    --  Requires `BASE_COMMIT` env variable to be set otherwise `main` is assumed.)
 	$(call help_once,clippy              --  Runs cargo clippy.)
 	$(call help_once,test                --  Builds and runs unit tests.)
+	$(call help_once,functional-tests    --  Runs functional tests. Set $$(TESTS) to run specfic tests. E.g. TESTS="test0 test1".)
+	$(call help_once,functional-tests-list --  Lists functional tests.)
 	$(call help_once,pylib               --  Builds the python bindings.)
 	$(call help_once,pytest              --  Tests the python bindings (requires "tox" installed).)
 	$(call help_once,report-cov          --  Generate coverage report after code coverage testing.)
@@ -260,5 +271,5 @@ help:
 	$(call help_once,                        Requires llvm-cov and preferably rustup toolchain.)
 
 .PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov
-.PHONY: test pytest-deps pytest check-ebpf
+.PHONY: test pytest-deps pytest check-ebpf functional-tests functional-tests-list
 .PHONY: clean clean-bindings clean-cov clean-ebpf
