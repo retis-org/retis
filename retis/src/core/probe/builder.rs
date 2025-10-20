@@ -13,6 +13,7 @@ use crate::core::probe::*;
 
 /// Trait representing the interface used to create and handle probes. We use a
 /// trait here as we're supporting various attach types.
+#[allow(dead_code)]
 pub(super) trait ProbeBuilder {
     /// Allocate and return a new instance of the probe builder, with default
     /// values.

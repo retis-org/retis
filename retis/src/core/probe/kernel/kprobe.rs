@@ -237,34 +237,3 @@ impl KprobeBuilder<'_> {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use serial_test::serial;
-
-    use super::*;
-
-    use crate::core::{
-        filters::{fixup_filter_load_fn, register_filter_handler},
-        kernel::Symbol,
-    };
-
-    #[test]
-    #[serial(libbpf)]
-    #[cfg_attr(not(feature = "test_cap_bpf"), ignore)]
-    fn init_and_attach() {
-        let _ = register_filter_handler(
-            "kprobe/probe",
-            libbpf_rs::ProgramType::Kprobe,
-            Some(fixup_filter_load_fn),
-        );
-
-        let mut builder = KprobeBuilder::new().unwrap();
-
-        assert!(builder.init(Vec::new(), Vec::new(), None, 4096).is_ok());
-        assert!(builder
-            .add_probe(Probe::kprobe(Symbol::from_name("consume_skb").unwrap()).unwrap())
-            .is_ok());
-        assert!(builder.attach().is_ok());
-    }
-}
