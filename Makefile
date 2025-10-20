@@ -192,6 +192,12 @@ endef
 
 $(foreach tgt,check clippy,$(eval $(call analyzer_tmpl,$(tgt))))
 
+check-rust:
+	$(call build, fmt --check, check format)
+	# No need to run `check` in addition to `clippy`, it's a superset.
+	$(call build, clippy $(if $(VERBOSITY),,--quiet), running clippy)
+	$(call build, clippy $(if $(VERBOSITY),,--quiet) -F benchmark, running clippy on benchmarks)
+
 check-ebpf:
 	$(call out_console,CHECKPATCH,checking eBPF coding style ...)
 	base_hash=$$(git merge-base $${BASE_COMMIT:-main} HEAD); \
@@ -205,6 +211,14 @@ check-ebpf:
 	    echo; \
 	done; \
 	[ -z "$$restyle" ]
+
+check-python:
+	$(call out_console,FLAKE8,checking Python coding style ...)
+	python3 -m flake8 tests
+	$(call out_console,BLACK,checking Python coding style ...)
+	python3 -m black --check $(if $(VERBOSITY),,--quiet) --diff tests/*.py tests/next/include/*.py
+
+checks: check-rust check-ebpf check-python
 
 report-cov:
 	$(CARGO) llvm-cov report $(CARGO_CMD_OPTS)
@@ -240,9 +254,12 @@ help:
 	$(call gen-bindings                  --  Generate Rust bindings for bpf programs.)
 	$(call help_once,install             --  Installs Retis.)
 	$(call help_once,release             --  Builds Retis with the release option.)
-	$(call help_once,check               --  Runs cargo check.)
+	$(call help_once,checks              --  Runs linters for Rust/eBPF/Python.)
+	$(call help_once,check-rust          --  Runs format and linter checks.)
 	$(call help_once,check-ebpf          --  Checks eBPF coding style for commits in current branch.)
 	$(call help_once,                    --  Requires `BASE_COMMIT` env variable to be set otherwise `main` is assumed.)
+	$(call help_once,check-python        --  Runs format and linter checks on Python files.)
+	$(call help_once,check               --  Runs cargo check.)
 	$(call help_once,clippy              --  Runs cargo clippy.)
 	$(call help_once,test                --  Builds and runs unit tests.)
 	$(call help_once,functional-tests    --  Runs functional tests. Set $$(TESTS) to run specfic tests. E.g. TESTS="test0 test1".)
@@ -271,5 +288,5 @@ help:
 	$(call help_once,                        Requires llvm-cov and preferably rustup toolchain.)
 
 .PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov
-.PHONY: test pytest-deps pytest check-ebpf functional-tests functional-tests-list
+.PHONY: test pytest-deps pytest check-ebpf functional-tests functional-tests-list check-rust check-python checks
 .PHONY: clean clean-bindings clean-cov clean-ebpf
