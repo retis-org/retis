@@ -141,8 +141,7 @@ do the relevant changes in there.
    one-liner last minute changes.
 1. Check for format & lint issues, `make lints`.
 1. Optionally check for tests and/or functional issues:
-   1. `make test V=1`, or to include runtime tests,
-      `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=sudo CARGO_CMD_OPTS="--features=test_cap_bpf" make test V=1`.
+   1. `make test V=1`.
    1. `sudo make functional-tests`.
    1. `make pytest V=1`
 1. Make sure commits are
