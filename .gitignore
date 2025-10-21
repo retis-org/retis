@@ -1,5 +1,5 @@
 /target
 .out
 __pycache__/
-retis.data
+retis.data*
 retis-events/.tox
