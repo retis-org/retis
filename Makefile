@@ -7,8 +7,12 @@ BINDGEN := bindgen
 DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
 ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$(DEFAULT_ARCH))
 
-RELEASE_VERSION = $(shell tools/localversion)
-RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
+define retis_set_version
+RELEASE_VERSION := $(shell tools/localversion)
+RELEASE_NAME := $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
+export RELEASE_NAME RELEASE_VERSION
+endef
+
 RELEASE_FLAGS = -Dwarnings
 # The flag below must be passed to the linker because
 # there's an issue that strips a section required for the
@@ -40,7 +44,7 @@ BPF_CFLAGS := -target bpf \
               -D__TARGET_ARCH_$(BPF_ARCH) \
               -O2
 
-export LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
+export LCC OBJCOPY
 
 PRINT = printf
 CONTAINER_RUNTIME := podman
@@ -130,9 +134,11 @@ define build
 endef
 
 debug: ebpf
+	$(eval $(call retis_set_version))
 	$(call build,build,building retis (debug))
 
 release: ebpf
+	$(eval $(call retis_set_version))
 	$(call build,build --release,building retis (release),$(RELEASE_FLAGS))
 
 test: ebpf
@@ -153,6 +159,7 @@ functional-tests-list: export LIST_TESTS=1
 functional-tests-list: functional-tests
 
 bench: ebpf
+	$(eval $(call retis_set_version))
 	$(call build,build -F benchmark --release,building benchmarks)
 
 ifeq ($(NOVENDOR),)
