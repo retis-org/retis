@@ -1,9 +1,12 @@
 ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
-LLC := llc
-OBJCOPY := llvm-objcopy
 
+LLC = llc
+OBJCOPY = llvm-objcopy
 CARGO := cargo $(CARGO_OPTS)
-BINDGEN := bindgen
+BINDGEN = bindgen
+CONTAINER_RUNTIME = podman
+
+export LCC OBJCOPY
 
 define retis_set_version
 RELEASE_VERSION := $(shell tools/localversion)
@@ -19,16 +22,14 @@ ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET)
 
 # Needs to be set because of PT_REGS_PARMx() and any other target
 # specific facility.
-x86_64 := x86
-aarch64 := arm64
-powerpc64 := powerpc
-s390x := s390
+x86_64 = x86
+aarch64 = arm64
+powerpc64 = powerpc
+s390x = s390
 # Mappings takes precedence over custom ARCH
 BPF_ARCH := $(if $$($$(ARCH)),$$($$(ARCH)),$$(ARCH))
 
-BPF_CFLAGS_PAHOLE := \
-	-Wno-gnu-variable-sized-type-not-at-end
-
+BPF_CFLAGS_PAHOLE = -Wno-gnu-variable-sized-type-not-at-end
 BPF_CFLAGS := -target bpf \
               -Wall \
               -Werror \
@@ -42,10 +43,7 @@ BPF_CFLAGS := -target bpf \
               -O2
 endef
 
-export LCC OBJCOPY
-
 PRINT = printf
-CONTAINER_RUNTIME := podman
 
 define help_once
     @$(PRINT) '$(1)\n'
@@ -70,16 +68,16 @@ endif
 
 ifeq ($(NOVENDOR),)
     # This MUST be kept in sync with API_HEADERS under lib.rs in libbpf-sys
-    LIBBPF_API_HEADERS := bpf.h \
-                          libbpf.h \
-                          btf.h \
-                          bpf_helpers.h \
-                          bpf_helper_defs.h \
-                          bpf_tracing.h \
-                          bpf_endian.h \
-                          bpf_core_read.h \
-                          libbpf_common.h \
-                          usdt.bpf.h
+    LIBBPF_API_HEADERS = bpf.h \
+                         libbpf.h \
+                         btf.h \
+                         bpf_helpers.h \
+                         bpf_helper_defs.h \
+                         bpf_tracing.h \
+                         bpf_endian.h \
+                         bpf_core_read.h \
+                         libbpf_common.h \
+                         usdt.bpf.h
 
     LIBBPF_SYS_LIBBPF_BASE_PATH := $(dir $(shell cargo metadata --format-version=1 | jq -r '.packages | .[] | select(.name == "libbpf-sys") | .manifest_path'))
     LIBBPF_SYS_LIBBPF_INCLUDES :=  $(wildcard $(addprefix $(LIBBPF_SYS_LIBBPF_BASE_PATH)/libbpf/src/, $(LIBBPF_API_HEADERS)))
