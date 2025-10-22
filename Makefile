@@ -4,8 +4,6 @@ OBJCOPY := llvm-objcopy
 
 CARGO := cargo $(CARGO_OPTS)
 BINDGEN := bindgen
-DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
-ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$(DEFAULT_ARCH))
 
 define retis_set_version
 RELEASE_VERSION := $(shell tools/localversion)
@@ -20,6 +18,10 @@ RELEASE_FLAGS = -Dwarnings
 # will be removed once the issue gets fixed.
 RUSTFLAGS_KEEP_SECS := -Clink-arg=-Wl,--no-gc-sections
 
+define ebpf_set_vars
+DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
+ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$$(DEFAULT_ARCH))
+
 # Needs to be set because of PT_REGS_PARMx() and any other target
 # specific facility.
 x86_64 := x86
@@ -27,7 +29,7 @@ aarch64 := arm64
 powerpc64 := powerpc
 s390x := s390
 # Mappings takes precedence over custom ARCH
-BPF_ARCH := $(if $($(ARCH)),$($(ARCH)),$(ARCH))
+BPF_ARCH := $(if $$($$(ARCH)),$$($$(ARCH)),$$(ARCH))
 
 BPF_CFLAGS_PAHOLE := \
 	-Wno-gnu-variable-sized-type-not-at-end
@@ -39,10 +41,11 @@ BPF_CFLAGS := -target bpf \
               -Wno-pointer-sign \
               -Wno-compare-distinct-pointer-types \
               -Wno-unused-command-line-argument \
-              $(BPF_CFLAGS_PAHOLE) \
+              $$(BPF_CFLAGS_PAHOLE) \
               -fno-stack-protector \
-              -D__TARGET_ARCH_$(BPF_ARCH) \
+              -D__TARGET_ARCH_$$(BPF_ARCH) \
               -O2
+endef
 
 export LCC OBJCOPY
 
@@ -168,7 +171,10 @@ $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
 	cp $^ $(LIBBPF_INCLUDES)/bpf/
 endif
 
-ebpf: $(EBPF_PROBES) $(EBPF_HOOKS)
+ebpf_prereqs:
+	$(eval $(call ebpf_set_vars))
+
+ebpf: ebpf_prereqs $(EBPF_PROBES) $(EBPF_HOOKS)
 
 $(EBPF_PROBES): OUT_NAME := PROBE
 $(EBPF_HOOKS):  OUT_NAME := HOOK
@@ -293,6 +299,6 @@ help:
 	$(call help_once, COV                   --  Enable code coverage for testing. Applies only to the target "test".)
 	$(call help_once,                           Requires llvm-cov and preferably rustup toolchain.)
 
-.PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov
+.PHONY: all bench ebpf ebpf_prereqs $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov
 .PHONY: test pytest-deps pytest check-ebpf functional-tests functional-tests-list check-rust check-python checks
 .PHONY: clean clean-bindings clean-cov clean-ebpf
