@@ -150,7 +150,7 @@ pub(crate) enum CompatValue {
     Bool(bool),
     Int(i64),
     Uint(u64),
-    String(String),
+    String(&'static str),
     // TODO: event sections?
 }
 

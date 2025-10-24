@@ -68,7 +68,7 @@ impl EventCompatibility for serde_json::Value {
                 serde_json::Number::from_u128(val.into())
                     .ok_or_else(|| anyhow!("Failed to convert {val} to a serde_json Number"))?,
             ),
-            CompatValue::String(val) => serde_json::Value::String(val),
+            CompatValue::String(val) => serde_json::Value::String(val.to_string()),
         };
 
         match target {
