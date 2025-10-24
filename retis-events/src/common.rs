@@ -2,6 +2,13 @@ use std::fmt;
 
 use crate::*;
 
+#[event_type]
+pub struct MachineInfo {
+    pub kernel_release: String,
+    pub kernel_version: String,
+    pub hardware_name: String,
+}
+
 /// Startup event section. Contains global information about a collection as a
 /// whole, with data gathered at collection startup time.
 #[event_section]
@@ -10,11 +17,23 @@ pub struct StartupEvent {
     pub retis_version: String,
     /// CLOCK_MONOTONIC offset in regards to local machine time.
     pub clock_monotonic_offset: TimeSpec,
+    /// Machine information retrieved while collecting events.
+    pub machine: MachineInfo,
 }
 
 impl EventFmt for StartupEvent {
-    fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
-        write!(f, "Retis version {}", self.retis_version)
+    fn event_fmt(&self, f: &mut Formatter, d: &DisplayFormat) -> fmt::Result {
+        let sep = if d.multiline { "\n" } else { " " };
+
+        write!(f, "Retis version {}", self.retis_version)?;
+
+        write!(
+            f,
+            "{sep}Machine info {} {} {}",
+            self.machine.kernel_release, self.machine.kernel_version, self.machine.hardware_name
+        )?;
+
+        Ok(())
     }
 }
 

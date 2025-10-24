@@ -45,10 +45,12 @@ nor disabled.
 
 ```none
 Retis version {version}
+Machine info {kernel_release} {kernel_version} {machine}
 ```
 
-Contains the `version` of the Retis binary that collected the event series as
-well as timing information for being able to display time in UTC at
-post-processing time. Only the `version` is shown in the output.
+Contains the `version` of the Retis binary that collected the event series, some
+machine-related information as in `uname -rvm` from the machine the data was
+collected, and timing information for being able to display time in UTC at
+post-processing time. The timing information is not displayed in the output.
 
 This section is emitted when a collection is started.
