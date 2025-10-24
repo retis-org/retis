@@ -49,7 +49,7 @@ impl RawEventSectionFactory for DevEventFactory {
         // union and there is no way we can know of the data is valid. Try our best
         // below to report an empty section if the data does not look like what it
         // should.
-        let dev_name = match str::from_utf8(&raw.dev_name) {
+        let dev_name = match std::str::from_utf8(&raw.dev_name) {
             Ok(s) => s.trim_end_matches(char::from(0)),
             Err(_) => return Ok(()),
         };
