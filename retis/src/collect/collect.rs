@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use log::{debug, info, warn};
-use nix::{errno::Errno, mount::*, unistd::Uid};
+use nix::{errno::Errno, mount::*, sys::utsname::uname, unistd::Uid};
 
 use super::{
     cli::Collect,
@@ -343,12 +343,22 @@ impl Collectors {
 
     // Generate an initial event with the startup section.
     fn initial_event(&mut self) -> Result<()> {
+        let uname = uname().map_err(|e| anyhow!("Failed to get system information: {e}"))?;
+        let release = uname.release().to_string_lossy();
+        let version = uname.version().to_string_lossy();
+        let machine = uname.machine().to_string_lossy();
+
         self.events_factory.add_event(|event| {
             event.startup = Some(StartupEvent {
                 retis_version: option_env!("RELEASE_VERSION")
                     .unwrap_or("unspec")
                     .to_string(),
                 clock_monotonic_offset: self.monotonic_offset,
+                machine: MachineInfo {
+                    kernel_release: release.to_string(),
+                    kernel_version: version.to_string(),
+                    hardware_name: machine.to_string(),
+                },
             });
             Ok(())
         })

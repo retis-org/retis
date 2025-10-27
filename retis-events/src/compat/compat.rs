@@ -18,6 +18,22 @@ const FIXUPS: &[&[CompatFixup]] = &[
         Move("skb/ns", "netns"),
         Move("packet/raw", "packet/data"),
     ],
+    /* CompatVersion::V2 */
+    &[
+        Add("startup/machine", CompatValue::Section),
+        Add(
+            "startup/machine/kernel_release",
+            CompatValue::String("unknown"),
+        ),
+        Add(
+            "startup/machine/kernel_version",
+            CompatValue::String("unknown"),
+        ),
+        Add(
+            "startup/machine/hardware_name",
+            CompatValue::String("unknown"),
+        ),
+    ],
 ];
 
 enum CompatFixup<'a> {
@@ -42,18 +58,21 @@ pub(crate) enum CompatStrategy {
 pub(crate) enum CompatVersion {
     /* v1.5.x; we start the backward compatibility effort with v1.5.0 */
     V0 = 0,
-    /* v1.6.x.. */
+    /* v1.6.x */
     V1,
+    /* v1.7.x.. */
+    V2,
 }
 
 // Retis versions to internal compat version table.
 const VERSION_MATCHES: &[(&str, CompatVersion)] = &[
     (">= 1.5.0, < 1.6.0", CompatVersion::V0),
-    (">= 1.6.0", CompatVersion::V1),
+    (">= 1.6.0, < 1.7.0", CompatVersion::V1),
+    (">= 1.7.0", CompatVersion::V2),
 ];
 
 impl CompatVersion {
-    pub const LATEST: Self = Self::V1;
+    pub const LATEST: Self = Self::V2;
 
     /// Create a compatibility version representation given a Retis version.
     pub(crate) fn from_retis_version(retis_version: &str) -> Result<Self> {
@@ -114,10 +133,7 @@ pub(crate) fn compatibility_fixup(
     let fixups = FIXUPS
         .iter()
         .enumerate()
-        .filter_map(|(i, fixup)| match i {
-            x if x >= boundary => Some(fixup),
-            _ => None,
-        })
+        .filter_map(|(i, fixup)| if i > boundary { Some(fixup) } else { None })
         .flat_map(|fixup| fixup.iter())
         .collect::<Vec<&CompatFixup>>();
 
@@ -153,8 +169,9 @@ pub(crate) enum CompatValue {
     Bool(bool),
     Int(i64),
     Uint(u64),
-    String(String),
-    // TODO: event sections?
+    String(&'static str),
+    // Non-leaf compound types
+    Section,
 }
 
 /// Fields to remove/add/move are pointed by `target`s. They are expressed as a
