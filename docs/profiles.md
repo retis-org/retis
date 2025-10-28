@@ -144,6 +144,9 @@ $ retis -p nft-dropmon pcap -o retis.pcap
 Profile enabling a set of options to collect events for later post-processing
 conversion into the `pcap-ng` format using the `pcap` sub-command.
 
+This profile ensures captures generated with `--profile` option display correct
+interface information. For more details, see the [pcap documentation](pcap.md).
+
 ```none
 $ retis -p pcap collect ...
 $ retis -p pcap,generic collect
