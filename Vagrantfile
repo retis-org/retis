@@ -26,6 +26,9 @@ dnf install -y \
     make \
     jq \
     ethtool
+
+# Provide 'python' if not already available.
+ln -s /usr/bin/python3 /usr/bin/python || true
 SCRIPT
 
 # CentOS mirror URL changed but the c8s image is no longer being built. We
@@ -177,6 +180,7 @@ Vagrant.configure("2") do |config|
           libpcap-dev \
           git \
           pkg-config \
+          python-is-python3 \
           python3-pip \
           python3-dev \
           openvswitch-switch \
