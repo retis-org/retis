@@ -2,8 +2,7 @@
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::{HashMap, HashSet},
-    fs::OpenOptions,
-    io::{self, BufWriter},
+    io,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::Arc,
@@ -12,7 +11,7 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use log::{debug, info, warn};
-use nix::{errno::Errno, mount::*, sys::utsname::uname, unistd::Uid};
+use nix::{errno::Errno, mount::*, unistd::Uid};
 
 use super::{
     cli::Collect,
@@ -26,7 +25,7 @@ use crate::{
     cli::{CliDisplayFormat, MainConfig},
     collect::collector::section_factories,
     core::{
-        events::{BpfEventsFactory, EventResult, RetisEventsFactory, SectionFactories},
+        events::*,
         filters::{
             filters::{BpfFilter, Filter},
             meta::filter::FilterMeta,
@@ -42,8 +41,8 @@ use crate::{
             gc::TrackingGC, skb_tracking::init_tracking, stack_tracking::init_stack_tracking,
         },
     },
-    events::*,
-    helpers::{signals::Running, time::*},
+    events::{file::rotate::*, helpers::time::*, *},
+    helpers::{file_rotate::*, signals::Running},
     process::display::*,
 };
 
@@ -341,29 +340,6 @@ impl Collectors {
         Ok(())
     }
 
-    // Generate an initial event with the startup section.
-    fn initial_event(&mut self) -> Result<()> {
-        let uname = uname().map_err(|e| anyhow!("Failed to get system information: {e}"))?;
-        let release = uname.release().to_string_lossy();
-        let version = uname.version().to_string_lossy();
-        let machine = uname.machine().to_string_lossy();
-
-        self.events_factory.add_event(|event| {
-            event.startup = Some(StartupEvent {
-                retis_version: option_env!("RELEASE_VERSION")
-                    .unwrap_or("unspec")
-                    .to_string(),
-                clock_monotonic_offset: self.monotonic_offset,
-                machine: MachineInfo {
-                    kernel_release: release.to_string(),
-                    kernel_version: version.to_string(),
-                    hardware_name: machine.to_string(),
-                },
-            });
-            Ok(())
-        })
-    }
-
     fn config_filters(&mut self, collect: &Collect) -> Result<()> {
         // Initialize tracking & filters.
         if !cfg!(test) && self.known_kernel_types.contains("struct sk_buff *") {
@@ -489,7 +465,6 @@ impl Collectors {
         let mut section_factories = section_factories()?;
 
         self.run.register_term_signals()?;
-        self.initial_event()?;
         self.init_collectors(&mut section_factories, collect)?;
         self.config_filters(collect)?;
         self.register_probes(collect, main_config)?;
@@ -566,14 +541,17 @@ impl Collectors {
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
             printers.push(PrintEvent::new(
-                Box::new(BufWriter::new(
-                    OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(out)
-                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-                )),
+                Box::new(
+                    RotateWriter::new(
+                        out,
+                        match &collect.out_rotate {
+                            Some(s) => Some(rotation_policy_from_str(s)?),
+                            None => None,
+                        },
+                        self.monotonic_offset,
+                    )
+                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+                ),
                 PrintEventFormat::Json,
             ));
         }

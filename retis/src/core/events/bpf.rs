@@ -19,7 +19,13 @@ use log::{error, log, Level};
 use plain::Plain;
 
 use crate::{
-    bindings::events_uapi::*, event_section_factory, events::*, helpers::signals::Running,
+    bindings::events_uapi::*,
+    event_section_factory,
+    events::{
+        helpers::time::{TimeSpec, *},
+        *,
+    },
+    helpers::signals::Running,
 };
 
 /// Raw event sections for common.
