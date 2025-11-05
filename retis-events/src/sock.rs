@@ -13,7 +13,11 @@ pub struct SockEvent {
 impl EventFmt for SockEvent {
     fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
         if let Some(common) = &self.common {
-            write!(f, "sock {}", common.inode)?;
+            write!(
+                f,
+                "sock {} {} {}",
+                common.inode, common.r#type, common.proto
+            )?;
         }
 
         Ok(())
@@ -26,4 +30,8 @@ impl EventFmt for SockEvent {
 pub struct SockCommonEvent {
     /// Socket inode
     pub inode: u32,
+    /// Type
+    pub r#type: String,
+    /// Protocol
+    pub proto: String,
 }
