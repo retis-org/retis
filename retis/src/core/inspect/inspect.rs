@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{bail, Result};
-use btf_rs::Type;
+use btf_rs::{self, Btf, Enum, Type};
 use once_cell::sync::OnceCell;
 
 use super::kernel::KernelInspector;
@@ -38,24 +38,55 @@ impl Inspector {
     }
 }
 
+/// Same as parse_enum but first find the anonymous enum that contains the
+/// provided member.
+pub(crate) fn parse_anon_enum(variant: &str, trim_start: &[&str]) -> Result<HashMap<u32, String>> {
+    if let Some((btf, anon_enum)) = inspector()?
+        .kernel
+        .btf
+        .resolve_types_by_name("")?
+        .iter()
+        .find_map(|(btf, t)| match t {
+            Type::Enum(e) => {
+                if e.members
+                    .iter()
+                    .any(|m| btf.resolve_name(m).is_ok_and(|v| v == variant))
+                {
+                    Some((btf, e))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+    {
+        parse_enum_type(btf, anon_enum, trim_start)
+    } else {
+        bail!("Failed to find an anonymous enum with variant {}", variant)
+    }
+}
+
 /// Parses an enum and returns its variant names, trimed if asked to.
 pub(crate) fn parse_enum(r#enum: &str, trim_start: &[&str]) -> Result<HashMap<u32, String>> {
-    let mut values = HashMap::new();
-
     if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(r#enum) {
         if let Some((btf, Type::Enum(r#enum))) =
             types.iter().find(|(_, t)| matches!(t, Type::Enum(_)))
         {
-            for member in r#enum.members.iter() {
-                let mut val = btf.resolve_name(member)?;
-                trim_start
-                    .iter()
-                    .for_each(|p| val = val.trim_start_matches(p).to_string());
-                values.insert(member.val(), val.to_string());
-            }
+            return parse_enum_type(btf, r#enum, trim_start);
         }
     }
+    Ok(HashMap::new())
+}
 
+fn parse_enum_type(btf: &Btf, r#enum: &Enum, trim_start: &[&str]) -> Result<HashMap<u32, String>> {
+    let mut values = HashMap::new();
+    for member in r#enum.members.iter() {
+        let mut val = btf.resolve_name(member)?;
+        trim_start
+            .iter()
+            .for_each(|p| val = val.trim_start_matches(p).to_string());
+        values.insert(member.val(), val.to_string());
+    }
     Ok(values)
 }
 
