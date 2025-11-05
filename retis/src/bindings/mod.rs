@@ -21,6 +21,7 @@ impl Default for retis_probe_offsets {
             net: -1,
             nft_pktinfo: -1,
             nft_traceinfo: -1,
+            sock: -1,
         }
     }
 }
@@ -79,3 +80,4 @@ unsafe impl plain::Plain for retis_log_event {}
 
 pub(crate) mod meta_filter_uapi;
 pub(crate) mod packet_filter_uapi;
+pub(crate) mod sock_hook_uapi;

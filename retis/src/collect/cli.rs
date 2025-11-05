@@ -23,7 +23,7 @@ pub(crate) struct Collect {
         short,
         long,
         value_parser = PossibleValuesParser::new([
-            "auto", "skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct", "dev", "ns",
+            "auto", "skb-tracking", "skb", "skb-drop", "ovs", "nft", "ct", "dev", "ns", "sock"
         ]),
         value_delimiter = ',',
         default_value = "auto",

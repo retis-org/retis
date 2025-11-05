@@ -18,6 +18,7 @@ use super::{
     collector::{
         ct::CtCollector, dev::DevCollector, nft::NftCollector, ns::NsCollector, ovs::OvsCollector,
         skb::SkbCollector, skb_drop::SkbDropCollector, skb_tracking::SkbTrackingCollector,
+        sock::SockCollector,
     },
 };
 use crate::{
@@ -273,6 +274,7 @@ impl Collectors {
             "ct",
             "dev",
             "ns",
+            "sock",
         ];
         let auto = collect.collectors.iter().any(|c| c == "auto");
 
@@ -287,6 +289,7 @@ impl Collectors {
                 "ct" => Box::new(CtCollector::new()?),
                 "dev" => Box::new(DevCollector::new()?),
                 "ns" => Box::new(NsCollector::new()?),
+                "sock" => Box::new(SockCollector::new()?),
                 _ => bail!("Unknown collector {name}"),
             };
 

@@ -31,6 +31,8 @@ pub mod skb_drop;
 pub use skb_drop::*;
 pub mod skb_tracking;
 pub use skb_tracking::*;
+pub mod sock;
+pub use sock::*;
 pub mod user;
 pub use user::*;
 
