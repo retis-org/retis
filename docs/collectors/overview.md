@@ -118,3 +118,9 @@ The `ns` collector retrieves information about namespaces, currently only
 network namespaces.
 
 The `ns` collector produces the [netns](../events/netns.md) event section.
+
+## Sock
+
+The `sock` collector retrieves information about sockets.
+
+The `sock` collector produces the [sock](..events/sock.md) event section.

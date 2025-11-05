@@ -16,3 +16,4 @@ pub(crate) mod ovs;
 pub(crate) mod skb;
 pub(crate) mod skb_drop;
 pub(crate) mod skb_tracking;
+pub(crate) mod sock;

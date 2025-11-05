@@ -2,7 +2,9 @@ use anyhow::Result;
 
 use crate::{
     collect::{
-        collector::{ct::*, dev::*, nft::*, ns::*, ovs::*, skb::*, skb_drop::*, skb_tracking::*},
+        collector::{
+            ct::*, dev::*, nft::*, ns::*, ovs::*, skb::*, skb_drop::*, skb_tracking::*, sock::*,
+        },
         Collector,
     },
     core::{
@@ -29,6 +31,7 @@ pub(crate) fn section_factories() -> Result<SectionFactories> {
     factories.insert(FactoryId::Ct, Box::new(CtEventFactory::new()?));
     factories.insert(FactoryId::Dev, Box::<DevEventFactory>::default());
     factories.insert(FactoryId::Ns, Box::new(NsEventFactory::new()?));
+    factories.insert(FactoryId::Sock, Box::new(SockEventFactory::new()?));
 
     Ok(factories)
 }

@@ -25,6 +25,9 @@ pub(super) fn inspect_symbol(symbol: &Symbol) -> Result<retis_probe_config> {
     if let Some(offset) = symbol.parameter_offset("struct nft_traceinfo *")? {
         cfg.offsets.nft_traceinfo = offset as i8;
     }
+    if let Some(offset) = symbol.parameter_offset("struct sock *")? {
+        cfg.offsets.sock = offset as i8;
+    }
 
     Ok(cfg)
 }

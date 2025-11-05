@@ -75,6 +75,8 @@ pub struct Event {
     pub ct: Option<CtEvent>,
     /// Startup event.
     pub startup: Option<StartupEvent>,
+    /// Socket event
+    pub sock: Option<SockEvent>,
 
     #[cfg(feature = "test-events")]
     pub test: Option<TestEvent>,
@@ -154,6 +156,7 @@ impl EventFmt for Event {
             self.ovs_detrace.as_ref().map(|f| f as &dyn EventDisplay),
             self.nft.as_ref().map(|f| f as &dyn EventDisplay),
             self.ct.as_ref().map(|f| f as &dyn EventDisplay),
+            self.sock.as_ref().map(|f| f as &dyn EventDisplay),
             self.startup.as_ref().map(|f| f as &dyn EventDisplay),
         ]
         .iter()

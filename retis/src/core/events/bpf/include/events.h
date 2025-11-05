@@ -29,6 +29,7 @@ enum retis_event_owners {
 	COLLECTOR_CT = 9,
 	COLLECTOR_DEV = 10,
 	COLLECTOR_NS = 11,
+	COLLECTOR_SOCK = 12,
 };
 
 struct retis_raw_event {

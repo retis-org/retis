@@ -27,6 +27,7 @@ struct retis_probe_offsets {
 	s8 net;	 /* netns */
 	s8 nft_pktinfo;
 	s8 nft_traceinfo;
+	s8 sock;
 };
 
 enum {
@@ -120,6 +121,8 @@ struct retis_context {
 	RETIS_GET(ctx, nft_pktinfo, struct nft_pktinfo *)
 #define retis_get_nft_traceinfo(ctx)	\
 	RETIS_GET(ctx, nft_traceinfo, struct nft_traceinfo *)
+#define retis_get_sock(ctx)	\
+	RETIS_GET(ctx, sock, struct sock *)
 
 /* Extended register helpers */
 static __always_inline void retis_set_ext_sk_buff(struct retis_context *ctx,
