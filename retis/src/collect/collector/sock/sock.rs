@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -8,6 +9,7 @@ use crate::{
     collect::{cli::Collect, Collector},
     core::{
         events::*,
+        inspect::parse_anon_enum,
         probe::{manager::ProbeBuilderManager, Hook},
     },
     event_section_factory,
@@ -38,13 +40,41 @@ impl Collector for SockCollector {
 }
 
 #[event_section_factory(FactoryId::Sock)]
-pub(crate) struct SockEventFactory {}
+#[derive(Default)]
+pub(crate) struct SockEventFactory {
+    // Mapping of socket protocols to names
+    socket_protocols: HashMap<u32, String>,
+}
 
 impl RawEventSectionFactory for SockEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let raw = parse_single_raw_section::<sock_event>(&raw_sections)?;
 
-        event.sock = Some(SockEvent { inode: raw.inode });
+        /* These should be kept in sync with "enum sock_type" in
+         * include/linux/net.h. It hasn't been modified for the last 20 years
+         * so chances are this is not very costy to maintain. */
+        let r#type = match raw.type_ {
+            1 => "SOCK_STREAM",
+            2 => "SOCK_DGRAM",
+            3 => "SOCK_RAW",
+            4 => "SOCK_RDM",
+            5 => "SOCK_SEQPACKET",
+            6 => "SOCK_DGRAM",
+            10 => "SOCK_PACKET",
+            _ => "UNKNOWN",
+        }
+        .to_string();
+
+        let proto = match self.socket_protocols.get(&(raw.proto as u32)) {
+            Some(r) => r.clone(),
+            None => format!("{}", raw.proto),
+        };
+
+        event.sock = Some(SockEvent {
+            inode: raw.inode,
+            r#type,
+            proto,
+        });
 
         Ok(())
     }
@@ -52,7 +82,9 @@ impl RawEventSectionFactory for SockEventFactory {
 
 impl SockEventFactory {
     pub(crate) fn new() -> Result<Self> {
-        Ok(Self {})
+        Ok(Self {
+            socket_protocols: parse_anon_enum("IPPROTO_IP", &["IPPROTO_"])?,
+        })
     }
 }
 
