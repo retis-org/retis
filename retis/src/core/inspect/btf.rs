@@ -48,18 +48,15 @@ impl BtfInfo {
         // Events have a void* pointing to the data as their first argument, which
         // does not end up in their context. We have to skip it. See
         // include/trace/bpf_probe.h in the __DEFINE_EVENT definition.
-        let fix = match symbol {
+        let start = match symbol {
             Symbol::Event(_) => 1,
             _ => 0,
         };
 
-        let (btf, proto) = self.find_prototype_btf(symbol)?;
-        for (offset, param) in proto.parameters.iter().enumerate() {
-            if BtfInfo::is_param_type(btf, param, parameter_type)? {
-                if offset < fix {
-                    continue;
-                }
-                return Ok(Some((offset - fix) as u32));
+        let (btf, mut proto) = self.find_prototype_btf(symbol)?;
+        for (offset, param) in proto.parameters.drain(start..).enumerate() {
+            if BtfInfo::is_param_type(btf, &param, parameter_type)? {
+                return Ok(Some(offset as u32));
             }
         }
         Ok(None)
