@@ -315,17 +315,6 @@ impl KernelInspector {
         Some(set.as_ref().unwrap().get(name).is_some())
     }
 
-    /// Get a parameter offset given a kernel function, if  any. Can be used to
-    /// check a function has a given parameter by using:
-    /// `inspector()?.parameter_offset()?.is_some()`
-    pub(crate) fn parameter_offset(
-        &self,
-        symbol: &Symbol,
-        parameter_type: &str,
-    ) -> Result<Option<u32>> {
-        self.btf.parameter_offset(symbol, parameter_type)
-    }
-
     /// Get a function's number of arguments.
     pub(crate) fn function_nargs(&self, symbol: &Symbol) -> Result<u32> {
         self.btf.function_nargs(symbol)

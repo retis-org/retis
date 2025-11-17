@@ -37,14 +37,11 @@ impl BtfInfo {
         Ok((proto.parameters.len() - fix) as u32)
     }
 
-    /// Get a parameter offset given a kernel function, if any. Can be used to
-    /// check a function has a given parameter by using:
-    /// `parameter_offset()?.is_some()`
-    pub(super) fn parameter_offset(
-        &self,
-        symbol: &Symbol,
-        parameter_type: &str,
-    ) -> Result<Option<u32>> {
+    /// Given a function symbol, get all its parameter type names (as String)
+    /// and their offsets.
+    pub(crate) fn get_parameters(&self, symbol: &Symbol) -> Result<Vec<(u32, String)>> {
+        let mut params = Vec::new();
+
         // Events have a void* pointing to the data as their first argument, which
         // does not end up in their context. We have to skip it. See
         // include/trace/bpf_probe.h in the __DEFINE_EVENT definition.
@@ -55,11 +52,10 @@ impl BtfInfo {
 
         let (btf, mut proto) = self.find_prototype_btf(symbol)?;
         for (offset, param) in proto.parameters.drain(start..).enumerate() {
-            if BtfInfo::is_param_type(btf, &param, parameter_type)? {
-                return Ok(Some(offset as u32));
-            }
+            params.push((offset as u32, Self::get_param(btf, &param)?));
         }
-        Ok(None)
+
+        Ok(params)
     }
 
     /// Look for a type based on its name and return both a Vec of Type objects
@@ -103,10 +99,10 @@ impl BtfInfo {
         bail!("Failed to resolve prototype for {symbol}");
     }
 
-    /// Determine if a parameter is from a specific type.
-    fn is_param_type(btf: &NamedBtf, param: &btf_rs::Parameter, r#type: &str) -> Result<bool> {
+    /// Translate a BTF function parameter into a type name String representation.
+    fn get_param(btf: &NamedBtf, param: &btf_rs::Parameter) -> Result<String> {
         let mut resolved = btf.resolve_chained_type(param)?;
-        let mut full_name = String::new();
+        let mut name = String::new();
 
         // First, traverse the type definition until we find the actual type.
         // Only support valid resolve_chained_type calls and exclude function
@@ -122,7 +118,7 @@ impl BtfInfo {
                 Type::Volatile(t) => btf.resolve_chained_type(&t)?,
                 Type::Const(t) => btf.resolve_chained_type(&t)?,
                 // FIXME: arrays are not supported at the moment.
-                Type::Array(_) => return Ok(false),
+                Type::Array(_) => return Ok(name),
                 _ => break,
             }
         }
@@ -136,19 +132,16 @@ impl BtfInfo {
             Type::Typedef(t) => btf.resolve_name(&t)?,
             Type::Float(t) => btf.resolve_name(&t)?,
             Type::Enum64(t) => format!("enum {}", btf.resolve_name(&t)?),
-            _ => return Ok(false),
+            _ => return Ok(name),
         };
-        full_name.push_str(type_name.as_str());
+        name.push_str(type_name.as_str());
 
         // Set the pointer information C style.
         if is_pointer {
-            full_name.push_str(" *");
+            name.push_str(" *");
         }
 
-        // We do not get the symbol name; useless and not always there (e.g.
-        // raw tracepoints).
-
-        Ok(r#type == full_name)
+        Ok(name)
     }
 
     fn get_function_prototype(btf: &NamedBtf, func: &Type) -> Result<btf_rs::FuncProto> {
@@ -214,70 +207,55 @@ mod tests {
 
     #[test]
     fn parameter_offset() {
-        let btf = BtfInfo::new().unwrap();
         assert!(
-            btf.parameter_offset(
-                &Symbol::Func("kfree_skb_reason".to_string()),
-                "struct sk_buff *"
-            )
-            .unwrap()
+            Symbol::Func("kfree_skb_reason".to_string())
+                .parameter_offset("struct sk_buff *")
+                .unwrap()
                 == Some(0)
         );
 
-        assert!(btf
-            .parameter_offset(
-                &Symbol::Func("kfree_skb_reason".to_string()),
-                "struct sk_buff"
-            )
+        assert!(Symbol::Func("kfree_skb_reason".to_string())
+            .parameter_offset("struct sk_buff")
             .unwrap()
             .is_none());
 
         assert!(
-            btf.parameter_offset(
-                &Symbol::Event("skb:kfree_skb".to_string()),
-                "struct sk_buff *"
-            )
-            .unwrap()
+            Symbol::Event("skb:kfree_skb".to_string())
+                .parameter_offset("struct sk_buff *")
+                .unwrap()
                 == Some(0)
         );
 
         assert!(
-            btf.parameter_offset(
-                &Symbol::Event("skb:kfree_skb".to_string()),
-                "enum skb_drop_reason"
-            )
-            .unwrap()
+            Symbol::Event("skb:kfree_skb".to_string())
+                .parameter_offset("enum skb_drop_reason")
+                .unwrap()
                 == Some(2)
         );
 
         assert!(
-            btf.parameter_offset(
-                &Symbol::Event("openvswitch:ovs_do_execute_action".to_string()),
-                "struct sw_flow_key *"
-            )
-            .unwrap()
+            Symbol::Event("openvswitch:ovs_do_execute_action".to_string())
+                .parameter_offset("struct sw_flow_key *")
+                .unwrap()
                 == Some(2)
         );
 
-        assert!(btf
-            .parameter_offset(
-                &Symbol::Event("openvswitch:ovs_do_execute_action".to_string()),
-                "struct sw_flow_key"
-            )
-            .unwrap()
-            .is_none());
+        assert!(
+            Symbol::Event("openvswitch:ovs_do_execute_action".to_string())
+                .parameter_offset("struct sw_flow_key")
+                .unwrap()
+                .is_none()
+        );
 
         assert!(
-            btf.parameter_offset(
-                &Symbol::Func("ovs_dp_upcall".to_string()),
-                "struct sk_buff *"
-            )
-            .unwrap()
+            Symbol::Func("ovs_dp_upcall".to_string())
+                .parameter_offset("struct sk_buff *")
+                .unwrap()
                 == Some(1)
         );
 
-        assert!(btf
-            .parameter_offset(&Symbol::Func("ovs_dp_upcall".to_string()), "struct sk_buff")
+        assert!(Symbol::Func("ovs_dp_upcall".to_string())
+            .parameter_offset("struct sk_buff")
             .unwrap()
             .is_none());
     }

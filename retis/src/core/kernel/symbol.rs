@@ -190,11 +190,21 @@ impl Symbol {
         inspector()?.kernel.function_nargs(self)
     }
 
+    /// Given a function symbol, get all its parameter type names (as String)
+    /// and their offsets.
+    pub(crate) fn get_parameters(&self) -> Result<Vec<(u32, String)>> {
+        inspector()?.kernel.btf.get_parameters(self)
+    }
+
     /// Get a parameter offset given its type, if found. Can be used to check a
     /// function has a given parameter by using:
     /// `function_parameter_offset()?.is_some()`.
     pub(crate) fn parameter_offset(&self, parameter_type: &str) -> Result<Option<u32>> {
-        inspector()?.kernel.parameter_offset(self, parameter_type)
+        let params = self.get_parameters()?;
+        Ok(params
+            .iter()
+            .find(|(_, p)| p == parameter_type)
+            .map(|(offset, _)| *offset))
     }
 }
 
