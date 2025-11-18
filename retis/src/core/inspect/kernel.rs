@@ -42,7 +42,7 @@ pub(crate) struct KernelInspector {
 }
 
 impl KernelInspector {
-    pub(crate) fn from(kconf: Option<&PathBuf>) -> Result<KernelInspector> {
+    pub(crate) fn from(kconf: Option<&PathBuf>, btf_cache: bool) -> Result<KernelInspector> {
         let (symbols_file, events_file, funcs_file, modules_file) =
             match cfg!(test) || cfg!(feature = "benchmark") {
                 false => (
@@ -64,7 +64,7 @@ impl KernelInspector {
                     BASE_TEST_DIR.to_owned() + "/test_data/modules",
                 ),
             };
-        let btf = BtfInfo::new()?;
+        let btf = BtfInfo::new(btf_cache)?;
 
         // First parse the symbol file.
         let mut symbols = BiBTreeMap::new();
@@ -362,13 +362,13 @@ mod tests {
 
     fn inspector() -> KernelInspector {
         let kconf = PathBuf::from("test_data/config-6.3.0-0.rc7.56.fc39.x86_64");
-        super::KernelInspector::from(Some(&kconf)).unwrap()
+        super::KernelInspector::from(Some(&kconf), false).unwrap()
     }
 
     #[test]
     fn inspector_init() {
         let kconf = PathBuf::from("test_data/config-6.3.0-0.rc7.56.fc39.x86_64");
-        assert!(super::KernelInspector::from(Some(&kconf)).is_ok());
+        assert!(super::KernelInspector::from(Some(&kconf), false).is_ok());
     }
 
     #[test]

@@ -37,9 +37,8 @@ Eg. '-p tp:*'. See `retis collect --help` for more details on the probe format."
 
 impl SubCommandParserRunner for Inspect {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
-        if let Some(kconf) = &self.kconf {
-            init_inspector(kconf)?;
-        }
+        init_inspector(self.kconf.as_ref(), true)?;
+
         if let Some(probe) = &self.probe {
             let known_types = get_known_types()?;
 

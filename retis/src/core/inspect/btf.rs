@@ -3,7 +3,7 @@ use std::ops::Deref;
 use anyhow::{bail, Result};
 use btf_rs::{
     utils::collection::{BtfCollection, NamedBtf},
-    Type,
+    Backend, Type,
 };
 
 use super::BASE_TEST_DIR;
@@ -14,14 +14,21 @@ pub(crate) struct BtfInfo(BtfCollection);
 
 impl BtfInfo {
     /// Parse kernel BTF files and create a Btf object.
-    pub(super) fn new() -> Result<Self> {
-        Ok(Self(BtfCollection::from_dir(
-            match cfg!(test) || cfg!(feature = "benchmark") {
-                false => "/sys/kernel/btf/".to_owned(),
-                true => BASE_TEST_DIR.to_owned() + "/test_data/btf/",
-            },
-            "vmlinux",
-        )?))
+    pub(super) fn new(cache: bool) -> Result<Self> {
+        let dir = match cfg!(test) || cfg!(feature = "benchmark") {
+            false => "/sys/kernel/btf/".to_owned(),
+            true => BASE_TEST_DIR.to_owned() + "/test_data/btf/",
+        };
+
+        Ok(Self(match cache || cfg!(test) {
+            true => BtfCollection::from_dir_with_backend(&dir, "vmlinux", Backend::Cache)?,
+            false => {
+                // Fallback to Backend::Cache for older kernels.
+                BtfCollection::from_dir_with_backend(&dir, "vmlinux", Backend::Mmap).or_else(
+                    |_| BtfCollection::from_dir_with_backend(&dir, "vmlinux", Backend::Cache),
+                )?
+            }
+        }))
     }
 
     /// Get a function's number of arguments.
@@ -184,7 +191,7 @@ mod tests {
 
     #[test]
     fn function_nargs() {
-        let btf = BtfInfo::new().unwrap();
+        let btf = BtfInfo::new(false).unwrap();
         assert!(
             btf.function_nargs(&Symbol::Func("kfree_skb_reason".to_string()))
                 .unwrap()
