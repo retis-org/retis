@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use anyhow::{bail, Result};
 use btf_rs::{
     utils::collection::{BtfCollection, NamedBtf},
@@ -23,7 +25,7 @@ impl BtfInfo {
     }
 
     /// Get a function's number of arguments.
-    pub(super) fn function_nargs(&self, symbol: &Symbol) -> Result<u32> {
+    pub(crate) fn function_nargs(&self, symbol: &Symbol) -> Result<u32> {
         // Events have a void* pointing to the data as their first argument, which
         // does not end up in their context. We have to skip it. See
         // include/trace/bpf_probe.h in the __DEFINE_EVENT definition.
@@ -58,18 +60,6 @@ impl BtfInfo {
         Ok(params)
     }
 
-    /// Look for a type based on its name and return both a Vec of Type objects
-    /// as well as the NamedBtf object where it was found. Subsequent lookups
-    /// based on this type (such as nested types by id) must be done on the
-    /// returned NamedBtf object since type ids of different modules overlap.
-    pub(crate) fn resolve_types_by_name(&self, name: &str) -> Result<Vec<(&NamedBtf, Type)>> {
-        let types = self.0.resolve_types_by_name(name)?;
-        if types.is_empty() {
-            bail!("No type linked to name {name}");
-        }
-        Ok(types)
-    }
-
     /// Look for a function symbol and return a Vec of matching Type objects as
     /// well as the NamedBtf object where it was found. Subsequent lookups based
     /// on this type (such as nested types by id) must be done on the returned
@@ -78,7 +68,7 @@ impl BtfInfo {
         &self,
         symbol: &Symbol,
     ) -> Result<Vec<(&NamedBtf, Type)>> {
-        self.resolve_types_by_name(&symbol.typedef_name())
+        Ok(self.0.resolve_types_by_name(&symbol.typedef_name())?)
     }
 
     /// Look for symbol prototype. Return the prototype and the NamedBtf object
@@ -176,6 +166,15 @@ impl BtfInfo {
             Type::FuncProto(proto) => Ok(proto),
             _ => bail!("Function {:?} does not have a prototype", func),
         }
+    }
+}
+
+// Allow accessing the `BtfCollection` API w/o indirections.
+impl Deref for BtfInfo {
+    type Target = BtfCollection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

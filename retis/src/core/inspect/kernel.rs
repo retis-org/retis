@@ -16,7 +16,6 @@ use log::warn;
 use regex::Regex;
 
 use super::{btf::BtfInfo, kernel_version::KernelVersion, BASE_TEST_DIR};
-use crate::core::kernel::Symbol;
 use crate::helpers::bimap::BiBTreeMap;
 
 /// Provides helpers to inspect probe related information in the kernel.
@@ -313,11 +312,6 @@ impl KernelInspector {
 
         // Unwrap as we checked above we have a set of valid functions.
         Some(set.as_ref().unwrap().get(name).is_some())
-    }
-
-    /// Get a function's number of arguments.
-    pub(crate) fn function_nargs(&self, symbol: &Symbol) -> Result<u32> {
-        self.btf.function_nargs(symbol)
     }
 
     /// Given an address, gets the name and the offset of the nearest symbol, if any.

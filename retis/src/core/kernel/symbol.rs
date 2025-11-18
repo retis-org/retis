@@ -187,7 +187,7 @@ impl Symbol {
 
     /// Get the symbol arguments number.
     pub(crate) fn nargs(&self) -> Result<u32> {
-        inspector()?.kernel.function_nargs(self)
+        inspector()?.kernel.btf.function_nargs(self)
     }
 
     /// Given a function symbol, get all its parameter type names (as String)
