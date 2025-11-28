@@ -502,6 +502,10 @@ impl RawPacket {
                 Some(icmp) => self.format_icmpv6(f, format, &icmp),
                 None => Err(PacketFmtError::Truncated),
             },
+            IpNextHeaderProtocols::Ah => match AhPacket::new(payload) {
+                Some(ah) => self.format_ah(f, format, &ah, payload_len),
+                None => Err(PacketFmtError::Truncated),
+            },
             IpNextHeaderProtocols::Esp => match EspPacket::new(payload) {
                 Some(esp) => self.format_esp(f, format, &esp),
                 None => Err(PacketFmtError::Truncated),
@@ -729,6 +733,39 @@ impl RawPacket {
             icmp.get_icmpv6_code().0
         )?;
         Ok(())
+    }
+
+    fn format_ah(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        ah: &AhPacket,
+        payload_len: u32,
+    ) -> FmtResult<()> {
+        write!(
+            f,
+            " spi {:#010x} seq {:#x} icv 0x{}",
+            ah.get_spi(),
+            ah.get_sequence_number(),
+            ah.get_icv()
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>()
+        )?;
+
+        let protocol = ah.get_next_header();
+        match helpers::protocol_str(protocol) {
+            Some(proto) => write!(f, " proto {proto} ({})", protocol.0)?,
+            None => write!(f, " proto ({})", protocol.0)?,
+        }
+
+        self.format_l4(
+            f,
+            format,
+            protocol,
+            ah.payload(),
+            payload_len.saturating_sub((ah.get_payload_len() as u32 + 2) * 4),
+        )
     }
 
     fn format_esp(
