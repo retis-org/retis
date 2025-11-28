@@ -4,8 +4,8 @@ use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
 use retis_pnet::{
-    arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipsec::*, ipv4::*, ipv6::*, tcp::*,
-    udp::*, vlan::*, vxlan::*, *,
+    arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipsec::*, ipv4::*, ipv6::*,
+    macsec::*, tcp::*, udp::*, vlan::*, vxlan::*, *,
 };
 
 #[cfg(feature = "python")]
@@ -246,6 +246,10 @@ impl RawPacket {
         }
 
         match etype {
+            EtherTypes::Macsec => match MacsecPacket::new(payload) {
+                Some(macsec) => self.format_macsec(f, format, &macsec),
+                None => Err(PacketFmtError::Truncated),
+            },
             EtherTypes::Arp => match ArpPacket::new(payload) {
                 Some(arp) => self.format_arp(f, format, &arp),
                 None => Err(PacketFmtError::Truncated),
@@ -475,6 +479,72 @@ impl RawPacket {
         }
 
         self.format_l4(f, format, protocol, payload, len)
+    }
+
+    fn format_macsec(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        macsec: &MacsecPacket,
+    ) -> FmtResult<()> {
+        let tci = macsec.get_tci();
+
+        if format.print_ll {
+            write!(
+                f,
+                "an {} pn {}",
+                macsec.get_association_number(),
+                macsec.get_packet_number(),
+            )?;
+
+            let mut flags = Vec::new();
+            if tci & MACSEC_TCI_E != 0 {
+                flags.push('E');
+            }
+            if tci & MACSEC_TCI_C != 0 {
+                flags.push('C');
+            }
+            if tci & MACSEC_TCI_ES != 0 {
+                flags.push('S');
+            }
+            if tci & MACSEC_TCI_SCB != 0 {
+                flags.push('B');
+            }
+            if tci & MACSEC_TCI_SC != 0 {
+                flags.push('I');
+            }
+            write!(f, " flags [{}]", flags.into_iter().collect::<String>())?;
+
+            let sl = macsec.get_short_length();
+            if sl > 0 {
+                write!(f, " sl {sl}")?;
+            }
+
+            if tci & MACSEC_TCI_SC != 0 {
+                write!(
+                    f,
+                    " sci 0x{}",
+                    macsec
+                        .get_sci()
+                        .iter()
+                        .map(|b| format!("{:02x}", b))
+                        .collect::<String>()
+                )?;
+            }
+        }
+
+        if tci & (MACSEC_TCI_E | MACSEC_TCI_C) != 0 {
+            // Not more we can do, data is encrypted or modified.
+            if !format.print_ll {
+                // Print at least a hint if we didn't print anything yet.
+                write!(f, "802.1AE MACsec frame")?;
+            }
+            return Ok(());
+        }
+
+        let payload = macsec.payload();
+        let protocol = EtherType::new(u16::from_be_bytes(payload[0..2].try_into().unwrap()));
+        self.traverse_vlan(f, format, protocol, &payload[2..])
     }
 
     fn format_l4(

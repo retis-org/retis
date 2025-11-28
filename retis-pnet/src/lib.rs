@@ -9,4 +9,5 @@ pub mod geneve;
 pub mod ip;
 pub mod ipsec;
 pub mod ipv6;
+pub mod macsec;
 pub mod tcp;
