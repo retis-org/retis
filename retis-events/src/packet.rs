@@ -4,8 +4,8 @@ use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
 use retis_pnet::{
-    arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipv4::*, ipv6::*, tcp::*, udp::*,
-    vlan::*, vxlan::*, *,
+    arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipsec::*, ipv4::*, ipv6::*, tcp::*,
+    udp::*, vlan::*, vxlan::*, *,
 };
 
 #[cfg(feature = "python")]
@@ -474,13 +474,6 @@ impl RawPacket {
             None => write!(f, " proto ({})", protocol.0)?,
         }
 
-        // ESP is valid but the payload might be unparsable, provide the len and
-        // skip for now.
-        if prev_protocol == IpNextHeaderProtocols::Esp {
-            write!(f, " len {len}")?;
-            return Err(PacketFmtError::NotSupported("ESP packet".to_string()));
-        }
-
         self.format_l4(f, format, protocol, payload, len)
     }
 
@@ -507,6 +500,10 @@ impl RawPacket {
             },
             IpNextHeaderProtocols::Icmpv6 => match Icmpv6Packet::new(payload) {
                 Some(icmp) => self.format_icmpv6(f, format, &icmp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            IpNextHeaderProtocols::Esp => match EspPacket::new(payload) {
+                Some(esp) => self.format_esp(f, format, &esp),
                 None => Err(PacketFmtError::Truncated),
             },
             _ => Err(PacketFmtError::NotSupported(format!(
@@ -730,6 +727,21 @@ impl RawPacket {
             " type {} code {}",
             icmp.get_icmpv6_type().0,
             icmp.get_icmpv6_code().0
+        )?;
+        Ok(())
+    }
+
+    fn format_esp(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        esp: &EspPacket,
+    ) -> FmtResult<()> {
+        write!(
+            f,
+            " spi {:#010x} seq {:#x}",
+            esp.get_spi(),
+            esp.get_sequence_number()
         )?;
         Ok(())
     }
