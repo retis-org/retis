@@ -179,49 +179,16 @@ impl RawPacket {
             )?;
         }
 
-        let (etype, payload) = self.traverse_vlan(f, format, eth.get_ethertype(), eth.payload())?;
-
-        if format.print_ll {
-            write!(f, " ")?;
-        }
-
-        self.format_l3(f, format, etype, payload)
+        self.traverse_vlan(f, format, eth.get_ethertype(), eth.payload())
     }
 
-    fn format_l3(
+    fn traverse_vlan(
         &self,
         f: &mut Formatter,
         format: &DisplayFormat,
         etype: EtherType,
         payload: &[u8],
     ) -> FmtResult<()> {
-        match etype {
-            EtherTypes::Arp => match ArpPacket::new(payload) {
-                Some(arp) => self.format_arp(f, format, &arp),
-                None => Err(PacketFmtError::Truncated),
-            },
-            EtherTypes::Ipv4 => match Ipv4Packet::new(payload) {
-                Some(ip) => self.format_ipv4(f, format, &ip),
-                None => Err(PacketFmtError::Truncated),
-            },
-            EtherTypes::Ipv6 => match Ipv6Packet::new(payload) {
-                Some(ip) => self.format_ipv6(f, format, &ip),
-                None => Err(PacketFmtError::Truncated),
-            },
-            _ => Err(PacketFmtError::NotSupported(format!(
-                "ethertype {:#06x}",
-                etype.0
-            ))),
-        }
-    }
-
-    fn traverse_vlan<'a>(
-        &self,
-        f: &mut Formatter,
-        format: &DisplayFormat,
-        etype: EtherType,
-        payload: &'a [u8],
-    ) -> FmtResult<(EtherType, &'a [u8])> {
         match etype {
             EtherTypes::Vlan | EtherTypes::PBridge | EtherTypes::QinQ => {
                 match VlanPacket::new(payload) {
@@ -239,7 +206,7 @@ impl RawPacket {
                     None => Err(PacketFmtError::Truncated),
                 }
             }
-            _ => Ok((etype, payload)),
+            _ => self.format_l3(f, format, etype, payload),
         }
     }
 
@@ -263,6 +230,39 @@ impl RawPacket {
         }
 
         Ok(())
+    }
+
+    fn format_l3(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        etype: EtherType,
+        payload: &[u8],
+    ) -> FmtResult<()> {
+        // In case link-layer information is printed this is not the start of
+        // the output.
+        if format.print_ll {
+            write!(f, " ")?;
+        }
+
+        match etype {
+            EtherTypes::Arp => match ArpPacket::new(payload) {
+                Some(arp) => self.format_arp(f, format, &arp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            EtherTypes::Ipv4 => match Ipv4Packet::new(payload) {
+                Some(ip) => self.format_ipv4(f, format, &ip),
+                None => Err(PacketFmtError::Truncated),
+            },
+            EtherTypes::Ipv6 => match Ipv6Packet::new(payload) {
+                Some(ip) => self.format_ipv6(f, format, &ip),
+                None => Err(PacketFmtError::Truncated),
+            },
+            _ => Err(PacketFmtError::NotSupported(format!(
+                "ethertype {:#06x}",
+                etype.0
+            ))),
+        }
     }
 
     fn format_arp(
