@@ -206,7 +206,7 @@ impl RawPacket {
                     None => Err(PacketFmtError::Truncated),
                 }
             }
-            _ => self.format_l3(f, format, etype, payload),
+            _ => self.format_etype(f, format, etype, payload),
         }
     }
 
@@ -232,7 +232,7 @@ impl RawPacket {
         Ok(())
     }
 
-    fn format_l3(
+    fn format_etype(
         &self,
         f: &mut Formatter,
         format: &DisplayFormat,
@@ -392,7 +392,7 @@ impl RawPacket {
             None => write!(f, " proto ({})", protocol.0)?,
         }
 
-        self.format_l4(
+        self.format_protocol(
             f,
             format,
             ip.get_next_level_protocol(),
@@ -478,7 +478,7 @@ impl RawPacket {
             None => write!(f, " proto ({})", protocol.0)?,
         }
 
-        self.format_l4(f, format, protocol, payload, len)
+        self.format_protocol(f, format, protocol, payload, len)
     }
 
     fn format_macsec(
@@ -547,7 +547,7 @@ impl RawPacket {
         self.traverse_vlan(f, format, protocol, &payload[2..])
     }
 
-    fn format_l4(
+    fn format_protocol(
         &self,
         f: &mut Formatter,
         format: &DisplayFormat,
@@ -829,7 +829,7 @@ impl RawPacket {
             None => write!(f, " proto ({})", protocol.0)?,
         }
 
-        self.format_l4(
+        self.format_protocol(
             f,
             format,
             protocol,
@@ -916,7 +916,7 @@ impl RawPacket {
                 Some(eth) => self.format_ethernet(f, format, &eth),
                 None => Err(PacketFmtError::Truncated),
             },
-            _ => self.format_l3(f, format, protocol, geneve.payload()),
+            _ => self.format_etype(f, format, protocol, geneve.payload()),
         }
     }
 }
