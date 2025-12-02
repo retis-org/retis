@@ -35,9 +35,13 @@
 
 use crate::{display::*, *};
 
-/// Full event. Internal representation
+/// Retis event
+///
+/// The full event with all the optional sections. It serves as internal reprentation
+/// as well as being exposed externally in event files (json-serialized) and python bindings.
 #[derive(Default)]
 #[event_section]
+#[schemars(title = "Retis Metadata")]
 // For backwards compatibility reasons, we keep section names in kebab-case.
 #[serde(rename_all = "kebab-case")]
 pub struct Event {
@@ -45,7 +49,7 @@ pub struct Event {
     pub common: Option<CommonEvent>,
     /// Kernel section.
     pub kernel: Option<KernelEvent>,
-    /// Userpace section.
+    /// Userspace section.
     pub userspace: Option<UserEvent>,
     /// Tracking section.
     pub tracking: Option<TrackingInfo>,
@@ -65,11 +69,11 @@ pub struct Event {
     pub ovs: Option<OvsEvent>,
     /// OVS-detrace section.
     pub ovs_detrace: Option<OvsFlowInfoEvent>,
-    /// Nft section
+    /// Nft section.
     pub nft: Option<NftEvent>,
-    /// Ct section
+    /// Ct section.
     pub ct: Option<CtEvent>,
-    /// Startup event
+    /// Startup event.
     pub startup: Option<StartupEvent>,
 
     #[cfg(feature = "test-events")]

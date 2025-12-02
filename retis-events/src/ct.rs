@@ -13,32 +13,35 @@ pub enum ZoneDir {
     None,
 }
 
+/// TCP
 #[event_type]
 #[derive(Default)]
 pub struct CtTcp {
-    /// TCP source port
+    /// Source port.
     pub sport: u16,
-    /// TCP destination port
+    /// Destination port.
     pub dport: u16,
 }
 
+/// UDP
 #[event_type]
 #[derive(Default)]
 pub struct CtUdp {
-    /// UDP source port
+    /// Source port.
     pub sport: u16,
-    /// UDP destination port
+    /// Destination port.
     pub dport: u16,
 }
 
+/// ICMP
 #[event_type]
 #[derive(Default)]
 pub struct CtIcmp {
-    /// ICMP code
+    /// Code
     pub code: u8,
-    /// ICMP type
+    /// Type
     pub r#type: u8,
-    /// ICMP ID
+    /// ID
     pub id: u16,
 }
 
@@ -78,11 +81,11 @@ pub enum CtIpVersion {
 #[event_type]
 #[derive(Default)]
 pub struct CtIp {
-    /// Source IP address
+    /// Source.
     pub src: String,
-    /// Destination IP address
+    /// Destination.
     pub dst: String,
-    /// IP version
+    /// Version.
     pub version: CtIpVersion,
 }
 
@@ -90,13 +93,13 @@ pub struct CtIp {
 #[event_type]
 #[derive(Default)]
 pub struct CtTuple {
-    /// IP address
+    /// IP address.
     pub ip: CtIp,
-    /// Protocol information
+    /// Protocol.
     pub proto: CtProto,
 }
 
-/// Conntrack state
+/// Conntrack state.
 #[event_type]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
@@ -113,34 +116,34 @@ pub enum CtState {
 /// Conntrack event
 #[event_section]
 pub struct CtEvent {
-    /// Packet's conntrack state
+    /// Conntrack state
     pub state: CtState,
-    /// Base connection event.
+    /// Base connection.
     #[serde(flatten)]
     pub base: CtConnEvent,
-    /// Parent connection information.
+    /// Parent connection.
     pub parent: Option<CtConnEvent>,
 }
 
-/// Conntrack connection information
+/// Conntrack connection
 #[event_type]
 #[derive(Default)]
 pub struct CtConnEvent {
-    /// Zone ID
+    /// Zone ID.
     pub zone_id: u16,
-    /// Zone direction
+    /// Zone direction.
     pub zone_dir: ZoneDir,
-    /// Original tuple
+    /// Original tuple.
     pub orig: CtTuple,
-    /// Reply tuple
+    /// Reply tuple.
     pub reply: CtTuple,
-    /// TCP state; if any
+    /// TCP state.
     pub tcp_state: Option<String>,
-    /// Connection mark tracking label
+    /// Mark.
     pub mark: Option<u32>,
-    /// Connection tracking labels.
+    /// Labels.
     pub labels: Option<U128>,
-    /// nf_conn status (ct->status).
+    /// Status. From ct->status.
     pub ct_status: u64,
 }
 

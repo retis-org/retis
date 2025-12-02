@@ -124,6 +124,18 @@ define build
 	$(CARGO) $(1) $(CARGO_CMD_OPTS)
 endef
 
+wireshark:
+	$(call out_console,BUILD,building wireshark plugin ...)
+	$(MAKE) -C tools/wireshark
+
+wireshark-install:
+	$(call out_console,INSTALL,installing wireshark plugin ...)
+	$(MAKE) -C tools/wireshark install
+
+wireshark-clean:
+	$(call out_console,CLEAN,cleaning wireshark plugin ...)
+	$(MAKE) -C tools/wireshark clean
+
 debug: ebpf
 	$(call build,build,building retis (debug))
 
@@ -211,7 +223,7 @@ clean-ebpf:
 	    rm -rf $(LIBBPF_INCLUDES); \
 	fi
 
-clean: clean-ebpf
+clean: clean-ebpf wireshark-clean
 	$(call out_console,CLEAN,cleaning retis ...)
 	$(CARGO) clean
 
@@ -224,6 +236,10 @@ help:
 	$(call help_once,                        (eBPF only).)
 	$(call help_once,ebpf                --  Builds only the eBPF programs.)
 	$(call gen-bindings                  --  Generate Rust bindings for bpf programs.)
+	$(call help_once,wireshark           --  Builds the Wireshark plugin.)
+	$(call help_once,wireshark-install   --  Installs the Wireshark plugin in the local plugin directory)
+	$(call help_once,                        ($(HOME)/.local/lib/wireshark/plugins). Set WIRESHARK_PLUGIN_BASE_DIR to change.)
+	$(call help_once,wireshark-clean     --  Cleans the Wireshark plugin.)
 	$(call help_once,install             --  Installs Retis.)
 	$(call help_once,release             --  Builds Retis with the release option.)
 	$(call help_once,check               --  Runs cargo check.)
@@ -254,6 +270,6 @@ help:
 	$(call help_once,COV                 --  Enable code coverage for testing. Applies only to the target "test".)
 	$(call help_once,                        Requires llvm-cov and preferably rustup toolchain.)
 
-.PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov
+.PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov wireshark wireshark-install wireshark-clean
 .PHONY: test pytest-deps pytest check-ebpf
 .PHONY: clean clean-bindings clean-cov clean-ebpf

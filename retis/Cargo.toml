@@ -48,7 +48,7 @@ once_cell = "1.15"
 ovs-unixctl = { version = "0.1.0" }
 pager = "0.16"
 pcap = "2.2"
-pcap-file = "2.0"
+pcap-file = { git = "https://github.com/courvoif/pcap-file.git", rev = "e60e2f9b614812360fdf6909b90a8b05283adb05" }
 pest = "2.7"
 pest_derive = "2.7"
 plain = "0.2"
@@ -63,6 +63,7 @@ signal-hook = "0.3"
 termcolor = "1.3"
 time = { version = "0.3", features = ["formatting", "macros"] }
 thiserror = "2.0"
+schemars = "0.9"
 
 [build-dependencies]
 bindgen = "0.72"

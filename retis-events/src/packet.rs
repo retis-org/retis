@@ -16,12 +16,12 @@ use {
 
 use super::*;
 
-/// Raw packet and related metadata.
+/// Packet section. Contains the raw packet and related metadata.
 #[event_section(SectionId::Packet)]
 pub struct PacketEvent {
-    /// Length of the packet.
+    /// Packet length.
     pub len: u32,
-    /// Lenght of the capture. <= len.
+    /// Capture length. <= len.
     pub capture_len: u32,
     /// Raw packet data.
     pub data: RawPacket,
@@ -46,7 +46,7 @@ impl EventFmt for PacketEvent {
 /// Represents a raw packet. Stored internally as a `Vec<u8>`.
 /// We don't use #[event_type] as we're implementing serde::Serialize and
 /// serde::Deserialize manually.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, schemars::JsonSchema)]
 #[cfg_attr(feature = "python", pyclass)]
 pub struct RawPacket(pub Vec<u8>);
 

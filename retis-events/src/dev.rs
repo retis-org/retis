@@ -3,15 +3,15 @@ use std::fmt;
 use super::*;
 use crate::{event_section, Formatter};
 
-/// Skb drop event section.
+/// Device section.
 #[derive(Default)]
 #[event_section(SectionId::Dev)]
 pub struct DevEvent {
-    /// Net device name associated with the packet, from `dev->name`.
+    /// Device name. From `dev->name`.
     pub name: String,
-    /// Net device ifindex associated with the packet, from `dev->ifindex`.
+    /// Ifindex. From `dev->ifindex`.
     pub ifindex: u32,
-    /// Index if the net device the packet arrived on, from `skb->skb_iif`.
+    /// Rx device ifindex. From `skb->skb_iif`.
     pub rx_ifindex: Option<u32>,
 }
 

@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 
 use crate::{event_type, TimeFormat};
 
-/// Representation of `struct timespec` to hold time values.
+/// Timespec. Representation of `struct timespec` to hold time values.
 #[event_type]
 #[derive(Copy, Default)]
 pub struct TimeSpec {
