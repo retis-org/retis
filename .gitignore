@@ -4,3 +4,4 @@ __pycache__/
 retis.data
 retis-events/.tox
 tools/wireshark/retis.so
+.vagrant

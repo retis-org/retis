@@ -1,28 +1,35 @@
 ROOT_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
-LLC := llc
-OBJCOPY := llvm-objcopy
 
+LLC = llc
+OBJCOPY = llvm-objcopy
 CARGO := cargo $(CARGO_OPTS)
-BINDGEN := bindgen
-DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
-ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$(DEFAULT_ARCH))
+BINDGEN = bindgen
+CONTAINER_RUNTIME = podman
 
-RELEASE_VERSION = $(shell tools/localversion)
-RELEASE_NAME ?= $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
+export LCC OBJCOPY
+
+define retis_set_version
+RELEASE_VERSION := $(shell tools/localversion)
+RELEASE_NAME := $(shell $(CARGO) metadata --no-deps --format-version=1 | jq -r '.packages | .[] | select(.name=="retis") | .metadata.misc.release_name')
+export RELEASE_NAME RELEASE_VERSION
+endef
+
 RELEASE_FLAGS = -Dwarnings
+
+define ebpf_set_vars
+DEFAULT_ARCH := $(patsubst target_arch="%",%,$(filter target_arch="%",$(shell rustc --print cfg)))
+ARCH := $(if $(CARGO_BUILD_TARGET),$(firstword $(subst -, ,$(CARGO_BUILD_TARGET))),$$(DEFAULT_ARCH))
 
 # Needs to be set because of PT_REGS_PARMx() and any other target
 # specific facility.
-x86_64 := x86
-aarch64 := arm64
-powerpc64 := powerpc
-s390x := s390
+x86_64 = x86
+aarch64 = arm64
+powerpc64 = powerpc
+s390x = s390
 # Mappings takes precedence over custom ARCH
-BPF_ARCH := $(if $($(ARCH)),$($(ARCH)),$(ARCH))
+BPF_ARCH := $(if $$($$(ARCH)),$$($$(ARCH)),$$(ARCH))
 
-BPF_CFLAGS_PAHOLE := \
-	-Wno-gnu-variable-sized-type-not-at-end
-
+BPF_CFLAGS_PAHOLE = -Wno-gnu-variable-sized-type-not-at-end
 BPF_CFLAGS := -target bpf \
               -Wall \
               -Werror \
@@ -30,15 +37,13 @@ BPF_CFLAGS := -target bpf \
               -Wno-pointer-sign \
               -Wno-compare-distinct-pointer-types \
               -Wno-unused-command-line-argument \
-              $(BPF_CFLAGS_PAHOLE) \
+              $$(BPF_CFLAGS_PAHOLE) \
               -fno-stack-protector \
-              -D__TARGET_ARCH_$(BPF_ARCH) \
+              -D__TARGET_ARCH_$$(BPF_ARCH) \
               -O2
-
-export LCC OBJCOPY RELEASE_NAME RELEASE_VERSION
+endef
 
 PRINT = printf
-CONTAINER_RUNTIME := podman
 
 define help_once
     @$(PRINT) '$(1)\n'
@@ -63,16 +68,16 @@ endif
 
 ifeq ($(NOVENDOR),)
     # This MUST be kept in sync with API_HEADERS under lib.rs in libbpf-sys
-    LIBBPF_API_HEADERS := bpf.h \
-                          libbpf.h \
-                          btf.h \
-                          bpf_helpers.h \
-                          bpf_helper_defs.h \
-                          bpf_tracing.h \
-                          bpf_endian.h \
-                          bpf_core_read.h \
-                          libbpf_common.h \
-                          usdt.bpf.h
+    LIBBPF_API_HEADERS = bpf.h \
+                         libbpf.h \
+                         btf.h \
+                         bpf_helpers.h \
+                         bpf_helper_defs.h \
+                         bpf_tracing.h \
+                         bpf_endian.h \
+                         bpf_core_read.h \
+                         libbpf_common.h \
+                         usdt.bpf.h
 
     LIBBPF_SYS_LIBBPF_BASE_PATH := $(dir $(shell cargo metadata --format-version=1 | jq -r '.packages | .[] | select(.name == "libbpf-sys") | .manifest_path'))
     LIBBPF_SYS_LIBBPF_INCLUDES :=  $(wildcard $(addprefix $(LIBBPF_SYS_LIBBPF_BASE_PATH)/libbpf/src/, $(LIBBPF_API_HEADERS)))
@@ -137,9 +142,11 @@ wireshark-clean:
 	$(MAKE) -C tools/wireshark clean
 
 debug: ebpf
+	$(eval $(call retis_set_version))
 	$(call build,build,building retis (debug))
 
 release: ebpf
+	$(eval $(call retis_set_version))
 	$(call build,build --release,building retis (release),$(RELEASE_FLAGS))
 
 test: ebpf
@@ -150,7 +157,17 @@ else
 	$(call build,test,building and running tests)
 endif
 
+functional-tests:
+	for script in tests/next/*.sh; do \
+		[ "$$LIST_TESTS" == "1" ] && echo "$$script:"; \
+		$$script; \
+	done
+
+functional-tests-list: export LIST_TESTS=1
+functional-tests-list: functional-tests
+
 bench: ebpf
+	$(eval $(call retis_set_version))
 	$(call build,build -F benchmark --release,building benchmarks)
 
 ifeq ($(NOVENDOR),)
@@ -159,7 +176,10 @@ $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
 	cp $^ $(LIBBPF_INCLUDES)/bpf/
 endif
 
-ebpf: $(EBPF_PROBES) $(EBPF_HOOKS)
+ebpf_prereqs:
+	$(eval $(call ebpf_set_vars))
+
+ebpf: ebpf_prereqs $(EBPF_PROBES) $(EBPF_HOOKS)
 
 $(EBPF_PROBES): OUT_NAME := PROBE
 $(EBPF_HOOKS):  OUT_NAME := HOOK
@@ -190,7 +210,13 @@ endef
 
 $(foreach tgt,check clippy,$(eval $(call analyzer_tmpl,$(tgt))))
 
-check-ebpf:
+lint-rust:
+	$(call build, fmt --check, check format)
+	# No need to run `check` in addition to `clippy`, it's a superset.
+	$(call build, clippy $(if $(VERBOSITY),,--quiet), running clippy)
+	$(call build, clippy $(if $(VERBOSITY),,--quiet) -F benchmark, running clippy on benchmarks)
+
+lint-ebpf:
 	$(call out_console,CHECKPATCH,checking eBPF coding style ...)
 	base_hash=$$(git merge-base $${BASE_COMMIT:-main} HEAD); \
 	COMMIT_RANGE=$$(git rev-list --no-merges --reverse $${base_hash}..HEAD); \
@@ -202,7 +228,18 @@ check-ebpf:
 	    git show --format=email $${commit} -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=SPDX_LICENSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || restyle=$$?; \
 	    echo; \
 	done; \
+	echo "Uncommitted changes"; \
+	echo "-------------------"; \
+	git diff -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=SPDX_LICNSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || restyle=$$?; \
 	[ -z "$$restyle" ]
+
+lint-python:
+	$(call out_console,FLAKE8,checking Python coding style ...)
+	python3 -m flake8 tests
+	$(call out_console,BLACK,checking Python coding style ...)
+	python3 -m black --check $(if $(VERBOSITY),,--quiet) --diff tests/*.py tests/next/include/*.py
+
+lints: lint-rust lint-ebpf lint-python
 
 report-cov:
 	$(CARGO) llvm-cov report $(CARGO_CMD_OPTS)
@@ -228,48 +265,61 @@ clean: clean-ebpf wireshark-clean
 	$(CARGO) clean
 
 help:
-	$(call help_once,all                 --  Builds the tool (both eBPF programs and retis).)
-	$(call help_once,bench               --  Builds benchmarks.)
-	$(call help_once,clean               --  Deletes all the files generated during the build process)
-	$(call help_once,                        (eBPF and rust directory).)
-	$(call help_once,clean-ebpf          --  Deletes all the files generated during the build process)
-	$(call help_once,                        (eBPF only).)
-	$(call help_once,ebpf                --  Builds only the eBPF programs.)
-	$(call gen-bindings                  --  Generate Rust bindings for bpf programs.)
-	$(call help_once,wireshark           --  Builds the Wireshark plugin.)
-	$(call help_once,wireshark-install   --  Installs the Wireshark plugin in the local plugin directory)
-	$(call help_once,                        ($(HOME)/.local/lib/wireshark/plugins). Set WIRESHARK_PLUGIN_BASE_DIR to change.)
-	$(call help_once,wireshark-clean     --  Cleans the Wireshark plugin.)
-	$(call help_once,install             --  Installs Retis.)
-	$(call help_once,release             --  Builds Retis with the release option.)
-	$(call help_once,check               --  Runs cargo check.)
-	$(call help_once,check-ebpf          --  Checks eBPF coding style for commits in current branch.)
-	$(call help_once,                    --  Requires `BASE_COMMIT` env variable to be set otherwise `main` is assumed.)
-	$(call help_once,clippy              --  Runs cargo clippy.)
-	$(call help_once,test                --  Builds and runs unit tests.)
-	$(call help_once,pylib               --  Builds the python bindings.)
-	$(call help_once,pytest              --  Tests the python bindings (requires "tox" installed).)
-	$(call help_once,report-cov          --  Generate coverage report after code coverage testing.)
-	$(call help_once,clean-cov           --  Deletes all the files generated during code coverage testing.)
+	$(call help_once,Generic targets:)
+	$(call help_once, all                   --  Builds the tool (both eBPF programs and retis).)
+	$(call help_once, install               --  Builds and installs Retis to $(HOME)/.cargo/bin.)
+	$(call help_once,                       --  See `man cargo install` for more details.)
+	$(call help_once, release               --  Builds Retis with the release option.)
+	$(call help_once, wireshark-install     --  Builds and installs the Wireshark plugin in the local plugin directory)
+	$(call help_once,                           ($(HOME)/.local/lib/wireshark/plugins). Set WIRESHARK_PLUGIN_BASE_DIR to change.)
+	$(call help_once, lints                 --  Runs linters for Rust/eBPF/Python.)
+	$(call help_once, test                  --  Builds and runs unit tests.)
+	$(call help_once, clean                 --  Deletes all the files generated during the build process.)
+	$(call help_once)
+	$(call help_once,Below are listed lower level targets and optional variables.)
+	$(call help_once)
+	$(call help_once,Building targets:)
+	$(call help_once, bench                 --  Builds benchmarks.)
+	$(call help_once, ebpf                  --  Builds only the eBPF programs.)
+	$(call help_once, pylib                 --  Builds the python bindings.)
+	$(call help_once, wireshark             --  Builds the Wireshark plugin.)
+	$(call help_once, report-cov            --  Generate coverage report after code coverage testing.)
+	$(call help_once, gen-bindings          --  Generate Rust bindings for bpf programs.)
+	$(call help_once)
+	$(call help_once,Cleaning targets:)
+	$(call help_once, clean-ebpf            --  Deletes all the files eBPF generated during the build process.)
+	$(call help_once, wireshark-clean       --  Cleans the Wireshark plugin.)
+	$(call help_once, clean-cov             --  Deletes all the files generated during code coverage testing.)
+	$(call help_once)
+	$(call help_once,Testing targets:)
+	$(call help_once, lint-rust             --  Runs format and linter checks.)
+	$(call help_once, lint-ebpf             --  Checks eBPF coding style for commits in current branch.)
+	$(call help_once,                       --  Requires `BASE_COMMIT` env variable to be set otherwise `main` is assumed.)
+	$(call help_once, lint-python           --  Runs format and linter checks on Python files.)
+	$(call help_once, check                 --  Runs cargo check.)
+	$(call help_once, clippy                --  Runs cargo clippy.)
+	$(call help_once, functional-tests      --  Runs functional tests. Set $$(TESTS) to run specfic tests. E.g. TESTS="test0 test1".)
+	$(call help_once, functional-tests-list --  Lists functional tests.)
+	$(call help_once, pytest                --  Tests the python bindings (requires "tox" installed).)
 	$(call help_once)
 	$(call help_once,Optional variables that can be used to override the default behavior:)
-	$(call help_once,V                   --  If set to 1 the verbose output will be printed.)
-	$(call help_once,                        cargo verbosity is set to default.)
-	$(call help_once,                        To override `cargo` behavior please refer to $$(CARGO_OPTS))
-	$(call help_once,                        $$(CARGO_CMD_OPTS) and for the install $$(CARGO_INSTALL_OPTS).)
-	$(call help_once,                        For further `cargo` customization please refer to configuration)
-	$(call help_once,                        environment variables)
-	$(call help_once,                        (https://doc.rust-lang.org/cargo/reference/environment-variables.html).)
-	$(call help_once,CARGO_CMD_OPTS      --  Changes `cargo` subcommand default behavior (e.g. --features <features> for `build`).)
-	$(call help_once,CARGO_INSTALL_OPTS  --  Changes `cargo` install subcommand default behavior.)
-	$(call help_once,CARGO_OPTS          --  Changes `cargo` default behavior (e.g. --verbose).)
-	$(call help_once,NOVENDOR            --  Avoid to self detect and consume the vendored headers)
-	$(call help_once,                        shipped with libbpf-sys.)
-	$(call help_once,RA                  --  Applies to check and clippy and runs those targets with the options needed)
-	$(call help_once,                        for rust-analyzer. When $$(RA) is used $$(V) becomes ineffective.)
-	$(call help_once,COV                 --  Enable code coverage for testing. Applies only to the target "test".)
-	$(call help_once,                        Requires llvm-cov and preferably rustup toolchain.)
+	$(call help_once, V                     --  If set to 1 the verbose output will be printed.)
+	$(call help_once,                           The cargo verbosity is set to default.)
+	$(call help_once,                           To override `cargo` behavior please refer to $$(CARGO_OPTS))
+	$(call help_once,                           $$(CARGO_CMD_OPTS) and for the install $$(CARGO_INSTALL_OPTS).)
+	$(call help_once,                           For further `cargo` customization please refer to configuration)
+	$(call help_once,                           environment variables)
+	$(call help_once,                           (https://doc.rust-lang.org/cargo/reference/environment-variables.html).)
+	$(call help_once, CARGO_CMD_OPTS        --  Changes `cargo` subcommand default behavior (e.g. --features <features> for `build`).)
+	$(call help_once, CARGO_INSTALL_OPTS    --  Changes `cargo` install subcommand default behavior.)
+	$(call help_once, CARGO_OPTS            --  Changes `cargo` default behavior (e.g. --verbose).)
+	$(call help_once, NOVENDOR              --  Avoid to self detect and consume the vendored headers)
+	$(call help_once,                           shipped with libbpf-sys.)
+	$(call help_once, RA                    --  Applies to check and clippy and runs those targets with the options needed)
+	$(call help_once,                           for rust-analyzer. When $$(RA) is used $$(V) becomes ineffective.)
+	$(call help_once, COV                   --  Enable code coverage for testing. Applies only to the target "test".)
+	$(call help_once,                           Requires llvm-cov and preferably rustup toolchain.)
 
-.PHONY: all bench ebpf $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov wireshark wireshark-install wireshark-clean
-.PHONY: test pytest-deps pytest check-ebpf
+.PHONY: all bench ebpf ebpf_prereqs $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov wireshark wireshark-install wireshark-clean
+.PHONY: test pytest-deps pytest lint-ebpf functional-tests functional-tests-list lint-rust lint-python lints
 .PHONY: clean clean-bindings clean-cov clean-ebpf
