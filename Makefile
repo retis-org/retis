@@ -217,6 +217,9 @@ lint-ebpf:
 	    git show --format=email $${commit} -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=SPDX_LICENSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || restyle=$$?; \
 	    echo; \
 	done; \
+	echo "Uncommitted changes"; \
+	echo "-------------------"; \
+	git diff -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=SPDX_LICNSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || restyle=$$?; \
 	[ -z "$$restyle" ]
 
 lint-python:
