@@ -33,6 +33,7 @@ const FIXUPS: &[&[CompatFixup]] = &[
             "startup/machine/hardware_name",
             CompatValue::String("unknown"),
         ),
+        Add("startup/command_line", CompatValue::String("unknown")),
     ],
 ];
 

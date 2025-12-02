@@ -2,6 +2,7 @@
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::{HashMap, HashSet},
+    env,
     fs::OpenOptions,
     io::{self, BufWriter},
     path::{Path, PathBuf},
@@ -348,11 +349,16 @@ impl Collectors {
         let version = uname.version().to_string_lossy();
         let machine = uname.machine().to_string_lossy();
 
+        let command_line: String = env::args_os()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+
         self.events_factory.add_event(|event| {
             event.startup = Some(StartupEvent {
                 retis_version: option_env!("RELEASE_VERSION")
                     .unwrap_or("unspec")
                     .to_string(),
+                command_line: command_line.clone(),
                 clock_monotonic_offset: self.monotonic_offset,
                 machine: MachineInfo {
                     kernel_release: release.to_string(),
