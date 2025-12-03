@@ -550,7 +550,7 @@ impl Collectors {
                         },
                         self.monotonic_offset,
                     )
-                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+                    .or_else(|e| bail!("Could not create or open '{}': {e}", out.display()))?,
                 ),
                 PrintEventFormat::Json,
             ));
