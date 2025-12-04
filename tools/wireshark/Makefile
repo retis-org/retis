@@ -5,10 +5,10 @@ HEADERS := $(wildcard *.h)
 OUTFILE = $(PLUGIN_NAME).so
 
 CC = gcc
-CFLAGS = -Wall -fPIC -I. $(shell pkg-config --cflags wireshark json-c)
-LDFLAGS = -shared $(shell pkg-config --libs wireshark json-c)
+CFLAGS := -Wall -fPIC -I. $(shell pkg-config --silence-errors --cflags wireshark json-c)
+LDFLAGS := -shared $(shell pkg-config --silence-errors --libs wireshark json-c)
 
-WIRESHARK_VERSION_FULL := $(shell pkg-config --modversion wireshark)
+WIRESHARK_VERSION_FULL := $(shell pkg-config --silence-errors --modversion wireshark)
 WIRESHARK_VERSION := $(shell echo $(WIRESHARK_VERSION_FULL) | cut -d. -f1,2)
 
 WIRESHARK_PLUGIN_BASE_DIR ?= $(HOME)/.local/lib/wireshark/plugins
