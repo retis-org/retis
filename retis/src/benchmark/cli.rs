@@ -1,5 +1,5 @@
 use anyhow::{bail, Result};
-use clap::{arg, builder::PossibleValuesParser, Parser};
+use clap::{builder::PossibleValuesParser, Parser};
 
 use crate::{benchmark::*, cli::*};
 
