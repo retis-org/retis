@@ -4,6 +4,10 @@ set -e
 RETIS_IMAGE=${RETIS_IMAGE:-quay.io/retis/retis}
 RETIS_TAG=${RETIS_TAG:-latest}
 
+errcho() {
+	>&2 echo $*
+}
+
 # Auto-detect the available runtime.
 if command -v podman >/dev/null; then
 	runtime=podman
@@ -11,7 +15,7 @@ if command -v podman >/dev/null; then
 
 	# Retis cannot run in an unprivileged container to collect events.
 	if [[ $(id -u) -ne 0 && $@ =~ "collect" ]]; then
-		echo "Error: Retis collection cannot run in an unprivileged container."
+		errcho "Error: Retis collection cannot run in an unprivileged container."
 		exit -1
 	fi
 elif command -v docker >/dev/null; then
@@ -22,7 +26,7 @@ elif command -v docker >/dev/null; then
 	[[ $@ =~ "--allow-system-changes" ]] && \
 		extra_args="--security-opt apparmor=unconfined"
 else
-	echo "No container runtime detected. Please install 'podman' or 'docker'."
+	errcho "No container runtime detected. Please install 'podman' or 'docker'."
 	exit -1
 fi
 
@@ -45,8 +49,8 @@ for kconfig in /proc/config.gz \
     fi
 done
 if [[ -z $kconfig_map ]]; then
-	echo "WARN: Could not auto-detect kernel configuration location. "
-	echo "You can place your configuration file in the current directory and use the '--kconf' option"
+	errcho "WARN: Could not auto-detect kernel configuration location. "
+	errcho "You can place your configuration file in the current directory and use the '--kconf' option"
 fi
 
 # Find tracefs; keep mounting debugfs for older RETIS_TAG.
