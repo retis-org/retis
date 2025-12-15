@@ -4,8 +4,8 @@ use base64::{
     display::Base64Display, engine::general_purpose::STANDARD, prelude::BASE64_STANDARD, Engine,
 };
 use retis_pnet::{
-    arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipv4::*, ipv6::*, tcp::*, udp::*,
-    vlan::*, vxlan::*, *,
+    arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipsec::*, ipv4::*, ipv6::*,
+    macsec::*, tcp::*, udp::*, vlan::*, vxlan::*, *,
 };
 
 #[cfg(feature = "python")]
@@ -179,49 +179,16 @@ impl RawPacket {
             )?;
         }
 
-        let (etype, payload) = self.traverse_vlan(f, format, eth.get_ethertype(), eth.payload())?;
-
-        if format.print_ll {
-            write!(f, " ")?;
-        }
-
-        self.format_l3(f, format, etype, payload)
+        self.traverse_vlan(f, format, eth.get_ethertype(), eth.payload())
     }
 
-    fn format_l3(
+    fn traverse_vlan(
         &self,
         f: &mut Formatter,
         format: &DisplayFormat,
         etype: EtherType,
         payload: &[u8],
     ) -> FmtResult<()> {
-        match etype {
-            EtherTypes::Arp => match ArpPacket::new(payload) {
-                Some(arp) => self.format_arp(f, format, &arp),
-                None => Err(PacketFmtError::Truncated),
-            },
-            EtherTypes::Ipv4 => match Ipv4Packet::new(payload) {
-                Some(ip) => self.format_ipv4(f, format, &ip),
-                None => Err(PacketFmtError::Truncated),
-            },
-            EtherTypes::Ipv6 => match Ipv6Packet::new(payload) {
-                Some(ip) => self.format_ipv6(f, format, &ip),
-                None => Err(PacketFmtError::Truncated),
-            },
-            _ => Err(PacketFmtError::NotSupported(format!(
-                "ethertype {:#06x}",
-                etype.0
-            ))),
-        }
-    }
-
-    fn traverse_vlan<'a>(
-        &self,
-        f: &mut Formatter,
-        format: &DisplayFormat,
-        etype: EtherType,
-        payload: &'a [u8],
-    ) -> FmtResult<(EtherType, &'a [u8])> {
         match etype {
             EtherTypes::Vlan | EtherTypes::PBridge | EtherTypes::QinQ => {
                 match VlanPacket::new(payload) {
@@ -239,7 +206,7 @@ impl RawPacket {
                     None => Err(PacketFmtError::Truncated),
                 }
             }
-            _ => Ok((etype, payload)),
+            _ => self.format_etype(f, format, etype, payload),
         }
     }
 
@@ -263,6 +230,43 @@ impl RawPacket {
         }
 
         Ok(())
+    }
+
+    fn format_etype(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        etype: EtherType,
+        payload: &[u8],
+    ) -> FmtResult<()> {
+        // In case link-layer information is printed this is not the start of
+        // the output.
+        if format.print_ll {
+            write!(f, " ")?;
+        }
+
+        match etype {
+            EtherTypes::Macsec => match MacsecPacket::new(payload) {
+                Some(macsec) => self.format_macsec(f, format, &macsec),
+                None => Err(PacketFmtError::Truncated),
+            },
+            EtherTypes::Arp => match ArpPacket::new(payload) {
+                Some(arp) => self.format_arp(f, format, &arp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            EtherTypes::Ipv4 => match Ipv4Packet::new(payload) {
+                Some(ip) => self.format_ipv4(f, format, &ip),
+                None => Err(PacketFmtError::Truncated),
+            },
+            EtherTypes::Ipv6 => match Ipv6Packet::new(payload) {
+                Some(ip) => self.format_ipv6(f, format, &ip),
+                None => Err(PacketFmtError::Truncated),
+            },
+            _ => Err(PacketFmtError::NotSupported(format!(
+                "ethertype {:#06x}",
+                etype.0
+            ))),
+        }
     }
 
     fn format_arp(
@@ -388,7 +392,7 @@ impl RawPacket {
             None => write!(f, " proto ({})", protocol.0)?,
         }
 
-        self.format_l4(
+        self.format_protocol(
             f,
             format,
             ip.get_next_level_protocol(),
@@ -474,17 +478,76 @@ impl RawPacket {
             None => write!(f, " proto ({})", protocol.0)?,
         }
 
-        // ESP is valid but the payload might be unparsable, provide the len and
-        // skip for now.
-        if prev_protocol == IpNextHeaderProtocols::Esp {
-            write!(f, " len {len}")?;
-            return Err(PacketFmtError::NotSupported("ESP packet".to_string()));
-        }
-
-        self.format_l4(f, format, protocol, payload, len)
+        self.format_protocol(f, format, protocol, payload, len)
     }
 
-    fn format_l4(
+    fn format_macsec(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        macsec: &MacsecPacket,
+    ) -> FmtResult<()> {
+        let tci = macsec.get_tci();
+
+        if format.print_ll {
+            write!(
+                f,
+                "an {} pn {}",
+                macsec.get_association_number(),
+                macsec.get_packet_number(),
+            )?;
+
+            let mut flags = Vec::new();
+            if tci & MACSEC_TCI_E != 0 {
+                flags.push('E');
+            }
+            if tci & MACSEC_TCI_C != 0 {
+                flags.push('C');
+            }
+            if tci & MACSEC_TCI_ES != 0 {
+                flags.push('S');
+            }
+            if tci & MACSEC_TCI_SCB != 0 {
+                flags.push('B');
+            }
+            if tci & MACSEC_TCI_SC != 0 {
+                flags.push('I');
+            }
+            write!(f, " flags [{}]", flags.into_iter().collect::<String>())?;
+
+            let sl = macsec.get_short_length();
+            if sl > 0 {
+                write!(f, " sl {sl}")?;
+            }
+
+            if tci & MACSEC_TCI_SC != 0 {
+                write!(
+                    f,
+                    " sci 0x{}",
+                    macsec
+                        .get_sci()
+                        .iter()
+                        .map(|b| format!("{:02x}", b))
+                        .collect::<String>()
+                )?;
+            }
+        }
+
+        if tci & (MACSEC_TCI_E | MACSEC_TCI_C) != 0 {
+            // Not more we can do, data is encrypted or modified.
+            if !format.print_ll {
+                // Print at least a hint if we didn't print anything yet.
+                write!(f, "802.1AE MACsec frame")?;
+            }
+            return Ok(());
+        }
+
+        let payload = macsec.payload();
+        let protocol = EtherType::new(u16::from_be_bytes(payload[0..2].try_into().unwrap()));
+        self.traverse_vlan(f, format, protocol, &payload[2..])
+    }
+
+    fn format_protocol(
         &self,
         f: &mut Formatter,
         format: &DisplayFormat,
@@ -507,6 +570,14 @@ impl RawPacket {
             },
             IpNextHeaderProtocols::Icmpv6 => match Icmpv6Packet::new(payload) {
                 Some(icmp) => self.format_icmpv6(f, format, &icmp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            IpNextHeaderProtocols::Ah => match AhPacket::new(payload) {
+                Some(ah) => self.format_ah(f, format, &ah, payload_len),
+                None => Err(PacketFmtError::Truncated),
+            },
+            IpNextHeaderProtocols::Esp => match EspPacket::new(payload) {
+                Some(esp) => self.format_esp(f, format, &esp),
                 None => Err(PacketFmtError::Truncated),
             },
             _ => Err(PacketFmtError::NotSupported(format!(
@@ -734,6 +805,54 @@ impl RawPacket {
         Ok(())
     }
 
+    fn format_ah(
+        &self,
+        f: &mut Formatter,
+        format: &DisplayFormat,
+        ah: &AhPacket,
+        payload_len: u32,
+    ) -> FmtResult<()> {
+        write!(
+            f,
+            " spi {:#010x} seq {:#x} icv 0x{}",
+            ah.get_spi(),
+            ah.get_sequence_number(),
+            ah.get_icv()
+                .iter()
+                .map(|b| format!("{:02x}", b))
+                .collect::<String>()
+        )?;
+
+        let protocol = ah.get_next_header();
+        match helpers::protocol_str(protocol) {
+            Some(proto) => write!(f, " proto {proto} ({})", protocol.0)?,
+            None => write!(f, " proto ({})", protocol.0)?,
+        }
+
+        self.format_protocol(
+            f,
+            format,
+            protocol,
+            ah.payload(),
+            payload_len.saturating_sub((ah.get_payload_len() as u32 + 2) * 4),
+        )
+    }
+
+    fn format_esp(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        esp: &EspPacket,
+    ) -> FmtResult<()> {
+        write!(
+            f,
+            " spi {:#010x} seq {:#x}",
+            esp.get_spi(),
+            esp.get_sequence_number()
+        )?;
+        Ok(())
+    }
+
     fn format_vxlan(
         &self,
         f: &mut Formatter,
@@ -797,7 +916,7 @@ impl RawPacket {
                 Some(eth) => self.format_ethernet(f, format, &eth),
                 None => Err(PacketFmtError::Truncated),
             },
-            _ => self.format_l3(f, format, protocol, geneve.payload()),
+            _ => self.format_etype(f, format, protocol, geneve.payload()),
         }
     }
 }
