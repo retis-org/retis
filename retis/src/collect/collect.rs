@@ -342,7 +342,7 @@ impl Collectors {
     }
 
     // Generate an initial event with the startup section.
-    fn initial_event(&mut self) -> Result<()> {
+    fn initial_event(&mut self, cmdline: &str) -> Result<()> {
         let uname = uname().map_err(|e| anyhow!("Failed to get system information: {e}"))?;
         let release = uname.release().to_string_lossy();
         let version = uname.version().to_string_lossy();
@@ -353,6 +353,7 @@ impl Collectors {
                 retis_version: option_env!("RELEASE_VERSION")
                     .unwrap_or("unspec")
                     .to_string(),
+                cmdline: cmdline.to_string(),
                 clock_monotonic_offset: self.monotonic_offset,
                 machine: MachineInfo {
                     kernel_release: release.to_string(),
@@ -489,7 +490,7 @@ impl Collectors {
         let mut section_factories = section_factories()?;
 
         self.run.register_term_signals()?;
-        self.initial_event()?;
+        self.initial_event(&main_config.cmdline)?;
         self.init_collectors(&mut section_factories, collect)?;
         self.config_filters(collect)?;
         self.register_probes(collect, main_config)?;

@@ -19,6 +19,8 @@ pub struct MachineInfo {
 pub struct StartupEvent {
     /// Retis version used while collecting events.
     pub retis_version: String,
+    /// Expanded command line used to invoke the application.
+    pub cmdline: String,
     /// CLOCK_MONOTONIC offset in regards to local machine time.
     pub clock_monotonic_offset: TimeSpec,
     /// Machine information retrieved while collecting events.
@@ -30,6 +32,8 @@ impl EventFmt for StartupEvent {
         let sep = if d.multiline { "\n" } else { " " };
 
         write!(f, "Retis version {}", self.retis_version)?;
+
+        write!(f, "{sep}Command line {}", self.cmdline)?;
 
         write!(
             f,

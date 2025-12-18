@@ -172,6 +172,9 @@ pub(crate) struct MainConfig {
         help = "Path to an additional directory with custom profiles. Takes precedence over built-in profiles directories."
     )]
     pub(crate) extra_profiles_dir: Option<PathBuf>,
+    /// Expanded command line that was used to invoke retis
+    #[arg(skip)]
+    pub(crate) cmdline: String,
 }
 
 const HELP_TEMPLATE: &str = "\
@@ -339,13 +342,13 @@ impl RetisCli {
         RetisCli::enhance_profile(&main_config, subcommand.name().as_str(), &mut args)
             .map_err(|err| command.error(ErrorKind::InvalidValue, format!("{err}")))?;
 
-        debug!(
-            "Resulting CLI arguments: {}",
-            args.iter()
-                .map(|o| o.as_os_str().to_str().unwrap_or("<encoding error>"))
-                .collect::<Vec<&str>>()
-                .join(" ")
-        );
+        let cmdline = args
+            .iter()
+            .map(|o| o.as_os_str().to_str().unwrap_or("<encoding error>"))
+            .collect::<Vec<&str>>()
+            .join(" ");
+
+        debug!("Resulting CLI arguments: {cmdline}");
 
         // Final round of parsing.
         let matches = match cfg!(test) {
@@ -365,6 +368,9 @@ impl RetisCli {
                 .update_from_arg_matches(matches)
                 .unwrap_or_else(|e| e.exit()),
         }
+
+        // Store the command line for use in initial event
+        main_config.cmdline = cmdline;
 
         Ok(CliConfig {
             command,
