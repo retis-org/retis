@@ -34,7 +34,7 @@ unittest_task:
     # make perl happy.
     echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
     git remote update origin
-    make check-ebpf BASE_COMMIT=origin/$CIRRUS_BASE_BRANCH
+    make lint-ebpf BASE_COMMIT=origin/$CIRRUS_BASE_BRANCH
   doc_check_script: |
     python3 -m venv .venv
     source .venv/bin/activate
@@ -188,6 +188,7 @@ functional_task:
   test_script: &functional_test
     - ssh -tt ${DISTRO} "env CARGO_CMD_OPTS=$CARGO_CMD_OPTS bash --login -exc 'cd /vagrant && make V=1'"
     - ssh -tt ${DISTRO} "cd /vagrant/tests && sudo python3 -m pytest ${TEST_EXTRA_ARGS}"
+    - ssh -tt ${DISTRO} "bash --login -exc 'cd /vagrant && sudo make functional-tests'"
 
 # Manual trigger for non-PR branches.
 manual_test_funtional_task:
