@@ -18,3 +18,7 @@ pub(crate) use sort::*;
 
 pub(crate) mod schema;
 pub(crate) use schema::*;
+
+pub(crate) mod capinfo;
+pub(crate) use capinfo::*;
+
