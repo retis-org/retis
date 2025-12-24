@@ -18,3 +18,6 @@ pub(crate) use sort::*;
 
 pub(crate) mod schema;
 pub(crate) use schema::*;
+
+pub(crate) mod stats;
+pub(crate) use stats::*;

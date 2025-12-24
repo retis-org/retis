@@ -206,6 +206,7 @@ impl RetisCli {
         cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
         cli.add_subcommand(Box::new(Complete::new()?))?;
         cli.add_subcommand(Box::new(PrintSchema::new()?))?;
+        cli.add_subcommand(Box::new(Stats::new()?))?;
 
         #[cfg(feature = "benchmark")]
         cli.add_subcommand(Box::new(Benchmark::new()?))?;
