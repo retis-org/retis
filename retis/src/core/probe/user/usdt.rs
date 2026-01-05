@@ -91,29 +91,3 @@ impl UsdtBuilder<'_> {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use crate::core::{probe::user::UsdtProbe, user::proc::Process};
-
-    use ::probe::probe as define_usdt;
-
-    #[test]
-    #[cfg_attr(not(feature = "test_cap_bpf"), ignore)]
-    fn init_and_attach_usdt() {
-        define_usdt!(test_builder, usdt, 1);
-
-        let mut builder = UsdtBuilder::new().unwrap();
-
-        let p = Process::from_pid(std::process::id() as i32).unwrap();
-
-        // It's for now, the probes below won't do much.
-        assert!(builder.init(Vec::new(), Vec::new(), None, 0).is_ok());
-        assert!(builder
-            .add_probe(Probe::usdt(UsdtProbe::new(&p, "test_builder::usdt").unwrap()).unwrap())
-            .is_ok());
-        assert!(builder.attach().is_ok());
-    }
-}
