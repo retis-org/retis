@@ -25,7 +25,7 @@
 
 /* Compatibility */
 #define WIRESHARK_VERSION \
-        ((WIRESHARK_VERSION_MAJOR * 100) + (WIRESHARK_VERSION_MINOR) * 10)
+	((WIRESHARK_VERSION_MAJOR * 100) + (WIRESHARK_VERSION_MINOR) * 10)
 
 #if WIRESHARK_VERSION < 430
 #error "Wireshark version 4.3 or higher is required"
@@ -576,7 +576,8 @@ static void pref_retis_schema(void)
 
 	f = fopen(schema_file_path, "r");
 	if (!f) {
-		ws_warning("Failed to open configured schema file: %s", schema_file_path);
+		ws_warning("Failed to open configured schema file: %s",
+			   schema_file_path);
 		return;
 	}
 
@@ -598,7 +599,8 @@ static void pref_retis_schema(void)
 
 	buffer = g_malloc(file_size + 1);
 	if (fread(buffer, 1, file_size, f) != file_size) {
-		ws_warning("Failed to read configured schema file: %s", g_strerror(errno));
+		ws_warning("Failed to read configured schema file: %s",
+			   g_strerror(errno));
 		g_free(buffer);
 		fclose(f);
 		return;
@@ -616,8 +618,8 @@ static void pref_retis_schema(void)
 	}
 
 	if (register_retis_fields_from_schema_json(NULL, NULL, NULL)) {
-		ws_warning("Retis configured schema parsed but failed to register"
-				"  fields with epan.");
+		ws_warning("Retis configured schema parsed but failed to"
+			   " register fields with epan.");
 		json_object_put(schema);
 		schema = NULL;
 		return;
@@ -738,7 +740,7 @@ static bool process_retis_option(wtap_block_t block _U_, unsigned option_id,
 
 	tok = json_tokener_new();
 	retis_event = json_tokener_parse_ex(tok, compat_wtap_opt_data(option),
-		compat_wtap_opt_len(option));
+					    compat_wtap_opt_len(option));
 
 	if (!retis_event) {
 		const char *err =
