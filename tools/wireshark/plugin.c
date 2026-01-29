@@ -327,6 +327,7 @@ static int object_parse(json_object *obj, const gchar *current_path,
 			gchar **errstr)
 {
 	json_object *props, *one_of;
+	int err;
 
 	if (!json_object_is_type(obj, json_type_object)) {
 		*errstr = g_strdup_printf("type is not an object: %s",
@@ -334,16 +335,29 @@ static int object_parse(json_object *obj, const gchar *current_path,
 		return -1;
 	}
 
-	if (json_object_object_get_ex(obj, "properties", &props)) {
-		return object_properties_parse(props, current_path, errstr);
-	} else if (json_object_object_get_ex(obj, "oneOf", &one_of)) {
+	props = json_object_object_get(obj, "properties");
+	one_of = json_object_object_get(obj, "oneOf");
+
+	if (!props && !one_of) {
+		*errstr = g_strdup_printf(
+			"object does not contain 'properties' or 'oneOf': %s",
+			json_object_to_json_string(obj));
+		return -1;
+	}
+
+	if (props) {
+		err = object_properties_parse(props, current_path, errstr);
+		if (err)
+			return err;
+	}
+
+	if (one_of) {
 		if (!json_object_is_type(one_of, json_type_array)) {
 			*errstr = g_strdup_printf(
 				"oneOf is not an array: %s",
 				json_object_to_json_string(obj));
 			return -1;
 		}
-		int err;
 		for (size_t idx = 0; idx < json_object_array_length(one_of);
 		     idx++) {
 			err = object_parse(json_object_array_get_idx(one_of,
@@ -352,11 +366,6 @@ static int object_parse(json_object *obj, const gchar *current_path,
 			if (err)
 				return err;
 		}
-	} else {
-		*errstr = g_strdup_printf(
-			"json-schema object does not contain 'properties' or 'oneOf': %s",
-			json_object_to_json_string(obj));
-		return -1;
 	}
 	return 0;
 }
