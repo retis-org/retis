@@ -134,7 +134,7 @@ static const char *definition_get_type(json_object *def)
 		json_object *one_of = json_object_object_get(def, "oneOf");
 
 		if (one_of && json_object_is_type(one_of, json_type_array) &&
-		    json_object_array_length(one_of) > 1 &&
+		    json_object_array_length(one_of) > 0 &&
 		    json_object_is_type(json_object_array_get_idx(one_of, 0),
 					json_type_object)) {
 			/* This is an object that can take different forms. */
