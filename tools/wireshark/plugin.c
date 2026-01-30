@@ -25,7 +25,7 @@
 
 /* Compatibility */
 #define WIRESHARK_VERSION \
-        ((WIRESHARK_VERSION_MAJOR * 100) + (WIRESHARK_VERSION_MINOR) * 10)
+	((WIRESHARK_VERSION_MAJOR * 100) + (WIRESHARK_VERSION_MINOR) * 10)
 
 #if WIRESHARK_VERSION < 430
 #error "Wireshark version 4.3 or higher is required"
@@ -134,7 +134,7 @@ static const char *definition_get_type(json_object *def)
 		json_object *one_of = json_object_object_get(def, "oneOf");
 
 		if (one_of && json_object_is_type(one_of, json_type_array) &&
-		    json_object_array_length(one_of) > 1 &&
+		    json_object_array_length(one_of) > 0 &&
 		    json_object_is_type(json_object_array_get_idx(one_of, 0),
 					json_type_object)) {
 			/* This is an object that can take different forms. */
@@ -327,6 +327,7 @@ static int object_parse(json_object *obj, const gchar *current_path,
 			gchar **errstr)
 {
 	json_object *props, *one_of;
+	int err;
 
 	if (!json_object_is_type(obj, json_type_object)) {
 		*errstr = g_strdup_printf("type is not an object: %s",
@@ -334,16 +335,29 @@ static int object_parse(json_object *obj, const gchar *current_path,
 		return -1;
 	}
 
-	if (json_object_object_get_ex(obj, "properties", &props)) {
-		return object_properties_parse(props, current_path, errstr);
-	} else if (json_object_object_get_ex(obj, "oneOf", &one_of)) {
+	props = json_object_object_get(obj, "properties");
+	one_of = json_object_object_get(obj, "oneOf");
+
+	if (!props && !one_of) {
+		*errstr = g_strdup_printf(
+			"object does not contain 'properties' or 'oneOf': %s",
+			json_object_to_json_string(obj));
+		return -1;
+	}
+
+	if (props) {
+		err = object_properties_parse(props, current_path, errstr);
+		if (err)
+			return err;
+	}
+
+	if (one_of) {
 		if (!json_object_is_type(one_of, json_type_array)) {
 			*errstr = g_strdup_printf(
 				"oneOf is not an array: %s",
 				json_object_to_json_string(obj));
 			return -1;
 		}
-		int err;
 		for (size_t idx = 0; idx < json_object_array_length(one_of);
 		     idx++) {
 			err = object_parse(json_object_array_get_idx(one_of,
@@ -352,11 +366,6 @@ static int object_parse(json_object *obj, const gchar *current_path,
 			if (err)
 				return err;
 		}
-	} else {
-		*errstr = g_strdup_printf(
-			"json-schema object does not contain 'properties' or 'oneOf': %s",
-			json_object_to_json_string(obj));
-		return -1;
 	}
 	return 0;
 }
@@ -567,7 +576,8 @@ static void pref_retis_schema(void)
 
 	f = fopen(schema_file_path, "r");
 	if (!f) {
-		ws_warning("Failed to open configured schema file: %s", schema_file_path);
+		ws_warning("Failed to open configured schema file: %s",
+			   schema_file_path);
 		return;
 	}
 
@@ -589,7 +599,8 @@ static void pref_retis_schema(void)
 
 	buffer = g_malloc(file_size + 1);
 	if (fread(buffer, 1, file_size, f) != file_size) {
-		ws_warning("Failed to read configured schema file: %s", g_strerror(errno));
+		ws_warning("Failed to read configured schema file: %s",
+			   g_strerror(errno));
 		g_free(buffer);
 		fclose(f);
 		return;
@@ -607,8 +618,8 @@ static void pref_retis_schema(void)
 	}
 
 	if (register_retis_fields_from_schema_json(NULL, NULL, NULL)) {
-		ws_warning("Retis configured schema parsed but failed to register"
-				"  fields with epan.");
+		ws_warning("Retis configured schema parsed but failed to"
+			   " register fields with epan.");
 		json_object_put(schema);
 		schema = NULL;
 		return;
@@ -729,7 +740,7 @@ static bool process_retis_option(wtap_block_t block _U_, unsigned option_id,
 
 	tok = json_tokener_new();
 	retis_event = json_tokener_parse_ex(tok, compat_wtap_opt_data(option),
-		compat_wtap_opt_len(option));
+					    compat_wtap_opt_len(option));
 
 	if (!retis_event) {
 		const char *err =
