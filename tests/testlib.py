@@ -308,7 +308,7 @@ def assert_events_present(events, expected):
         found = False
         # Find an event that matches
         for i in range(idx, len(events)):
-            (is_sub, reason) = is_subset(events[i], ex, aliases)
+            is_sub, reason = is_subset(events[i], ex, aliases)
             if is_sub:
                 print(
                     f"HIT: Event at index {i}\n"
@@ -390,7 +390,7 @@ def is_subset(superset, subset, aliases):
 
         # Recursively assert nested dictionaries
         if isinstance(value, dict):
-            (is_sub, reason) = is_subset(superset[key], value, aliases)
+            is_sub, reason = is_subset(superset[key], value, aliases)
             if not is_sub:
                 return (
                     False,

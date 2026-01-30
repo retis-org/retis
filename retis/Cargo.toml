@@ -20,7 +20,7 @@ maintenance = { status = "actively-developed" }
 
 [features]
 default = ["python"]
-python = ["retis-derive/python", "events/python-embed"]
+python = ["retis-derive/python", "events/python-shell"]
 test_bindgen_layout = []
 benchmark = []
 debug = ["dep:rbpf"]
