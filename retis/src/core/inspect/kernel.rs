@@ -84,6 +84,15 @@ impl KernelInspector {
                 .next()
                 .ok_or_else(|| anyhow!("Couldn't get symbol name for {}", data[0]))?;
 
+            // ARM64 ELF mapping symbols can appear in /proc/kallsyms for
+            // loadable modules, sharing addresses with real symbols. The
+            // kernel filters these in its own symbol lookups (see Linux
+            // commit ff09f6fd2972), but /proc/kallsyms still includes them
+            // for modules, so we skip them here.
+            if symbol.starts_with('$') {
+                continue;
+            }
+
             symbols.insert(u64::from_str_radix(data[0], 16)?, String::from(symbol));
         }
 
