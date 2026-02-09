@@ -473,6 +473,25 @@ mod tests {
     }
 
     #[test]
+    fn module_mapping_symbols_filtered() {
+        // The test data must contain a $d mapping symbol at a module
+        // symbol address. If test_data/kallsyms gets regenerated
+        // without it, this assert will catch it.
+        let kallsyms =
+            std::fs::read_to_string("test_data/kallsyms").expect("test_data/kallsyms readable");
+        assert!(
+            kallsyms.contains("ffffffffc0a25120 d $d\t[openvswitch]"),
+            "test_data/kallsyms must contain a $d mapping symbol \
+             at ffffffffc0a25120",
+        );
+
+        assert_eq!(
+            inspector().get_symbol_name(0xffffffffc0a25120).unwrap(),
+            "__tracepoint_ovs_do_execute_action",
+        );
+    }
+
+    #[test]
     fn kernel_modules() {
         assert_eq!(inspector().is_module_loaded("zram"), Some(true));
         assert_eq!(inspector().is_module_loaded("openvswitch"), Some(false));
