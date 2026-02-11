@@ -101,7 +101,7 @@ install: release
 
 # Skip out path and vmlinux.h
 BINDINGS := $(shell find $(ROOT_DIR)/retis/src -name '*.[ch]' -not -name 'vmlinux.h' -not -path '*/.out/*' -exec grep -l "__binding" {} \;)
-gen-bindings: clean-bindings
+gen-bindings: clean-bindings ebpf-prereqs
 	-mkdir -p $(ROOT_DIR)/retis/src/bindings; \
 	for binding in $(BINDINGS); do \
 	    $(call out_console,BINDINGS,processing $$binding ...); \
@@ -176,10 +176,10 @@ $(LIBBPF_INCLUDES): $(LIBBPF_SYS_LIBBPF_INCLUDES)
 	cp $^ $(LIBBPF_INCLUDES)/bpf/
 endif
 
-ebpf_prereqs:
+ebpf-prereqs:
 	$(eval $(call ebpf_set_vars))
 
-ebpf: ebpf_prereqs $(EBPF_PROBES) $(EBPF_HOOKS)
+ebpf: ebpf-prereqs $(EBPF_PROBES) $(EBPF_HOOKS)
 
 $(EBPF_PROBES): OUT_NAME := PROBE
 $(EBPF_HOOKS):  OUT_NAME := HOOK
@@ -320,6 +320,6 @@ help:
 	$(call help_once, COV                   --  Enable code coverage for testing. Applies only to the target "test".)
 	$(call help_once,                           Requires llvm-cov and preferably rustup toolchain.)
 
-.PHONY: all bench ebpf ebpf_prereqs $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov wireshark wireshark-install wireshark-clean
+.PHONY: all bench ebpf ebpf-prereqs $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov wireshark wireshark-install wireshark-clean
 .PHONY: test pytest-deps pytest lint-ebpf functional-tests functional-tests-list lint-rust lint-python lints
 .PHONY: clean clean-bindings clean-cov clean-ebpf
