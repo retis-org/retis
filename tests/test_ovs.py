@@ -351,7 +351,7 @@ def gen_expected_events(packet):
 
 @pytest.mark.ovs_track
 def test_ovs_tracking(two_port_ovs):
-    (ovs, ns) = two_port_ovs
+    ovs, ns = two_port_ovs
 
     retis = Retis()
 
@@ -401,7 +401,7 @@ def test_ovs_tracking(two_port_ovs):
 
 @pytest.mark.ovs_track
 def test_ovs_tracking_filtered(two_port_ovs):
-    (ovs, ns) = two_port_ovs
+    ovs, ns = two_port_ovs
 
     retis = Retis()
 
@@ -454,7 +454,7 @@ def test_ovs_tracking_filtered(two_port_ovs):
 
 @pytest.mark.ovs_track
 def test_ovs_filtered_userspace(two_port_ovs):
-    (ovs, ns) = two_port_ovs
+    ovs, ns = two_port_ovs
 
     retis = Retis()
 
