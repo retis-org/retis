@@ -25,6 +25,13 @@ fi
 # Parse (w/o enforcing validity) Retis arguments to allow custom actions.
 while [ $# -gt 0 ]; do
 	case $1 in
+	-P|--extra-profiles-dir)
+		if [[ ! "$2" =~ ^/ ]]; then
+			errcho "Error: --extra-profiles-dir should be an absolute path"
+			exit -1
+		fi
+		extra_volumes="$extra_volumes -v $2:$2:ro"
+		;;
 	collect)
 		# Retis cannot run in an unprivileged Podman container to collect events.
 		if [[ $runtime == "podman" && $(id -u) -ne 0 ]]; then
@@ -97,7 +104,7 @@ exec $runtime run $extra_args $term_opts --rm --pid=host \
       $tracefs $debugfs \
       -v $(pwd):/data:rw \
       $kconfig_legacy_map $kconfig_map \
-      $local_conf \
+      $local_conf $extra_volumes \
       $ovs_binary_mount \
       $ovs_rundir_mount \
       $RETIS_IMAGE:$RETIS_TAG $cmdline
