@@ -84,6 +84,15 @@ impl KernelInspector {
                 .next()
                 .ok_or_else(|| anyhow!("Couldn't get symbol name for {}", data[0]))?;
 
+            // ARM64 ELF mapping symbols can appear in /proc/kallsyms for
+            // loadable modules, sharing addresses with real symbols. The
+            // kernel filters these in its own symbol lookups (see Linux
+            // commit ff09f6fd2972), but /proc/kallsyms still includes them
+            // for modules, so we skip them here.
+            if symbol.starts_with('$') {
+                continue;
+            }
+
             symbols.insert(u64::from_str_radix(data[0], 16)?, String::from(symbol));
         }
 
@@ -460,6 +469,25 @@ mod tests {
                 .get_config_option("CONFIG_SYSTEM_TRUSTED_KEYS")
                 .unwrap(),
             Some("")
+        );
+    }
+
+    #[test]
+    fn module_mapping_symbols_filtered() {
+        // The test data must contain a $d mapping symbol at a module
+        // symbol address. If test_data/kallsyms gets regenerated
+        // without it, this assert will catch it.
+        let kallsyms =
+            std::fs::read_to_string("test_data/kallsyms").expect("test_data/kallsyms readable");
+        assert!(
+            kallsyms.contains("ffffffffc0a25120 d $d\t[openvswitch]"),
+            "test_data/kallsyms must contain a $d mapping symbol \
+             at ffffffffc0a25120",
+        );
+
+        assert_eq!(
+            inspector().get_symbol_name(0xffffffffc0a25120).unwrap(),
+            "__tracepoint_ovs_do_execute_action",
         );
     }
 
