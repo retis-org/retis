@@ -162,8 +162,14 @@ impl Profile {
         let mut found = None;
 
         for entry in path.read_dir()? {
-            let entry = entry?;
-            match Profile::from_file(entry.path()) {
+            let entry = entry?.path();
+
+            // Skip non-YAML files.
+            if !entry.extension().is_some_and(|e| e == "yaml" || e == "yml") {
+                continue;
+            }
+
+            match Profile::from_file(entry.clone()) {
                 Ok(mut profiles) => {
                     for profile in profiles.drain(..) {
                         if profile.name.eq(name) {
@@ -180,7 +186,7 @@ impl Profile {
                     }
                 }
                 Err(err) => {
-                    debug!("Skipping invalid file {}: {err}", entry.path().display())
+                    debug!("Skipping invalid file {}: {err}", entry.display())
                 }
             }
         }

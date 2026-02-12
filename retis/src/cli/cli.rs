@@ -162,7 +162,7 @@ pub(crate) struct MainConfig {
         short,
         value_delimiter = ',',
         help = "Comma separated list of profiles to apply. Accepted values:
-- Profile names, in which case the profile should be in either /usr/share/retis/profiles or in $HOME/.config/retis/profiles.
+- Profile names, in which case the profile should be in either /usr/share/retis/profiles or in $HOME/.config/retis/profiles and in a .yaml or .yml file.
 - Path to a profile, in which case the file should contain a single profile."
     )]
     pub(crate) profile: Vec<PathBuf>,
