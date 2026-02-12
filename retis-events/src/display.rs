@@ -5,7 +5,7 @@ use std::{
 
 use log::warn;
 
-use super::TimeSpec;
+use crate::helpers::time::TimeSpec;
 
 /// Controls how the time should be displayed in the events.
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
