@@ -183,7 +183,7 @@ pub mod test {
     use super::*;
     use crate::event_section;
 
-    #[event_section(SectionId::Common)]
+    #[event_section]
     #[derive(Default)]
     pub struct TestEvent {
         pub field0: Option<u64>,
