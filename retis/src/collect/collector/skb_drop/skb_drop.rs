@@ -30,6 +30,7 @@ impl Collector for SkbDropCollector {
             "enum skb_drop_reason",
             "enum mac80211_drop_reason",
             "enum ovs_drop_reason",
+            "enum qdisc_drop_reason",
         ])
     }
 
