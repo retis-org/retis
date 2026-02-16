@@ -3,14 +3,14 @@ use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::{HashMap, HashSet},
     io,
-    path::{Path, PathBuf},
+    path::Path,
     process::{Command, Stdio},
     sync::Arc,
     time::Duration,
 };
 
 use anyhow::{anyhow, bail, Context, Result};
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use nix::{errno::Errno, mount::*, unistd::Uid};
 
 use super::{
@@ -42,7 +42,7 @@ use crate::{
         },
     },
     events::{file::rotate::*, helpers::time::*, *},
-    helpers::{file_rotate::*, signals::Running},
+    helpers::{add_exit_cb, file_rotate::*, signals::Running},
     process::display::*,
 };
 
@@ -112,8 +112,6 @@ pub(crate) struct Collectors {
     stack_tracking_config_map: Option<libbpf_rs::MapHandle>,
     // Retis events factory.
     events_factory: Arc<RetisEventsFactory>,
-    // Did we mount tracefs/debugfs ourselves? If so, contains the target dir.
-    mounted: Option<PathBuf>,
     // Monotonic clock offset stored once and reused.
     monotonic_offset: TimeSpec,
 }
@@ -133,7 +131,6 @@ impl Collectors {
             tracking_config_map: None,
             stack_tracking_config_map: None,
             events_factory: Arc::new(RetisEventsFactory::default()),
-            mounted: None,
             monotonic_offset: monotonic_clock_offset()?,
         })
     }
@@ -203,11 +200,19 @@ impl Collectors {
         if collect.allow_system_changes {
             if let Some(mounted) = Self::try_mount("tracefs", "/sys/kernel/tracing") {
                 if mounted {
-                    self.mounted = Some(PathBuf::from("/sys/kernel/tracing"));
+                    add_exit_cb(|| {
+                        if let Err(e) = umount("/sys/kernel/tracing") {
+                            error!("Could not umount /sys/kernel/tracing: {e}");
+                        }
+                    })?;
                 }
             } else if let Some(mounted) = Self::try_mount("debugfs", "/sys/kernel/debug") {
                 if mounted {
-                    self.mounted = Some(PathBuf::from("/sys/kernel/debug"));
+                    add_exit_cb(|| {
+                        if let Err(e) = umount("/sys/kernel/debug") {
+                            error!("Could not umount /sys/kernel/debug: {e}");
+                        }
+                    })?;
                 }
             }
         }
@@ -222,7 +227,7 @@ impl Collectors {
     /// - None otherwise.
     fn try_mount(fs: &str, target: &str) -> Option<bool> {
         let err = mount(
-            None::<&std::path::Path>,
+            None::<&Path>,
             Path::new(target),
             Some(fs),
             MsFlags::empty(),
@@ -503,12 +508,6 @@ impl Collectors {
 
         debug!("Stopping events");
         self.factory.stop()?;
-
-        // If we mounted a fs, unmount it.
-        if let Some(ref path) = self.mounted {
-            debug!("Unmounting {}", path.display());
-            umount(path)?;
-        }
 
         Ok(())
     }
