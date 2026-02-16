@@ -66,7 +66,11 @@ impl ProfileCmd {
                     }
                 }
                 Err(err) => {
-                    warn!("Skipping invalid file {}: {err}", entry.path().display())
+                    let entry_path = entry.path();
+
+                    if entry_path.ends_with(".yaml") || entry_path.ends_with(".yml") {
+                        warn!("Skipping invalid file {}: {err}", entry_path.display());
+                    }
                 }
             }
         }

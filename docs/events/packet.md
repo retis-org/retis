@@ -89,3 +89,25 @@ vxlan [{flags}] vni {vni}
 ```
 
 - `flags` can be `I` (set for a valid VNI).
+
+## MACsec
+
+```none
+an {association number} pn {packet number} [{flags}] sl {short length} sci {sci}
+```
+
+- `flags` are constructed following the bits set in the `tci` field with a
+  combination of `E` (encrypted payload), `C` (changed text), `S` (end station),
+  `B` (single copy broadcast) and `I` (SCI present).
+
+## ESP
+
+```none
+spi {spi} seq {sequence number}
+```
+
+## AH
+
+```none
+spi {spi} seq {sequence number} icv {icv}
+```
