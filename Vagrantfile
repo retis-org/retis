@@ -22,6 +22,7 @@ dnf install -y \
     python3-pip \
     python3-devel \
     socat \
+    tcpdump \
     nftables \
     make \
     jq \
@@ -185,6 +186,7 @@ Vagrant.configure("2") do |config|
           python3-dev \
           openvswitch-switch \
           socat \
+          tcpdump \
           nftables \
           make \
           jq
