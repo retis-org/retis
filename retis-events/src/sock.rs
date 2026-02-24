@@ -12,10 +12,16 @@ pub struct SockEvent {
     pub r#type: String,
     /// Protocol
     pub proto: String,
+    /// State
+    pub state: String,
 }
 
 impl EventFmt for SockEvent {
     fn event_fmt(&self, f: &mut Formatter, _: &DisplayFormat) -> fmt::Result {
-        write!(f, "sock {} {} {}", self.inode, self.r#type, self.proto)
+        write!(
+            f,
+            "sock ({} {} {}) state {}",
+            self.inode, self.r#type, self.proto, self.state
+        )
     }
 }

@@ -44,6 +44,8 @@ impl Collector for SockCollector {
 pub(crate) struct SockEventFactory {
     // Mapping of socket protocols to names
     socket_protocols: HashMap<u32, String>,
+    // TCP socket states
+    tcp_states: HashMap<u32, String>,
 }
 
 impl RawEventSectionFactory for SockEventFactory {
@@ -70,10 +72,19 @@ impl RawEventSectionFactory for SockEventFactory {
             None => format!("{}", raw.proto),
         };
 
+        let state = match proto.as_str() {
+            "TCP" | "UDP" => match self.tcp_states.get(&(raw.state as u32)) {
+                Some(r) => r.clone(),
+                None => format!("{}", raw.state),
+            },
+            _ => format!("{}", raw.state),
+        };
+
         event.sock = Some(SockEvent {
             inode: raw.inode,
             r#type,
             proto,
+            state,
         });
 
         Ok(())
@@ -84,6 +95,7 @@ impl SockEventFactory {
     pub(crate) fn new() -> Result<Self> {
         Ok(Self {
             socket_protocols: parse_anon_enum("IPPROTO_IP", &["IPPROTO_"])?,
+            tcp_states: parse_anon_enum("TCP_ESTABLISHED", &["TCP_"])?,
         })
     }
 }
