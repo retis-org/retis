@@ -4,7 +4,7 @@ source $(dirname $0)/include/helpers.sh
 
 skb_sanity() {
 	require $retis python -h || return 0
-	two_ns_simple
+	two_ns
 
 	$retis collect -o -c skb,dev,ns -f icmp -p ip_rcv \
 		--cmd 'ip netns exec ns0 ping -c1 10.0.42.2; sleep 1'
@@ -22,7 +22,7 @@ EOF
 }
 
 skb_tcp_cc() {
-	two_ns_simple
+	two_ns
 
 	# FIXME: stop using STDIN
 	ip netns exec ns1 socat TCP-LISTEN:80 /dev/null &
@@ -292,7 +292,7 @@ EOF
 }
 
 skb_vlan() {
-	two_ns_vlan_simple
+	two_ns_vlan
 
 	# FIXME: stop using STDIN
 	ip netns exec ns1 socat TCP-LISTEN:80 /dev/null &
