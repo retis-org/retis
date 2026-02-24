@@ -22,6 +22,7 @@ impl Default for retis_probe_offsets {
             nft_pktinfo: -1,
             nft_traceinfo: -1,
             sock: -1,
+            sk_rst_reason: -1,
         }
     }
 }

@@ -4,6 +4,11 @@
 
 #include <common.h>
 
+enum sock_sections {
+	SECTION_SOCK = 1,
+	SECTION_RST_REASON = 2,
+} __binding;
+
 struct sock_event {
 	u32 inode;
 	u16 type;
@@ -11,6 +16,9 @@ struct sock_event {
 	u8 state;
 } __binding;
 
+struct sock_rst_reason_event {
+	u32 reason;
+} __binding;
 
 static __always_inline unsigned long sock_inode(struct socket *socket) {
 	struct socket_alloc *alloc;
@@ -42,6 +50,18 @@ DEFINE_HOOK_RAW(
 	struct sock *sk;
 	u32 inode = 0;
 
+	if (bpf_core_type_exists(enum sk_rst_reason) &&
+	    retis_arg_valid(ctx, sk_rst_reason)) {
+		struct sock_rst_reason_event *e;
+
+		e = get_event_section(event, COLLECTOR_SOCK,
+				      SECTION_RST_REASON, sizeof(*e));
+		if (!e)
+			return 0;
+
+		e->reason = (u32)retis_get_sk_rst_reason(ctx);
+	}
+
 	skb = retis_get_sk_buff(ctx);
 	if (!skb || !skb_is_tracked(skb))
 		return 0;
@@ -58,7 +78,7 @@ DEFINE_HOOK_RAW(
 		inode = sock_inode(sk_socket);
 	}
 
-	e = get_event_section(event, COLLECTOR_SOCK, 0, sizeof(*e));
+	e = get_event_section(event, COLLECTOR_SOCK, SECTION_SOCK, sizeof(*e));
 	if (!e)
 		return 0;
 

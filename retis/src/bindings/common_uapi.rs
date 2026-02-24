@@ -17,6 +17,7 @@ pub struct retis_probe_offsets {
     pub nft_pktinfo: s8,
     pub nft_traceinfo: s8,
     pub sock: s8,
+    pub sk_rst_reason: s8,
 }
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]

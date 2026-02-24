@@ -28,6 +28,9 @@ pub(super) fn inspect_symbol(symbol: &Symbol) -> Result<retis_probe_config> {
     if let Some(offset) = symbol.parameter_offset("struct sock *")? {
         cfg.offsets.sock = offset as i8;
     }
+    if let Some(offset) = symbol.parameter_offset("enum sk_rst_reason")? {
+        cfg.offsets.sk_rst_reason = offset as i8;
+    }
 
     Ok(cfg)
 }
