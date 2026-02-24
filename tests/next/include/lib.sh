@@ -79,7 +79,7 @@ run_tests() {
 		# Do not error on unknown tests to allow `TESTS` use with
 		# `make functional-tests`.
 		typeset -f $t >/dev/null || continue
-		[ "$LIST_TESTS" == "1" ] && { echo $t; continue; }
+		[ "$LIST_TESTS" == "1" ] && { echo -e "  $t"; continue; }
 
 		tmpdir=$(mktemp -d -t retis-test-XXXX)
 		cleanup "rm -rf $tmpdir"
