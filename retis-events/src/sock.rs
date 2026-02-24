@@ -15,8 +15,8 @@ impl EventFmt for SockEvent {
         if let Some(common) = &self.common {
             write!(
                 f,
-                "sock {} {} {}",
-                common.inode, common.r#type, common.proto
+                "sock ({} {} {}) state {}",
+                common.inode, common.r#type, common.proto, common.state
             )?;
         }
 
@@ -34,4 +34,6 @@ pub struct SockCommonEvent {
     pub r#type: String,
     /// Protocol
     pub proto: String,
+    /// State
+    pub state: String,
 }
