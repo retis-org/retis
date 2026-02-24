@@ -37,6 +37,7 @@ BPF_CFLAGS := -target bpf \
               -Wno-pointer-sign \
               -Wno-compare-distinct-pointer-types \
               -Wno-unused-command-line-argument \
+              -Wno-missing-declarations \
               $$(BPF_CFLAGS_PAHOLE) \
               -fno-stack-protector \
               -D__TARGET_ARCH_$$(BPF_ARCH) \
