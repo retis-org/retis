@@ -353,6 +353,69 @@ struct bpf_link_ops;
 
 struct bpf_prog;
 
+enum bpf_attach_type {
+	BPF_CGROUP_INET_INGRESS            = 0,
+	BPF_CGROUP_INET_EGRESS             = 1,
+	BPF_CGROUP_INET_SOCK_CREATE        = 2,
+	BPF_CGROUP_SOCK_OPS                = 3,
+	BPF_SK_SKB_STREAM_PARSER           = 4,
+	BPF_SK_SKB_STREAM_VERDICT          = 5,
+	BPF_CGROUP_DEVICE                  = 6,
+	BPF_SK_MSG_VERDICT                 = 7,
+	BPF_CGROUP_INET4_BIND              = 8,
+	BPF_CGROUP_INET6_BIND              = 9,
+	BPF_CGROUP_INET4_CONNECT           = 10,
+	BPF_CGROUP_INET6_CONNECT           = 11,
+	BPF_CGROUP_INET4_POST_BIND         = 12,
+	BPF_CGROUP_INET6_POST_BIND         = 13,
+	BPF_CGROUP_UDP4_SENDMSG            = 14,
+	BPF_CGROUP_UDP6_SENDMSG            = 15,
+	BPF_LIRC_MODE2                     = 16,
+	BPF_FLOW_DISSECTOR                 = 17,
+	BPF_CGROUP_SYSCTL                  = 18,
+	BPF_CGROUP_UDP4_RECVMSG            = 19,
+	BPF_CGROUP_UDP6_RECVMSG            = 20,
+	BPF_CGROUP_GETSOCKOPT              = 21,
+	BPF_CGROUP_SETSOCKOPT              = 22,
+	BPF_TRACE_RAW_TP                   = 23,
+	BPF_TRACE_FENTRY                   = 24,
+	BPF_TRACE_FEXIT                    = 25,
+	BPF_MODIFY_RETURN                  = 26,
+	BPF_LSM_MAC                        = 27,
+	BPF_TRACE_ITER                     = 28,
+	BPF_CGROUP_INET4_GETPEERNAME       = 29,
+	BPF_CGROUP_INET6_GETPEERNAME       = 30,
+	BPF_CGROUP_INET4_GETSOCKNAME       = 31,
+	BPF_CGROUP_INET6_GETSOCKNAME       = 32,
+	BPF_XDP_DEVMAP                     = 33,
+	BPF_CGROUP_INET_SOCK_RELEASE       = 34,
+	BPF_XDP_CPUMAP                     = 35,
+	BPF_SK_LOOKUP                      = 36,
+	BPF_XDP                            = 37,
+	BPF_SK_SKB_VERDICT                 = 38,
+	BPF_SK_REUSEPORT_SELECT            = 39,
+	BPF_SK_REUSEPORT_SELECT_OR_MIGRATE = 40,
+	BPF_PERF_EVENT                     = 41,
+	BPF_TRACE_KPROBE_MULTI             = 42,
+	BPF_LSM_CGROUP                     = 43,
+	BPF_STRUCT_OPS                     = 44,
+	BPF_NETFILTER                      = 45,
+	BPF_TCX_INGRESS                    = 46,
+	BPF_TCX_EGRESS                     = 47,
+	BPF_TRACE_UPROBE_MULTI             = 48,
+	BPF_CGROUP_UNIX_CONNECT            = 49,
+	BPF_CGROUP_UNIX_SENDMSG            = 50,
+	BPF_CGROUP_UNIX_RECVMSG            = 51,
+	BPF_CGROUP_UNIX_GETPEERNAME        = 52,
+	BPF_CGROUP_UNIX_GETSOCKNAME        = 53,
+	BPF_NETKIT_PRIMARY                 = 54,
+	BPF_NETKIT_PEER                    = 55,
+	BPF_TRACE_KPROBE_SESSION           = 56,
+	BPF_TRACE_UPROBE_SESSION           = 57,
+	BPF_TRACE_FSESSION                 = 58,
+	__MAX_BPF_ATTACH_TYPE              = 59,
+};
+
 struct callback_head;
 
 struct callback_head {
@@ -386,18 +449,18 @@ struct bpf_link {
 	enum bpf_link_type         type;                 /*    12     4 */
 	const struct bpf_link_ops  * ops;                /*    16     8 */
 	struct bpf_prog *          prog;                 /*    24     8 */
-	bool                       sleepable;            /*    32     1 */
-
-	/* XXX 7 bytes hole, try to pack */
-
+	u32                        flags;                /*    32     4 */
+	enum bpf_attach_type       attach_type;          /*    36     4 */
 	union {
 		struct callback_head rcu;                /*    40    16 */
 		struct work_struct work;                 /*    40    32 */
 	};                                               /*    40    32 */
+	/* --- cacheline 1 boundary (64 bytes) was 8 bytes ago --- */
+	bool                       sleepable;            /*    72     1 */
 
-	/* size: 72, cachelines: 2, members: 7 */
-	/* sum members: 65, holes: 1, sum holes: 7 */
-	/* last cacheline: 8 bytes */
+	/* size: 80, cachelines: 2, members: 9 */
+	/* padding: 7 */
+	/* last cacheline: 16 bytes */
 };
 
 typedef long unsigned int __kernel_ulong_t;
@@ -439,7 +502,6 @@ struct bpf_kprobe_multi_link {
 	u32                        cnt;
 	u32                        mods_cnt;
 	struct module * *          mods;
-	u32                        flags;
 };
 
 enum bpf_map_type {
@@ -479,7 +541,8 @@ enum bpf_map_type {
 	BPF_MAP_TYPE_USER_RINGBUF                     = 31,
 	BPF_MAP_TYPE_CGRP_STORAGE                     = 32,
 	BPF_MAP_TYPE_ARENA                            = 33,
-	__MAX_BPF_MAP_TYPE                            = 34,
+	BPF_MAP_TYPE_INSN_ARRAY                       = 34,
+	__MAX_BPF_MAP_TYPE                            = 35,
 };
 
 
@@ -500,9 +563,9 @@ typedef u8 kprobe_opcode_t;
 typedef u8 kprobe_opcode_t;
 
 struct fred_cs {
-	u64                        cs:16;                /*     0: 0  8 */
-	u64                        sl:2;                 /*     0:16  8 */
-	u64                        wfe:1;                /*     0:18  8 */
+	u64                        cs:16;                /*     0: 0  2 */
+	u64                        sl:2;                 /*     0:16  3 */
+	u64                        wfe:1;                /*     0:18  3 */
 
 	/* size: 8, cachelines: 1, members: 3 */
 	/* bit_padding: 45 bits */
@@ -511,26 +574,26 @@ struct fred_cs {
 
 
 struct fred_ss {
-	u64                        ss:16;                /*     0: 0  8 */
-	u64                        sti:1;                /*     0:16  8 */
-	u64                        swevent:1;            /*     0:17  8 */
-	u64                        nmi:1;                /*     0:18  8 */
+	u64                        ss:16;                /*     0: 0  2 */
+	u64                        sti:1;                /*     0:16  3 */
+	u64                        swevent:1;            /*     0:17  3 */
+	u64                        nmi:1;                /*     0:18  3 */
 
 	/* XXX 13 bits hole, try to pack */
 	u64                        :13;
 
-	u64                        vector:8;             /*     0:32  8 */
+	u64                        vector:8;             /*     0:32  5 */
 
 	/* XXX 8 bits hole, try to pack */
 	u64                        :8;
 
-	u64                        type:4;               /*     0:48  8 */
+	u64                        type:4;               /*     0:48  7 */
 
 	/* XXX 4 bits hole, try to pack */
 	u64                        :4;
 
 	u64                        enclave:1;            /*     0:56  8 */
-	u64                        lm:1;                 /*     0:57  8 */
+	u64                        l:1;                  /*     0:57  8 */
 	u64                        nested:1;             /*     0:58  8 */
 
 	/* XXX 1 bit hole, try to pack */
@@ -791,23 +854,6 @@ typedef u32 u_int32_t;
 
 struct nf_ct_ext;
 
-typedef u64 u_int64_t;
-
-struct nf_ct_dccp {
-	u_int8_t                   role[2];              /*     0     2 */
-	u_int8_t                   state;                /*     2     1 */
-	u_int8_t                   last_pkt;             /*     3     1 */
-	u_int8_t                   last_dir;             /*     4     1 */
-
-	/* XXX 3 bytes hole, try to pack */
-
-	u_int64_t                  handshake_seq;        /*     8     8 */
-
-	/* size: 16, cachelines: 1, members: 5 */
-	/* sum members: 13, holes: 1, sum holes: 3 */
-	/* last cacheline: 16 bytes */
-};
-
 enum sctp_conntrack {
 	SCTP_CONNTRACK_NONE              = 0,
 	SCTP_CONNTRACK_CLOSED            = 1,
@@ -879,7 +925,6 @@ struct nf_ct_gre {
 };
 
 union nf_conntrack_proto {
-	struct nf_ct_dccp          dccp;               /*     0    16 */
 	struct ip_ct_sctp          sctp;               /*     0    16 */
 	struct ip_ct_tcp           tcp;                /*     0    60 */
 	struct nf_ct_udp           udp;                /*     0     8 */
@@ -947,6 +992,7 @@ enum nf_hook_ops_type {
 	NF_HOOK_OP_UNDEFINED = 0,
 	NF_HOOK_OP_NF_TABLES = 1,
 	NF_HOOK_OP_BPF       = 2,
+	NF_HOOK_OP_NFT_FT    = 3,
 };
 
 struct nf_hook_ops {
@@ -959,7 +1005,7 @@ struct nf_hook_ops {
 
 	/* Bitfield combined with previous fields */
 
-	enum nf_hook_ops_type      hook_ops_type:8;      /*    56: 8  4 */
+	enum nf_hook_ops_type      hook_ops_type:8;      /*    56: 8  2 */
 
 	/* XXX 16 bits hole, try to pack */
 
@@ -1004,6 +1050,14 @@ struct rhlist_head {
 
 struct nft_table;
 
+struct nft_chain_validate_state {
+	u8                         hook_mask[3];         /*     0     3 */
+	u8                         depth;                /*     3     1 */
+
+	/* size: 4, cachelines: 1, members: 2 */
+	/* last cacheline: 4 bytes */
+};
+
 struct nft_chain {
 	struct nft_rule_blob *     blob_gen_0;           /*     0     8 */
 	struct nft_rule_blob *     blob_gen_1;           /*     8     8 */
@@ -1027,11 +1081,12 @@ struct nft_chain {
 
 	u8 *                       udata;                /*   104     8 */
 	struct nft_rule_blob *     blob_next;            /*   112     8 */
+	struct nft_chain_validate_state vstate;          /*   120     4 */
 
-	/* size: 120, cachelines: 2, members: 15 */
-	/* sum members: 110, holes: 2, sum holes: 9 */
+	/* size: 128, cachelines: 2, members: 16 */
+	/* sum members: 114, holes: 2, sum holes: 9 */
 	/* sum bitfield members: 8 bits (1 bytes) */
-	/* last cacheline: 56 bytes */
+	/* padding: 4 */
 };
 
 
@@ -1685,18 +1740,87 @@ struct idr {
 	/* last cacheline: 24 bytes */
 };
 
+
 struct dentry;
 
 struct proc_ns_operations;
 
-struct ns_common {
-	struct dentry *            stashed;              /*     0     8 */
-	const struct proc_ns_operations  * ops;          /*     8     8 */
-	unsigned int               inum;                 /*    16     4 */
-	refcount_t                 count;                /*    20     4 */
 
-	/* size: 24, cachelines: 1, members: 4 */
+
+struct ns_tree_node {
+	struct rb_node             ns_node;              /*     0    24 */
+	struct list_head           ns_list_entry;        /*    24    16 */
+
+	/* size: 40, cachelines: 1, members: 2 */
+	/* last cacheline: 40 bytes */
+};
+
+
+
+struct rb_node;
+
+struct rb_root {
+	struct rb_node *           rb_node;              /*     0     8 */
+
+	/* size: 8, cachelines: 1, members: 1 */
+	/* last cacheline: 8 bytes */
+};
+
+
+struct ns_tree_root {
+	struct rb_root             ns_rb;                /*     0     8 */
+	struct list_head           ns_list_head;         /*     8    16 */
+
+	/* size: 24, cachelines: 1, members: 2 */
 	/* last cacheline: 24 bytes */
+};
+
+struct ns_tree {
+	u64                        ns_id;                /*     0     8 */
+	atomic_t                   __ns_ref_active;      /*     8     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct ns_tree_node        ns_unified_node;      /*    16    40 */
+	struct ns_tree_node        ns_tree_node;         /*    56    40 */
+	/* --- cacheline 1 boundary (64 bytes) was 32 bytes ago --- */
+	struct ns_tree_node        ns_owner_node;        /*    96    40 */
+	/* --- cacheline 2 boundary (128 bytes) was 8 bytes ago --- */
+	struct ns_tree_root        ns_owner_root;        /*   136    24 */
+
+	/* size: 160, cachelines: 3, members: 6 */
+	/* sum members: 156, holes: 1, sum holes: 4 */
+	/* last cacheline: 32 bytes */
+};
+
+
+
+struct ns_common {
+	struct {
+		refcount_t         __ns_ref;             /*     0     4 */
+	} __attribute__((__aligned__(64)));                                               /*     0    64 */
+
+	/* XXX last struct has 60 bytes of padding */
+
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	u32                        ns_type;              /*    64     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct dentry *            stashed;              /*    72     8 */
+	const struct proc_ns_operations  * ops;          /*    80     8 */
+	unsigned int               inum;                 /*    88     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	union {
+		struct ns_tree     ;                     /*    96   160 */
+		struct callback_head ns_rcu;             /*    96    16 */
+	};                                               /*    96   160 */
+
+	/* size: 256, cachelines: 4, members: 6 */
+	/* sum members: 248, holes: 2, sum holes: 8 */
+	/* paddings: 1, sum paddings: 60 */
 };
 
 struct ref_tracker_dir {
@@ -1762,14 +1886,6 @@ struct ctl_table_header {
 	/* last cacheline: 24 bytes */
 };
 
-struct rb_node;
-
-struct rb_root {
-	struct rb_node *           rb_node;              /*     0     8 */
-
-	/* size: 8, cachelines: 1, members: 1 */
-	/* last cacheline: 8 bytes */
-};
 
 struct ctl_dir {
 	struct ctl_table_header    header;               /*     0    88 */
@@ -1814,17 +1930,19 @@ struct prot_inuse;
 struct netns_core {
 	struct ctl_table_header *  sysctl_hdr;           /*     0     8 */
 	int                        sysctl_somaxconn;     /*     8     4 */
-	int                        sysctl_optmem_max;    /*    12     4 */
-	u8                         sysctl_txrehash;      /*    16     1 */
-	u8                         sysctl_tstamp_allow_data; /*    17     1 */
+	int                        sysctl_txq_reselection; /*    12     4 */
+	int                        sysctl_optmem_max;    /*    16     4 */
+	u8                         sysctl_txrehash;      /*    20     1 */
+	u8                         sysctl_tstamp_allow_data; /*    21     1 */
+	u8                         sysctl_bypass_prot_mem; /*    22     1 */
 
-	/* XXX 6 bytes hole, try to pack */
+	/* XXX 1 byte hole, try to pack */
 
 	struct prot_inuse *        prot_inuse;           /*    24     8 */
 	struct cpumask *           rps_default_mask;     /*    32     8 */
 
-	/* size: 40, cachelines: 1, members: 7 */
-	/* sum members: 34, holes: 1, sum holes: 6 */
+	/* size: 40, cachelines: 1, members: 9 */
+	/* sum members: 39, holes: 1, sum holes: 1 */
 	/* last cacheline: 40 bytes */
 };
 
@@ -1936,6 +2054,7 @@ struct netns_nexthop {
 	/* last cacheline: 8 bytes */
 };
 
+
 struct inet_hashinfo;
 
 struct inet_timewait_death_row {
@@ -2006,13 +2125,14 @@ struct seqcount_spinlock {
 };
 typedef struct seqcount_spinlock seqcount_spinlock_t;
 
-typedef struct {
+struct seqlock {
 	seqcount_spinlock_t        seqcount;             /*     0     4 */
 	spinlock_t                 lock;                 /*     4     4 */
 
 	/* size: 8, cachelines: 1, members: 2 */
 	/* last cacheline: 8 bytes */
-} seqlock_t;
+};
+typedef struct seqlock seqlock_t;
 
 typedef unsigned int __kernel_gid32_t;
 typedef __kernel_gid32_t gid_t;
@@ -2098,9 +2218,9 @@ struct netns_ipv4 {
 	u8                         sysctl_ip_fwd_use_pmtu; /*    32     1 */
 	__u8                       __cacheline_group_end__netns_ipv4_read_tx[0]; /*    33     0 */
 	__u8                       __cacheline_group_begin__netns_ipv4_read_txrx[0]; /*    33     0 */
+	__u8                       __cacheline_group_end__netns_ipv4_read_txrx[0]; /*    33     0 */
+	__u8                       __cacheline_group_begin__netns_ipv4_read_rx[0]; /*    33     0 */
 	u8                         sysctl_tcp_moderate_rcvbuf; /*    33     1 */
-	__u8                       __cacheline_group_end__netns_ipv4_read_txrx[0]; /*    34     0 */
-	__u8                       __cacheline_group_begin__netns_ipv4_read_rx[0]; /*    34     0 */
 	u8                         sysctl_ip_early_demux; /*    34     1 */
 	u8                         sysctl_tcp_early_demux; /*    35     1 */
 	u8                         sysctl_tcp_l3mdev_accept; /*    36     1 */
@@ -2109,217 +2229,231 @@ struct netns_ipv4 {
 
 	int                        sysctl_tcp_reordering; /*    40     4 */
 	int                        sysctl_tcp_rmem[3];   /*    44    12 */
-	__u8                       __cacheline_group_end__netns_ipv4_read_rx[0]; /*    56     0 */
+	int                        sysctl_tcp_rcvbuf_low_rtt; /*    56     4 */
+	__u8                       __cacheline_group_end__netns_ipv4_read_rx[0]; /*    60     0 */
 
-	/* XXX 8 bytes hole, try to pack */
+	/* XXX 4 bytes hole, try to pack */
 
 	/* --- cacheline 1 boundary (64 bytes) --- */
-	struct inet_timewait_death_row tcp_death_row __attribute__((__aligned__(64))); /*    64   128 */
+	__u8                       __cacheline_group_begin__icmp[0] __attribute__((__aligned__(64))); /*    64     0 */
+	atomic_t                   icmp_global_credit __attribute__((__aligned__(64))); /*    64     4 */
+	u32                        icmp_global_stamp;    /*    68     4 */
+	__u8                       __cacheline_group_end__icmp[0]; /*    72     0 */
+
+	/* XXX 56 bytes hole, try to pack */
+
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	struct {
+	} __cacheline_group_pad__icmp __attribute__((__aligned__(64)));              /*   128     0 */
+	struct inet_timewait_death_row tcp_death_row __attribute__((__aligned__(64))); /*   128   128 */
 
 	/* XXX last struct has 52 bytes of padding, 1 hole */
 
-	/* --- cacheline 3 boundary (192 bytes) --- */
-	struct udp_table *         udp_table;            /*   192     8 */
-	struct udp_tunnel_gro      udp_tunnel_gro[2];    /*   200    32 */
-	struct ctl_table_header *  forw_hdr;             /*   232     8 */
-	struct ctl_table_header *  frags_hdr;            /*   240     8 */
-	struct ctl_table_header *  ipv4_hdr;             /*   248     8 */
 	/* --- cacheline 4 boundary (256 bytes) --- */
-	struct ctl_table_header *  route_hdr;            /*   256     8 */
-	struct ctl_table_header *  xfrm4_hdr;            /*   264     8 */
-	struct ipv4_devconf *      devconf_all;          /*   272     8 */
-	struct ipv4_devconf *      devconf_dflt;         /*   280     8 */
-	struct ip_ra_chain *       ra_chain;             /*   288     8 */
-	struct mutex               ra_mutex;             /*   296    32 */
-	/* --- cacheline 5 boundary (320 bytes) was 8 bytes ago --- */
-	struct fib_rules_ops *     rules_ops;            /*   328     8 */
-	struct fib_table *         fib_main;             /*   336     8 */
-	struct fib_table *         fib_default;          /*   344     8 */
-	unsigned int               fib_rules_require_fldissect; /*   352     4 */
-	bool                       fib_has_custom_rules; /*   356     1 */
-	bool                       fib_has_custom_local_routes; /*   357     1 */
-	bool                       fib_offload_disabled; /*   358     1 */
-	u8                         sysctl_tcp_shrink_window; /*   359     1 */
-	atomic_t                   fib_num_tclassid_users; /*   360     4 */
+	struct udp_table *         udp_table;            /*   256     8 */
+	struct udp_tunnel_gro      udp_tunnel_gro[2];    /*   264    32 */
+	struct ctl_table_header *  forw_hdr;             /*   296     8 */
+	struct ctl_table_header *  frags_hdr;            /*   304     8 */
+	struct ctl_table_header *  ipv4_hdr;             /*   312     8 */
+	/* --- cacheline 5 boundary (320 bytes) --- */
+	struct ctl_table_header *  route_hdr;            /*   320     8 */
+	struct ctl_table_header *  xfrm4_hdr;            /*   328     8 */
+	struct ipv4_devconf *      devconf_all;          /*   336     8 */
+	struct ipv4_devconf *      devconf_dflt;         /*   344     8 */
+	struct ip_ra_chain *       ra_chain;             /*   352     8 */
+	struct mutex               ra_mutex;             /*   360    32 */
+	/* --- cacheline 6 boundary (384 bytes) was 8 bytes ago --- */
+	struct fib_rules_ops *     rules_ops;            /*   392     8 */
+	struct fib_table *         fib_main;             /*   400     8 */
+	struct fib_table *         fib_default;          /*   408     8 */
+	unsigned int               fib_rules_require_fldissect; /*   416     4 */
+	bool                       fib_has_custom_rules; /*   420     1 */
+	bool                       fib_has_custom_local_routes; /*   421     1 */
+	bool                       fib_offload_disabled; /*   422     1 */
+	u8                         sysctl_tcp_shrink_window; /*   423     1 */
+	atomic_t                   fib_num_tclassid_users; /*   424     4 */
 
 	/* XXX 4 bytes hole, try to pack */
 
-	struct hlist_head *        fib_table_hash;       /*   368     8 */
-	struct sock *              fibnl;                /*   376     8 */
-	/* --- cacheline 6 boundary (384 bytes) --- */
-	struct hlist_head *        fib_info_hash;        /*   384     8 */
-	unsigned int               fib_info_hash_bits;   /*   392     4 */
-	unsigned int               fib_info_cnt;         /*   396     4 */
-	struct sock *              mc_autojoin_sk;       /*   400     8 */
-	struct inet_peer_base *    peers;                /*   408     8 */
-	struct fqdir *             fqdir;                /*   416     8 */
-	u8                         sysctl_icmp_echo_ignore_all; /*   424     1 */
-	u8                         sysctl_icmp_echo_enable_probe; /*   425     1 */
-	u8                         sysctl_icmp_echo_ignore_broadcasts; /*   426     1 */
-	u8                         sysctl_icmp_ignore_bogus_error_responses; /*   427     1 */
-	u8                         sysctl_icmp_errors_use_inbound_ifaddr; /*   428     1 */
-
-	/* XXX 3 bytes hole, try to pack */
-
-	int                        sysctl_icmp_ratelimit; /*   432     4 */
-	int                        sysctl_icmp_ratemask; /*   436     4 */
-	int                        sysctl_icmp_msgs_per_sec; /*   440     4 */
-	int                        sysctl_icmp_msgs_burst; /*   444     4 */
+	struct hlist_head *        fib_table_hash;       /*   432     8 */
+	struct sock *              fibnl;                /*   440     8 */
 	/* --- cacheline 7 boundary (448 bytes) --- */
-	atomic_t                   icmp_global_credit;   /*   448     4 */
-	u32                        icmp_global_stamp;    /*   452     4 */
-	u32                        ip_rt_min_pmtu;       /*   456     4 */
-	int                        ip_rt_mtu_expires;    /*   460     4 */
-	int                        ip_rt_min_advmss;     /*   464     4 */
-	struct local_ports         ip_local_ports;       /*   468     8 */
+	struct hlist_head *        fib_info_hash;        /*   448     8 */
+	unsigned int               fib_info_hash_bits;   /*   456     4 */
+	unsigned int               fib_info_cnt;         /*   460     4 */
+	struct sock *              mc_autojoin_sk;       /*   464     8 */
+	struct inet_peer_base *    peers;                /*   472     8 */
+	struct fqdir *             fqdir;                /*   480     8 */
+	u8                         sysctl_icmp_echo_ignore_all; /*   488     1 */
+	u8                         sysctl_icmp_echo_enable_probe; /*   489     1 */
+	u8                         sysctl_icmp_echo_ignore_broadcasts; /*   490     1 */
+	u8                         sysctl_icmp_ignore_bogus_error_responses; /*   491     1 */
+	u8                         sysctl_icmp_errors_use_inbound_ifaddr; /*   492     1 */
+	u8                         sysctl_icmp_errors_extension_mask; /*   493     1 */
+
+	/* XXX 2 bytes hole, try to pack */
+
+	int                        sysctl_icmp_ratelimit; /*   496     4 */
+	int                        sysctl_icmp_ratemask; /*   500     4 */
+	int                        sysctl_icmp_msgs_per_sec; /*   504     4 */
+	int                        sysctl_icmp_msgs_burst; /*   508     4 */
+	/* --- cacheline 8 boundary (512 bytes) --- */
+	u32                        ip_rt_min_pmtu;       /*   512     4 */
+	int                        ip_rt_mtu_expires;    /*   516     4 */
+	int                        ip_rt_min_advmss;     /*   520     4 */
+	struct local_ports         ip_local_ports;       /*   524     8 */
 
 	/* XXX last struct has 3 bytes of padding */
 
-	u8                         sysctl_tcp_ecn;       /*   476     1 */
-	u8                         sysctl_tcp_ecn_fallback; /*   477     1 */
-	u8                         sysctl_ip_default_ttl; /*   478     1 */
-	u8                         sysctl_ip_no_pmtu_disc; /*   479     1 */
-	u8                         sysctl_ip_fwd_update_priority; /*   480     1 */
-	u8                         sysctl_ip_nonlocal_bind; /*   481     1 */
-	u8                         sysctl_ip_autobind_reuse; /*   482     1 */
-	u8                         sysctl_ip_dynaddr;    /*   483     1 */
-	u8                         sysctl_raw_l3mdev_accept; /*   484     1 */
-	u8                         sysctl_udp_early_demux; /*   485     1 */
-	u8                         sysctl_nexthop_compat_mode; /*   486     1 */
-	u8                         sysctl_fwmark_reflect; /*   487     1 */
-	u8                         sysctl_tcp_fwmark_accept; /*   488     1 */
-	u8                         sysctl_tcp_mtu_probing; /*   489     1 */
-
-	/* XXX 2 bytes hole, try to pack */
-
-	int                        sysctl_tcp_mtu_probe_floor; /*   492     4 */
-	int                        sysctl_tcp_base_mss;  /*   496     4 */
-	int                        sysctl_tcp_probe_threshold; /*   500     4 */
-	u32                        sysctl_tcp_probe_interval; /*   504     4 */
-	int                        sysctl_tcp_keepalive_time; /*   508     4 */
-	/* --- cacheline 8 boundary (512 bytes) --- */
-	int                        sysctl_tcp_keepalive_intvl; /*   512     4 */
-	u8                         sysctl_tcp_keepalive_probes; /*   516     1 */
-	u8                         sysctl_tcp_syn_retries; /*   517     1 */
-	u8                         sysctl_tcp_synack_retries; /*   518     1 */
-	u8                         sysctl_tcp_syncookies; /*   519     1 */
-	u8                         sysctl_tcp_migrate_req; /*   520     1 */
-	u8                         sysctl_tcp_comp_sack_nr; /*   521     1 */
-	u8                         sysctl_tcp_backlog_ack_defer; /*   522     1 */
-	u8                         sysctl_tcp_pingpong_thresh; /*   523     1 */
-	u8                         sysctl_tcp_retries1;  /*   524     1 */
-	u8                         sysctl_tcp_retries2;  /*   525     1 */
-	u8                         sysctl_tcp_orphan_retries; /*   526     1 */
-	u8                         sysctl_tcp_tw_reuse;  /*   527     1 */
-	unsigned int               sysctl_tcp_tw_reuse_delay; /*   528     4 */
-	int                        sysctl_tcp_fin_timeout; /*   532     4 */
-	u8                         sysctl_tcp_sack;      /*   536     1 */
-	u8                         sysctl_tcp_window_scaling; /*   537     1 */
-	u8                         sysctl_tcp_timestamps; /*   538     1 */
+	u8                         sysctl_tcp_ecn;       /*   532     1 */
+	u8                         sysctl_tcp_ecn_option; /*   533     1 */
+	u8                         sysctl_tcp_ecn_option_beacon; /*   534     1 */
+	u8                         sysctl_tcp_ecn_fallback; /*   535     1 */
+	u8                         sysctl_ip_default_ttl; /*   536     1 */
+	u8                         sysctl_ip_no_pmtu_disc; /*   537     1 */
+	u8                         sysctl_ip_fwd_update_priority; /*   538     1 */
+	u8                         sysctl_ip_nonlocal_bind; /*   539     1 */
+	u8                         sysctl_ip_autobind_reuse; /*   540     1 */
+	u8                         sysctl_ip_dynaddr;    /*   541     1 */
+	u8                         sysctl_raw_l3mdev_accept; /*   542     1 */
+	u8                         sysctl_udp_early_demux; /*   543     1 */
+	u8                         sysctl_nexthop_compat_mode; /*   544     1 */
+	u8                         sysctl_fwmark_reflect; /*   545     1 */
+	u8                         sysctl_tcp_fwmark_accept; /*   546     1 */
+	u8                         sysctl_tcp_mtu_probing; /*   547     1 */
+	int                        sysctl_tcp_mtu_probe_floor; /*   548     4 */
+	int                        sysctl_tcp_base_mss;  /*   552     4 */
+	int                        sysctl_tcp_probe_threshold; /*   556     4 */
+	u32                        sysctl_tcp_probe_interval; /*   560     4 */
+	int                        sysctl_tcp_keepalive_time; /*   564     4 */
+	int                        sysctl_tcp_keepalive_intvl; /*   568     4 */
+	u8                         sysctl_tcp_keepalive_probes; /*   572     1 */
+	u8                         sysctl_tcp_syn_retries; /*   573     1 */
+	u8                         sysctl_tcp_synack_retries; /*   574     1 */
+	u8                         sysctl_tcp_syncookies; /*   575     1 */
+	/* --- cacheline 9 boundary (576 bytes) --- */
+	u8                         sysctl_tcp_migrate_req; /*   576     1 */
+	u8                         sysctl_tcp_comp_sack_nr; /*   577     1 */
+	u8                         sysctl_tcp_backlog_ack_defer; /*   578     1 */
+	u8                         sysctl_tcp_pingpong_thresh; /*   579     1 */
+	u8                         sysctl_tcp_retries1;  /*   580     1 */
+	u8                         sysctl_tcp_retries2;  /*   581     1 */
+	u8                         sysctl_tcp_orphan_retries; /*   582     1 */
+	u8                         sysctl_tcp_tw_reuse;  /*   583     1 */
+	unsigned int               sysctl_tcp_tw_reuse_delay; /*   584     4 */
+	int                        sysctl_tcp_fin_timeout; /*   588     4 */
+	u8                         sysctl_tcp_sack;      /*   592     1 */
+	u8                         sysctl_tcp_window_scaling; /*   593     1 */
+	u8                         sysctl_tcp_timestamps; /*   594     1 */
 
 	/* XXX 1 byte hole, try to pack */
 
-	int                        sysctl_tcp_rto_min_us; /*   540     4 */
-	int                        sysctl_tcp_rto_max_ms; /*   544     4 */
-	u8                         sysctl_tcp_recovery;  /*   548     1 */
-	u8                         sysctl_tcp_thin_linear_timeouts; /*   549     1 */
-	u8                         sysctl_tcp_slow_start_after_idle; /*   550     1 */
-	u8                         sysctl_tcp_retrans_collapse; /*   551     1 */
-	u8                         sysctl_tcp_stdurg;    /*   552     1 */
-	u8                         sysctl_tcp_rfc1337;   /*   553     1 */
-	u8                         sysctl_tcp_abort_on_overflow; /*   554     1 */
-	u8                         sysctl_tcp_fack;      /*   555     1 */
-	int                        sysctl_tcp_max_reordering; /*   556     4 */
-	int                        sysctl_tcp_adv_win_scale; /*   560     4 */
-	u8                         sysctl_tcp_dsack;     /*   564     1 */
-	u8                         sysctl_tcp_app_win;   /*   565     1 */
-	u8                         sysctl_tcp_frto;      /*   566     1 */
-	u8                         sysctl_tcp_nometrics_save; /*   567     1 */
-	u8                         sysctl_tcp_no_ssthresh_metrics_save; /*   568     1 */
-	u8                         sysctl_tcp_workaround_signed_windows; /*   569     1 */
+	int                        sysctl_tcp_rto_min_us; /*   596     4 */
+	int                        sysctl_tcp_rto_max_ms; /*   600     4 */
+	u8                         sysctl_tcp_recovery;  /*   604     1 */
+	u8                         sysctl_tcp_thin_linear_timeouts; /*   605     1 */
+	u8                         sysctl_tcp_slow_start_after_idle; /*   606     1 */
+	u8                         sysctl_tcp_retrans_collapse; /*   607     1 */
+	u8                         sysctl_tcp_stdurg;    /*   608     1 */
+	u8                         sysctl_tcp_rfc1337;   /*   609     1 */
+	u8                         sysctl_tcp_abort_on_overflow; /*   610     1 */
+	u8                         sysctl_tcp_fack;      /*   611     1 */
+	int                        sysctl_tcp_max_reordering; /*   612     4 */
+	int                        sysctl_tcp_adv_win_scale; /*   616     4 */
+	u8                         sysctl_tcp_dsack;     /*   620     1 */
+	u8                         sysctl_tcp_app_win;   /*   621     1 */
+	u8                         sysctl_tcp_frto;      /*   622     1 */
+	u8                         sysctl_tcp_nometrics_save; /*   623     1 */
+	u8                         sysctl_tcp_no_ssthresh_metrics_save; /*   624     1 */
+	u8                         sysctl_tcp_workaround_signed_windows; /*   625     1 */
 
 	/* XXX 2 bytes hole, try to pack */
 
-	int                        sysctl_tcp_challenge_ack_limit; /*   572     4 */
-	/* --- cacheline 9 boundary (576 bytes) --- */
-	u8                         sysctl_tcp_min_tso_segs; /*   576     1 */
-	u8                         sysctl_tcp_reflect_tos; /*   577     1 */
+	int                        sysctl_tcp_challenge_ack_limit; /*   628     4 */
+	u8                         sysctl_tcp_min_tso_segs; /*   632     1 */
+	u8                         sysctl_tcp_reflect_tos; /*   633     1 */
 
 	/* XXX 2 bytes hole, try to pack */
 
-	int                        sysctl_tcp_invalid_ratelimit; /*   580     4 */
-	int                        sysctl_tcp_pacing_ss_ratio; /*   584     4 */
-	int                        sysctl_tcp_pacing_ca_ratio; /*   588     4 */
-	unsigned int               sysctl_tcp_child_ehash_entries; /*   592     4 */
-
-	/* XXX 4 bytes hole, try to pack */
-
-	long unsigned int          sysctl_tcp_comp_sack_delay_ns; /*   600     8 */
-	long unsigned int          sysctl_tcp_comp_sack_slack_ns; /*   608     8 */
-	int                        sysctl_max_syn_backlog; /*   616     4 */
-	int                        sysctl_tcp_fastopen;  /*   620     4 */
-	const struct tcp_congestion_ops  * tcp_congestion_control; /*   624     8 */
-	struct tcp_fastopen_context * tcp_fastopen_ctx;  /*   632     8 */
+	int                        sysctl_tcp_invalid_ratelimit; /*   636     4 */
 	/* --- cacheline 10 boundary (640 bytes) --- */
-	unsigned int               sysctl_tcp_fastopen_blackhole_timeout; /*   640     4 */
-	atomic_t                   tfo_active_disable_times; /*   644     4 */
-	long unsigned int          tfo_active_disable_stamp; /*   648     8 */
-	u32                        tcp_challenge_timestamp; /*   656     4 */
-	u32                        tcp_challenge_count;  /*   660     4 */
-	u8                         sysctl_tcp_plb_enabled; /*   664     1 */
-	u8                         sysctl_tcp_plb_idle_rehash_rounds; /*   665     1 */
-	u8                         sysctl_tcp_plb_rehash_rounds; /*   666     1 */
-	u8                         sysctl_tcp_plb_suspend_rto_sec; /*   667     1 */
-	int                        sysctl_tcp_plb_cong_thresh; /*   668     4 */
-	int                        sysctl_udp_wmem_min;  /*   672     4 */
-	int                        sysctl_udp_rmem_min;  /*   676     4 */
-	u8                         sysctl_fib_notify_on_flag_change; /*   680     1 */
-	u8                         sysctl_tcp_syn_linear_timeouts; /*   681     1 */
-	u8                         sysctl_udp_l3mdev_accept; /*   682     1 */
-	u8                         sysctl_igmp_llm_reports; /*   683     1 */
-	int                        sysctl_igmp_max_memberships; /*   684     4 */
-	int                        sysctl_igmp_max_msf;  /*   688     4 */
-	int                        sysctl_igmp_qrv;      /*   692     4 */
-	struct ping_group_range    ping_group_range;     /*   696    16 */
-	/* --- cacheline 11 boundary (704 bytes) was 8 bytes ago --- */
-	atomic_t                   dev_addr_genid;       /*   712     4 */
-	unsigned int               sysctl_udp_child_hash_entries; /*   716     4 */
-	long unsigned int *        sysctl_local_reserved_ports; /*   720     8 */
-	int                        sysctl_ip_prot_sock;  /*   728     4 */
-
-	/* XXX 4 bytes hole, try to pack */
-
-	struct list_head           mr_tables;            /*   736    16 */
-	struct fib_rules_ops *     mr_rules_ops;         /*   752     8 */
-	struct sysctl_fib_multipath_hash_seed sysctl_fib_multipath_hash_seed; /*   760     8 */
+	int                        sysctl_tcp_pacing_ss_ratio; /*   640     4 */
+	int                        sysctl_tcp_pacing_ca_ratio; /*   644     4 */
+	unsigned int               sysctl_tcp_child_ehash_entries; /*   648     4 */
+	int                        sysctl_tcp_comp_sack_rtt_percent; /*   652     4 */
+	long unsigned int          sysctl_tcp_comp_sack_delay_ns; /*   656     8 */
+	long unsigned int          sysctl_tcp_comp_sack_slack_ns; /*   664     8 */
+	int                        sysctl_max_syn_backlog; /*   672     4 */
+	int                        sysctl_tcp_fastopen;  /*   676     4 */
+	const struct tcp_congestion_ops  * tcp_congestion_control; /*   680     8 */
+	struct tcp_fastopen_context * tcp_fastopen_ctx;  /*   688     8 */
+	unsigned int               sysctl_tcp_fastopen_blackhole_timeout; /*   696     4 */
+	atomic_t                   tfo_active_disable_times; /*   700     4 */
+	/* --- cacheline 11 boundary (704 bytes) --- */
+	long unsigned int          tfo_active_disable_stamp; /*   704     8 */
+	u32                        tcp_challenge_timestamp; /*   712     4 */
+	u32                        tcp_challenge_count;  /*   716     4 */
+	u8                         sysctl_tcp_plb_enabled; /*   720     1 */
+	u8                         sysctl_tcp_plb_idle_rehash_rounds; /*   721     1 */
+	u8                         sysctl_tcp_plb_rehash_rounds; /*   722     1 */
+	u8                         sysctl_tcp_plb_suspend_rto_sec; /*   723     1 */
+	int                        sysctl_tcp_plb_cong_thresh; /*   724     4 */
+	int                        sysctl_udp_wmem_min;  /*   728     4 */
+	int                        sysctl_udp_rmem_min;  /*   732     4 */
+	u8                         sysctl_fib_notify_on_flag_change; /*   736     1 */
+	u8                         sysctl_tcp_syn_linear_timeouts; /*   737     1 */
+	u8                         sysctl_udp_l3mdev_accept; /*   738     1 */
+	u8                         sysctl_igmp_llm_reports; /*   739     1 */
+	int                        sysctl_igmp_max_memberships; /*   740     4 */
+	int                        sysctl_igmp_max_msf;  /*   744     4 */
+	int                        sysctl_igmp_qrv;      /*   748     4 */
+	struct ping_group_range    ping_group_range;     /*   752    16 */
 	/* --- cacheline 12 boundary (768 bytes) --- */
-	u32                        sysctl_fib_multipath_hash_fields; /*   768     4 */
-	u8                         sysctl_fib_multipath_use_neigh; /*   772     1 */
-	u8                         sysctl_fib_multipath_hash_policy; /*   773     1 */
+	u16                        ping_port_rover;      /*   768     2 */
 
 	/* XXX 2 bytes hole, try to pack */
 
-	struct fib_notifier_ops *  notifier_ops;         /*   776     8 */
-	unsigned int               fib_seq;              /*   784     4 */
+	atomic_t                   dev_addr_genid;       /*   772     4 */
+	unsigned int               sysctl_udp_child_hash_entries; /*   776     4 */
 
 	/* XXX 4 bytes hole, try to pack */
 
-	struct fib_notifier_ops *  ipmr_notifier_ops;    /*   792     8 */
-	unsigned int               ipmr_seq;             /*   800     4 */
-	atomic_t                   rt_genid;             /*   804     4 */
-	siphash_key_t              ip_id_key;            /*   808    16 */
-	struct hlist_head *        inet_addr_lst;        /*   824     8 */
+	long unsigned int *        sysctl_local_reserved_ports; /*   784     8 */
+	int                        sysctl_ip_prot_sock;  /*   792     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct list_head           mr_tables;            /*   800    16 */
+	struct fib_rules_ops *     mr_rules_ops;         /*   816     8 */
+	struct sysctl_fib_multipath_hash_seed sysctl_fib_multipath_hash_seed; /*   824     8 */
 	/* --- cacheline 13 boundary (832 bytes) --- */
-	struct delayed_work        addr_chk_work;        /*   832    88 */
+	u32                        sysctl_fib_multipath_hash_fields; /*   832     4 */
+	u8                         sysctl_fib_multipath_use_neigh; /*   836     1 */
+	u8                         sysctl_fib_multipath_hash_policy; /*   837     1 */
+
+	/* XXX 2 bytes hole, try to pack */
+
+	struct fib_notifier_ops *  notifier_ops;         /*   840     8 */
+	unsigned int               fib_seq;              /*   848     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct fib_notifier_ops *  ipmr_notifier_ops;    /*   856     8 */
+	unsigned int               ipmr_seq;             /*   864     4 */
+	atomic_t                   rt_genid;             /*   868     4 */
+	siphash_key_t              ip_id_key;            /*   872    16 */
+	struct hlist_head *        inet_addr_lst;        /*   888     8 */
+	/* --- cacheline 14 boundary (896 bytes) --- */
+	struct delayed_work        addr_chk_work;        /*   896    88 */
 
 	/* XXX last struct has 4 bytes of padding */
 
-	/* size: 960, cachelines: 15, members: 172 */
-	/* sum members: 881, holes: 12, sum holes: 39 */
+	/* size: 1024, cachelines: 16, members: 181 */
+	/* sum members: 894, holes: 13, sum holes: 90 */
 	/* padding: 40 */
 	/* member types with holes: 1, total: 1 */
 	/* paddings: 3, sum paddings: 59 */
-	/* forced alignments: 1, forced holes: 1, sum forced holes: 8 */
+	/* forced alignments: 4, forced holes: 2, sum forced holes: 60 */
 } __attribute__((__aligned__(64)));
 
 struct dst_ops;
@@ -2398,23 +2532,25 @@ struct netns_sysctl_ipv6 {
 	int                        ip6_rt_min_advmss;    /*    68     4 */
 	u32                        multipath_hash_fields; /*    72     4 */
 	u8                         multipath_hash_policy; /*    76     1 */
-	u8                         bindv6only;           /*    77     1 */
-	u8                         flowlabel_consistency; /*    78     1 */
-	u8                         auto_flowlabels;      /*    79     1 */
-	int                        icmpv6_time;          /*    80     4 */
-	u8                         icmpv6_echo_ignore_all; /*    84     1 */
-	u8                         icmpv6_echo_ignore_multicast; /*    85     1 */
-	u8                         icmpv6_echo_ignore_anycast; /*    86     1 */
+	__u8                       __cacheline_group_begin__sysctl_ipv6_flowlabel[0]; /*    77     0 */
+	u8                         flowlabel_consistency; /*    77     1 */
+	u8                         auto_flowlabels;      /*    78     1 */
+	u8                         flowlabel_state_ranges; /*    79     1 */
+	__u8                       __cacheline_group_end__sysctl_ipv6_flowlabel[0]; /*    80     0 */
+	u8                         icmpv6_echo_ignore_all; /*    80     1 */
+	u8                         icmpv6_echo_ignore_multicast; /*    81     1 */
+	u8                         icmpv6_echo_ignore_anycast; /*    82     1 */
 
 	/* XXX 1 byte hole, try to pack */
 
+	int                        icmpv6_time;          /*    84     4 */
 	long unsigned int          icmpv6_ratemask[4];   /*    88    32 */
 	long unsigned int *        icmpv6_ratemask_ptr;  /*   120     8 */
 	/* --- cacheline 2 boundary (128 bytes) --- */
 	u8                         anycast_src_echo_reply; /*   128     1 */
-	u8                         ip_nonlocal_bind;     /*   129     1 */
-	u8                         fwmark_reflect;       /*   130     1 */
-	u8                         flowlabel_state_ranges; /*   131     1 */
+	u8                         bindv6only;           /*   129     1 */
+	u8                         ip_nonlocal_bind;     /*   130     1 */
+	u8                         fwmark_reflect;       /*   131     1 */
 	int                        idgen_retries;        /*   132     4 */
 	int                        idgen_delay;          /*   136     4 */
 	int                        flowlabel_reflect;    /*   140     4 */
@@ -2428,10 +2564,11 @@ struct netns_sysctl_ipv6 {
 	u8                         skip_notify_on_dev_down; /*   176     1 */
 	u8                         fib_notify_on_flag_change; /*   177     1 */
 	u8                         icmpv6_error_anycast_as_unicast; /*   178     1 */
+	u8                         icmpv6_errors_extension_mask; /*   179     1 */
 
-	/* size: 184, cachelines: 3, members: 41 */
-	/* sum members: 178, holes: 1, sum holes: 1 */
-	/* padding: 5 */
+	/* size: 184, cachelines: 3, members: 44 */
+	/* sum members: 179, holes: 1, sum holes: 1 */
+	/* padding: 4 */
 	/* last cacheline: 56 bytes */
 };
 
@@ -2464,12 +2601,13 @@ struct qrwlock {
 };
 typedef struct qrwlock arch_rwlock_t;
 
-typedef struct {
+struct rwlock {
 	arch_rwlock_t              raw_lock;             /*     0     8 */
 
 	/* size: 8, cachelines: 1, members: 1 */
 	/* last cacheline: 8 bytes */
-} rwlock_t;
+};
+typedef struct rwlock rwlock_t;
 
 
 
@@ -2487,7 +2625,7 @@ struct netns_ipv6 {
 	/* --- cacheline 3 boundary (192 bytes) --- */
 	struct netns_sysctl_ipv6   sysctl;               /*   192   184 */
 
-	/* XXX last struct has 5 bytes of padding, 1 hole */
+	/* XXX last struct has 4 bytes of padding, 1 hole */
 
 	/* --- cacheline 5 boundary (320 bytes) was 56 bytes ago --- */
 	struct ipv6_devconf *      devconf_all;          /*   376     8 */
@@ -2567,7 +2705,7 @@ struct netns_ipv6 {
 	/* sum members: 790, holes: 5, sum holes: 18 */
 	/* padding: 24 */
 	/* member types with holes: 2, total: 2 */
-	/* paddings: 4, sum paddings: 37 */
+	/* paddings: 4, sum paddings: 36 */
 } __attribute__((__aligned__(64)));
 
 struct netns_sysctl_lowpan {
@@ -2618,46 +2756,43 @@ struct netns_sctp {
 	int                        rto_beta;             /*   168     4 */
 	int                        max_burst;            /*   172     4 */
 	int                        cookie_preserve_enable; /*   176     4 */
-
-	/* XXX 4 bytes hole, try to pack */
-
-	char *                     sctp_hmac_alg;        /*   184     8 */
+	int                        cookie_auth_enable;   /*   180     4 */
+	unsigned int               valid_cookie_life;    /*   184     4 */
+	unsigned int               sack_timeout;         /*   188     4 */
 	/* --- cacheline 3 boundary (192 bytes) --- */
-	unsigned int               valid_cookie_life;    /*   192     4 */
-	unsigned int               sack_timeout;         /*   196     4 */
-	unsigned int               hb_interval;          /*   200     4 */
-	unsigned int               probe_interval;       /*   204     4 */
-	int                        max_retrans_association; /*   208     4 */
-	int                        max_retrans_path;     /*   212     4 */
-	int                        max_retrans_init;     /*   216     4 */
-	int                        pf_retrans;           /*   220     4 */
-	int                        ps_retrans;           /*   224     4 */
-	int                        pf_enable;            /*   228     4 */
-	int                        pf_expose;            /*   232     4 */
-	int                        sndbuf_policy;        /*   236     4 */
-	int                        rcvbuf_policy;        /*   240     4 */
-	int                        default_auto_asconf;  /*   244     4 */
-	int                        addip_enable;         /*   248     4 */
-	int                        addip_noauth;         /*   252     4 */
+	unsigned int               hb_interval;          /*   192     4 */
+	unsigned int               probe_interval;       /*   196     4 */
+	int                        max_retrans_association; /*   200     4 */
+	int                        max_retrans_path;     /*   204     4 */
+	int                        max_retrans_init;     /*   208     4 */
+	int                        pf_retrans;           /*   212     4 */
+	int                        ps_retrans;           /*   216     4 */
+	int                        pf_enable;            /*   220     4 */
+	int                        pf_expose;            /*   224     4 */
+	int                        sndbuf_policy;        /*   228     4 */
+	int                        rcvbuf_policy;        /*   232     4 */
+	int                        default_auto_asconf;  /*   236     4 */
+	int                        addip_enable;         /*   240     4 */
+	int                        addip_noauth;         /*   244     4 */
+	int                        prsctp_enable;        /*   248     4 */
+	int                        reconf_enable;        /*   252     4 */
 	/* --- cacheline 4 boundary (256 bytes) --- */
-	int                        prsctp_enable;        /*   256     4 */
-	int                        reconf_enable;        /*   260     4 */
-	int                        auth_enable;          /*   264     4 */
-	int                        intl_enable;          /*   268     4 */
-	int                        ecn_enable;           /*   272     4 */
-	int                        scope_policy;         /*   276     4 */
-	int                        rwnd_upd_shift;       /*   280     4 */
+	int                        auth_enable;          /*   256     4 */
+	int                        intl_enable;          /*   260     4 */
+	int                        ecn_enable;           /*   264     4 */
+	int                        scope_policy;         /*   268     4 */
+	int                        rwnd_upd_shift;       /*   272     4 */
 
 	/* XXX 4 bytes hole, try to pack */
 
-	long unsigned int          max_autoclose;        /*   288     8 */
-	int                        l3mdev_accept;        /*   296     4 */
+	long unsigned int          max_autoclose;        /*   280     8 */
+	int                        l3mdev_accept;        /*   288     4 */
 
-	/* size: 304, cachelines: 5, members: 47 */
-	/* sum members: 292, holes: 2, sum holes: 8 */
+	/* size: 296, cachelines: 5, members: 47 */
+	/* sum members: 288, holes: 1, sum holes: 4 */
 	/* padding: 4 */
 	/* paddings: 1, sum paddings: 4 */
-	/* last cacheline: 48 bytes */
+	/* last cacheline: 40 bytes */
 };
 
 struct nf_logger;
@@ -2776,10 +2911,12 @@ struct netns_ct {
 };
 
 struct netns_nftables {
-	u8                         gencursor;            /*     0     1 */
+	unsigned int               base_seq;             /*     0     4 */
+	u8                         gencursor;            /*     4     1 */
 
-	/* size: 1, cachelines: 1, members: 1 */
-	/* last cacheline: 1 bytes */
+	/* size: 8, cachelines: 1, members: 2 */
+	/* padding: 3 */
+	/* last cacheline: 8 bytes */
 };
 
 struct nf_flow_table_stat;
@@ -2912,15 +3049,16 @@ struct netns_ipvs;
 
 struct mpls_route;
 
+
 struct netns_mpls {
 	int                        ip_ttl_propagate;     /*     0     4 */
 	int                        default_ttl;          /*     4     4 */
 	size_t                     platform_labels;      /*     8     8 */
 	struct mpls_route * *      platform_label;       /*    16     8 */
-	struct ctl_table_header *  ctl;                  /*    24     8 */
+	struct mutex               platform_mutex;       /*    24    32 */
+	struct ctl_table_header *  ctl;                  /*    56     8 */
 
-	/* size: 32, cachelines: 1, members: 5 */
-	/* last cacheline: 32 bytes */
+	/* size: 64, cachelines: 1, members: 6 */
 };
 
 struct can_dev_rcv_lists;
@@ -2982,51 +3120,40 @@ struct netns_xdp {
 struct netns_mctp {
 	struct list_head           routes;               /*     0    16 */
 	struct mutex               bind_lock;            /*    16    32 */
-	struct hlist_head          binds;                /*    48     8 */
-	spinlock_t                 keys_lock;            /*    56     4 */
+	struct hlist_head          binds[128];           /*    48  1024 */
+	/* --- cacheline 16 boundary (1024 bytes) was 48 bytes ago --- */
+	spinlock_t                 keys_lock;            /*  1072     4 */
 
 	/* XXX 4 bytes hole, try to pack */
 
-	/* --- cacheline 1 boundary (64 bytes) --- */
-	struct hlist_head          keys;                 /*    64     8 */
-	unsigned int               default_net;          /*    72     4 */
+	struct hlist_head          keys;                 /*  1080     8 */
+	/* --- cacheline 17 boundary (1088 bytes) --- */
+	unsigned int               default_net;          /*  1088     4 */
 
 	/* XXX 4 bytes hole, try to pack */
 
-	struct mutex               neigh_lock;           /*    80    32 */
-	struct list_head           neighbours;           /*   112    16 */
+	struct mutex               neigh_lock;           /*  1096    32 */
+	struct list_head           neighbours;           /*  1128    16 */
 
-	/* size: 128, cachelines: 2, members: 8 */
-	/* sum members: 120, holes: 2, sum holes: 8 */
+	/* size: 1144, cachelines: 18, members: 8 */
+	/* sum members: 1136, holes: 2, sum holes: 8 */
+	/* last cacheline: 56 bytes */
 };
 
-struct smc_stats;
+enum vsock_net_mode {
+	VSOCK_NET_MODE_GLOBAL = 0,
+	VSOCK_NET_MODE_LOCAL  = 1,
+};
 
+struct netns_vsock {
+	struct ctl_table_header *  sysctl_hdr;           /*     0     8 */
+	u32                        port;                 /*     8     4 */
+	enum vsock_net_mode        mode;                 /*    12     4 */
+	enum vsock_net_mode        child_ns_mode;        /*    16     4 */
 
-struct smc_stats_rsn;
-
-struct netns_smc {
-	struct smc_stats *         smc_stats;            /*     0     8 */
-	struct mutex               mutex_fback_rsn;      /*     8    32 */
-	struct smc_stats_rsn *     fback_rsn;            /*    40     8 */
-	bool                       limit_smc_hs;         /*    48     1 */
-
-	/* XXX 7 bytes hole, try to pack */
-
-	struct ctl_table_header *  smc_hdr;              /*    56     8 */
-	/* --- cacheline 1 boundary (64 bytes) --- */
-	unsigned int               sysctl_autocorking_size; /*    64     4 */
-	unsigned int               sysctl_smcr_buf_type; /*    68     4 */
-	int                        sysctl_smcr_testlink_time; /*    72     4 */
-	int                        sysctl_wmem;          /*    76     4 */
-	int                        sysctl_rmem;          /*    80     4 */
-	int                        sysctl_max_links_per_lgr; /*    84     4 */
-	int                        sysctl_max_conns_per_lgr; /*    88     4 */
-
-	/* size: 96, cachelines: 2, members: 12 */
-	/* sum members: 85, holes: 1, sum holes: 7 */
+	/* size: 24, cachelines: 1, members: 4 */
 	/* padding: 4 */
-	/* last cacheline: 32 bytes */
+	/* last cacheline: 24 bytes */
 };
 
 struct net {
@@ -3046,7 +3173,7 @@ struct net {
 	struct user_namespace *    user_ns;
 	struct ucounts *           ucounts;
 	struct idr                 netns_ids;
-	struct ns_common           ns;
+	struct ns_common           ns __attribute__((__aligned__(64)));
 	struct ref_tracker_dir     refcnt_tracker;
 	struct ref_tracker_dir     notrefcnt_tracker;
 	struct list_head           dev_base_head;
@@ -3061,6 +3188,7 @@ struct net {
 	struct xarray              dev_by_index;
 	struct raw_notifier_head   netdev_chain;
 	u32                        hash_mix;
+	bool                       is_dying;
 	struct net_device *        loopback_dev;
 	struct list_head           rules_ops;
 	struct netns_core          core;
@@ -3087,7 +3215,7 @@ struct net {
 	struct netns_mctp          mctp;
 	struct sock *              crypto_nlsk;
 	struct sock *              diag_nlsk;
-	struct netns_smc           smc;
+	struct netns_vsock         vsock;
 } __attribute__((__aligned__(64)));
 
 
@@ -3328,6 +3456,8 @@ struct mpls_dev;
 
 struct mctp_dev;
 
+struct psp_dev;
+
 struct cpu_rmap;
 
 
@@ -3380,11 +3510,11 @@ struct kobject {
 	const struct kobj_type  *  ktype;                /*    40     8 */
 	struct kernfs_node *       sd;                   /*    48     8 */
 	struct kref                kref;                 /*    56     4 */
-	unsigned int               state_initialized:1;  /*    60: 0  4 */
-	unsigned int               state_in_sysfs:1;     /*    60: 1  4 */
-	unsigned int               state_add_uevent_sent:1; /*    60: 2  4 */
-	unsigned int               state_remove_uevent_sent:1; /*    60: 3  4 */
-	unsigned int               uevent_suppress:1;    /*    60: 4  4 */
+	unsigned int               state_initialized:1;  /*    60: 0  1 */
+	unsigned int               state_in_sysfs:1;     /*    60: 1  1 */
+	unsigned int               state_add_uevent_sent:1; /*    60: 2  1 */
+	unsigned int               state_remove_uevent_sent:1; /*    60: 3  1 */
+	unsigned int               uevent_suppress:1;    /*    60: 4  1 */
 
 	/* size: 64, cachelines: 1, members: 12 */
 	/* bit_padding: 27 bits */
@@ -3556,16 +3686,17 @@ struct dev_pm_info {
 
 	/* --- cacheline 1 boundary (64 bytes) --- */
 	struct wakeup_source *     wakeup;               /*    64     8 */
-	bool                       wakeup_path:1;        /*    72: 0  1 */
-	bool                       syscore:1;            /*    72: 1  1 */
-	bool                       no_pm_callbacks:1;    /*    72: 2  1 */
-	bool                       work_in_progress:1;   /*    72: 3  1 */
-	bool                       smart_suspend:1;      /*    72: 4  1 */
-	bool                       must_resume:1;        /*    72: 5  1 */
-	bool                       may_skip_resume:1;    /*    72: 6  1 */
+	bool                       work_in_progress;     /*    72     1 */
+	bool                       wakeup_path:1;        /*    73: 0  1 */
+	bool                       syscore:1;            /*    73: 1  1 */
+	bool                       no_pm_callbacks:1;    /*    73: 2  1 */
+	bool                       smart_suspend:1;      /*    73: 3  1 */
+	bool                       must_resume:1;        /*    73: 4  1 */
+	bool                       may_skip_resume:1;    /*    73: 5  1 */
+	bool                       out_band_wakeup:1;    /*    73: 6  1 */
+	bool                       strict_midlayer:1;    /*    73: 7  1 */
 
-	/* XXX 1 bit hole, try to pack */
-	/* XXX 7 bytes hole, try to pack */
+	/* XXX 6 bytes hole, try to pack */
 
 	struct hrtimer             suspend_timer;        /*    80    64 */
 
@@ -3579,15 +3710,12 @@ struct dev_pm_info {
 	struct wake_irq *          wakeirq;              /*   208     8 */
 	atomic_t                   usage_count;          /*   216     4 */
 	atomic_t                   child_count;          /*   220     4 */
-	unsigned int               disable_depth:3;      /*   224: 0  4 */
+	unsigned int               disable_depth:3;      /*   224: 0  1 */
 	bool                       idle_notification:1;  /*   224: 3  1 */
 	bool                       request_pending:1;    /*   224: 4  1 */
 	bool                       deferred_resume:1;    /*   224: 5  1 */
 	bool                       needs_force_resume:1; /*   224: 6  1 */
 	bool                       runtime_auto:1;       /*   224: 7  1 */
-
-	/* Bitfield combined with next fields */
-
 	bool                       ignore_children:1;    /*   225: 0  1 */
 	bool                       no_callbacks:1;       /*   225: 1  1 */
 	bool                       irq_safe:1;           /*   225: 2  1 */
@@ -3614,13 +3742,15 @@ struct dev_pm_info {
 	struct pm_subsys_data *    subsys_data;          /*   288     8 */
 	void                       (*set_latency_tolerance)(struct device *, s32); /*   296     8 */
 	struct dev_pm_qos *        qos;                  /*   304     8 */
+	bool                       detach_power_off:1;   /*   312: 0  1 */
 
-	/* size: 312, cachelines: 5, members: 55 */
-	/* sum members: 292, holes: 3, sum holes: 13 */
-	/* sum bitfield members: 31 bits, bit holes: 3, sum bit holes: 25 bits */
+	/* size: 320, cachelines: 5, members: 58 */
+	/* sum members: 293, holes: 3, sum holes: 12 */
+	/* sum bitfield members: 33 bits, bit holes: 2, sum bit holes: 24 bits */
+	/* padding: 7 */
 	/* member types with holes: 1, total: 1 */
 	/* paddings: 1, sum paddings: 4 */
-	/* last cacheline: 56 bytes */
+	/* bit_padding: 7 bits */
 };
 
 struct dev_pm_domain;
@@ -3703,56 +3833,56 @@ struct device {
 	/* XXX last struct has 4 bytes of padding */
 
 	/* --- cacheline 3 boundary (192 bytes) was 24 bytes ago --- */
-	struct dev_pm_info         power;                /*   216   312 */
+	struct dev_pm_info         power;                /*   216   320 */
 
-	/* XXX last struct has 3 holes, 3 bit holes */
+	/* XXX last struct has 7 bytes of padding, 7 bits of padding, 3 holes, 2 bit holes */
 
-	/* --- cacheline 8 boundary (512 bytes) was 16 bytes ago --- */
-	struct dev_pm_domain *     pm_domain;            /*   528     8 */
-	struct em_perf_domain *    em_pd;                /*   536     8 */
-	struct dev_pin_info *      pins;                 /*   544     8 */
-	struct dev_msi_info        msi;                  /*   552    16 */
-	const struct dma_map_ops  * dma_ops;             /*   568     8 */
+	/* --- cacheline 8 boundary (512 bytes) was 24 bytes ago --- */
+	struct dev_pm_domain *     pm_domain;            /*   536     8 */
+	struct em_perf_domain *    em_pd;                /*   544     8 */
+	struct dev_pin_info *      pins;                 /*   552     8 */
+	struct dev_msi_info        msi;                  /*   560    16 */
 	/* --- cacheline 9 boundary (576 bytes) --- */
-	u64 *                      dma_mask;             /*   576     8 */
-	u64                        coherent_dma_mask;    /*   584     8 */
-	u64                        bus_dma_limit;        /*   592     8 */
-	const struct bus_dma_region  * dma_range_map;    /*   600     8 */
-	struct device_dma_parameters * dma_parms;        /*   608     8 */
-	struct list_head           dma_pools;            /*   616    16 */
-	struct cma *               cma_area;             /*   632     8 */
+	const struct dma_map_ops  * dma_ops;             /*   576     8 */
+	u64 *                      dma_mask;             /*   584     8 */
+	u64                        coherent_dma_mask;    /*   592     8 */
+	u64                        bus_dma_limit;        /*   600     8 */
+	const struct bus_dma_region  * dma_range_map;    /*   608     8 */
+	struct device_dma_parameters * dma_parms;        /*   616     8 */
+	struct list_head           dma_pools;            /*   624    16 */
 	/* --- cacheline 10 boundary (640 bytes) --- */
-	struct io_tlb_mem *        dma_io_tlb_mem;       /*   640     8 */
-	struct dev_archdata        archdata;             /*   648     0 */
-	struct device_node *       of_node;              /*   648     8 */
-	struct fwnode_handle *     fwnode;               /*   656     8 */
-	int                        numa_node;            /*   664     4 */
-	dev_t                      devt;                 /*   668     4 */
-	u32                        id;                   /*   672     4 */
-	spinlock_t                 devres_lock;          /*   676     4 */
-	struct list_head           devres_head;          /*   680    16 */
-	const struct class  *      class;                /*   696     8 */
+	struct cma *               cma_area;             /*   640     8 */
+	struct io_tlb_mem *        dma_io_tlb_mem;       /*   648     8 */
+	struct dev_archdata        archdata;             /*   656     0 */
+	struct device_node *       of_node;              /*   656     8 */
+	struct fwnode_handle *     fwnode;               /*   664     8 */
+	int                        numa_node;            /*   672     4 */
+	dev_t                      devt;                 /*   676     4 */
+	u32                        id;                   /*   680     4 */
+	spinlock_t                 devres_lock;          /*   684     4 */
+	struct list_head           devres_head;          /*   688    16 */
 	/* --- cacheline 11 boundary (704 bytes) --- */
-	const struct attribute_group  * * groups;        /*   704     8 */
-	void                       (*release)(struct device *); /*   712     8 */
-	struct iommu_group *       iommu_group;          /*   720     8 */
-	struct dev_iommu *         iommu;                /*   728     8 */
-	struct device_physical_location * physical_location; /*   736     8 */
-	enum device_removable      removable;            /*   744     4 */
-	bool                       offline_disabled:1;   /*   748: 0  1 */
-	bool                       offline:1;            /*   748: 1  1 */
-	bool                       of_node_reused:1;     /*   748: 2  1 */
-	bool                       state_synced:1;       /*   748: 3  1 */
-	bool                       can_match:1;          /*   748: 4  1 */
-	bool                       dma_skip_sync:1;      /*   748: 5  1 */
-	bool                       dma_iommu:1;          /*   748: 6  1 */
+	const struct class  *      class;                /*   704     8 */
+	const struct attribute_group  * * groups;        /*   712     8 */
+	void                       (*release)(struct device *); /*   720     8 */
+	struct iommu_group *       iommu_group;          /*   728     8 */
+	struct dev_iommu *         iommu;                /*   736     8 */
+	struct device_physical_location * physical_location; /*   744     8 */
+	enum device_removable      removable;            /*   752     4 */
+	bool                       offline_disabled:1;   /*   756: 0  1 */
+	bool                       offline:1;            /*   756: 1  1 */
+	bool                       of_node_reused:1;     /*   756: 2  1 */
+	bool                       state_synced:1;       /*   756: 3  1 */
+	bool                       can_match:1;          /*   756: 4  1 */
+	bool                       dma_skip_sync:1;      /*   756: 5  1 */
+	bool                       dma_iommu:1;          /*   756: 6  1 */
 
-	/* size: 752, cachelines: 12, members: 47 */
+	/* size: 760, cachelines: 12, members: 47 */
 	/* padding: 3 */
-	/* member types with holes: 1, total: 3, bit holes: 1, total: 3, bit paddings: 1, total: 27 bits */
-	/* paddings: 1, sum paddings: 4 */
+	/* member types with holes: 1, total: 3, bit holes: 1, total: 2, bit paddings: 2, total: 34 bits */
+	/* paddings: 2, sum paddings: 11 */
 	/* bit_padding: 1 bits */
-	/* last cacheline: 48 bytes */
+	/* last cacheline: 56 bytes */
 };
 
 struct rtnl_link_ops;
@@ -3897,6 +4027,7 @@ struct net_device {
 	netdev_features_t          vlan_features;
 	netdev_features_t          hw_enc_features;
 	netdev_features_t          mpls_features;
+	netdev_features_t          mangleid_features;
 	unsigned int               min_mtu;
 	unsigned int               max_mtu;
 	short unsigned int         type;
@@ -3921,6 +4052,7 @@ struct net_device {
 	unsigned char              addr_len;
 	unsigned char              upper_level;
 	unsigned char              lower_level;
+	u8                         threaded;
 	short unsigned int         neigh_priv_len;
 	short unsigned int         dev_id;
 	short unsigned int         dev_port;
@@ -3945,6 +4077,7 @@ struct net_device {
 	struct wpan_dev *          ieee802154_ptr;
 	struct mpls_dev *          mpls_ptr;
 	struct mctp_dev *          mctp_ptr;
+	struct psp_dev *           psp_dev;
 	const unsigned char  *     dev_addr;
 	unsigned int               num_rx_queues;
 	unsigned int               xdp_zc_max_segs;
@@ -3979,7 +4112,7 @@ struct net_device {
 	struct mrp_port *          mrp_port;
 	struct dm_hw_stat_delta *  dm_private;
 	struct device              dev;
-	const struct attribute_group  * sysfs_groups[4];
+	const struct attribute_group  * sysfs_groups[5];
 	const struct attribute_group  * sysfs_rx_queue_group;
 	const struct rtnl_link_ops  * rtnl_link_ops;
 	const struct netdev_stat_ops  * stat_ops;
@@ -3995,7 +4128,6 @@ struct net_device {
 	struct sfp_bus *           sfp_bus;
 	struct lock_class_key *    qdisc_tx_busylock;
 	bool                       proto_down;
-	bool                       threaded;
 	bool                       irq_affinity_auto;
 	bool                       rx_cpu_rmap_auto;
 	long unsigned int          see_all_hwtstamp_requests:1;
@@ -4021,8 +4153,9 @@ struct net_device {
 	struct dim_irq_moder *     irq_moder;
 	u64                        max_pacing_offload_horizon;
 	struct napi_config *       napi_config;
-	long unsigned int          gro_flush_timeout;
+	u32                        num_napi_configs;
 	u32                        napi_defer_hard_irqs;
+	long unsigned int          gro_flush_timeout;
 	bool                       up;
 	bool                       request_ops_lock;
 	struct mutex               lock;
@@ -4076,83 +4209,92 @@ enum skb_drop_reason {
 	SKB_DROP_REASON_TCP_LISTEN_OVERFLOW      = 40,
 	SKB_DROP_REASON_TCP_OLD_SEQUENCE         = 41,
 	SKB_DROP_REASON_TCP_INVALID_SEQUENCE     = 42,
-	SKB_DROP_REASON_TCP_INVALID_ACK_SEQUENCE = 43,
-	SKB_DROP_REASON_TCP_RESET                = 44,
-	SKB_DROP_REASON_TCP_INVALID_SYN          = 45,
-	SKB_DROP_REASON_TCP_CLOSE                = 46,
-	SKB_DROP_REASON_TCP_FASTOPEN             = 47,
-	SKB_DROP_REASON_TCP_OLD_ACK              = 48,
-	SKB_DROP_REASON_TCP_TOO_OLD_ACK          = 49,
-	SKB_DROP_REASON_TCP_ACK_UNSENT_DATA      = 50,
-	SKB_DROP_REASON_TCP_OFO_QUEUE_PRUNE      = 51,
-	SKB_DROP_REASON_TCP_OFO_DROP             = 52,
-	SKB_DROP_REASON_IP_OUTNOROUTES           = 53,
-	SKB_DROP_REASON_BPF_CGROUP_EGRESS        = 54,
-	SKB_DROP_REASON_IPV6DISABLED             = 55,
-	SKB_DROP_REASON_NEIGH_CREATEFAIL         = 56,
-	SKB_DROP_REASON_NEIGH_FAILED             = 57,
-	SKB_DROP_REASON_NEIGH_QUEUEFULL          = 58,
-	SKB_DROP_REASON_NEIGH_DEAD               = 59,
-	SKB_DROP_REASON_NEIGH_HH_FILLFAIL        = 60,
-	SKB_DROP_REASON_TC_EGRESS                = 61,
-	SKB_DROP_REASON_SECURITY_HOOK            = 62,
-	SKB_DROP_REASON_QDISC_DROP               = 63,
-	SKB_DROP_REASON_QDISC_OVERLIMIT          = 64,
-	SKB_DROP_REASON_QDISC_CONGESTED          = 65,
-	SKB_DROP_REASON_CAKE_FLOOD               = 66,
-	SKB_DROP_REASON_FQ_BAND_LIMIT            = 67,
-	SKB_DROP_REASON_FQ_HORIZON_LIMIT         = 68,
-	SKB_DROP_REASON_FQ_FLOW_LIMIT            = 69,
-	SKB_DROP_REASON_CPU_BACKLOG              = 70,
-	SKB_DROP_REASON_XDP                      = 71,
-	SKB_DROP_REASON_TC_INGRESS               = 72,
-	SKB_DROP_REASON_UNHANDLED_PROTO          = 73,
-	SKB_DROP_REASON_SKB_CSUM                 = 74,
-	SKB_DROP_REASON_SKB_GSO_SEG              = 75,
-	SKB_DROP_REASON_SKB_UCOPY_FAULT          = 76,
-	SKB_DROP_REASON_DEV_HDR                  = 77,
-	SKB_DROP_REASON_DEV_READY                = 78,
-	SKB_DROP_REASON_FULL_RING                = 79,
-	SKB_DROP_REASON_NOMEM                    = 80,
-	SKB_DROP_REASON_HDR_TRUNC                = 81,
-	SKB_DROP_REASON_TAP_FILTER               = 82,
-	SKB_DROP_REASON_TAP_TXFILTER             = 83,
-	SKB_DROP_REASON_ICMP_CSUM                = 84,
-	SKB_DROP_REASON_INVALID_PROTO            = 85,
-	SKB_DROP_REASON_IP_INADDRERRORS          = 86,
-	SKB_DROP_REASON_IP_INNOROUTES            = 87,
-	SKB_DROP_REASON_IP_LOCAL_SOURCE          = 88,
-	SKB_DROP_REASON_IP_INVALID_SOURCE        = 89,
-	SKB_DROP_REASON_IP_LOCALNET              = 90,
-	SKB_DROP_REASON_IP_INVALID_DEST          = 91,
-	SKB_DROP_REASON_PKT_TOO_BIG              = 92,
-	SKB_DROP_REASON_DUP_FRAG                 = 93,
-	SKB_DROP_REASON_FRAG_REASM_TIMEOUT       = 94,
-	SKB_DROP_REASON_FRAG_TOO_FAR             = 95,
-	SKB_DROP_REASON_TCP_MINTTL               = 96,
-	SKB_DROP_REASON_IPV6_BAD_EXTHDR          = 97,
-	SKB_DROP_REASON_IPV6_NDISC_FRAG          = 98,
-	SKB_DROP_REASON_IPV6_NDISC_HOP_LIMIT     = 99,
-	SKB_DROP_REASON_IPV6_NDISC_BAD_CODE      = 100,
-	SKB_DROP_REASON_IPV6_NDISC_BAD_OPTIONS   = 101,
-	SKB_DROP_REASON_IPV6_NDISC_NS_OTHERHOST  = 102,
-	SKB_DROP_REASON_QUEUE_PURGE              = 103,
-	SKB_DROP_REASON_TC_COOKIE_ERROR          = 104,
-	SKB_DROP_REASON_PACKET_SOCK_ERROR        = 105,
-	SKB_DROP_REASON_TC_CHAIN_NOTFOUND        = 106,
-	SKB_DROP_REASON_TC_RECLASSIFY_LOOP       = 107,
-	SKB_DROP_REASON_VXLAN_INVALID_HDR        = 108,
-	SKB_DROP_REASON_VXLAN_VNI_NOT_FOUND      = 109,
-	SKB_DROP_REASON_MAC_INVALID_SOURCE       = 110,
-	SKB_DROP_REASON_VXLAN_ENTRY_EXISTS       = 111,
-	SKB_DROP_REASON_NO_TX_TARGET             = 112,
-	SKB_DROP_REASON_IP_TUNNEL_ECN            = 113,
-	SKB_DROP_REASON_TUNNEL_TXINFO            = 114,
-	SKB_DROP_REASON_LOCAL_MAC                = 115,
-	SKB_DROP_REASON_ARP_PVLAN_DISABLE        = 116,
-	SKB_DROP_REASON_MAC_IEEE_MAC_CONTROL     = 117,
-	SKB_DROP_REASON_BRIDGE_INGRESS_STP_STATE = 118,
-	SKB_DROP_REASON_MAX                      = 119,
+	SKB_DROP_REASON_TCP_INVALID_END_SEQUENCE = 43,
+	SKB_DROP_REASON_TCP_INVALID_ACK_SEQUENCE = 44,
+	SKB_DROP_REASON_TCP_RESET                = 45,
+	SKB_DROP_REASON_TCP_INVALID_SYN          = 46,
+	SKB_DROP_REASON_TCP_CLOSE                = 47,
+	SKB_DROP_REASON_TCP_FASTOPEN             = 48,
+	SKB_DROP_REASON_TCP_OLD_ACK              = 49,
+	SKB_DROP_REASON_TCP_TOO_OLD_ACK          = 50,
+	SKB_DROP_REASON_TCP_ACK_UNSENT_DATA      = 51,
+	SKB_DROP_REASON_TCP_OFO_QUEUE_PRUNE      = 52,
+	SKB_DROP_REASON_TCP_OFO_DROP             = 53,
+	SKB_DROP_REASON_IP_OUTNOROUTES           = 54,
+	SKB_DROP_REASON_BPF_CGROUP_EGRESS        = 55,
+	SKB_DROP_REASON_IPV6DISABLED             = 56,
+	SKB_DROP_REASON_NEIGH_CREATEFAIL         = 57,
+	SKB_DROP_REASON_NEIGH_FAILED             = 58,
+	SKB_DROP_REASON_NEIGH_QUEUEFULL          = 59,
+	SKB_DROP_REASON_NEIGH_DEAD               = 60,
+	SKB_DROP_REASON_NEIGH_HH_FILLFAIL        = 61,
+	SKB_DROP_REASON_TC_EGRESS                = 62,
+	SKB_DROP_REASON_SECURITY_HOOK            = 63,
+	SKB_DROP_REASON_QDISC_DROP               = 64,
+	SKB_DROP_REASON_QDISC_BURST_DROP         = 65,
+	SKB_DROP_REASON_QDISC_OVERLIMIT          = 66,
+	SKB_DROP_REASON_QDISC_CONGESTED          = 67,
+	SKB_DROP_REASON_CAKE_FLOOD               = 68,
+	SKB_DROP_REASON_FQ_BAND_LIMIT            = 69,
+	SKB_DROP_REASON_FQ_HORIZON_LIMIT         = 70,
+	SKB_DROP_REASON_FQ_FLOW_LIMIT            = 71,
+	SKB_DROP_REASON_CPU_BACKLOG              = 72,
+	SKB_DROP_REASON_XDP                      = 73,
+	SKB_DROP_REASON_TC_INGRESS               = 74,
+	SKB_DROP_REASON_UNHANDLED_PROTO          = 75,
+	SKB_DROP_REASON_SKB_CSUM                 = 76,
+	SKB_DROP_REASON_SKB_GSO_SEG              = 77,
+	SKB_DROP_REASON_SKB_UCOPY_FAULT          = 78,
+	SKB_DROP_REASON_DEV_HDR                  = 79,
+	SKB_DROP_REASON_DEV_READY                = 80,
+	SKB_DROP_REASON_FULL_RING                = 81,
+	SKB_DROP_REASON_NOMEM                    = 82,
+	SKB_DROP_REASON_HDR_TRUNC                = 83,
+	SKB_DROP_REASON_TAP_FILTER               = 84,
+	SKB_DROP_REASON_TAP_TXFILTER             = 85,
+	SKB_DROP_REASON_ICMP_CSUM                = 86,
+	SKB_DROP_REASON_INVALID_PROTO            = 87,
+	SKB_DROP_REASON_IP_INADDRERRORS          = 88,
+	SKB_DROP_REASON_IP_INNOROUTES            = 89,
+	SKB_DROP_REASON_IP_LOCAL_SOURCE          = 90,
+	SKB_DROP_REASON_IP_INVALID_SOURCE        = 91,
+	SKB_DROP_REASON_IP_LOCALNET              = 92,
+	SKB_DROP_REASON_IP_INVALID_DEST          = 93,
+	SKB_DROP_REASON_PKT_TOO_BIG              = 94,
+	SKB_DROP_REASON_DUP_FRAG                 = 95,
+	SKB_DROP_REASON_FRAG_REASM_TIMEOUT       = 96,
+	SKB_DROP_REASON_FRAG_TOO_FAR             = 97,
+	SKB_DROP_REASON_TCP_MINTTL               = 98,
+	SKB_DROP_REASON_IPV6_BAD_EXTHDR          = 99,
+	SKB_DROP_REASON_IPV6_NDISC_FRAG          = 100,
+	SKB_DROP_REASON_IPV6_NDISC_HOP_LIMIT     = 101,
+	SKB_DROP_REASON_IPV6_NDISC_BAD_CODE      = 102,
+	SKB_DROP_REASON_IPV6_NDISC_BAD_OPTIONS   = 103,
+	SKB_DROP_REASON_IPV6_NDISC_NS_OTHERHOST  = 104,
+	SKB_DROP_REASON_QUEUE_PURGE              = 105,
+	SKB_DROP_REASON_TC_COOKIE_ERROR          = 106,
+	SKB_DROP_REASON_PACKET_SOCK_ERROR        = 107,
+	SKB_DROP_REASON_TC_CHAIN_NOTFOUND        = 108,
+	SKB_DROP_REASON_TC_RECLASSIFY_LOOP       = 109,
+	SKB_DROP_REASON_VXLAN_INVALID_HDR        = 110,
+	SKB_DROP_REASON_VXLAN_VNI_NOT_FOUND      = 111,
+	SKB_DROP_REASON_MAC_INVALID_SOURCE       = 112,
+	SKB_DROP_REASON_VXLAN_ENTRY_EXISTS       = 113,
+	SKB_DROP_REASON_NO_TX_TARGET             = 114,
+	SKB_DROP_REASON_IP_TUNNEL_ECN            = 115,
+	SKB_DROP_REASON_TUNNEL_TXINFO            = 116,
+	SKB_DROP_REASON_LOCAL_MAC                = 117,
+	SKB_DROP_REASON_ARP_PVLAN_DISABLE        = 118,
+	SKB_DROP_REASON_MAC_IEEE_MAC_CONTROL     = 119,
+	SKB_DROP_REASON_BRIDGE_INGRESS_STP_STATE = 120,
+	SKB_DROP_REASON_CAN_RX_INVALID_FRAME     = 121,
+	SKB_DROP_REASON_CANFD_RX_INVALID_FRAME   = 122,
+	SKB_DROP_REASON_CANXL_RX_INVALID_FRAME   = 123,
+	SKB_DROP_REASON_PFMEMALLOC               = 124,
+	SKB_DROP_REASON_DUALPI2_STEP_DROP        = 125,
+	SKB_DROP_REASON_PSP_INPUT                = 126,
+	SKB_DROP_REASON_PSP_OUTPUT               = 127,
+	SKB_DROP_REASON_MAX                      = 128,
 	SKB_DROP_REASON_SUBSYS_MASK              = 4294901760,
 };
 
@@ -4263,9 +4405,7 @@ struct sock_common {
 	unsigned char              skc_reuseport:1;      /*    19: 4  1 */
 	unsigned char              skc_ipv6only:1;       /*    19: 5  1 */
 	unsigned char              skc_net_refcnt:1;     /*    19: 6  1 */
-
-	/* XXX 1 bit hole, try to pack */
-
+	unsigned char              skc_bypass_prot_mem:1; /*    19: 7  1 */
 	int                        skc_bound_dev_if;     /*    20     4 */
 	union {
 		struct hlist_node  skc_bind_node;        /*    24    16 */
@@ -4303,9 +4443,7 @@ struct sock_common {
 		u32                skc_tw_snd_nxt;       /*   132     4 */
 	};                                               /*   132     4 */
 
-	/* size: 136, cachelines: 3, members: 25 */
-	/* sum members: 135 */
-	/* sum bitfield members: 7 bits, bit holes: 1, sum bit holes: 1 bits */
+	/* size: 136, cachelines: 3, members: 26 */
 	/* last cacheline: 8 bytes */
 };
 
@@ -4347,6 +4485,8 @@ struct mem_cgroup;
 
 struct xfrm_policy;
 
+struct psp_assoc;
+
 typedef struct {
 	spinlock_t                 slock;                /*     0     4 */
 	int                        owned;                /*     4     4 */
@@ -4369,6 +4509,9 @@ struct page_frag {
 	/* size: 16, cachelines: 1, members: 3 */
 	/* last cacheline: 16 bytes */
 };
+
+
+
 
 
 typedef unsigned int __kernel_uid32_t;
@@ -4402,6 +4545,16 @@ struct sock_cgroup_data {
 struct sock_reuseport;
 
 struct bpf_local_storage;
+
+struct numa_drop_counters;
+
+
+typedef struct {
+	long unsigned int          v;                    /*     0     8 */
+
+	/* size: 8, cachelines: 1, members: 1 */
+	/* last cacheline: 8 bytes */
+} freeptr_t;
 
 
 typedef struct {
@@ -4448,6 +4601,7 @@ struct sock {
 	struct socket *            sk_socket;
 	struct mem_cgroup *        sk_memcg;
 	struct xfrm_policy *       sk_policy[2];
+	struct psp_assoc *         psp_assoc;
 	__u8                       __cacheline_group_end__sock_read_rxtx[0];
 	__u8                       __cacheline_group_begin__sock_write_rxtx[0];
 	socket_lock_t              sk_lock;
@@ -4458,7 +4612,7 @@ struct sock {
 	__u8                       __cacheline_group_begin__sock_write_tx[0];
 	int                        sk_write_pending;
 	atomic_t                   sk_omem_alloc;
-	int                        sk_sndbuf;
+	int                        sk_err_soft;
 	int                        sk_wmem_queued;
 	refcount_t                 sk_wmem_alloc;
 	long unsigned int          sk_tsq_flags;
@@ -4467,19 +4621,27 @@ struct sock {
 		struct rb_root     tcp_rtx_queue;
 	};
 	struct sk_buff_head        sk_write_queue;
-	u32                        sk_dst_pending_confirm;
-	u32                        sk_pacing_status;
 	struct page_frag           sk_frag;
-	struct timer_list          sk_timer;
+	union {
+		struct timer_list  sk_timer;
+		struct timer_list  tcp_retransmit_timer;
+		struct timer_list  mptcp_retransmit_timer;
+	};
 	long unsigned int          sk_pacing_rate;
 	atomic_t                   sk_zckey;
 	atomic_t                   sk_tskey;
+	long unsigned int          sk_tx_queue_mapping_jiffies;
 	__u8                       __cacheline_group_end__sock_write_tx[0];
 	__u8                       __cacheline_group_begin__sock_read_tx[0];
+	u32                        sk_dst_pending_confirm;
+	u32                        sk_pacing_status;
 	long unsigned int          sk_max_pacing_rate;
 	long int                   sk_sndtimeo;
 	u32                        sk_priority;
 	u32                        sk_mark;
+	kuid_t                     sk_uid;
+	u16                        sk_protocol;
+	u16                        sk_type;
 	struct dst_entry *         sk_dst_cache;
 	netdev_features_t          sk_route_caps;
 	struct sk_buff *           (*sk_validate_xmit_skb)(struct sock *, struct net_device *, struct sk_buff *);
@@ -4488,6 +4650,7 @@ struct sock {
 	unsigned int               sk_gso_max_size;
 	gfp_t                      sk_allocation;
 	u32                        sk_txhash;
+	int                        sk_sndbuf;
 	u8                         sk_pacing_shift;
 	bool                       sk_use_task_frag;
 	__u8                       __cacheline_group_end__sock_read_tx[0];
@@ -4496,15 +4659,12 @@ struct sock {
 	u8                         sk_no_check_tx:1;
 	u8                         sk_no_check_rx:1;
 	u8                         sk_shutdown;
-	u16                        sk_type;
-	u16                        sk_protocol;
 	long unsigned int          sk_lingertime;
 	struct proto *             sk_prot_creator;
 	rwlock_t                   sk_callback_lock;
-	int                        sk_err_soft;
 	u32                        sk_ack_backlog;
 	u32                        sk_max_ack_backlog;
-	kuid_t                     sk_uid;
+	long unsigned int          sk_ino;
 	spinlock_t                 sk_peer_lock;
 	int                        sk_bind_phc;
 	struct pid *               sk_peer_pid;
@@ -4537,7 +4697,11 @@ struct sock {
 	void                       (*sk_destruct)(struct sock *);
 	struct sock_reuseport *    sk_reuseport_cb;
 	struct bpf_local_storage * sk_bpf_storage;
-	struct callback_head       sk_rcu;
+	struct numa_drop_counters * sk_drop_counters;
+	union {
+		struct callback_head sk_rcu;
+		freeptr_t          sk_freeptr;
+	};
 	netns_tracker              ns_tracker;
 	struct xarray              sk_user_frags;
 };
@@ -4561,6 +4725,304 @@ struct vlan_ethhdr {
 	__be16                     h_vlan_encapsulated_proto;
 };
 
+
+
+typedef enum {
+	SS_FREE          = 0,
+	SS_UNCONNECTED   = 1,
+	SS_CONNECTING    = 2,
+	SS_CONNECTED     = 3,
+	SS_DISCONNECTING = 4,
+} socket_state;
+
+struct file;
+
+struct proto_ops;
+
+struct fasync_struct;
+
+
+struct socket_wq {
+	wait_queue_head_t          wait;                 /*     0    24 */
+	struct fasync_struct *     fasync_list;          /*    24     8 */
+	long unsigned int          flags;                /*    32     8 */
+	struct callback_head       rcu;                  /*    40    16 */
+
+	/* size: 64, cachelines: 1, members: 4 */
+	/* padding: 8 */
+} __attribute__((__aligned__(64)));
+
+struct socket {
+	socket_state               state;
+	short int                  type;
+	long unsigned int          flags;
+	struct file *              file;
+	struct sock *              sk;
+	const struct proto_ops  *  ops;
+	struct socket_wq           wq __attribute__((__aligned__(64)));
+};
+
+
+typedef short unsigned int umode_t;
+
+struct posix_acl;
+
+struct inode_operations;
+
+struct super_block;
+
+struct address_space;
+
+
+typedef long long int __kernel_loff_t;
+typedef __kernel_loff_t loff_t;
+
+typedef __s64 time64_t;
+
+enum rw_hint {
+	WRITE_LIFE_NOT_SET = 0,
+	WRITE_LIFE_NONE    = 1,
+	WRITE_LIFE_SHORT   = 2,
+	WRITE_LIFE_MEDIUM  = 3,
+	WRITE_LIFE_LONG    = 4,
+	WRITE_LIFE_EXTREME = 5,
+	WRITE_LIFE_HINT_NR = 6,
+} __attribute__((__packed__));
+
+typedef u64 blkcnt_t;
+
+enum inode_state_flags_enum {
+	I_NEW              = 1,
+	I_SYNC             = 2,
+	I_LRU_ISOLATING    = 4,
+	I_DIRTY_SYNC       = 16,
+	I_DIRTY_DATASYNC   = 32,
+	I_DIRTY_PAGES      = 64,
+	I_WILL_FREE        = 128,
+	I_FREEING          = 256,
+	I_CLEAR            = 512,
+	I_REFERENCED       = 1024,
+	I_LINKABLE         = 2048,
+	I_DIRTY_TIME       = 4096,
+	I_WB_SWITCH        = 8192,
+	I_OVL_INUSE        = 16384,
+	I_CREATING         = 32768,
+	I_DONTCACHE        = 65536,
+	I_SYNC_QUEUED      = 131072,
+	I_PINNING_NETFS_WB = 262144,
+};
+
+struct inode_state_flags {
+	enum inode_state_flags_enum __state;             /*     0     4 */
+
+	/* size: 4, cachelines: 1, members: 1 */
+	/* last cacheline: 4 bytes */
+};
+
+
+
+
+struct bdi_writeback;
+
+
+
+
+
+
+
+struct file_operations;
+
+struct inode;
+
+
+
+struct file_lock_context;
+
+
+
+
+struct rb_root_cached {
+	struct rb_root             rb_root;              /*     0     8 */
+	struct rb_node *           rb_leftmost;          /*     8     8 */
+
+	/* size: 16, cachelines: 1, members: 2 */
+	/* last cacheline: 16 bytes */
+};
+
+struct address_space_operations;
+
+typedef u32 errseq_t;
+
+
+
+struct address_space {
+	struct inode *             host;                 /*     0     8 */
+	struct xarray              i_pages;              /*     8    16 */
+	struct rw_semaphore        invalidate_lock;      /*    24    40 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	gfp_t                      gfp_mask;             /*    64     4 */
+	atomic_t                   i_mmap_writable;      /*    68     4 */
+	atomic_t                   nr_thps;              /*    72     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct rb_root_cached      i_mmap;               /*    80    16 */
+	long unsigned int          nrpages;              /*    96     8 */
+	long unsigned int          writeback_index;      /*   104     8 */
+	const struct address_space_operations  * a_ops;  /*   112     8 */
+	long unsigned int          flags;                /*   120     8 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	errseq_t                   wb_err;               /*   128     4 */
+	spinlock_t                 i_private_lock;       /*   132     4 */
+	struct list_head           i_private_list;       /*   136    16 */
+	struct rw_semaphore        i_mmap_rwsem;         /*   152    40 */
+	/* --- cacheline 3 boundary (192 bytes) --- */
+	void *                     i_private_data;       /*   192     8 */
+
+	/* size: 200, cachelines: 4, members: 16 */
+	/* sum members: 196, holes: 1, sum holes: 4 */
+	/* last cacheline: 8 bytes */
+};
+
+
+
+struct pipe_inode_info;
+
+struct cdev;
+
+
+struct fsnotify_mark_connector;
+
+struct inode {
+	umode_t                    i_mode;               /*     0     2 */
+	short unsigned int         i_opflags;            /*     2     2 */
+	unsigned int               i_flags;              /*     4     4 */
+	struct posix_acl *         i_acl;                /*     8     8 */
+	struct posix_acl *         i_default_acl;        /*    16     8 */
+	kuid_t                     i_uid;                /*    24     4 */
+	kgid_t                     i_gid;                /*    28     4 */
+	const struct inode_operations  * i_op;           /*    32     8 */
+	struct super_block *       i_sb;                 /*    40     8 */
+	struct address_space *     i_mapping;            /*    48     8 */
+	void *                     i_security;           /*    56     8 */
+	/* --- cacheline 1 boundary (64 bytes) --- */
+	long unsigned int          i_ino;                /*    64     8 */
+	union {
+		const unsigned int i_nlink;              /*    72     4 */
+		unsigned int       __i_nlink;            /*    72     4 */
+	};                                               /*    72     4 */
+	dev_t                      i_rdev;               /*    76     4 */
+	loff_t                     i_size;               /*    80     8 */
+	time64_t                   i_atime_sec;          /*    88     8 */
+	time64_t                   i_mtime_sec;          /*    96     8 */
+	time64_t                   i_ctime_sec;          /*   104     8 */
+	u32                        i_atime_nsec;         /*   112     4 */
+	u32                        i_mtime_nsec;         /*   116     4 */
+	u32                        i_ctime_nsec;         /*   120     4 */
+	u32                        i_generation;         /*   124     4 */
+	/* --- cacheline 2 boundary (128 bytes) --- */
+	spinlock_t                 i_lock;               /*   128     4 */
+	short unsigned int         i_bytes;              /*   132     2 */
+	u8                         i_blkbits;            /*   134     1 */
+	enum rw_hint               i_write_hint;         /*   135     1 */
+	blkcnt_t                   i_blocks;             /*   136     8 */
+	struct inode_state_flags   i_state;              /*   144     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct rw_semaphore        i_rwsem;              /*   152    40 */
+	/* --- cacheline 3 boundary (192 bytes) --- */
+	long unsigned int          dirtied_when;         /*   192     8 */
+	long unsigned int          dirtied_time_when;    /*   200     8 */
+	struct hlist_node          i_hash;               /*   208    16 */
+	struct list_head           i_io_list;            /*   224    16 */
+	struct bdi_writeback *     i_wb;                 /*   240     8 */
+	int                        i_wb_frn_winner;      /*   248     4 */
+	u16                        i_wb_frn_avg_time;    /*   252     2 */
+	u16                        i_wb_frn_history;     /*   254     2 */
+	/* --- cacheline 4 boundary (256 bytes) --- */
+	struct list_head           i_lru;                /*   256    16 */
+	struct list_head           i_sb_list;            /*   272    16 */
+	struct list_head           i_wb_list;            /*   288    16 */
+	union {
+		struct hlist_head  i_dentry;             /*   304     8 */
+		struct callback_head i_rcu;              /*   304    16 */
+	};                                               /*   304    16 */
+	/* --- cacheline 5 boundary (320 bytes) --- */
+	atomic64_t                 i_version;            /*   320     8 */
+	atomic64_t                 i_sequence;           /*   328     8 */
+	atomic_t                   i_count;              /*   336     4 */
+	atomic_t                   i_dio_count;          /*   340     4 */
+	atomic_t                   i_writecount;         /*   344     4 */
+	atomic_t                   i_readcount;          /*   348     4 */
+	union {
+		const struct file_operations  * i_fop;   /*   352     8 */
+		void               (*free_inode)(struct inode *); /*   352     8 */
+	};                                               /*   352     8 */
+	struct file_lock_context * i_flctx;              /*   360     8 */
+	struct address_space       i_data;               /*   368   200 */
+
+	/* XXX last struct has 1 hole */
+
+	/* --- cacheline 8 boundary (512 bytes) was 56 bytes ago --- */
+	union {
+		struct list_head   i_devices;            /*   568    16 */
+		int                i_linklen;            /*   568     4 */
+	};                                               /*   568    16 */
+	/* --- cacheline 9 boundary (576 bytes) was 8 bytes ago --- */
+	union {
+		struct pipe_inode_info * i_pipe;         /*   584     8 */
+		struct cdev *      i_cdev;               /*   584     8 */
+		char *             i_link;               /*   584     8 */
+		unsigned int       i_dir_seq;            /*   584     4 */
+	};                                               /*   584     8 */
+	__u32                      i_fsnotify_mask;      /*   592     4 */
+
+	/* XXX 4 bytes hole, try to pack */
+
+	struct fsnotify_mark_connector * i_fsnotify_marks; /*   600     8 */
+	void *                     i_private;            /*   608     8 */
+
+	/* size: 616, cachelines: 10, members: 55 */
+	/* sum members: 608, holes: 2, sum holes: 8 */
+	/* member types with holes: 1, total: 1 */
+	/* last cacheline: 40 bytes */
+};
+
+struct socket_alloc {
+	struct socket              socket;
+	struct inode               vfs_inode;
+} __attribute__((__aligned__(64)));
+
+enum sk_rst_reason {
+	SK_RST_REASON_NOT_SPECIFIED            = 0,
+	SK_RST_REASON_NO_SOCKET                = 1,
+	SK_RST_REASON_TCP_INVALID_ACK_SEQUENCE = 2,
+	SK_RST_REASON_TCP_RFC7323_PAWS         = 3,
+	SK_RST_REASON_TCP_TOO_OLD_ACK          = 4,
+	SK_RST_REASON_TCP_ACK_UNSENT_DATA      = 5,
+	SK_RST_REASON_TCP_FLAGS                = 6,
+	SK_RST_REASON_TCP_OLD_ACK              = 7,
+	SK_RST_REASON_TCP_ABORT_ON_DATA        = 8,
+	SK_RST_REASON_TCP_TIMEWAIT_SOCKET      = 9,
+	SK_RST_REASON_INVALID_SYN              = 10,
+	SK_RST_REASON_TCP_ABORT_ON_CLOSE       = 11,
+	SK_RST_REASON_TCP_ABORT_ON_LINGER      = 12,
+	SK_RST_REASON_TCP_ABORT_ON_MEMORY      = 13,
+	SK_RST_REASON_TCP_STATE                = 14,
+	SK_RST_REASON_TCP_KEEPALIVE_TIMEOUT    = 15,
+	SK_RST_REASON_TCP_DISCONNECT_WITH_DATA = 16,
+	SK_RST_REASON_MPTCP_RST_EUNSPEC        = 17,
+	SK_RST_REASON_MPTCP_RST_EMPTCP         = 18,
+	SK_RST_REASON_MPTCP_RST_ERESOURCE      = 19,
+	SK_RST_REASON_MPTCP_RST_EPROHIBIT      = 20,
+	SK_RST_REASON_MPTCP_RST_EWQ2BIG        = 21,
+	SK_RST_REASON_MPTCP_RST_EBADPERF       = 22,
+	SK_RST_REASON_MPTCP_RST_EMIDDLEBOX     = 23,
+	SK_RST_REASON_ERROR                    = 24,
+	SK_RST_REASON_MAX                      = 25,
+};
+
 enum {
 	BPF_F_SKIP_FIELD_MASK = 255,
 	BPF_F_USER_STACK      = 256,
@@ -4571,10 +5033,12 @@ enum {
 ;
 
 enum {
-	BPF_ANY     = 0,
-	BPF_NOEXIST = 1,
-	BPF_EXIST   = 2,
-	BPF_F_LOCK  = 4,
+	BPF_ANY        = 0,
+	BPF_NOEXIST    = 1,
+	BPF_EXIST      = 2,
+	BPF_F_LOCK     = 4,
+	BPF_F_CPU      = 8,
+	BPF_F_ALL_CPUS = 16,
 }
 ;
 
