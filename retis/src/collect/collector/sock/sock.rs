@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 
 use super::sock_hook;
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
     collect::{cli::Collect, Collector},
     core::{
         events::*,
-        inspect::parse_anon_enum,
+        inspect::*,
         probe::{manager::ProbeBuilderManager, Hook},
     },
     event_section_factory,
@@ -46,49 +46,67 @@ pub(crate) struct SockEventFactory {
     socket_protocols: HashMap<u32, String>,
     // TCP socket states
     tcp_states: HashMap<u32, String>,
+    // Socket reset reasons.
+    reset_reasons: HashMap<u32, String>,
 }
 
 impl RawEventSectionFactory for SockEventFactory {
     fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
-        let raw = parse_single_raw_section::<sock_event>(&raw_sections)?;
+        let mut sock = SockEvent::default();
 
-        /* These should be kept in sync with "enum sock_type" in
-         * include/linux/net.h. It hasn't been modified for the last 20 years
-         * so chances are this is not very costy to maintain. */
-        let r#type = match raw.type_ {
-            1 => "SOCK_STREAM",
-            2 => "SOCK_DGRAM",
-            3 => "SOCK_RAW",
-            4 => "SOCK_RDM",
-            5 => "SOCK_SEQPACKET",
-            6 => "SOCK_DGRAM",
-            10 => "SOCK_PACKET",
-            _ => "UNKNOWN",
+        for section in raw_sections.iter() {
+            match section.header.data_type as u32 {
+                SECTION_SOCK => {
+                    let raw = parse_raw_section::<sock_event>(section)?;
+                    let mut common = SockCommonEvent::default();
+
+                    /* These should be kept in sync with "enum sock_type" in
+                     * include/linux/net.h. It hasn't been modified for the last 20 years
+                     * so chances are this is not very costy to maintain. */
+                    common.r#type = match raw.type_ {
+                        1 => "SOCK_STREAM",
+                        2 => "SOCK_DGRAM",
+                        3 => "SOCK_RAW",
+                        4 => "SOCK_RDM",
+                        5 => "SOCK_SEQPACKET",
+                        6 => "SOCK_DGRAM",
+                        10 => "SOCK_PACKET",
+                        _ => "UNKNOWN",
+                    }
+                    .to_string();
+
+                    common.proto = match self.socket_protocols.get(&(raw.proto as u32)) {
+                        Some(r) => r.clone(),
+                        None => format!("{}", raw.proto),
+                    };
+
+                    common.state = match common.proto.as_str() {
+                        "TCP" | "UDP" => match self.tcp_states.get(&(raw.state as u32)) {
+                            Some(r) => r.clone(),
+                            None => format!("{}", raw.state),
+                        },
+                        _ => format!("{}", raw.state),
+                    };
+
+                    common.inode = raw.inode;
+
+                    sock.common = Some(common);
+                }
+                SECTION_RST_REASON => {
+                    let raw = parse_raw_section::<sock_rst_reason_event>(section)?;
+
+                    sock.reset_reason = Some(
+                        self.reset_reasons
+                            .get(&raw.reason)
+                            .cloned()
+                            .unwrap_or("NOT_SPECIFIED".to_string()),
+                    );
+                }
+                x => bail!("Unknown data type ({x})"),
+            }
         }
-        .to_string();
 
-        let proto = match self.socket_protocols.get(&(raw.proto as u32)) {
-            Some(r) => r.clone(),
-            None => format!("{}", raw.proto),
-        };
-
-        let state = match proto.as_str() {
-            "TCP" | "UDP" => match self.tcp_states.get(&(raw.state as u32)) {
-                Some(r) => r.clone(),
-                None => format!("{}", raw.state),
-            },
-            _ => format!("{}", raw.state),
-        };
-
-        event.sock = Some(SockEvent {
-            common: Some(SockCommonEvent {
-                inode: raw.inode,
-                r#type,
-                proto,
-                state,
-            }),
-        });
-
+        event.sock = Some(sock);
         Ok(())
     }
 }
@@ -98,6 +116,7 @@ impl SockEventFactory {
         Ok(Self {
             socket_protocols: parse_anon_enum("IPPROTO_IP", &["IPPROTO_"])?,
             tcp_states: parse_anon_enum("TCP_ESTABLISHED", &["TCP_"])?,
+            reset_reasons: parse_enum("sk_rst_reason", &["SK_RST_REASON_"])?,
         })
     }
 }
