@@ -19,16 +19,17 @@ pcap_tcp_cc() {
         grep -q "raw_tracepoint/net:net_dev_start_xmit: 9" stats
 
 	# Check PCAP content.
-	[ $(tcpdump -nnr retis.pcap | wc -l) == 9 ]
-	tcpdump -nnr retis.pcap | grep "ARP, Request who-has 10.0.42.2 tell 10.0.42.1"
-	tcpdump -nnr retis.pcap | grep "ARP, Reply 10.0.42.2 is-at"
-	tcpdump -nnr retis.pcap | grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[S\]"
-	tcpdump -nnr retis.pcap | grep -E "IP 10.0.42.2.80 > 10.0.42.1.[0-9]{4,5}: Flags \[S.\]"
-	tcpdump -nnr retis.pcap | grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[.\]"
-	tcpdump -nnr retis.pcap | grep -E "IP 10.0.42.2.80 > 10.0.42.1.[0-9]{4,5}: Flags \[F.\]"
-	tcpdump -nnr retis.pcap | grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[.\]"
-	tcpdump -nnr retis.pcap | grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[F.\]"
-	tcpdump -nnr retis.pcap | grep -E "IP 10.0.42.2.80 > 10.0.42.1.[0-9]{4,5}: Flags \[.\]"
+	tcpdump -nnr retis.pcap > tcpdump_output
+	[ $(cat tcpdump_output | wc -l) == 9 ]
+	grep "ARP, Request who-has 10.0.42.2 tell 10.0.42.1" tcpdump_output
+	grep "ARP, Reply 10.0.42.2 is-at" tcpdump_output
+	grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[S\]" tcpdump_output
+	grep -E "IP 10.0.42.2.80 > 10.0.42.1.[0-9]{4,5}: Flags \[S.\]" tcpdump_output
+	grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[.\]" tcpdump_output
+	grep -E "IP 10.0.42.2.80 > 10.0.42.1.[0-9]{4,5}: Flags \[F.\]" tcpdump_output
+	grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[.\]" tcpdump_output
+	grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[F.\]" tcpdump_output
+	grep -E "IP 10.0.42.2.80 > 10.0.42.1.[0-9]{4,5}: Flags \[.\]" tcpdump_output
 }
 
 run_tests pcap_tcp_cc
