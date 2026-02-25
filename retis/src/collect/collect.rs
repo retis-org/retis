@@ -121,15 +121,12 @@ impl Collectors {
         let factory = BpfEventsFactory::new()?;
         let probes = ProbeManager::new()?;
 
-        let run = Running::new();
-        run.register_term_signals()?;
-
         Ok(Collectors {
             collectors: HashMap::new(),
             probes,
             factory,
             known_kernel_types: HashSet::new(),
-            run,
+            run: Running::new()?,
             tracking_gc: None,
             tracking_config_map: None,
             stack_tracking_config_map: None,

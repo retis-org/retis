@@ -23,27 +23,16 @@ pub(crate) struct Running {
 }
 
 impl Running {
-    pub(crate) fn new() -> Running {
-        Self {
-            condition: Arc::new(AtomicBool::new(false)),
-            callbacks: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    /// Add a new callback to be run on `Drop`.
-    pub(crate) fn add_drop_cb<F>(&mut self, cb: F)
-    where
-        F: FnOnce() + Send + Sync + 'static,
-    {
-        self.callbacks.lock().unwrap().push(Box::new(cb))
-    }
-
-    /// Register termination signals so the current Running instance will stop
-    /// upon receiving one of those signals (SIGTERM, etc). This can only work
-    /// from the main thread.
-    pub(crate) fn register_term_signals(&self) -> Result<()> {
+    // Create a new Running instance.
+    //
+    // - Helps handling loops in various threads to synchonize termination.
+    // - This instance will also stop upon receiving one of the termination
+    //   signals (e.g. SIGTERM).
+    pub(crate) fn new() -> Result<Running> {
         let mut sigs = Signals::new(signal_hook::consts::TERM_SIGNALS)?;
-        let condition = Arc::clone(&self.condition);
+
+        let run = Self::ignore_signals();
+        let condition = Arc::clone(&run.condition);
 
         thread::spawn(move || {
             sigs.wait();
@@ -51,7 +40,24 @@ impl Running {
             info!("Received signal, terminating...");
         });
 
-        Ok(())
+        Ok(run)
+    }
+
+    // Same as `new()` but without handling termination signals. Termination
+    // *must* be manually handlded here.
+    pub(crate) fn ignore_signals() -> Running {
+        Self {
+            condition: Arc::new(AtomicBool::new(false)),
+            callbacks: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    // Add a new callback to be run on `Drop`.
+    pub(crate) fn add_drop_cb<F>(&mut self, cb: F)
+    where
+        F: FnOnce() + Send + Sync + 'static,
+    {
+        self.callbacks.lock().unwrap().push(Box::new(cb))
     }
 
     pub(crate) fn running(&self) -> bool {
@@ -60,12 +66,6 @@ impl Running {
 
     pub(crate) fn terminate(&self) {
         self.condition.store(true, Ordering::Relaxed);
-    }
-}
-
-impl Default for Running {
-    fn default() -> Self {
-        Running::new()
     }
 }
 

@@ -143,7 +143,7 @@ impl BpfEventsFactory {
             rxc: None,
             handle: None,
             log_handle: None,
-            run_state: Running::new(),
+            run_state: Running::ignore_signals(),
             time_format: Default::default(),
             monotonic_offset: None,
         })
