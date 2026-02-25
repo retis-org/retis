@@ -33,7 +33,7 @@ pub(crate) struct NftCollectorArgs {
         long,
         value_parser=PossibleValuesParser::new(["all", "continue", "break", "jump", "goto", "return", "drop", "accept", "stolen", "queue", "repeat"]),
         value_delimiter=',',
-        default_value="drop,accept",
+        default_value="drop",
         help = "Comma separated list of verdicts whose events will be collected. Note that stolen verdicts might not be visible if a filter has been specified using the -f option."
     )]
     nft_verdicts: Vec<String>,

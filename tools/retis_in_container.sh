@@ -12,12 +12,6 @@ errcho() {
 if command -v podman >/dev/null; then
 	runtime=podman
 	extra_args="--pull=newer"
-
-	# Retis cannot run in an unprivileged container to collect events.
-	if [[ $(id -u) -ne 0 && $@ =~ "collect" ]]; then
-		errcho "Error: Retis collection cannot run in an unprivileged container."
-		exit -1
-	fi
 elif command -v docker >/dev/null; then
 	docker pull $RETIS_IMAGE:$RETIS_TAG &>/dev/null
 	runtime=docker
@@ -34,7 +28,7 @@ fi
 # a command outputting a specific format to stdout (which could be piped into
 # another utility parsing it), like the pcap command. This is because an extra
 # EOL char is added (see commit 9f3361ac39c3).
-[[ ! $@ =~ "pcap" ]] && term_opts="-it"
+[[ -t 1 ]] && term_opts="-it"
 
 # Map well-known kernel configuration files.
 kconfig_map=""
