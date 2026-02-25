@@ -28,7 +28,7 @@ fi
 # a command outputting a specific format to stdout (which could be piped into
 # another utility parsing it), like the pcap command. This is because an extra
 # EOL char is added (see commit 9f3361ac39c3).
-[[ ! $@ =~ "pcap" ]] && term_opts="-it"
+[[ -t 1 ]] && term_opts="-it"
 
 # Map well-known kernel configuration files.
 kconfig_map=""
