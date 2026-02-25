@@ -89,6 +89,12 @@ expected_events = [
 assert_events_present("retis.data", expected_events)
 EOF
 	python test.py
+
+    $retis sort -o sorted
+    $retis stats sorted > sorted_stats
+    grep -q "Number of series: 2" sorted_stats
+    grep -q "Number of events: 3" sorted_stats
+    grep -q "raw_tracepoint/net:netif_rx: 3" sorted_stats
 }
 
 run_tests tracking_sanity
