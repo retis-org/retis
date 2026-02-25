@@ -39,6 +39,28 @@ rotation_by_size() {
 	echo $out | grep -v "file id 0"
 	echo $out | grep "file id 1"
 	echo $out | grep "file id 2"
+
+	# Check stats contain all 3 rotation blocks
+	$retis stats > stats
+	[[ "$(grep -c 'Split index' stats)" -ge "3" ]]
+	[[ "$(grep -c 'Probes' stats)" -ge "3" ]]
+	[[ "$(grep -c 'First event' stats)" -ge "3" ]]
+	[[ "$(grep -c 'Last event' stats)" -ge "3" ]]
+	[[ "$(grep -c 'Retis cmdline' stats)" -eq "1" ]]
+
+	# Test each split reports increasing first and last timestamps
+	# by performing lexicographic comparisons.
+	first_ts="0"
+	last_ts="0"
+	for split in $(seq 0 2); do
+		$retis stats retis.data.${split}> stats_${split}
+		f_ts=$(grep "First event at:" stats_${split} | cut -d ":" -f 2- | xargs)
+		l_ts=$(grep "Last event at:" stats_${split} | cut -d ":" -f 2- | xargs)
+		[[ "$l_ts" > "$f_ts" ]] || [[ "$l_ts" == "$f_ts" ]]
+		[[ "$f_ts" > "$last_ts" ]] || [[ "$f_ts" == "$last_ts" ]]
+		first_ts=$f_ts
+		last_ts=$l_ts
+	done
 }
 
 run_tests rotation_by_size
