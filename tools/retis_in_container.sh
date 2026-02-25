@@ -12,12 +12,6 @@ errcho() {
 if command -v podman >/dev/null; then
 	runtime=podman
 	extra_args="--pull=newer"
-
-	# Retis cannot run in an unprivileged container to collect events.
-	if [[ $(id -u) -ne 0 && $@ =~ "collect" ]]; then
-		errcho "Error: Retis collection cannot run in an unprivileged container."
-		exit -1
-	fi
 elif command -v docker >/dev/null; then
 	docker pull $RETIS_IMAGE:$RETIS_TAG &>/dev/null
 	runtime=docker
