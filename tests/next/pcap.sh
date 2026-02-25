@@ -11,9 +11,6 @@ pcap_tcp_cc() {
 		-p net:netif_rx -p net:net_dev_start_xmit \
 		--cmd "ip netns exec ns0 socat - TCP:10.0.42.2:80"
 
-	# We should have two probes in the capture.
-	[ $($retis pcap --list-probes | wc -l) == 2 ]
-
 	$retis pcap -p tp:net:netif_rx -o retis.pcap
 
 	# Check PCAP content.

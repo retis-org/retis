@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::{File, OpenOptions},
     io::Write,
     path::PathBuf,
@@ -241,31 +241,21 @@ pub(crate) struct Pcap {
     #[arg(
         short,
         long,
-        conflicts_with = "list_probes",
         help = "Write the generated PCAP output to a file rather than stdout"
     )]
     pub(super) out: Option<PathBuf>,
     #[arg(help = InputDataFile::help())]
     pub(super) input: Option<InputDataFile>,
-    #[arg(short, long, help = "List probes that are available in the input file")]
-    pub(super) list_probes: bool,
     #[arg(
         short,
         long,
-        help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern. See `retis collect --help` for more details on the probe format"
+        help = "Filter events from this probe. Probes should follow the [TYPE:]TARGET pattern. See `retis collect --help` for more details on the probe format. Use `retis stats` to get a list of probes."
     )]
     pub(super) probe: Option<String>,
 }
 
 impl SubCommandParserRunner for Pcap {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
-        if self.list_probes {
-            let probes = list_probes(&self.input.clone().unwrap_or_default())?;
-            probes.iter().for_each(|p| println!("{p}"));
-            return Ok(());
-        }
-        // The following unwrap() will never fail as Clap makes sure that either
-        // list_probes is true, or probe is Some().
         let filter: &dyn Fn(&str, &str) -> bool = if let Some(probe) = self.probe.as_ref() {
             let (probe_type, target, _) = parse_cli_probe(probe)?;
             let symbol = Symbol::from_name_no_inspect(target);
@@ -360,53 +350,6 @@ where
 
     parser.report_stats();
     Ok(())
-}
-
-/// List the probes that are available in the input. Only add probes from events
-/// that pass the sanity check.
-fn list_probes(input: &InputDataFile) -> Result<Vec<String>> {
-    let mut probe_set: HashSet<String> = HashSet::new();
-
-    // Create running instance that will handle signal termination.
-    let run = Running::new();
-    run.register_term_signals()?;
-
-    // Start our events factory.
-    let mut factory = input.to_factory()?;
-
-    while run.running() {
-        match factory.next_event()? {
-            None => break,
-            Some(event) => {
-                if let Some(kernel) = event.kernel {
-                    let probe_name = format!("{}:{}", kernel.probe_type, kernel.symbol);
-                    if probe_set.contains(&probe_name) {
-                        continue;
-                    }
-                    // Having a common section is mandatory for now, seeing a
-                    // filtered event w/o one of those is bogus.
-                    if event.common.is_none() {
-                        continue;
-                    }
-                    // The packet section is mandatory for us to generate PCAP
-                    // events, but it might not be present in some filtered
-                    // events.
-                    if event.packet.is_none() {
-                        continue;
-                    }
-
-                    probe_set.insert(probe_name);
-                }
-            }
-        }
-    }
-
-    if probe_set.is_empty() {
-        bail!("Could not find any compatible probe in provided data set");
-    }
-    let mut probes = probe_set.into_iter().collect::<Vec<String>>();
-    probes.sort();
-    Ok(probes)
 }
 
 #[cfg(test)]
@@ -634,63 +577,6 @@ mod tests {
                         }
                         assert_eq!(blocks, expected_blocks);
                     }
-                    Err(expected_e) => {
-                        panic!(
-                            "Expected error but got valid result instead\n\
-                            expected error: {expected_e}\n\
-                            result: {v:#?}"
-                        )
-                    }
-                },
-                Err(e) => match expected_res {
-                    Ok(expected_v) => {
-                        panic!(
-                            "Expected a valid result but got err instead\n\
-                            result: {expected_v:#?},\n\
-                            err: {e}"
-                        )
-                    }
-                    Err(expected_e) => assert_eq!(e.to_string(), expected_e.to_string(),),
-                },
-            }
-        }
-    }
-
-    #[test]
-    fn test_list_probes() {
-        let test_cases = [
-            // Valid data.
-            (
-                "test_data/test_events_packets.json",
-                Ok(vec![
-                    "kretprobe:ovs_dp_upcall".to_string(),
-                    "raw_tracepoint:net:net_dev_start_xmit".to_string(),
-                    "raw_tracepoint:net:netif_receive_skb".to_string(),
-                    "raw_tracepoint:openvswitch:ovs_do_execute_action".to_string(),
-                    "raw_tracepoint:openvswitch:ovs_dp_upcall".to_string(),
-                    "raw_tracepoint:skb:kfree_skb".to_string(),
-                ]),
-            ),
-            // Completely missing probe section.
-            (
-                "test_data/test_events_bench_no_probes.json",
-                Err(anyhow!(
-                    "Could not find any compatible probe in provided data set"
-                )),
-            ),
-            // Garbage data.
-            (
-                "test_data/available_events",
-                Err(anyhow!(
-                    "Failed to parse event file: \
-                Error(\"expected value\", line: 1, column: 1)"
-                )),
-            ),
-        ];
-        for (file_path, expected_res) in test_cases.into_iter() {
-            match list_probes(&file_path.parse().expect("Could not parse input file")) {
-                Ok(v) => match expected_res {
-                    Ok(expected_v) => assert_eq!(v, expected_v),
                     Err(expected_e) => {
                         panic!(
                             "Expected error but got valid result instead\n\
