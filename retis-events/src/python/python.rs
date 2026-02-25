@@ -8,10 +8,13 @@ use std::{collections::HashMap, ffi::CString, path::PathBuf};
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError},
     prelude::*,
-    types::{IntoPyDict, PyBool, PyList},
+    types::*,
 };
 
-use crate::{file::*, *};
+use crate::{
+    file::{rotate::*, *},
+    *,
+};
 
 /// Python representation of an Event.
 ///
@@ -208,14 +211,12 @@ impl PyEventSeries {
 /// ```
 #[pyclass(name = "EventReader")]
 pub(crate) struct PyEventReader {
-    pub(crate) factory: FileEventsFactory,
+    factory: FileEventsFactory,
 }
 
-#[pymethods]
 impl PyEventReader {
-    #[new]
-    pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
-        let factory = FileEventsFactory::from_path(path)
+    fn from_event_file(file: EventFile) -> PyResult<Self> {
+        let factory = FileEventsFactory::from_event_file(file)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
         if matches!(factory.file_type(), FileType::Series) {
@@ -223,7 +224,29 @@ impl PyEventReader {
                 "Cannot create a EventReader from a sorted file. Use an SeriesReader instead",
             ));
         }
+
         Ok(PyEventReader { factory })
+    }
+}
+
+#[pymethods]
+impl PyEventReader {
+    #[new]
+    pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
+        Self::from_event_file(EventFile {
+            path,
+            use_rotation: false,
+            try_split: false,
+        })
+    }
+
+    #[classmethod]
+    pub(crate) fn with_rotation(_: &Bound<'_, PyType>, path: PathBuf) -> PyResult<Self> {
+        Self::from_event_file(EventFile {
+            path,
+            use_rotation: true,
+            try_split: false,
+        })
     }
 
     // Implementation of the iterator protocol.
@@ -328,7 +351,7 @@ impl PySeriesReader {
 /// ```
 #[pyclass(name = "EventFile")]
 pub(crate) struct PyEventFile {
-    path: PathBuf,
+    file: EventFile,
     ftype: FileType,
 }
 
@@ -339,10 +362,31 @@ impl PyEventFile {
         let temp = FileEventsFactory::from_path(&path)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         let ftype = temp.file_type();
-        Ok(PyEventFile {
+
+        let file = EventFile {
             path,
+            use_rotation: false,
+            try_split: false,
+        };
+
+        Ok(Self {
+            file,
             ftype: ftype.clone(),
         })
+    }
+
+    #[classmethod]
+    pub(crate) fn with_rotation(_: &Bound<'_, PyType>, path: PathBuf) -> PyResult<Self> {
+        let mut slf = Self::new(path)?;
+
+        if matches!(slf.ftype, FileType::Series) {
+            return Err(PyRuntimeError::new_err(
+                "Cannot use rotation on event series",
+            ));
+        }
+
+        slf.file.use_rotation = true;
+        Ok(slf)
     }
 
     // Returns whether the file is sorted.
@@ -354,11 +398,11 @@ impl PyEventFile {
     }
 
     pub(crate) fn events(&self) -> PyResult<PyEventReader> {
-        PyEventReader::new(self.path.clone())
+        PyEventReader::from_event_file(self.file.clone())
     }
 
     pub(crate) fn series(&self) -> PyResult<PySeriesReader> {
-        PySeriesReader::new(self.path.clone())
+        PySeriesReader::new(self.file.path.clone())
     }
 }
 
