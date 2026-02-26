@@ -8,6 +8,14 @@ drop_sanity() {
 	$retis collect -o -c skb-drop,skb,dev -f tcp \
 		--cmd 'ip netns exec ns0 socat -T1 - TCP:10.0.42.2:443'
 
+        $retis stats > stats
+        grep -q "Number of events: 1" stats
+        grep -q "raw_tracepoint/skb:kfree_skb: 1" stats
+        first_ts=$(grep "First event at:" stats | cut -d ":" -f 2-)
+        last_ts=$(grep "Last event at:" stats | cut -d ":" -f 2-)
+        [[ "$first_ts" !=  "" ]]
+        [[ "$first_ts" ==  "$last_ts" ]]
+
 	cat >test.py <<EOF
 from helpers import assert_events_present
 
