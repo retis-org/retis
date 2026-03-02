@@ -355,24 +355,30 @@ pub(crate) struct PyEventFile {
     ftype: FileType,
 }
 
+impl PyEventFile {
+    pub(crate) fn from_event_file(file: EventFile) -> PyResult<Self> {
+        let temp = FileEventsFactory::from_event_file(file.clone())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let ftype = temp.file_type();
+
+        Ok(Self {
+            file,
+            ftype: ftype.clone(),
+        })
+    }
+}
+
 #[pymethods]
 impl PyEventFile {
     #[new]
     pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
-        let temp = FileEventsFactory::from_path(&path)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        let ftype = temp.file_type();
-
         let file = EventFile {
             path,
             use_rotation: false,
             try_split: false,
         };
 
-        Ok(Self {
-            file,
-            ftype: ftype.clone(),
-        })
+        Self::from_event_file(file)
     }
 
     #[classmethod]

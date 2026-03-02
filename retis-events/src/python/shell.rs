@@ -8,10 +8,11 @@ use anyhow::{anyhow, Result};
 use pyo3::{prelude::*, types::PyDict};
 
 use super::python::*;
+use crate::file::rotate::EventFile;
 
 /// Create a python shell and execute the provided script.
-pub fn shell_execute(file: PathBuf, script: Option<&PathBuf>, args: &[String]) -> Result<()> {
-    let event_file = PyEventFile::new(file)?;
+pub fn shell_execute(file: EventFile, script: Option<&PathBuf>, args: &[String]) -> Result<()> {
+    let event_file = PyEventFile::from_event_file(file)?;
 
     let argv = match script {
         Some(script) => {
