@@ -98,7 +98,7 @@ impl SubCommandParserRunner for Sort {
             //
             // Due to the default input file logic and the range format, we
             // only due this check best-effort.
-            if let Ok(input) = &input.path.canonicalize() {
+            if let Ok(input) = &input.0.path.canonicalize() {
                 let out = match out.canonicalize() {
                     Ok(out) => out,
                     // If the file doesn't exist we can't use fs::canonicalize() but it is not needed

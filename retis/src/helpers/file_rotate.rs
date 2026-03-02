@@ -34,11 +34,7 @@ pub(crate) fn rotation_policy_from_str(limit: &str) -> Result<RotationPolicy> {
 // Custom argument type to represent the input file. This automatically handles
 // the rotation logic, if any. Can be used within `clap` directly.
 #[derive(Clone, Debug)]
-pub(crate) struct InputDataFile {
-    pub(crate) path: PathBuf,
-    use_rotation: bool,
-    try_split: bool,
-}
+pub(crate) struct InputDataFile(pub(crate) EventFile);
 
 impl InputDataFile {
     // Help text to be used in the cli argument directly.
@@ -50,28 +46,17 @@ impl InputDataFile {
     }
 
     pub(crate) fn to_factory(&self) -> Result<FileEventsFactory> {
-        if self.use_rotation {
-            FileEventsFactory::new(Box::new(RotateReader::new(
-                self.path.clone(),
-                self.try_split,
-            )?))
-        } else {
-            let path_str = self
-                .path
-                .to_str()
-                .ok_or_else(|| anyhow!("Cannot convert path to str"))?;
-            FileEventsFactory::from_path(path_str)
-        }
+        FileEventsFactory::from_event_file(self.0.clone())
     }
 }
 
 impl Default for InputDataFile {
     fn default() -> Self {
-        Self {
+        Self(EventFile {
             path: PathBuf::from("retis.data"),
             use_rotation: true,
             try_split: true,
-        }
+        })
     }
 }
 
@@ -80,19 +65,19 @@ impl FromStr for InputDataFile {
 
     fn from_str(path: &str) -> std::result::Result<Self, Self::Err> {
         let input = match path.strip_suffix("..") {
-            Some(path_first) => Self {
+            Some(path_first) => Self(EventFile {
                 path: PathBuf::from(path_first),
                 use_rotation: true,
                 try_split: false,
-            },
-            None => Self {
+            }),
+            None => Self(EventFile {
                 path: PathBuf::from(path),
                 use_rotation: false,
                 try_split: false,
-            },
+            }),
         };
 
-        if !&input.path.exists() {
+        if !&input.0.path.exists() {
             return Err("No such file or directory".to_string());
         }
 
