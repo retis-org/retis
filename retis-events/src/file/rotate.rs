@@ -13,6 +13,14 @@ use nix::sys::utsname::uname;
 
 use crate::{compat::json, file::guess_version, helpers::time::*, *};
 
+/// Represent an event file and how it should be used wrt rotation.
+#[derive(Clone, Debug)]
+pub struct EventFile {
+    pub path: PathBuf,
+    pub use_rotation: bool,
+    pub try_split: bool,
+}
+
 /// Rotation policy
 ///
 /// How the output files are split depending on internal rules.
