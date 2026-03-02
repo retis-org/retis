@@ -103,12 +103,10 @@ struct retis_context {
  * targeted ones.
  */
 #define RETIS_GET(ctx, name, type)		\
-	(retis_arg_valid(ctx, name) ?	\
-	 retis_get_param(ctx, ctx->offsets.name, type) : 0)
+	 retis_get_param(ctx, ctx->offsets.name, type)
 /* Same as RETIS_GET() but local to hooks only. */
 #define RETIS_HOOK_GET(ctx, offsets, name, type)	\
-	(retis_offset_valid(offsets.name) ?	\
-	 retis_get_param(ctx, offsets.name, type) : 0)
+	 retis_get_param(ctx, offsets.name, type)
 
 #define retis_get_sk_buff(ctx)	\
 	RETIS_GET(ctx, sk_buff, struct sk_buff *)
