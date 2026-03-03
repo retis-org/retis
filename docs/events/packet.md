@@ -76,11 +76,14 @@ type {type number} code {code number}
 ## Geneve
 
 ```none
-geneve [{flags}] vni {vni} proto {etype name} ({etype hex}) opts_len {opts_len}
+geneve [{flags}] vni {vni} proto {etype name} ({etype hex}) [{options}]
 ```
 
 - `flags` are constructed using a combination of `O` (control) and `C`
   (critical).
+- `options` is a list of options separated by commas of the following form:
+  `class {class} type {type} len {len}`. `type` includes a trailing "(C)" if the
+  option type has the critical bit set.
 
 ## VXLAN
 
