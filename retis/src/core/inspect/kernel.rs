@@ -383,37 +383,41 @@ mod tests {
 
     #[test]
     fn test_bijection() {
+        let inspector = inspector();
         let symbol = "consume_skb";
-        let addr = inspector().get_symbol_addr(symbol).unwrap();
-        let name = inspector().get_symbol_name(addr).unwrap();
+        let addr = inspector.get_symbol_addr(symbol).unwrap();
+        let name = inspector.get_symbol_name(addr).unwrap();
 
         assert!(symbol == name);
     }
 
     #[test]
     fn nearest_symbol() {
-        let addr = inspector().get_symbol_addr("consume_skb").unwrap();
+        let inspector = inspector();
+        let addr = inspector.get_symbol_addr("consume_skb").unwrap();
 
-        assert!(inspector().find_nearest_symbol(addr + 1).unwrap() == addr);
-        assert!(inspector().find_nearest_symbol(addr).unwrap() == addr);
-        assert!(inspector().find_nearest_symbol(addr - 1).unwrap() != addr);
+        assert!(inspector.find_nearest_symbol(addr + 1).unwrap() == addr);
+        assert!(inspector.find_nearest_symbol(addr).unwrap() == addr);
+        assert!(inspector.find_nearest_symbol(addr - 1).unwrap() != addr);
     }
 
     #[test]
     fn name_from_addr_near() {
-        let mut sym_info = inspector()
+        let inspector = inspector();
+
+        let mut sym_info = inspector
             .get_name_offt_from_addr_near(0xffffffff99d1da80 + 1)
             .unwrap();
 
         assert_eq!(sym_info.0, "consume_skb");
         assert_eq!(sym_info.1, 0x1_u64);
 
-        sym_info = inspector()
+        sym_info = inspector
             .get_name_offt_from_addr_near(0xffffffff99d1da80 - 1)
             .unwrap();
         assert_ne!(sym_info.0, "consume_skb");
 
-        sym_info = inspector()
+        sym_info = inspector
             .get_name_offt_from_addr_near(0xffffffff99d1da80)
             .unwrap();
         assert_eq!(sym_info.0, "consume_skb");
@@ -422,33 +426,33 @@ mod tests {
 
     #[test]
     fn kernel_config() {
+        let inspector = inspector();
+
         assert_eq!(
-            inspector().get_config_option("CONFIG_VETH").unwrap(),
+            inspector.get_config_option("CONFIG_VETH").unwrap(),
             Some("m")
         );
         assert_eq!(
-            inspector().get_config_option("CONFIG_OPENVSWITCH").unwrap(),
+            inspector.get_config_option("CONFIG_OPENVSWITCH").unwrap(),
             Some("m")
         );
-        assert_eq!(inspector().get_config_option("CONFIG_FOO").unwrap(), None);
+        assert_eq!(inspector.get_config_option("CONFIG_FOO").unwrap(), None);
         assert_eq!(
-            inspector()
-                .get_config_option("CONFIG_COMPILE_TEST")
-                .unwrap(),
+            inspector.get_config_option("CONFIG_COMPILE_TEST").unwrap(),
             Some("n")
         );
         assert_eq!(
-            inspector().get_config_option("CONFIG_NETPOLL").unwrap(),
+            inspector.get_config_option("CONFIG_NETPOLL").unwrap(),
             Some("y")
         );
         assert_eq!(
-            inspector()
+            inspector
                 .get_config_option("CONFIG_DEFAULT_HOSTNAME")
                 .unwrap(),
             Some("(none)")
         );
         assert_eq!(
-            inspector()
+            inspector
                 .get_config_option("CONFIG_SYSTEM_TRUSTED_KEYS")
                 .unwrap(),
             Some("")
@@ -476,7 +480,8 @@ mod tests {
 
     #[test]
     fn kernel_modules() {
-        assert_eq!(inspector().is_module_loaded("zram"), Some(true));
-        assert_eq!(inspector().is_module_loaded("openvswitch"), Some(false));
+        let inspector = inspector();
+        assert_eq!(inspector.is_module_loaded("zram"), Some(true));
+        assert_eq!(inspector.is_module_loaded("openvswitch"), Some(false));
     }
 }
