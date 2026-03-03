@@ -57,8 +57,16 @@ struct skb_gso_event {
 struct skb_packet_event {
 	u32 len;
 	u32 capture_len;
+	u8 kind;
 #define PACKET_CAPTURE_SIZE	255
 	u8 packet[PACKET_CAPTURE_SIZE];
+} __binding;
+
+enum packet_kind {
+	ETHERNET = 0,
+	FAKE_ETHERNET,
+	IPV4,
+	IPV6,
 } __binding;
 
 /* Retrieve an skb linear len */
@@ -149,6 +157,7 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 
 		e->len = len - mac_offset;
 		e->capture_len = size;
+		e->kind = ETHERNET;
 		bpf_probe_read_kernel(e->packet, size, head + mac);
 	/* Valid network offset with an unset or invalid mac offset: we can fake
 	 * the eth header.
@@ -156,17 +165,23 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 	} else if (is_network_data_valid(skb)) {
 		u16 etype = skb_protocol(skb);
 		long network_offset, size;
-		struct ethhdr *eth;
+		u32 fakelen = 0;
+		u8 kind;
 
 		/* We do need the ethertype to be set at the skb level here,
 		 * otherwise we can't guess what kind of packet this is.
 		 */
-		if (!etype)
+		if (etype == bpf_htons(ETH_P_IP))
+			kind = IPV4;
+		else if (etype == bpf_htons(ETH_P_IPV6))
+			kind = IPV6;
+		else if (etype)
+			kind = FAKE_ETHERNET;
+		else
 			return 0;
 
 		network_offset = network - headroom;
-		size = MIN(linear_len - network_offset,
-			   PACKET_CAPTURE_SIZE - sizeof(struct ethhdr));
+		size = MIN(linear_len - network_offset, PACKET_CAPTURE_SIZE);
 		if (size <= 0)
 			return 0;
 
@@ -175,15 +190,29 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		if (!e)
 			return 0;
 
-		/* Fake eth header */
-		eth = (struct ethhdr *)e->packet;
-		__builtin_memset(eth, 0, sizeof(*eth));
-		eth->h_proto = etype;
+		/* Set a fake Ethernet header in case we don't explicitly handle
+		 * the ethertype.
+		 */
+		if (kind == FAKE_ETHERNET) {
+			static const u8 fake_addr[6] = {
+				0xf0, 0xc4, 0xcc, 0x14, 0x00, 0x00,
+			};
+			struct ethhdr *eth;
 
-		e->len = len - network_offset + sizeof(*eth);
-		e->capture_len = size + sizeof(struct ethhdr);
-		bpf_probe_read_kernel(e->packet + sizeof(*eth), size,
-				      head + network);
+			eth = (struct ethhdr *)e->packet;
+			__builtin_memcpy(eth, &fake_addr, 6);
+			__builtin_memcpy((void *)eth + 6, &fake_addr, 6);
+			eth->h_proto = etype;
+
+			fakelen = sizeof(*eth);
+			size = MIN(size, PACKET_CAPTURE_SIZE - fakelen);
+		}
+
+		e->len = len - network_offset + fakelen;
+		e->capture_len = size + fakelen;
+		e->kind = kind;
+		bpf_probe_read_kernel(e->packet + fakelen, size,
+					      head + network);
 	/* Can't guess any useful packet offset */
 	} else {
 		return 0;

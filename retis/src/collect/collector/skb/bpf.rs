@@ -70,6 +70,13 @@ pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<PacketEven
     Ok(PacketEvent {
         len: raw.len,
         capture_len: raw.capture_len,
+        kind: match raw.kind as u32 {
+            ETHERNET => PacketKind::Ethernet,
+            FAKE_ETHERNET => PacketKind::FakeEthernet,
+            IPV4 => PacketKind::Ipv4,
+            IPV6 => PacketKind::Ipv6,
+            x => bail!("Unknown packet kind {x}"),
+        },
         data: RawPacket(raw.packet[..(raw.capture_len as usize)].to_vec()),
     })
 }
@@ -114,6 +121,7 @@ pub(crate) mod benchmark {
             let data = Self {
                 len: 66,
                 capture_len: 66,
+                kind: ETHERNET as u8,
                 packet: [
                     46, 137, 59, 254, 34, 122, 42, 186, 90, 193, 129, 79, 8, 0, 69, 0, 0, 52, 32,
                     32, 64, 0, 55, 6, 237, 160, 1, 1, 1, 1, 10, 0, 42, 2, 1, 187, 157, 12, 31, 149,
