@@ -235,7 +235,6 @@ impl PyEventReader {
         Self::from_event_file(EventFile {
             path,
             use_rotation: false,
-            try_split: false,
         })
     }
 
@@ -244,7 +243,6 @@ impl PyEventReader {
         Self::from_event_file(EventFile {
             path,
             use_rotation: true,
-            try_split: false,
         })
     }
 
@@ -374,7 +372,6 @@ impl PyEventFile {
         let file = EventFile {
             path,
             use_rotation: false,
-            try_split: false,
         };
 
         Self::from_event_file(file)

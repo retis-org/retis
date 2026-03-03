@@ -52,10 +52,14 @@ impl InputDataFile {
 
 impl Default for InputDataFile {
     fn default() -> Self {
+        let mut path = PathBuf::from("retis.data");
+        if !path.is_file() {
+            path = PathBuf::from("retis.data.0");
+        }
+
         Self(EventFile {
-            path: PathBuf::from("retis.data"),
+            path,
             use_rotation: true,
-            try_split: true,
         })
     }
 }
@@ -68,12 +72,10 @@ impl FromStr for InputDataFile {
             Some(path_first) => Self(EventFile {
                 path: PathBuf::from(path_first),
                 use_rotation: true,
-                try_split: false,
             }),
             None => Self(EventFile {
                 path: PathBuf::from(path),
                 use_rotation: false,
-                try_split: false,
             }),
         };
 
