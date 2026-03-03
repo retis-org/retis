@@ -23,8 +23,22 @@ pub struct PacketEvent {
     pub len: u32,
     /// Capture length. <= len.
     pub capture_len: u32,
+    /// Packet kind.
+    pub kind: PacketKind,
     /// Raw packet data.
     pub data: RawPacket,
+}
+
+/// Describes the kind of packet that was captured as raw data.
+#[event_type]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum PacketKind {
+    #[default]
+    Ethernet,
+    FakeEthernet,
+    Ipv4,
+    Ipv6,
 }
 
 #[allow(dead_code)]
@@ -40,7 +54,13 @@ impl PacketEvent {
             Ok(scapy) => {
                 let locals = [("scapy", scapy)].into_py_dict(py)?;
                 let packet = PyBytes::new(py, &self.data.0);
-                let ins = CString::new(format!("scapy.Ether({packet})"))?;
+                let ins = CString::new(match self.kind {
+                    PacketKind::Ethernet | PacketKind::FakeEthernet => {
+                        format!("scapy.Ether({packet})")
+                    }
+                    PacketKind::Ipv4 => format!("scapy.IP({packet})"),
+                    PacketKind::Ipv6 => format!("scapy.IPv6({packet})"),
+                })?;
                 Ok(py.eval(ins.as_c_str(), None, Some(&locals))?.into())
             }
             Err(_) => Err(PyImportError::new_err("Could not import scapy.all")),
@@ -76,9 +96,24 @@ impl EventFmt for PacketEvent {
 
 impl PacketEvent {
     fn format_packet(&self, f: &mut Formatter, format: &DisplayFormat) -> FmtResult<()> {
-        match EthernetPacket::new(&self.data.0) {
-            Some(eth) => self.format_ethernet(f, format, &eth),
-            None => Err(PacketFmtError::Truncated),
+        let data = &self.data.0;
+        match self.kind {
+            PacketKind::Ethernet | PacketKind::FakeEthernet => self.format_ethernet(
+                f,
+                format,
+                &EthernetPacket::new(data).ok_or(PacketFmtError::Truncated)?,
+                self.kind == PacketKind::FakeEthernet,
+            ),
+            PacketKind::Ipv4 => self.format_ipv4(
+                f,
+                format,
+                &Ipv4Packet::new(data).ok_or(PacketFmtError::Truncated)?,
+            ),
+            PacketKind::Ipv6 => self.format_ipv6(
+                f,
+                format,
+                &Ipv6Packet::new(data).ok_or(PacketFmtError::Truncated)?,
+            ),
         }
     }
 
@@ -87,6 +122,7 @@ impl PacketEvent {
         f: &mut Formatter,
         format: &DisplayFormat,
         eth: &EthernetPacket,
+        fake: bool,
     ) -> FmtResult<()> {
         let etype = match helpers::net::etype_str(eth.get_ethertype()) {
             Some(etype) => etype,
@@ -101,10 +137,10 @@ impl PacketEvent {
             }
         };
 
-        if format.print_ll {
+        if format.print_ll && !fake {
             write!(
                 f,
-                "{} > {} ethertype {etype} ({:#06x})",
+                "{} > {} ethertype {etype} ({:#06x}) ",
                 eth.get_source(),
                 eth.get_destination(),
                 eth.get_ethertype().0
@@ -157,8 +193,8 @@ impl PacketEvent {
 
         let ethertype = vlan.get_ethertype();
         match helpers::net::etype_str(ethertype) {
-            Some(etype) => write!(f, " ethertype {etype} ({:#06x})", ethertype.0)?,
-            None => write!(f, " ethertype ({:#06x})", ethertype.0)?,
+            Some(etype) => write!(f, "ethertype {etype} ({:#06x}) ", ethertype.0)?,
+            None => write!(f, "ethertype ({:#06x}) ", ethertype.0)?,
         }
 
         Ok(())
@@ -171,12 +207,6 @@ impl PacketEvent {
         etype: EtherType,
         payload: &[u8],
     ) -> FmtResult<()> {
-        // In case link-layer information is printed this is not the start of
-        // the output.
-        if format.print_ll {
-            write!(f, " ")?;
-        }
-
         match etype {
             EtherTypes::Macsec => match MacsecPacket::new(payload) {
                 Some(macsec) => self.format_macsec(f, format, &macsec),
@@ -914,7 +944,7 @@ impl PacketEvent {
 
         write!(f, " ")?;
         match EthernetPacket::new(vxlan.payload()) {
-            Some(eth) => self.format_ethernet(f, format, &eth),
+            Some(eth) => self.format_ethernet(f, format, &eth, false),
             None => Err(PacketFmtError::Truncated),
         }
     }
@@ -994,7 +1024,7 @@ impl PacketEvent {
         write!(f, " ")?;
         match protocol {
             EtherTypes::Teb => match EthernetPacket::new(geneve.payload()) {
-                Some(eth) => self.format_ethernet(f, format, &eth),
+                Some(eth) => self.format_ethernet(f, format, &eth, false),
                 None => Err(PacketFmtError::Truncated),
             },
             _ => self.format_etype(f, format, protocol, geneve.payload()),
@@ -1065,6 +1095,7 @@ mod tests {
         let packet = PacketEvent {
             len: 0,
             capture_len: 0,
+            kind: PacketKind::Ethernet,
             data: RawPacket(buf),
         };
 
@@ -1084,6 +1115,7 @@ mod tests {
         let packet = PacketEvent {
             len: 0,
             capture_len: 0,
+            kind: PacketKind::Ethernet,
             data: RawPacket(buf),
         };
 
@@ -1103,6 +1135,7 @@ mod tests {
         let packet = PacketEvent {
             len: 0,
             capture_len: 0,
+            kind: PacketKind::Ethernet,
             data: RawPacket(buf),
         };
 
