@@ -123,53 +123,26 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 	/* Use int instead of the underlying (smaller) unsigned type to allow
 	 * signed arithmetic operations.
 	 */
-	int mac, headroom, linear_len;
+	int headroom, linear_len, start;
+	long offset, size, fakelen = 0;
 	struct skb_packet_event *e;
 	unsigned char *head;
-	u16 network;
-	u32 len;
+	u16 etype = 0;
+	u8 kind;
 
-	head = BPF_CORE_READ(skb, head);
-	headroom = BPF_CORE_READ(skb, data) - head;
-
-	mac = BPF_CORE_READ(skb, mac_header);
-	network = BPF_CORE_READ(skb, network_header);
 	linear_len = skb_linear_len(skb);
-	len = BPF_CORE_READ(skb, len);
-
 	/* No data in the linear len, nothing to report */
 	if (!linear_len)
 		return 0;
 
-	/* Best case: mac offset is set and valid */
 	if (is_mac_data_valid(skb)) {
-		long mac_offset, size;
-
-		mac_offset = mac - headroom;
-		size = MIN(linear_len - mac_offset, PACKET_CAPTURE_SIZE);
-		if (size <= 0)
-			return 0;
-
-		e = get_event_section(event, COLLECTOR_SKB, SECTION_PACKET,
-				      sizeof(*e));
-		if (!e)
-			return 0;
-
-		e->len = len - mac_offset;
-		e->capture_len = size;
-		e->kind = ETHERNET;
-		bpf_probe_read_kernel(e->packet, size, head + mac);
-	/* Valid network offset with an unset or invalid mac offset: we can fake
-	 * the eth header.
-	 */
+		kind = ETHERNET;
+		start = BPF_CORE_READ(skb, mac_header);
 	} else if (is_network_data_valid(skb)) {
-		u16 etype = skb_protocol(skb);
-		long network_offset, size;
-		u32 fakelen = 0;
-		u8 kind;
+		etype = skb_protocol(skb);
 
-		/* We do need the ethertype to be set at the skb level here,
-		 * otherwise we can't guess what kind of packet this is.
+		/* We do need the ethertype, otherwise we can't guess what kind
+		 * of packet this is.
 		 */
 		if (etype == bpf_htons(ETH_P_IP))
 			kind = IPV4;
@@ -180,43 +153,45 @@ static __always_inline int process_packet(struct retis_raw_event *event,
 		else
 			return 0;
 
-		network_offset = network - headroom;
-		size = MIN(linear_len - network_offset, PACKET_CAPTURE_SIZE);
-		if (size <= 0)
-			return 0;
-
-		e = get_event_section(event, COLLECTOR_SKB, SECTION_PACKET,
-				      sizeof(*e));
-		if (!e)
-			return 0;
-
-		/* Set a fake Ethernet header in case we don't explicitly handle
-		 * the ethertype.
-		 */
-		if (kind == FAKE_ETHERNET) {
-			static const u8 fake_addr[6] = {
-				0xf0, 0xc4, 0xcc, 0x14, 0x00, 0x00,
-			};
-			struct ethhdr *eth;
-
-			eth = (struct ethhdr *)e->packet;
-			__builtin_memcpy(eth, &fake_addr, 6);
-			__builtin_memcpy((void *)eth + 6, &fake_addr, 6);
-			eth->h_proto = etype;
-
-			fakelen = sizeof(*eth);
-			size = MIN(size, PACKET_CAPTURE_SIZE - fakelen);
-		}
-
-		e->len = len - network_offset + fakelen;
-		e->capture_len = size + fakelen;
-		e->kind = kind;
-		bpf_probe_read_kernel(e->packet + fakelen, size,
-					      head + network);
-	/* Can't guess any useful packet offset */
+		start = BPF_CORE_READ(skb, network_header);
 	} else {
 		return 0;
 	}
+
+	head = BPF_CORE_READ(skb, head);
+	headroom = BPF_CORE_READ(skb, data) - head;
+
+	offset = start - headroom;
+	size = MIN(linear_len - offset, PACKET_CAPTURE_SIZE);
+	if (size <= 0)
+		return 0;
+
+	e = get_event_section(event, COLLECTOR_SKB, SECTION_PACKET, sizeof(*e));
+	if (!e)
+		return 0;
+
+	/* Set a fake Ethernet header in case we don't explicitly handle
+	 * the ethertype.
+	 */
+	if (kind == FAKE_ETHERNET) {
+		static const u8 fake_addr[6] = {
+			0xf0, 0xc4, 0xcc, 0x14, 0x00, 0x00,
+		};
+		struct ethhdr *eth;
+
+		eth = (struct ethhdr *)e->packet;
+		__builtin_memcpy(eth, &fake_addr, 6);
+		__builtin_memcpy((void *)eth + 6, &fake_addr, 6);
+		eth->h_proto = etype;
+
+		fakelen = sizeof(*eth);
+		size = MIN(size, PACKET_CAPTURE_SIZE - fakelen);
+	}
+
+	e->len = BPF_CORE_READ(skb, len) - offset + fakelen;
+	e->capture_len = size + fakelen;
+	e->kind = kind;
+	bpf_probe_read_kernel(e->packet + fakelen, size, head + start);
 
 	return 0;
 }
