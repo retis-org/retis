@@ -39,3 +39,40 @@ pub struct Geneve {
 fn geneve_option_length(geneve: &GenevePacket) -> usize {
     geneve.get_options_len() as usize * 4
 }
+
+/// Geneve options, see
+/// [RFC 8926](https://datatracker.ietf.org/doc/html/rfc8926#name-tunnel-options).
+///
+///   0                   1                   2                   3
+///   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///   |          Option Class         |      Type     |R|R|R| Length  |
+///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///   |                                                               |
+///   ~                  Variable-Length Option Data                  ~
+///   |                                                               |
+///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+#[packet]
+pub struct GeneveOption {
+    pub class: u16be,
+    pub option_type: u8,
+    pub reserved0: u3,
+    pub length: u5,
+    #[length_fn = "geneve_option_data_length"]
+    #[payload]
+    pub payload: Vec<u8>,
+}
+
+/// Bit 7 of `GeneveOption::option_type` is set for critical options. See
+/// [RFC 8926](https://datatracker.ietf.org/doc/html/rfc8926#name-tunnel-options).
+pub const GENEVE_OPTION_CRITICAL: u8 = 1 << 7;
+
+fn geneve_option_data_length(opt: &GeneveOptionPacket) -> usize {
+    opt.get_length() as usize * 4
+}
+
+impl<'a> GeneveOptionIterable<'a> {
+    pub fn new(buf: &'a [u8]) -> Self {
+        Self { buf }
+    }
+}

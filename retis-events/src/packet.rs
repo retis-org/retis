@@ -907,7 +907,25 @@ impl RawPacket {
         }
 
         if geneve.get_options_len() > 0 {
-            write!(f, " opts_len {}", geneve.get_options_len() * 4)?;
+            let opt_fmt = |opt: &GeneveOptionPacket| {
+                format!(
+                    "class {:#x} type {:#x}{} len {}",
+                    opt.get_class(),
+                    opt.get_option_type(),
+                    if opt.get_option_type() & GENEVE_OPTION_CRITICAL != 0 {
+                        "(C)"
+                    } else {
+                        ""
+                    },
+                    opt.get_length() * 4,
+                )
+            };
+
+            let options = GeneveOptionIterable::new(&geneve.get_options())
+                .map(|opt| opt_fmt(&opt))
+                .collect::<Vec<_>>()
+                .join(",");
+            write!(f, " [{options}]")?;
         }
 
         write!(f, " ")?;
