@@ -2,11 +2,17 @@ import base64
 import json
 import sys
 
-from scapy.all import Ether
+from scapy.all import Ether, IP, IPv6
 
 
-def packet_to_json(raw_packet):
-    p = Ether(base64.decodebytes(raw_packet.encode("ascii")))
+def packet_to_json(packet):
+    raw = base64.decodebytes(packet["data"].encode("ascii"))
+    p = {
+        "ethernet": Ether(raw),
+        "fake_ethernet": Ether(raw),
+        "ipv4": IP(raw),
+        "ipv6": IPv6(raw),
+    }.get(packet["kind"])
     res = {}
     for line in p.show2(dump=True).split("\n"):
         if "###" in line:
@@ -25,7 +31,7 @@ def events_to_json(file):
             event = json.loads(event)
 
             if "packet" in event:
-                event["parsed_packet"] = packet_to_json(event["packet"]["data"])
+                event["parsed_packet"] = packet_to_json(event["packet"])
 
             events.append(event)
     return events

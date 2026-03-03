@@ -40,6 +40,16 @@ export in the events. See the `retis collect --help` for a detailed description.
 The `skb` collector produces the [skb](../events/skb.md) and
 [packet](../events/packet.md) event sections.
 
+The [packet](../events/packet.md) event contains the raw packet. In case the
+capture happened in a transmit path at L3 when the Ethernet header was not
+constructed yet:
+
+- For IPv4 and IPv6 packets, the raw data will start at L3.
+- Otherwise a fake Ethernet header with the right Ethertype will be inserted. It
+  won't be displayed by Retis but will allow the packet to be consumed by other
+  tools (eg. after pcap conversion). The fake Ethernet header looks like:
+  `f0:c4:cc:14:00:00 > f0:c4:cc:14:00:00, ethertype {etype}`.
+
 ## Skb tracking
 
 The `skb-tracking` collector does not track itself `skb` in the kernel (this is
