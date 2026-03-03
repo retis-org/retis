@@ -215,8 +215,7 @@ pub(crate) struct PyEventReader {
 
 impl PyEventReader {
     fn from_event_file(file: EventFile) -> PyResult<Self> {
-        let factory = FileEventsFactory::from_event_file(file)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let factory = FileEventsFactory::from_event_file(file)?;
 
         if matches!(factory.file_type(), FileType::Series) {
             return Err(PyRuntimeError::new_err(
@@ -256,11 +255,7 @@ impl PyEventReader {
         mut slf: PyRefMut<'_, Self>,
         py: Python<'_>,
     ) -> PyResult<Option<Py<PyAny>>> {
-        match slf
-            .factory
-            .next_event()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
-        {
+        match slf.factory.next_event()? {
             Some(event) => {
                 let pyevent: Bound<'_, PyEvent> = Bound::new(py, PyEvent::new(py, event)?)?;
                 Ok(Some(pyevent.into_any().into()))
@@ -292,8 +287,7 @@ pub(crate) struct PySeriesReader {
 impl PySeriesReader {
     #[new]
     pub(crate) fn new(path: PathBuf) -> PyResult<Self> {
-        let factory = FileEventsFactory::from_path(path)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let factory = FileEventsFactory::from_path(path)?;
 
         if matches!(factory.file_type(), FileType::Event) {
             return Err(PyRuntimeError::new_err(
@@ -313,11 +307,7 @@ impl PySeriesReader {
         mut slf: PyRefMut<'_, Self>,
         py: Python<'_>,
     ) -> PyResult<Option<Py<PyAny>>> {
-        match slf
-            .factory
-            .next_series()
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?
-        {
+        match slf.factory.next_series()? {
             Some(series) => {
                 let pyseries: Bound<'_, PyEventSeries> =
                     Bound::new(py, PyEventSeries::new(py, series)?)?;
@@ -354,14 +344,11 @@ pub(crate) struct PyEventFile {
 
 impl PyEventFile {
     pub(crate) fn from_event_file(file: EventFile) -> PyResult<Self> {
-        let temp = FileEventsFactory::from_event_file(file.clone())
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        let ftype = temp.file_type();
+        let ftype = FileEventsFactory::from_event_file(file.clone())?
+            .file_type()
+            .clone();
 
-        Ok(Self {
-            file,
-            ftype: ftype.clone(),
-        })
+        Ok(Self { file, ftype })
     }
 }
 
