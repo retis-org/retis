@@ -42,7 +42,6 @@ impl FileEventsFactory {
         Self::from_event_file(EventFile {
             path: file.as_ref().to_path_buf(),
             use_rotation: false,
-            try_split: false,
         })
     }
 
@@ -50,7 +49,7 @@ impl FileEventsFactory {
         // Using the RotateReader in both cases should work but not using it
         // will save some cycles without impacting maintenance too much.
         let mut reader: BufReader<Box<dyn ReadSeek>> = BufReader::new(match file.use_rotation {
-            true => Box::new(RotateReader::new(file.path, file.try_split)?),
+            true => Box::new(RotateReader::new(file.path)?),
             false => Box::new(
                 File::open(file.path.clone())
                     .map_err(|e| anyhow!("Could not open {}: {e}", file.path.display()))?,
