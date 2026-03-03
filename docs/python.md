@@ -180,12 +180,11 @@ The raw packet data can also be accessed as a bytes string or as bytes, for
 low-level access or for using in other packet-parsing libraries:
 
 ```python
-e.packet.data          # Bytes string
-bytes(e.packet.data)   # bytes
+bytes(e.packet)        # bytes
 
 # Manual implementation of to_scapy().
 from scapy.layers.l2 import Ether
-Ether(bytes(e.packet.data))
+Ether(bytes(e.packet))
 ```
 
 ## Available helpers
