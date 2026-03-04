@@ -323,8 +323,7 @@ where
     F: FnMut(&Block) -> Result<()>,
 {
     // Create running instance that will handle signal termination.
-    let run = Running::new();
-    run.register_term_signals()?;
+    let run = Running::new()?;
 
     // Start our events factory.
     let mut factory = input.to_factory()?;
@@ -368,8 +367,7 @@ fn list_probes(input: &InputDataFile) -> Result<Vec<String>> {
     let mut probe_set: HashSet<String> = HashSet::new();
 
     // Create running instance that will handle signal termination.
-    let run = Running::new();
-    run.register_term_signals()?;
+    let run = Running::new()?;
 
     // Start our events factory.
     let mut factory = input.to_factory()?;

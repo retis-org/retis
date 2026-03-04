@@ -61,7 +61,6 @@ pub(crate) struct OvsCollectorArgs {
     ovs_enrich_rate: u32,
 }
 
-#[derive(Default)]
 pub(crate) struct OvsCollector {
     track: bool,
     inflight_upcalls_map: Option<libbpf_rs::MapHandle>,
@@ -81,7 +80,18 @@ pub(crate) struct OvsCollector {
 
 impl Collector for OvsCollector {
     fn new() -> Result<Self> {
-        Ok(Self::default())
+        Ok(Self {
+            track: false,
+            inflight_upcalls_map: None,
+            inflight_exec_map: None,
+            flow_exec_tracking_fd: 0,
+            upcall_tracking_fd: 0,
+            gc: None,
+            running: Running::ignore_signals(),
+            upcall_batches: None,
+            pid_to_batch: None,
+            flow_enricher: None,
+        })
     }
 
     // Check if the OvS collector can run. Some potential errors are silenced,

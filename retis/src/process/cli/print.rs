@@ -32,8 +32,7 @@ pub(crate) struct Print {
 impl SubCommandParserRunner for Print {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
         // Create running instance that will handle signal termination.
-        let run = Running::new();
-        run.register_term_signals()?;
+        let run = Running::new()?;
 
         // Create event factory.
         let mut factory = self.input.clone().unwrap_or_default().to_factory()?;
