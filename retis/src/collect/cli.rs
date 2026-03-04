@@ -129,6 +129,12 @@ Notes:
     pub(super) cmd: Option<String>,
     #[arg(
         long,
+        value_name = "COUNT",
+        help = "Stop collection after receiving the specified number of events. Only counts user-visible events, not internal events."
+    )]
+    pub(super) stop_after: Option<u64>,
+    #[arg(
+        long,
         help = r#"Allow the tool to setup all the system changes needed to make the tracing fully operational:
 
 - Mounting tracefs to /sys/kernel/tracing if not already mounted. If Retis mounted tracefs it will unmount it when stopped. On older kernels it might mount (and unmount) debugfs to /sys/kernel/debug instead.
