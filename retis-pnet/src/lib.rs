@@ -10,4 +10,5 @@ pub mod ip;
 pub mod ipsec;
 pub mod ipv6;
 pub mod macsec;
+pub mod sctp;
 pub mod tcp;
