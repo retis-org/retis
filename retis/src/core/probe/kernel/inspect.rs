@@ -40,6 +40,8 @@ fn drop_reason_offset(symbol: &Symbol) -> Result<Option<i8>> {
             Some(offset as i8)
         } else if let Some(offset) = symbol.parameter_offset("enum ovs_drop_reason")? {
             Some(offset as i8)
+        } else if let Some(offset) = symbol.parameter_offset("enum qdisc_drop_reason")? {
+            Some(offset as i8)
         } else {
             None
         },

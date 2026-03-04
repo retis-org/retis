@@ -41,6 +41,7 @@ impl DropReasons {
             "mac80211_unusable" => parse_enum("mac80211_drop_reason", &[])?,
             "mac80211_monitor" => parse_enum("mac80211_drop_reason", &[])?,
             "openvswitch" => parse_enum("ovs_drop_reason", &[])?,
+            "qdisc" => parse_enum("qdisc_drop_reason", &[])?,
             x => {
                 warn!("Unknown drop reason subsystem ({x})");
                 HashMap::new()
