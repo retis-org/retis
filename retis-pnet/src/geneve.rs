@@ -76,3 +76,28 @@ impl<'a> GeneveOptionIterable<'a> {
         Self { buf }
     }
 }
+
+/// Geneve class numbers.
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+pub mod GeneveClassNumbers {
+    pub const Netdev: u16 = 0x100;
+
+    /// Netdev class types.
+    pub mod NetdevTypeNumbers {
+        pub const GroHint: u8 = 0x1;
+    }
+}
+
+#[packet]
+pub struct GeneveOptionGroHint {
+    pub reserved0: u5,
+    pub nested_is_v6: u1,
+    pub inner_proto_id: u2,
+    pub nested_nh_offset: u8,
+    pub nested_tp_offset: u8,
+    pub nested_hdr_len: u8,
+    #[payload]
+    #[length = "0"]
+    pub payload: Vec<u8>,
+}
