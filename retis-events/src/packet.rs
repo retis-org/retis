@@ -908,8 +908,8 @@ impl RawPacket {
 
         if geneve.get_options_len() > 0 {
             let opt_fmt = |opt: &GeneveOptionPacket| {
-                format!(
-                    "class {:#x} type {:#x}{} len {}",
+                let mut out = format!(
+                    "class {:#x} type {:#x}{} hlen {}",
                     opt.get_class(),
                     opt.get_option_type(),
                     if opt.get_option_type() & GENEVE_OPTION_CRITICAL != 0 {
@@ -918,7 +918,28 @@ impl RawPacket {
                         ""
                     },
                     opt.get_length() * 4,
-                )
+                );
+
+                if opt.get_class() == GeneveClassNumbers::Netdev
+                    && opt.get_option_type() == GeneveClassNumbers::NetdevTypeNumbers::GroHint
+                {
+                    if let Some(hint) = GeneveOptionGroHintPacket::new(opt.payload()) {
+                        out.push_str(&format!(
+                            " (proto {} {} nh {} tp {} len {})",
+                            hint.get_inner_proto_id(),
+                            if hint.get_nested_is_v6() == 1 {
+                                "v6"
+                            } else {
+                                "v4"
+                            },
+                            hint.get_nested_nh_offset(),
+                            hint.get_nested_tp_offset(),
+                            hint.get_nested_hdr_len(),
+                        ));
+                    }
+                }
+
+                out
             };
 
             let options = GeneveOptionIterable::new(&geneve.get_options())

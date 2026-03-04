@@ -85,6 +85,14 @@ geneve [{flags}] vni {vni} proto {etype name} ({etype hex}) [{options}]
   `class {class} type {type} len {len}`. `type` includes a trailing "(C)" if the
   option type has the critical bit set.
 
+If the Netdev GRO hint option is used the above `options` will contain
+additional information of the following form:
+
+```none
+proto {inner proto id} {nested IP version} nh {nested nh offset}
+    tp {nested tp offset} hlen {nested header len}
+```
+
 ## VXLAN
 
 ```none
