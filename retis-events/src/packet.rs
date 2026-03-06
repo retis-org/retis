@@ -17,7 +17,7 @@ use {
 use crate::*;
 
 /// Packet section. Contains the raw packet and related metadata.
-#[event_section(SectionId::Packet)]
+#[event_section]
 pub struct PacketEvent {
     /// Packet length.
     pub len: u32,
