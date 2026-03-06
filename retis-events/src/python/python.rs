@@ -38,7 +38,6 @@ use crate::{file::*, *};
 /// The Event class also implements the __repr__ function, but in a different
 /// way. Here the event is represented as a dictionary. This allows quick
 /// investigation of events in the interpreter.
-/// ```
 #[pyclass(name = "Event")]
 pub struct PyEvent(Py<Event>);
 
