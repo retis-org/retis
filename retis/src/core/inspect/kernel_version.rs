@@ -84,10 +84,10 @@ impl KernelVersionReq {
     /// - Supported operators are: =, >, <, >=, <= and !=.
     /// - Kernel versions are expressed in the "major.minor.patch-build" form,
     ///   only the major number is mandatory.
-    /// - One requirement must follow: "<op><version>" with optional spaces
+    /// - One requirement must follow: `"<op><version>"` with optional spaces
     ///   after the operation identifier.
     /// - Two requirements can be combined using a comma (,) as follows:
-    ///   "<req1>,<req2>" with optional spaces around the requirements.
+    ///   `"<req1>,<req2>"` with optional spaces around the requirements.
     ///
     /// Examples:
     /// ```
