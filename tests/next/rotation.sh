@@ -39,6 +39,29 @@ rotation_by_size() {
 	echo $out | grep -v "file id 0"
 	echo $out | grep "file id 1"
 	echo $out | grep "file id 2"
+
+	# Check using rotated events in the Python sub-command.
+	if $retis python -h &>/dev/null; then
+		cat >test.py <<EOF
+for e in reader.events():
+	print(e)
+EOF
+
+		out=$($retis python test.py)
+		echo $out | grep "file id 0"
+		echo $out | grep "file id 1"
+		echo $out | grep "file id 2"
+
+		out=$($retis python --input retis.data.1 test.py)
+		echo $out | grep -v "file id 0"
+		echo $out | grep "file id 1"
+		echo $out | grep -v "file id 2"
+
+		out=$($retis python --input retis.data.1.. test.py)
+		echo $out | grep -v "file id 0"
+		echo $out | grep "file id 1"
+		echo $out | grep "file id 2"
+	fi
 }
 
 run_tests rotation_by_size
