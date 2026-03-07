@@ -26,7 +26,7 @@
 //! eBpfProg contains multiple instances of eBpfInsn. eBpfProg could
 //! be created from BpfProg objects.
 //! For details related to the instructions, registers and calling conventions, see:
-//! https://www.kernel.org/doc/html/latest/bpf/instruction-set.html#ebpf-instruction-set-specification-v1-0
+//! <https://www.kernel.org/doc/html/latest/bpf/instruction-set.html#ebpf-instruction-set-specification-v1-0>
 
 #![allow(dead_code, non_camel_case_types)]
 use std::convert::TryFrom;

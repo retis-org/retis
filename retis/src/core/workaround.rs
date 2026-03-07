@@ -90,7 +90,7 @@ pub(crate) struct OpenSkelStorage<T> {
 }
 
 impl<'a, T> OpenSkelStorage<T> {
-    /// Creates a new OpenSkelStorage<T> where T is the output of a SkelBuilder
+    /// Creates a new `OpenSkelStorage<T>` where T is the output of a SkelBuilder
     /// implementation, aka. an open skeleton.
     ///
     /// When creating an open skeleton, libbpf_rs requires to provide storage
