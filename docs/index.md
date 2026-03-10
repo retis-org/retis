@@ -226,6 +226,18 @@ In addition to built-in post-processing commands, it is possible to use the
 python bindings to implement custom processing. See the
 [python bindings documentation](python.md).
 
+### Stats
+Some statistics about an event file (sorted or not) can be shown using
+the `stats` command:
+
+```none
+$ retis stats
+...
+```
+
+It includes the timestamp of the first and last event as well as how many times
+each probe was hit.
+
 ## Paging
 
 Some post-processing commands (eg. `print`, `sort`) can generate a long output.

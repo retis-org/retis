@@ -206,6 +206,7 @@ impl RetisCli {
         cli.add_subcommand(Box::new(ProfileCmd::new()?))?;
         cli.add_subcommand(Box::new(Complete::new()?))?;
         cli.add_subcommand(Box::new(PrintSchema::new()?))?;
+        cli.add_subcommand(Box::new(Stats::new()?))?;
 
         #[cfg(feature = "benchmark")]
         cli.add_subcommand(Box::new(Benchmark::new()?))?;
@@ -332,7 +333,7 @@ impl RetisCli {
             // Try setting up the pager for a selected subset of commands.
             // This needs to be done before the final round of cli parsing because logs can be emitted
             // and we need to redirect them to stdout if pager is active.
-            "print" | "sort" => {
+            "print" | "sort" | "stats" => {
                 try_enable_pager(&logger);
             }
             _ => (),
