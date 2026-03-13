@@ -96,6 +96,10 @@ impl CtEventFactory {
             RETIS_CT_PROTO_TCP,
             parse_enum("tcp_conntrack", &["TCP_CONNTRACK_"])?,
         );
+        me.proto_states.insert(
+            RETIS_CT_PROTO_SCTP,
+            parse_enum("sctp_conntrack", &["SCTP_CONNTRACK_"])?,
+        );
         Ok(me)
     }
 
@@ -197,19 +201,35 @@ impl CtEventFactory {
                     },
                 },
             )
+        } else if flags & RETIS_CT_PROTO_SCTP != 0 {
+            (
+                CtProto::Sctp {
+                    sctp: CtSctp {
+                        sport: u16::from_be(raw.orig.src.data),
+                        dport: u16::from_be(raw.orig.dst.data),
+                    },
+                },
+                CtProto::Sctp {
+                    sctp: CtSctp {
+                        sport: u16::from_be(raw.reply.src.data),
+                        dport: u16::from_be(raw.reply.dst.data),
+                    },
+                },
+            )
         } else {
             bail!("ct: invalid protocol tuple information");
         };
 
-        let proto_state = if flags & RETIS_CT_PROTO_TCP != 0 {
-            self.proto_states
-                .get(&RETIS_CT_PROTO_TCP)
-                .and_then(|m| m.get(&(raw.proto_state as u32)))
-                .cloned()
-                .or_else(|| Some(format!("{}", raw.proto_state)))
-        } else {
-            None
-        };
+        let proto_state = [RETIS_CT_PROTO_TCP, RETIS_CT_PROTO_SCTP]
+            .iter()
+            .find(|&f| flags & f != 0)
+            .map(|f| {
+                self.proto_states
+                    .get(f)
+                    .and_then(|m| m.get(&(raw.proto_state as u32)))
+                    .cloned()
+                    .unwrap_or_else(|| format!("{}", raw.proto_state))
+            });
 
         let labels = U128::from_u128(u128::from_ne_bytes(raw.labels));
 
