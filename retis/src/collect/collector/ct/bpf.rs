@@ -25,7 +25,7 @@ use crate::{
 pub(crate) struct CtEventFactory {
     mark_available: bool,
     labels_available: bool,
-    tcp_states: HashMap<i32, String>,
+    proto_states: HashMap<u32, HashMap<i32, String>>,
 }
 
 impl RawEventSectionFactory for CtEventFactory {
@@ -93,16 +93,14 @@ impl CtEventFactory {
             ..Default::default()
         };
 
-        me.parse_tcp_states()?;
+        me.parse_proto_states(RETIS_CT_PROTO_TCP, "tcp_conntrack", "TCP_CONNTRACK_")?;
         Ok(me)
     }
 
-    fn parse_tcp_states(&mut self) -> Result<()> {
-        if let Ok(types) = inspector()?
-            .kernel
-            .btf
-            .resolve_types_by_name("tcp_conntrack")
-        {
+    fn parse_proto_states(&mut self, flag: u32, btf_name: &str, prefix: &str) -> Result<()> {
+        let mut states = HashMap::new();
+
+        if let Ok(types) = inspector()?.kernel.btf.resolve_types_by_name(btf_name) {
             if let Some((btf, Type::Enum(r#enum))) =
                 types.iter().find(|(_, t)| matches!(t, Type::Enum(_)))
             {
@@ -110,16 +108,17 @@ impl CtEventFactory {
                     if (member.val() as i32) < 0 {
                         continue;
                     }
-                    self.tcp_states.insert(
+                    states.insert(
                         member.val() as i32,
                         btf.resolve_name(member)?
-                            .trim_start_matches("TCP_CONNTRACK_")
+                            .trim_start_matches(prefix)
                             .to_string(),
                     );
                 }
             }
         }
 
+        self.proto_states.insert(flag, states);
         Ok(())
     }
 
@@ -225,11 +224,12 @@ impl CtEventFactory {
             bail!("ct: invalid protocol tuple information");
         };
 
-        let tcp_state = if flags & RETIS_CT_PROTO_TCP != 0 {
-            match self.tcp_states.get(&(raw.tcp_state as i32)) {
-                Some(r) => Some(r.clone()),
-                None => Some(format!("{}", raw.tcp_state)),
-            }
+        let proto_state = if flags & RETIS_CT_PROTO_TCP != 0 {
+            self.proto_states
+                .get(&RETIS_CT_PROTO_TCP)
+                .and_then(|m| m.get(&(raw.proto_state as i32)))
+                .cloned()
+                .or_else(|| Some(format!("{}", raw.proto_state)))
         } else {
             None
         };
@@ -248,7 +248,7 @@ impl CtEventFactory {
                 ip: reply_ip,
                 proto: reply_proto,
             },
-            tcp_state,
+            proto_state,
             mark: if self.mark_available {
                 Some(raw.mark)
             } else {

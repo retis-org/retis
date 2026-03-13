@@ -137,8 +137,8 @@ pub struct CtConnEvent {
     pub orig: CtTuple,
     /// Reply tuple.
     pub reply: CtTuple,
-    /// TCP state.
-    pub tcp_state: Option<String>,
+    /// Protocol state.
+    pub proto_state: Option<String>,
     /// Mark.
     pub mark: Option<u32>,
     /// Labels.
@@ -184,7 +184,7 @@ impl CtEvent {
                 write!(
                     f,
                     "tcp ({}) orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
-                    conn.tcp_state.as_ref().unwrap_or(&"UNKNOWN".to_string()),
+                    conn.proto_state.as_ref().unwrap_or(&"UNKNOWN".to_string()),
                     conn.orig.ip.src,
                     tcp_orig.sport,
                     conn.orig.ip.dst,

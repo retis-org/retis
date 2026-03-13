@@ -80,7 +80,7 @@ pub struct ct_event {
     pub mark: u32_,
     pub labels: [u8_; 16usize],
     pub zone_id: u16_,
-    pub tcp_state: u8_,
+    pub proto_state: u8_,
 }
 impl Default for ct_event {
     fn default() -> Self {
