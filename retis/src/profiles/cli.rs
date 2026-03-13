@@ -14,7 +14,8 @@ use crate::cli::*;
 
 #[derive(Debug, Default, Subcommand)]
 enum ProfileSubCommand {
-    /// List available profiles.
+    /// List available profiles from built-in and extra profile directories (see
+    /// `retis --help`). Only files ending on .yaml or .yml are considered valid.
     #[default]
     List,
 }
@@ -51,11 +52,17 @@ impl SubCommandParserRunner for ProfileCmd {
 impl ProfileCmd {
     fn list_path(path: &Path) -> Result<()> {
         for entry in path.read_dir()? {
-            let entry = entry?;
-            match Profile::from_file(entry.path()) {
+            let entry = entry?.path();
+
+            // Skip non-YAML files.
+            if !entry.extension().is_some_and(|e| e == "yaml" || e == "yml") {
+                continue;
+            }
+
+            match Profile::from_file(entry.clone()) {
                 Ok(mut profiles) => {
                     if !profiles.is_empty() {
-                        println!("{}:", entry.path().to_str().unwrap_or("unknown"));
+                        println!("{}:", entry.to_str().unwrap_or("unknown"));
                     }
                     for profile in profiles.drain(..) {
                         println!(
@@ -66,7 +73,7 @@ impl ProfileCmd {
                     }
                 }
                 Err(err) => {
-                    warn!("Skipping invalid file {}: {err}", entry.path().display())
+                    warn!("Skipping invalid file {}: {err}", entry.display());
                 }
             }
         }

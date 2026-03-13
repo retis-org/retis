@@ -5,7 +5,7 @@ use crate::{event_section, Formatter};
 
 /// Device section.
 #[derive(Default)]
-#[event_section(SectionId::Dev)]
+#[event_section]
 pub struct DevEvent {
     /// Device name. From `dev->name`.
     pub name: String,
