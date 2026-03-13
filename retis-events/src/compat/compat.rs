@@ -34,6 +34,8 @@ const FIXUPS: &[&[CompatFixup]] = &[
             CompatValue::String("unknown"),
         ),
         Add("startup/cmdline", CompatValue::String("unknown")),
+        Move("ct/tcp_state", "ct/proto_state"),
+        Move("ct/parent/tcp_state", "ct/parent/proto_state"),
     ],
 ];
 

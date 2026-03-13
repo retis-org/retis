@@ -63,7 +63,7 @@ struct ct_event {
 	u32 mark;
 	u8 labels[16];
 	u16 zone_id;
-	u8 tcp_state;
+	u8 proto_state;
 } __binding;
 
 static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
@@ -181,7 +181,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 		bpf_core_read(&e->reply.dst.data, sizeof(e->reply.dst.data),
 			      &ct->REPLY.dst.u.tcp.port);
 
-		e->tcp_state = (u8)BPF_CORE_READ(ct, proto.tcp.state);
+		e->proto_state = (u8)BPF_CORE_READ(ct, proto.tcp.state);
 
 		break;
 	case IPPROTO_UDP:
