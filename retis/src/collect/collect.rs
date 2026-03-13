@@ -577,6 +577,7 @@ impl Collectors {
 
         let (mut iccount, mut eccount) = (0, 0);
         let mut probe_stack = ProbeStack::new(self.known_kernel_types.clone());
+        let stop_count = collect.stop_after.unwrap_or_default();
 
         use EventResult::*;
         while self.run.running() {
@@ -600,6 +601,11 @@ impl Collectors {
                         .iter_mut()
                         .try_for_each(|p| p.process_one(&event))?;
                     eccount += 1;
+
+                    if stop_count > 0 && eccount >= stop_count {
+                        self.run.terminate();
+                        info!("Reached stop count ({stop_count}), terminating...");
+                    }
                 }
                 Timeout => continue,
             }

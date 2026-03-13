@@ -5,7 +5,7 @@ use base64::{
 };
 use retis_pnet::{
     arp::*, ethernet::*, geneve::*, icmp::*, icmpv6::*, ip::*, ipsec::*, ipv4::*, ipv6::*,
-    macsec::*, tcp::*, udp::*, vlan::*, vxlan::*, *,
+    macsec::*, sctp::*, tcp::*, udp::*, vlan::*, vxlan::*, *,
 };
 
 #[cfg(feature = "python")]
@@ -318,6 +318,8 @@ impl RawPacket {
                     .map(|tcp| (tcp.get_source(), tcp.get_destination())),
                 IpNextHeaderProtocols::Udp => UdpPacket::new(ip.payload())
                     .map(|udp| (udp.get_source(), udp.get_destination())),
+                IpNextHeaderProtocols::Sctp => SctpPacket::new(ip.payload())
+                    .map(|sctp| (sctp.get_source(), sctp.get_destination())),
                 _ => None,
             };
         if let Some((sport, dport)) = ports {
@@ -413,6 +415,8 @@ impl RawPacket {
                     .map(|tcp| (tcp.get_source(), tcp.get_destination())),
                 IpNextHeaderProtocols::Udp => UdpPacket::new(ip.payload())
                     .map(|udp| (udp.get_source(), udp.get_destination())),
+                IpNextHeaderProtocols::Sctp => SctpPacket::new(ip.payload())
+                    .map(|sctp| (sctp.get_source(), sctp.get_destination())),
                 _ => None,
             };
         if let Some((sport, dport)) = ports {
@@ -578,6 +582,10 @@ impl RawPacket {
             },
             IpNextHeaderProtocols::Esp => match EspPacket::new(payload) {
                 Some(esp) => self.format_esp(f, format, &esp),
+                None => Err(PacketFmtError::Truncated),
+            },
+            IpNextHeaderProtocols::Sctp => match SctpPacket::new(payload) {
+                Some(sctp) => self.format_sctp(f, format, &sctp, payload_len),
                 None => Err(PacketFmtError::Truncated),
             },
             _ => Err(PacketFmtError::NotSupported(format!(
@@ -853,6 +861,108 @@ impl RawPacket {
         Ok(())
     }
 
+    fn format_sctp(
+        &self,
+        f: &mut Formatter,
+        _format: &DisplayFormat,
+        sctp: &SctpPacket,
+        payload_len: u32,
+    ) -> FmtResult<()> {
+        write!(f, " vtag {:#x}", sctp.get_verification_tag())?;
+
+        let chunks = SctpChunkIterable::new(sctp.payload());
+        let mut payload_len = payload_len.saturating_sub(12);
+
+        for chunk in chunks {
+            let chunk_type = chunk.get_chunk_type();
+            let chunk_len = chunk.get_length() as u32;
+            let payload = chunk.payload();
+            match chunk_type {
+                SctpChunkTypes::INIT => {
+                    if payload.len() < 16 {
+                        return Err(PacketFmtError::Truncated);
+                    }
+
+                    let init_tag = u32::from_be_bytes(payload[0..4].try_into().unwrap());
+                    let rwnd = u32::from_be_bytes(payload[4..8].try_into().unwrap());
+                    let os = u16::from_be_bytes(payload[8..10].try_into().unwrap());
+                    let mis = u16::from_be_bytes(payload[10..12].try_into().unwrap());
+                    let init_tsn = u32::from_be_bytes(payload[12..16].try_into().unwrap());
+                    write!(f, " [INIT init_tag {init_tag} rwnd {rwnd} OS {os} MIS {mis} init_TSN {init_tsn}]")?;
+                }
+                SctpChunkTypes::INIT_ACK => {
+                    if payload.len() < 16 {
+                        return Err(PacketFmtError::Truncated);
+                    }
+
+                    let init_tag = u32::from_be_bytes(payload[0..4].try_into().unwrap());
+                    let rwnd = u32::from_be_bytes(payload[4..8].try_into().unwrap());
+                    let os = u16::from_be_bytes(payload[8..10].try_into().unwrap());
+                    let mis = u16::from_be_bytes(payload[10..12].try_into().unwrap());
+                    let init_tsn = u32::from_be_bytes(payload[12..16].try_into().unwrap());
+                    write!(f, " [INIT_ACK init_tag {init_tag} rwnd {rwnd} OS {os} MIS {mis} init_TSN {init_tsn}]")?;
+                }
+                SctpChunkTypes::DATA => {
+                    if payload.len() < 12 {
+                        return Err(PacketFmtError::Truncated);
+                    }
+
+                    let flags = chunk.get_flags();
+                    let tsn = u32::from_be_bytes(payload[0..4].try_into().unwrap());
+                    let sid = u16::from_be_bytes(payload[4..6].try_into().unwrap());
+                    let sseq = u16::from_be_bytes(payload[6..8].try_into().unwrap());
+                    let ppid = u32::from_be_bytes(payload[8..12].try_into().unwrap());
+                    write!(f, " [DATA")?;
+                    if flags & 0x07 != 0 {
+                        write!(f, " (")?;
+                        if flags & 0x04 != 0 {
+                            write!(f, "U")?;
+                        }
+                        if flags & 0x02 != 0 {
+                            write!(f, "B")?;
+                        }
+                        if flags & 0x01 != 0 {
+                            write!(f, "E")?;
+                        }
+                        write!(f, ")")?;
+                    }
+                    write!(f, " TSN {tsn} SID {sid} SSEQ {sseq} PPID {ppid:#x}]")?;
+                }
+                SctpChunkTypes::SACK => {
+                    if payload.len() < 12 {
+                        return Err(PacketFmtError::Truncated);
+                    }
+
+                    let cum_ack = u32::from_be_bytes(payload[0..4].try_into().unwrap());
+                    let a_rwnd = u32::from_be_bytes(payload[4..8].try_into().unwrap());
+                    let n_gap = u16::from_be_bytes(payload[8..10].try_into().unwrap());
+                    let n_dup = u16::from_be_bytes(payload[10..12].try_into().unwrap());
+                    write!(f, " [SACK cum_ack {cum_ack} a_rwnd {a_rwnd} #gap_acks {n_gap} #dup_tsns {n_dup}]")?;
+                }
+                SctpChunkTypes::HEARTBEAT => write!(f, " [HEARTBEAT]")?,
+                SctpChunkTypes::HEARTBEAT_ACK => write!(f, " [HEARTBEAT_ACK]")?,
+                SctpChunkTypes::ABORT => write!(f, " [ABORT]")?,
+                SctpChunkTypes::SHUTDOWN => write!(f, " [SHUTDOWN]")?,
+                SctpChunkTypes::SHUTDOWN_ACK => write!(f, " [SHUTDOWN_ACK]")?,
+                SctpChunkTypes::ERROR => write!(f, " [ERROR]")?,
+                SctpChunkTypes::COOKIE_ECHO => write!(f, " [COOKIE_ECHO]")?,
+                SctpChunkTypes::COOKIE_ACK => write!(f, " [COOKIE_ACK]")?,
+                SctpChunkTypes::ECNE => write!(f, " [ECNE]")?,
+                SctpChunkTypes::CWR => write!(f, " [CWR]")?,
+                SctpChunkTypes::SHUTDOWN_COMPLETE => write!(f, " [SHUTDOWN_COMPLETE]")?,
+                _ => write!(f, " [UNKNOWN:{}]", chunk_type.0)?,
+            }
+
+            payload_len = payload_len.saturating_sub((chunk_len + 3) & !3);
+        }
+
+        if payload_len != 0 {
+            return Err(PacketFmtError::Truncated);
+        }
+
+        Ok(())
+    }
+
     fn format_vxlan(
         &self,
         f: &mut Formatter,
@@ -992,6 +1102,21 @@ mod tests {
         assert_eq!(
             &format!("{}", raw.display(&DisplayFormat::new().print_ll(true), &FormatterConf::new())),
             "9e:1d:3d:31:9e:3b > ae:b0:4a:6a:bf:af ethertype IPv6 (0x86dd) 1111::1.56164 > 1111::2.80 ttl 64 label 0x6f48a len 40 proto TCP (6) flags [S] seq 2987508160 win 64800 [mss 1440,sackOK,TS val 1409097346 ecr 0,nop,wscale 7]"
+        );
+    }
+
+    #[test]
+    fn print_sctp_init() {
+        let mut buf = Vec::new();
+        BASE64_STANDARD.decode_vec(
+            "Oh7dUvtE6h3Fhm4TCABFAgBEAABAAECE0jEKACoBCgAqAoVME8QAAAAAAAAAAAEAACTFizMuAAGgAAAK///40kCcAAwABgAFAACAAAAEwAAABA==",
+            &mut buf,
+        ).unwrap();
+        let raw = RawPacket(buf);
+
+        assert_eq!(
+            &format!("{}", raw.display(&DisplayFormat::new(), &FormatterConf::new())),
+            "10.0.42.1.34124 > 10.0.42.2.5060 tos 0x0 ECT(0) ttl 64 id 0 off 0 [DF] len 68 proto SCTP (132) vtag 0x0 [INIT init_tag 3314234158 rwnd 106496 OS 10 MIS 65535 init_TSN 4174528668]"
         );
     }
 }
