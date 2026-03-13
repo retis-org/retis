@@ -3,6 +3,21 @@
 The `packet` event section holds raw networking packets and is used to display
 their fields.
 
+Retis parses headers layer by layer, displaying information for each supported
+protocol as described in the sections below. Depending on how far parsing
+progresses, the output falls into one of three cases:
+
+- **All headers parsed**: the output is fully printed with no trailing
+  indicator.
+
+- **Unsupported protocol encountered**: parsing stops at the unsupported layer
+  and the output ends with `... ({protocol} not supported, use 'retis pcap')`.
+  There may be interesting data further down the payload that is not shown.
+
+- **Truncated or incomplete data**: headers are expected but not enough data was
+  available (e.g. due to snap length truncation); parsing stops early and the
+  output ends with `... (truncated or incomplete packet)`.
+
 ## Ethernet
 
 ```none
