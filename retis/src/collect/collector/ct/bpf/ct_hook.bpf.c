@@ -32,6 +32,7 @@ enum ct_flags {
 	RETIS_CT_PROTO_TCP	= 1 << 4,
 	RETIS_CT_PROTO_UDP	= 1 << 5,
 	RETIS_CT_PROTO_ICMP	= 1 << 6,
+	RETIS_CT_PROTO_SCTP	= 1 << 7,
 } __binding;
 
 struct ct_meta_event {
@@ -63,7 +64,7 @@ struct ct_event {
 	u32 mark;
 	u8 labels[16];
 	u16 zone_id;
-	u8 tcp_state;
+	u8 proto_state;
 } __binding;
 
 static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
@@ -80,6 +81,7 @@ static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
 	case IPPROTO_TCP:
 	case IPPROTO_UDP:
 	case IPPROTO_ICMP:
+	case IPPROTO_SCTP:
 		break;
 	default:
 		return false;
@@ -181,7 +183,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 		bpf_core_read(&e->reply.dst.data, sizeof(e->reply.dst.data),
 			      &ct->REPLY.dst.u.tcp.port);
 
-		e->tcp_state = (u8)BPF_CORE_READ(ct, proto.tcp.state);
+		e->proto_state = (u8)BPF_CORE_READ(ct, proto.tcp.state);
 
 		break;
 	case IPPROTO_UDP:
@@ -211,6 +213,14 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 		e->reply.dst.data =
 			((u8) BPF_CORE_READ(ct, REPLY.dst.u.icmp.type) << 8) |
 			(u8) BPF_CORE_READ(ct, REPLY.dst.u.icmp.code);
+		break;
+	case IPPROTO_SCTP:
+		e->flags |= RETIS_CT_PROTO_SCTP;
+		e->orig.src.data = BPF_CORE_READ(ct, ORIG.src.u.sctp.port);
+		e->orig.dst.data = BPF_CORE_READ(ct, ORIG.dst.u.sctp.port);
+		e->reply.src.data = BPF_CORE_READ(ct, REPLY.src.u.sctp.port);
+		e->reply.dst.data = BPF_CORE_READ(ct, REPLY.dst.u.sctp.port);
+		e->proto_state = (u8)BPF_CORE_READ(ct, proto.sctp.state);
 		break;
 	}
 

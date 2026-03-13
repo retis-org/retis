@@ -24,10 +24,10 @@ for the bitset representing the corresponding values.
 
 ## Connection information
 
-This starts by a protocol specific part. For TCP and UDP,
+This starts by a protocol specific part. For TCP, UDP and SCTP,
 
 ```none
-{protocol name} ({TCP state if any}) orig [{src ip}.{src port} > {dst ip}.{dst port}]
+{protocol name} ({proto state if any}) orig [{src ip}.{src port} > {dst ip}.{dst port}]
     reply [{src ip}.{src port} > {dst ip}.{dst port}] mark {mark} labels {labels}
 ```
 

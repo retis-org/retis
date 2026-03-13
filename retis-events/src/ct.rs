@@ -45,6 +45,16 @@ pub struct CtIcmp {
     pub id: u16,
 }
 
+/// SCTP
+#[event_type]
+#[derive(Default)]
+pub struct CtSctp {
+    /// Source port.
+    pub sport: u16,
+    /// Destination port.
+    pub dport: u16,
+}
+
 #[event_type]
 #[serde(rename_all = "snake_case")]
 pub enum CtProto {
@@ -59,6 +69,10 @@ pub enum CtProto {
     Icmp {
         #[serde(flatten)]
         icmp: CtIcmp,
+    },
+    Sctp {
+        #[serde(flatten)]
+        sctp: CtSctp,
     },
 }
 impl Default for CtProto {
@@ -137,8 +151,8 @@ pub struct CtConnEvent {
     pub orig: CtTuple,
     /// Reply tuple.
     pub reply: CtTuple,
-    /// TCP state.
-    pub tcp_state: Option<String>,
+    /// Protocol state.
+    pub proto_state: Option<String>,
     /// Mark.
     pub mark: Option<u32>,
     /// Labels.
@@ -184,7 +198,7 @@ impl CtEvent {
                 write!(
                     f,
                     "tcp ({}) orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
-                    conn.tcp_state.as_ref().unwrap_or(&"UNKNOWN".to_string()),
+                    conn.proto_state.as_ref().unwrap_or(&"UNKNOWN".to_string()),
                     conn.orig.ip.src,
                     tcp_orig.sport,
                     conn.orig.ip.dst,
@@ -222,6 +236,21 @@ impl CtEvent {
                            icmp_reply.code,
                            icmp_reply.id,
                            )?;
+            }
+            (CtProto::Sctp { sctp: sctp_orig }, CtProto::Sctp { sctp: sctp_reply }) => {
+                write!(
+                    f,
+                    "sctp ({}) orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
+                    conn.proto_state.as_ref().unwrap_or(&"UNKNOWN".to_string()),
+                    conn.orig.ip.src,
+                    sctp_orig.sport,
+                    conn.orig.ip.dst,
+                    sctp_orig.dport,
+                    conn.reply.ip.src,
+                    sctp_reply.sport,
+                    conn.reply.ip.dst,
+                    sctp_reply.dport,
+                )?;
             }
             _ => (),
         }
