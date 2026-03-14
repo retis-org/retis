@@ -51,6 +51,7 @@ Wildcards (*) can be used, eg. \"kprobe:tcp_*\" or \"tp:skb:*\".
 
 OPTIONS can be used to configure probes on a per-probe basis. Options are a list of keywords separated by '/' (e.g. TARGET/opt1/opt2). Valid OPTIONS:
 - stack: enables stack traces retrieval (same as \"--stack\", on a per-probe basis).
+- ftrace: enables ftrace-style tracking for kprobes on functions whose arguments do not include any trackable object directly. It's only valid for kprobes. A matching kretprobe is automatically added to close the tracking window. Within the window, probes on functions with known types will propagate the tracking context as if they had been hit by skb-aware functions.
 
 If this is not set, no profile is used (\"--profile\") and no collector is explicitly enabled (\"--collector\"); \"net:netif_receive_skb\" and \"net:net_dev_start_xmit\" are automatically used. Also note the \"--probe-stack\" logic takes precedence over this.
 

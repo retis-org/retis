@@ -10,16 +10,24 @@ struct skb_tracking_event {
 	u64 skb;
 } __binding;
 
-DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
+DEFINE_HOOK(F_OR, RETIS_ALL_FILTERS | RETIS_F_STACK_PASS,
 	struct skb_tracking_event *e;
 	struct tracking_info *ti;
 	struct sk_buff *skb;
+	u64 *refp;
+	u64 ref;
 
 	skb = retis_get_sk_buff(ctx);
-	if (!skb)
-		return 0;
+	if (skb) {
+		ti = skb_tracking_info_by_skb(skb);
+	} else {
+		refp = stack_get_skb_ref(ctx->stack_base);
+		if (!refp || !(*refp & FTRACE_WINDOW))
+			return 0;
+		ref = *refp & ~(FTRACE_SENTINEL | FTRACE_WINDOW);
+		ti = skb_tracking_info(&ref);
+	}
 
-	ti = skb_tracking_info_by_skb(skb);
 	if (!ti)
 		return 0;
 
@@ -29,7 +37,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 
 	e->orig_head = ti->orig_head;
 	e->timestamp = ti->timestamp;
-	e->skb = (u64)skb;
+	e->skb = (u64)skb;   /* 0 when skb is NULL (ftrace path) */
 
 	return 0;
 )
