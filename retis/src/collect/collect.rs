@@ -34,7 +34,10 @@ use crate::{
         inspect::check::collection_prerequisites,
         kernel::Symbol,
         probe::{
-            kernel::{probe_stack::ProbeStack, utils::probe_from_cli},
+            kernel::{
+                probe_stack::ProbeStack,
+                utils::{parse_cli_probe, probe_from_cli},
+            },
             *,
         },
         tracking::{
@@ -397,8 +400,21 @@ impl Collectors {
                 .try_for_each(|p| self.probes.builder_mut()?.register_probe(p))?;
         }
 
+        // Cross probe check for option eligible to bypass filtering
+        let mut skip_filter = false;
+        for p in &collect.probes {
+            let (_, _, options) = parse_cli_probe(p)?;
+            if options.contains(&ProbeOption::Ftrace) {
+                skip_filter = true;
+                break;
+            }
+        }
+
         // Setup user defined probes.
         let filter = |symbol: &Symbol| {
+            if skip_filter {
+                return true;
+            }
             // Skip probes not being compatible with the loaded collectors.
             let ok = self.known_kernel_types.iter().any(|t| {
                 symbol

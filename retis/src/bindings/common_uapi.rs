@@ -29,4 +29,5 @@ pub struct kernel_event {
 pub struct retis_probe_config {
     pub offsets: retis_probe_offsets,
     pub stack_trace: u8_,
+    pub ftrace: u8_,
 }
