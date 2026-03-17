@@ -126,7 +126,13 @@ $ make -j$(nproc) release
 $ apt update
 $ apt -y install git cargo clang jq libelf-dev libpcap-dev python3-dev \
         llvm make pkg-config
-$ make -j$(nproc) release
+```
+
+On Debian based systems `asm/errno.h` does not live in a path known to the
+compiler, in turn an additional header location must be configured. For example:
+
+```none
+$ CPATH=/usr/include/x86_64-linux-gnu make -j$(nproc) release
 ```
 
 #### Cross-compilation
