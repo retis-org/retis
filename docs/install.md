@@ -3,15 +3,6 @@
 Retis can be installed from a container image, using pre-built packages on
 supported Linux distributions or from sources.
 
-## Fedora
-
-Starting with Fedora 43, Retis is available as an official package.
-
-```none
-$ dnf -y install retis
-$ retis --help
-```
-
 ## Container image
 
 We provide a script to run Retis in a container for `x86_64` and `aarch64` targets,
@@ -50,24 +41,22 @@ $ RETIS_IMAGE=my-registry.example.com/retis ./retis_in_container.sh --help
 `OVS_RUNDIR` environment variable can also be specified if the default one
 (/var/run/openvswitch) does not point to OVS's runtime directory.
 
-## COPR
+## Pre-built packages on Linux distributions
 
-RPM packages for Fedora (currently supported releases including Rawhide), RHEL (>=
-8) and EPEL (>= 8) are available.
+### Fedora (>= 43)
+
+```none
+$ dnf -y install retis
+```
+
+### Fedora (<= 42), RHEL (>= 8.6), CentOS Stream (>= 8.6), EPEL (>= 8.6)
 
 ```none
 $ dnf -y copr enable @retis/retis
 $ dnf -y install retis
-$ retis --help
 ```
 
-Or on older distributions,
-
-```none
-$ yum -y copr enable @retis/retis
-$ yum -y install retis
-$ retis --help
-```
+Use `yum` instead of `dnf` on older distributions (e.g. CentOS Stream 8).
 
 ## From sources
 
