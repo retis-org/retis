@@ -87,27 +87,21 @@ Retis depends on the following (in addition to Git and Cargo):
 If the `python` feature is used (which is by default), the Python3 shared
 libraries and headers must be available.
 
-On Fedora, one can run:
+To download Retis' sources:
 
 ```none
-$ dnf -y install git cargo clang elfutils-libelf-devel python3-devel \
-        jq libpcap-devel llvm make pkgconf-pkg-config
+$ git clone https://github.com/retis-org/retis    # Consider using --depth 1.
+$ cd retis
 ```
 
-On Ubuntu:
+To build Retis:
 
 ```none
-$ apt update
-$ apt -y install git cargo clang jq libelf-dev libpcap-dev python3-dev \
-        llvm make pkg-config
-```
+$ make -j$(nproc) release       # Release build.
+$ ./target/release/retis -V
 
-Then, to download and build Retis:
-
-```none
-$ git clone --depth 1 https://github.com/retis-org/retis; cd retis
-$ make release
-$ ./target/release/retis --help
+$ make -j$(nproc)               # Debug build.
+$ ./target/debug/retis -V
 ```
 
 Finally, profiles should be installed in either `/usr/share/retis/profiles` or
@@ -116,6 +110,23 @@ Finally, profiles should be installed in either `/usr/share/retis/profiles` or
 ```none
 $ mkdir -p /usr/share/retis/profiles
 $ cp retis/profiles/* /usr/share/retis/profiles
+```
+
+#### Fedora
+
+```none
+$ dnf -y install git cargo clang elfutils-libelf-devel python3-devel \
+        jq libpcap-devel llvm make pkgconf-pkg-config
+$ make -j$(nproc) release
+```
+
+#### Debian based
+
+```none
+$ apt update
+$ apt -y install git cargo clang jq libelf-dev libpcap-dev python3-dev \
+        llvm make pkg-config
+$ make -j$(nproc) release
 ```
 
 #### Cross-compilation
