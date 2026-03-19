@@ -36,7 +36,9 @@ nor disabled.
   collection of events. It can be used to reconstruct packet flows. Note that
   this id can be shared between skbs, eg. for clones.
 - `skb address`: the address of the `skb`, which can be used to distinguished
-  between `skb` sharing the same `tracking id`.
+  between `skb` sharing the same `tracking id`. May be `0` when the event is
+  emitted from a probe using the `ftrace` option on a function that has no
+  trackable object in its arguments.
 - `event index`: when an event is part of a series of events (this is only
   available at post-processing time when using the `sort` sub-command), this
   indicates the index of the event in the series.
