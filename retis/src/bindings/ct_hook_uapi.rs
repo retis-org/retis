@@ -19,6 +19,7 @@ pub const RETIS_CT_IPV6: ct_flags = 8;
 pub const RETIS_CT_PROTO_TCP: ct_flags = 16;
 pub const RETIS_CT_PROTO_UDP: ct_flags = 32;
 pub const RETIS_CT_PROTO_ICMP: ct_flags = 64;
+pub const RETIS_CT_PROTO_SCTP: ct_flags = 128;
 pub type ct_flags = ::std::os::raw::c_uint;
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
@@ -80,7 +81,7 @@ pub struct ct_event {
     pub mark: u32_,
     pub labels: [u8_; 16usize],
     pub zone_id: u16_,
-    pub tcp_state: u8_,
+    pub proto_state: u8_,
 }
 impl Default for ct_event {
     fn default() -> Self {
