@@ -202,17 +202,21 @@ impl CtEventFactory {
                 },
             )
         } else if flags & RETIS_CT_PROTO_SCTP != 0 {
+            let vtag_orig = u32::from_be(unsafe { raw.proto.sctp }.vtag[0]);
+            let vtag_reply = u32::from_be(unsafe { raw.proto.sctp }.vtag[1]);
             (
                 CtProto::Sctp {
                     sctp: CtSctp {
                         sport: u16::from_be(raw.orig.src.data),
                         dport: u16::from_be(raw.orig.dst.data),
+                        vtag: vtag_orig,
                     },
                 },
                 CtProto::Sctp {
                     sctp: CtSctp {
                         sport: u16::from_be(raw.reply.src.data),
                         dport: u16::from_be(raw.reply.dst.data),
+                        vtag: vtag_reply,
                     },
                 },
             )

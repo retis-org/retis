@@ -72,6 +72,25 @@ impl Default for nf_conn_tuple {
     }
 }
 #[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct ct_proto_sctp {
+    pub vtag: [u32_; 2usize],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ct_proto_data {
+    pub sctp: ct_proto_sctp,
+}
+impl Default for ct_proto_data {
+    fn default() -> Self {
+        let mut s = ::std::mem::MaybeUninit::<Self>::uninit();
+        unsafe {
+            ::std::ptr::write_bytes(s.as_mut_ptr(), 0, 1);
+            s.assume_init()
+        }
+    }
+}
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub struct ct_event {
     pub orig: nf_conn_tuple,
@@ -82,6 +101,7 @@ pub struct ct_event {
     pub labels: [u8_; 16usize],
     pub zone_id: u16_,
     pub proto_state: u8_,
+    pub proto: ct_proto_data,
 }
 impl Default for ct_event {
     fn default() -> Self {

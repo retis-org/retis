@@ -53,6 +53,8 @@ pub struct CtSctp {
     pub sport: u16,
     /// Destination port.
     pub dport: u16,
+    /// Verification tag.
+    pub vtag: u32,
 }
 
 #[event_type]
@@ -240,16 +242,18 @@ impl CtEvent {
             (CtProto::Sctp { sctp: sctp_orig }, CtProto::Sctp { sctp: sctp_reply }) => {
                 write!(
                     f,
-                    "sctp ({}) orig [{}.{} > {}.{}] reply [{}.{} > {}.{}] ",
+                    "sctp ({}) orig [{}.{} > {}.{} vtag {:#x}] reply [{}.{} > {}.{} vtag {:#x}] ",
                     conn.proto_state.as_ref().unwrap_or(&"UNKNOWN".to_string()),
                     conn.orig.ip.src,
                     sctp_orig.sport,
                     conn.orig.ip.dst,
                     sctp_orig.dport,
+                    sctp_orig.vtag,
                     conn.reply.ip.src,
                     sctp_reply.sport,
                     conn.reply.ip.dst,
                     sctp_reply.dport,
+                    sctp_reply.vtag,
                 )?;
             }
             _ => (),
