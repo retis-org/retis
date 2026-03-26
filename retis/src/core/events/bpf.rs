@@ -200,6 +200,11 @@ impl BpfEventsFactory {
     /// This starts the event polling mechanism. A dedicated thread is started
     /// for events to be retrieved and processed.
     pub(crate) fn start(&mut self, section_factories: SectionFactories) -> Result<()> {
+        self.start_log_handler()?;
+        self.start_events_handler(section_factories)
+    }
+
+    fn start_events_handler(&mut self, section_factories: SectionFactories) -> Result<()> {
         if section_factories.is_empty() {
             bail!("No section factory, can't parse events, aborting");
         }
@@ -236,6 +241,11 @@ impl BpfEventsFactory {
             0
         };
 
+        self.handle = Some(self.ringbuf_handler(&self.map, process_event, "events")?);
+        Ok(())
+    }
+
+    fn start_log_handler(&mut self) -> Result<()> {
         let run_state = self.run_state.clone();
         let time_format = self.time_format;
         let monotonic_offset = self.monotonic_offset;
@@ -286,11 +296,7 @@ impl BpfEventsFactory {
             0
         };
 
-        // Finally make our ring buffers and associate maps to their
-        // respective events processing closure.
-        self.handle = Some(self.ringbuf_handler(&self.map, process_event, "events")?);
         self.log_handle = Some(self.ringbuf_handler(&self.log_map, process_log, "logs")?);
-
         Ok(())
     }
 
