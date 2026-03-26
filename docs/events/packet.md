@@ -174,11 +174,15 @@ vtag {vtag} [{chunk}] [{chunk}] ...
 [INIT init_tag {init_tag} rwnd {rwnd} OS {os} MIS {mis} init_TSN {tsn}]
 ```
 
+- `init_tag` is printed as hex.
+
 **INIT ACK**
 
 ```none
 [INIT ACK init_tag {init_tag} rwnd {rwnd} OS {os} MIS {mis} init_TSN {tsn}]
 ```
+
+- `init_tag` is printed as hex.
 
 **SACK**
 
