@@ -9,7 +9,7 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     os::fd::{AsFd, AsRawFd, RawFd},
-    sync::mpsc,
+    sync::{mpsc, Arc, Mutex},
     thread,
     time::Duration,
 };
@@ -94,11 +94,11 @@ pub(crate) enum EventResult {
 pub(crate) struct BpfEventsFactory {
     map: libbpf_rs::MapHandle,
     log_map: libbpf_rs::MapHandle,
+    /// Number of threads parsing raw events from BPF.
+    event_threads: usize,
     /// Receiver channel to retrieve events from the processing loop.
     rxc: Option<mpsc::Receiver<Event>>,
-    /// Polling thread handle.
-    handle: Option<thread::JoinHandle<()>>,
-    log_handle: Option<thread::JoinHandle<()>>,
+    handles: Vec<thread::JoinHandle<()>>,
     run_state: Running,
     /// Time formatter selector.
     time_format: TimeFormat,
@@ -140,9 +140,9 @@ impl BpfEventsFactory {
         Ok(BpfEventsFactory {
             map,
             log_map,
+            event_threads: 1,
             rxc: None,
-            handle: None,
-            log_handle: None,
+            handles: Vec::new(),
             run_state: Running::ignore_signals(),
             time_format: Default::default(),
             monotonic_offset: None,
@@ -209,39 +209,94 @@ impl BpfEventsFactory {
             bail!("No section factory, can't parse events, aborting");
         }
 
-        // Create the sending and receiving channels.
+        // Create the channel for conveying raw events. Reserve just enough
+        // space for queuing a single raw event while another one is being
+        // processed (the sending side is using a synchronous call).
+        let (raw_txc, raw_rxc) = mpsc::sync_channel(self.event_threads * 2);
+        let raw_rxc = Arc::new(Mutex::new(raw_rxc));
+
+        // Create the channel for conveying (parsed) events.
         let (txc, rxc) = mpsc::sync_channel(EVENTS_MAX as usize);
         self.rxc = Some(rxc);
 
-        let run_state = self.run_state.clone();
-        // Closure to handle the raw events coming from the BPF part.
+        // Closure to dequeue and dispatch the raw events coming from the BPF
+        // part.
+        let state = self.run_state.clone();
         let process_event = move |data: &[u8]| -> i32 {
             // If a termination signal got received, return (EINTR)
             // from the callback in order to trigger the event thread
             // termination. This is useful in the case we're
             // processing a huge number of buffers and rb.poll() never
             // times out.
-            if !run_state.running() {
+            if !state.running() {
                 return -4;
             }
-            // Parse the raw event.
-            let event = match parse_raw_event(data, &section_factories) {
-                Ok(event) => event,
-                Err(e) => {
-                    error!("Could not parse raw event: {e}");
-                    return 0;
-                }
-            };
 
-            // Send the event into the events channel for future retrieval.
-            if let Err(e) = txc.send(event) {
-                error!("Could not send event: {e}");
+            // Get the full size of the event to avoid sending padding bytes in
+            // the channel.
+            let size =
+                u16::from_ne_bytes(data[..2].try_into().unwrap()) as usize + mem::size_of::<u16>();
+
+            // Send the event into the events channel for future retrieval. We
+            // use a syncrhonous call here on purpose to put pressure on the
+            // eBPF side and use the eBPF map as a buffer for bursts. This is
+            // crutial to drop events in the eBPF side to:
+            // - Reduce processing for discarded events.
+            // - Reduce eBPF runtime for discarded events, leading to better
+            //   performances for the impacted flows.
+            if let Err(e) = raw_txc.send(data[..size].to_vec()) {
+                error!("Could not send eBPF event to parsers: {e}");
             }
 
             0
         };
+        self.handles
+            .push(self.ringbuf_handler(&self.map, process_event, "events")?);
 
-        self.handle = Some(self.ringbuf_handler(&self.map, process_event, "events")?);
+        // Let the section facories be sharable between threads.
+        let factories = Arc::new(section_factories);
+
+        // Threads to handle and parse raw events.
+        for i in 0..self.event_threads {
+            let state = self.run_state.clone();
+            let raw_rxc = Arc::clone(&raw_rxc);
+            let factories = Arc::clone(&factories);
+            let txc = txc.clone();
+
+            let thread = thread::Builder::new().name(format!("retis-event-{i}"));
+            self.handles.push(thread.spawn(move || {
+                while state.running() {
+                    let raw = match raw_rxc
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS))
+                    {
+                        Ok(raw) => raw,
+                        _ => continue,
+                    };
+
+                    // Parse the raw event.
+                    let event = match parse_raw_event(&raw, &factories) {
+                        Ok(event) => event,
+                        Err(e) => {
+                            error!("Could not parse raw event: {e}");
+                            continue;
+                        }
+                    };
+
+                    // Send the event for factory consumer retrieval. For the
+                    // same reason as for the raw events channel we should use a
+                    // synchronous call here to avoid taking pressure at this
+                    // stage and only handle as much events as the consumer can
+                    // handle.
+                    //
+                    // The only possible error is if the channel gets
+                    // disconnected (on runner stop); ignore.
+                    let _ = txc.send(event);
+                }
+            })?);
+        }
+
         Ok(())
     }
 
@@ -296,22 +351,18 @@ impl BpfEventsFactory {
             0
         };
 
-        self.log_handle = Some(self.ringbuf_handler(&self.log_map, process_log, "logs")?);
+        self.handles
+            .push(self.ringbuf_handler(&self.log_map, process_log, "logs")?);
         Ok(())
     }
 
     /// Stops the event polling mechanism. The dedicated thread is stopped
     /// joining the execution
     pub(crate) fn stop(&mut self) -> Result<()> {
-        self.handle.take().map_or(Ok(()), |th| {
-            self.run_state.terminate();
-            th.join()
-                .map_err(|_| anyhow!("while joining bpf event thread"))
-        })?;
-
-        self.log_handle.take().map_or(Ok(()), |th| {
-            th.join()
-                .map_err(|_| anyhow!("while joining bpf log event thread"))
+        self.run_state.terminate();
+        self.handles.drain(..).try_for_each(|t| {
+            t.join()
+                .map_err(|_| anyhow!("Failed joining BPF events factory thread"))
         })
     }
 
