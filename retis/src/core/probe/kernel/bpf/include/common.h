@@ -26,6 +26,7 @@ struct kernel_event {
 struct retis_probe_config {
 	struct retis_probe_offsets offsets;
 	u8 stack_trace;
+	u8 ftrace;
 } __binding;
 
 /* Probe configuration; the key is the target symbol address */
@@ -312,6 +313,9 @@ static __always_inline int chain(struct retis_context *ctx)
 	struct common_event *e;
 	struct kernel_event *k;
 	struct sk_buff *skb;
+	bool in_window;
+	u64 *cur_ref;
+	u64 *ref;
 	int ret;
 
 	/* Check if the collection is enabled, otherwise bail out. Once we have
@@ -346,9 +350,15 @@ static __always_inline int chain(struct retis_context *ctx)
 	 * logic runs even if later ops fail: we don't want to miss information
 	 * because of non-fatal errors!
 	 */
-	if (RETIS_TRACKABLE(ctx))
-		track_skb_start(ctx);
-	else if (skb)
+	if (RETIS_TRACKABLE(ctx)) {
+		cur_ref = stack_get_skb_ref(ctx->stack_base);
+		in_window = cur_ref &&
+			(*cur_ref & (FTRACE_SENTINEL | FTRACE_WINDOW));
+		ref = track_skb_start(ctx);
+		if (ref && (in_window || (cfg->ftrace &&
+			    ctx->probe_type == KERNEL_PROBE_KPROBE)))
+			*ref |= FTRACE_WINDOW;
+	} else if (skb) {
 		/* Terminate any potentially existing entry not
 		 * associated with a tracked skb. Blind termination
 		 * approach is supposed to be more performing in the
@@ -357,6 +367,10 @@ static __always_inline int chain(struct retis_context *ctx)
 		 * collection (e.g. skb_tracking stale entry hanging).
 		 */
 		track_stack_end(ctx->stack_base);
+	} else if (cfg->ftrace && ctx->probe_type == KERNEL_PROBE_KPROBE) {
+		track_stack_update(ctx->stack_base, FTRACE_SENTINEL,
+				   BPF_ANY);
+	}
 
 	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
 	 * to allocate and fill an event to drop it later on.
@@ -436,6 +450,16 @@ exit:
 	 */
 	if (RETIS_TRACKABLE(ctx))
 		track_skb_end(ctx);
+
+	/* Close the ftrace window by stripping the ftrace tag bits so that
+	 * potentially subsequent consumers that rely on stack tracking are
+	 * not affected.
+	 */
+	if (cfg->ftrace && ctx->probe_type == KERNEL_PROBE_KRETPROBE) {
+		ref = stack_get_skb_ref(ctx->stack_base);
+		if (ref && (*ref & (FTRACE_SENTINEL | FTRACE_WINDOW)))
+			*ref &= ~(FTRACE_SENTINEL | FTRACE_WINDOW);
+	}
 
 	return 0;
 }
