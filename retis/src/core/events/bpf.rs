@@ -9,7 +9,7 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     os::fd::{AsFd, AsRawFd, RawFd},
-    sync::{mpsc, Arc, Mutex},
+    sync::Arc,
     thread,
     time::Duration,
 };
@@ -97,7 +97,7 @@ pub(crate) struct BpfEventsFactory {
     /// Number of threads parsing raw events from BPF.
     event_threads: usize,
     /// Receiver channel to retrieve events from the processing loop.
-    rxc: Option<mpsc::Receiver<Event>>,
+    rxc: Option<crossbeam_channel::Receiver<Event>>,
     handles: Vec<thread::JoinHandle<()>>,
     run_state: Running,
     /// Time formatter selector.
@@ -212,11 +212,10 @@ impl BpfEventsFactory {
         // Create the channel for conveying raw events. Reserve just enough
         // space for queuing a single raw event while another one is being
         // processed (the sending side is using a synchronous call).
-        let (raw_txc, raw_rxc) = mpsc::sync_channel(self.event_threads * 2);
-        let raw_rxc = Arc::new(Mutex::new(raw_rxc));
+        let (raw_txc, raw_rxc) = crossbeam_channel::bounded(self.event_threads * 2);
 
         // Create the channel for conveying (parsed) events.
-        let (txc, rxc) = mpsc::sync_channel(EVENTS_MAX as usize);
+        let (txc, rxc) = crossbeam_channel::bounded(EVENTS_MAX as usize);
         self.rxc = Some(rxc);
 
         // Closure to dequeue and dispatch the raw events coming from the BPF
@@ -259,7 +258,7 @@ impl BpfEventsFactory {
         // Threads to handle and parse raw events.
         for i in 0..self.event_threads {
             let state = self.run_state.clone();
-            let raw_rxc = Arc::clone(&raw_rxc);
+            let raw_rxc = raw_rxc.clone();
             let factories = Arc::clone(&factories);
             let txc = txc.clone();
 
@@ -267,8 +266,6 @@ impl BpfEventsFactory {
             self.handles.push(thread.spawn(move || {
                 while state.running() {
                     let raw = match raw_rxc
-                        .lock()
-                        .unwrap()
                         .recv_timeout(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS))
                     {
                         Ok(raw) => raw,
@@ -376,7 +373,7 @@ impl BpfEventsFactory {
         Ok(match timeout {
             Some(timeout) => match rxc.recv_timeout(timeout) {
                 Ok(event) => EventResult::Event(Box::new(event)),
-                Err(mpsc::RecvTimeoutError::Timeout) => EventResult::Timeout,
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => EventResult::Timeout,
                 Err(e) => return Err(anyhow!(e)),
             },
             None => EventResult::Event(Box::new(rxc.recv()?)),
