@@ -32,6 +32,7 @@ byteorder = "1.5"
 caps = "0.5"
 clap = { version = "4.0", features = ["derive", "string", "wrap_help"] }
 clap_complete = "4.4"
+crossbeam-channel = "0.5"
 elf = "0.8"
 events = {version = "1.5", path = "../retis-events", package="retis-events" }
 flate2 = "1.0"
