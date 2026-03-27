@@ -27,9 +27,12 @@ for the bitset representing the corresponding values.
 This starts by a protocol specific part. For TCP, UDP and SCTP,
 
 ```none
-{protocol name} ({proto state if any}) orig [{src ip}.{src port} > {dst ip}.{dst port}]
-    reply [{src ip}.{src port} > {dst ip}.{dst port}] mark {mark} labels {labels}
+{protocol name} ({proto state if any}) orig [{src ip}.{src port} > {dst ip}.{dst port} {proto specific}]
+    reply [{src ip}.{src port} > {dst ip}.{dst port} {proto specific}] mark {mark} labels {labels}
 ```
+
+where `{proto specific}` is optional protocol-specific information. For SCTP,
+the verification tags are reported as `vtag {vtag}` in hex format.
 
 For ICMP,
 

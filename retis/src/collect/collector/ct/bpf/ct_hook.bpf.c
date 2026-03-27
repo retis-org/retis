@@ -55,6 +55,16 @@ struct nf_conn_tuple {
 	struct nf_conn_addr_proto dst;
 } __binding;
 
+/* SCTP-specific info. */
+struct ct_proto_sctp {
+	u32 vtag[IP_CT_DIR_MAX];
+} __binding;
+
+/* Per-protocol extra info. */
+union ct_proto_data {
+	struct ct_proto_sctp sctp;
+} __binding;
+
 /* Conntrack event information */
 struct ct_event {
 	struct nf_conn_tuple orig;
@@ -65,6 +75,7 @@ struct ct_event {
 	u8 labels[16];
 	u16 zone_id;
 	u8 proto_state;
+	union ct_proto_data proto;
 } __binding;
 
 static __always_inline bool ct_protocol_is_supported(u16 l3num, u8 protonum)
@@ -221,6 +232,10 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 		e->reply.src.data = BPF_CORE_READ(ct, REPLY.src.u.sctp.port);
 		e->reply.dst.data = BPF_CORE_READ(ct, REPLY.dst.u.sctp.port);
 		e->proto_state = (u8)BPF_CORE_READ(ct, proto.sctp.state);
+		e->proto.sctp.vtag[IP_CT_DIR_ORIGINAL] =
+			BPF_CORE_READ(ct, proto.sctp.vtag[IP_CT_DIR_ORIGINAL]);
+		e->proto.sctp.vtag[IP_CT_DIR_REPLY] =
+			BPF_CORE_READ(ct, proto.sctp.vtag[IP_CT_DIR_REPLY]);
 		break;
 	}
 

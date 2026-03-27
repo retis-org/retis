@@ -888,7 +888,7 @@ impl RawPacket {
                     let os = u16::from_be_bytes(payload[8..10].try_into().unwrap());
                     let mis = u16::from_be_bytes(payload[10..12].try_into().unwrap());
                     let init_tsn = u32::from_be_bytes(payload[12..16].try_into().unwrap());
-                    write!(f, " [INIT init_tag {init_tag} rwnd {rwnd} OS {os} MIS {mis} init_TSN {init_tsn}]")?;
+                    write!(f, " [INIT init_tag {init_tag:#x} rwnd {rwnd} OS {os} MIS {mis} init_TSN {init_tsn}]")?;
                 }
                 SctpChunkTypes::INIT_ACK => {
                     if payload.len() < 16 {
@@ -900,7 +900,7 @@ impl RawPacket {
                     let os = u16::from_be_bytes(payload[8..10].try_into().unwrap());
                     let mis = u16::from_be_bytes(payload[10..12].try_into().unwrap());
                     let init_tsn = u32::from_be_bytes(payload[12..16].try_into().unwrap());
-                    write!(f, " [INIT_ACK init_tag {init_tag} rwnd {rwnd} OS {os} MIS {mis} init_TSN {init_tsn}]")?;
+                    write!(f, " [INIT_ACK init_tag {init_tag:#x} rwnd {rwnd} OS {os} MIS {mis} init_TSN {init_tsn}]")?;
                 }
                 SctpChunkTypes::DATA => {
                     if payload.len() < 12 {
@@ -1116,7 +1116,7 @@ mod tests {
 
         assert_eq!(
             &format!("{}", raw.display(&DisplayFormat::new(), &FormatterConf::new())),
-            "10.0.42.1.34124 > 10.0.42.2.5060 tos 0x0 ECT(0) ttl 64 id 0 off 0 [DF] len 68 proto SCTP (132) vtag 0x0 [INIT init_tag 3314234158 rwnd 106496 OS 10 MIS 65535 init_TSN 4174528668]"
+            "10.0.42.1.34124 > 10.0.42.2.5060 tos 0x0 ECT(0) ttl 64 id 0 off 0 [DF] len 68 proto SCTP (132) vtag 0x0 [INIT init_tag 0xc58b332e rwnd 106496 OS 10 MIS 65535 init_TSN 4174528668]"
         );
     }
 }
