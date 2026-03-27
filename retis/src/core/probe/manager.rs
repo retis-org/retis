@@ -634,7 +634,7 @@ impl ProbeRuntimeManager {
                 /* kernel symbols */
                 if counters_key.pid == 0 {
                     let ksym = Symbol::from_addr(counters_key.sym_addr)?;
-                    warn!("lost {} event(s) from {ksym}", counters.dropped_events);
+                    warn!("lost {} eBPF event(s) from {ksym}", counters.dropped_events);
                 } else {
                     let usdt_info;
 
@@ -649,7 +649,10 @@ impl ProbeRuntimeManager {
                         proc_cache.insert(counters_key.pid, usdt_info.to_string());
                     }
 
-                    warn!("lost {} event(s) from {usdt_info}", counters.dropped_events);
+                    warn!(
+                        "lost {} eBPF event(s) from {usdt_info}",
+                        counters.dropped_events
+                    );
                 }
 
                 total_lost = total_lost.saturating_add(counters.dropped_events);
@@ -657,7 +660,7 @@ impl ProbeRuntimeManager {
         }
 
         if total_lost > 0 {
-            warn!("total events lost: {total_lost}");
+            warn!("lost {total_lost} eBPF events in total");
         }
 
         Ok(())
