@@ -3,7 +3,10 @@
 //! Print is a simple post-processing command that just parses events and prints them back to
 //! stdout
 
-use std::io::{self, stdout, ErrorKind};
+use std::{
+    io::{self, stdout, ErrorKind, Write},
+    time::Duration,
+};
 
 use anyhow::Result;
 use clap::Parser;
@@ -11,7 +14,7 @@ use clap::Parser;
 use crate::{
     cli::*,
     events::{file::*, *},
-    helpers::{file_rotate::InputDataFile, signals::Running},
+    helpers::{file_rotate::InputDataFile, signals::*},
     process::display::*,
 };
 
@@ -49,19 +52,22 @@ impl SubCommandParserRunner for Print {
 
         match factory.file_type() {
             FileType::Event => {
-                // Formatter & printer for events.
-                let mut event_output =
-                    PrintEvent::new(Box::new(stdout()), PrintEventFormat::Text(format));
+                let formatter = EventFormatter::new(run.clone(), 1, EventFormat::Text(format));
+                let mut w = stdout();
 
                 while run.running() {
                     match factory.next_event()? {
                         Some(event) => {
-                            if let Err(e) = event_output.process_one(&event) {
-                                match e.downcast_ref::<io::Error>() {
-                                    Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
-                                        break
-                                    }
-                                    _ => return Err(e),
+                            formatter.process_event(&event)?;
+                            let event = match formatter.next(Duration::from_millis(CALL_TIMEOUT_MS))
+                            {
+                                Ok(EventResult::Event(event)) => event,
+                                _ => continue,
+                            };
+
+                            if let Err(e) = w.write_all(&event) {
+                                if e.kind() == ErrorKind::BrokenPipe {
+                                    break;
                                 }
                             }
                         }
@@ -72,7 +78,7 @@ impl SubCommandParserRunner for Print {
             FileType::Series => {
                 // Formatter & printer for series.
                 let mut series_output =
-                    PrintSeries::new(Box::new(stdout()), PrintEventFormat::Text(format));
+                    PrintSeries::new(Box::new(stdout()), EventFormat::Text(format));
 
                 while run.running() {
                     match factory.next_series()? {
