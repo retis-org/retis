@@ -179,7 +179,10 @@ impl Drop for RotateWriter {
             return;
         }
 
-        info!("Wrote {} event file(s)", self.index);
+        info!(
+            "Wrote {} event file(s)",
+            if self.policy.is_none() { 1 } else { self.index }
+        );
     }
 }
 
