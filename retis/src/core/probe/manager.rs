@@ -244,6 +244,10 @@ impl ProbeBuilderManager {
         Ok(mgr)
     }
 
+    pub(crate) fn probes(&self) -> Vec<&Probe> {
+        self.probes.values().collect()
+    }
+
     /// Set a probe option for later fixup during the attach phase. A given
     /// option can only be set once as those are global and we can't decide
     /// which version to keep.

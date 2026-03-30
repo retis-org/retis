@@ -4,6 +4,7 @@ use anyhow::{bail, Result};
 
 use crate::{
     events::{file::FileEventsFactory, *},
+    helpers::signals::Running,
     process::{display::*, series::EventSorter, tracking::AddTracking},
 };
 
@@ -22,36 +23,27 @@ pub(super) fn bench(ci: bool) -> Result<()> {
         _ => bail!("Could not get event from test file"),
     };
 
-    let mut p = PrintEvent::new(
-        Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintEventFormat::Text(DisplayFormat::new()),
-    );
+    let p = EventFormatter::new(Running::new()?, 1, EventFormat::Text(DisplayFormat::new()));
     let now = Instant::now();
     for _ in 0..iters {
-        p.process_one(&event)?;
+        p.process_event(&event)?;
     }
     println!(
         "1M_print_single_singleline_us {}",
         now.elapsed().as_micros()
     );
 
-    let mut p = PrintEvent::new(
-        Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintEventFormat::Text(DisplayFormat::new().multiline(true)),
-    );
+    let p = EventFormatter::new(Running::new()?, 1, EventFormat::Text(DisplayFormat::new()));
     let now = Instant::now();
     for _ in 0..iters {
-        p.process_one(&event)?;
+        p.process_event(&event)?;
     }
     println!("1M_print_single_multiline_us {}", now.elapsed().as_micros());
 
-    let mut p = PrintEvent::new(
-        Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintEventFormat::Json,
-    );
+    let p = EventFormatter::new(Running::new()?, 1, EventFormat::Json);
     let now = Instant::now();
     for _ in 0..iters {
-        p.process_one(&event)?;
+        p.process_event(&event)?;
     }
     println!("1M_print_single_json_us {}", now.elapsed().as_micros());
 
@@ -69,7 +61,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     let mut p = PrintSeries::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintEventFormat::Text(DisplayFormat::new()),
+        EventFormat::Text(DisplayFormat::new()),
     );
     let now = Instant::now();
     for _ in 0..iters {
@@ -82,7 +74,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     let mut p = PrintSeries::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintEventFormat::Text(DisplayFormat::new().multiline(true)),
+        EventFormat::Text(DisplayFormat::new().multiline(true)),
     );
     let now = Instant::now();
     for _ in 0..iters {
@@ -92,7 +84,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     let mut p = PrintSeries::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
-        PrintEventFormat::Json,
+        EventFormat::Json,
     );
     let now = Instant::now();
     for _ in 0..iters {

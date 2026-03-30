@@ -2,10 +2,11 @@
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::{HashMap, HashSet},
-    io,
+    io::{self, Write},
     path::Path,
     process::{Command, Stdio},
     sync::Arc,
+    thread,
     time::Duration,
 };
 
@@ -34,10 +35,7 @@ use crate::{
         inspect::check::collection_prerequisites,
         kernel::Symbol,
         probe::{
-            kernel::{
-                probe_stack::ProbeStack,
-                utils::{parse_cli_probe, probe_from_cli},
-            },
+            kernel::{probe_stack::*, utils::*},
             *,
         },
         tracking::{
@@ -45,7 +43,7 @@ use crate::{
         },
     },
     events::{file::rotate::*, helpers::time::*, *},
-    helpers::{file_rotate::*, signals::Running},
+    helpers::{file_rotate::*, signals::*},
     process::display::*,
 };
 
@@ -113,15 +111,14 @@ pub(crate) struct Collectors {
     // Keep a reference on both the skb and stack tracking configuration maps.
     tracking_config_map: Option<libbpf_rs::MapHandle>,
     stack_tracking_config_map: Option<libbpf_rs::MapHandle>,
-    // Retis events factory.
-    events_factory: Arc<RetisEventsFactory>,
     // Monotonic clock offset stored once and reused.
     monotonic_offset: TimeSpec,
 }
 
 impl Collectors {
     pub(super) fn new() -> Result<Self> {
-        let factory = BpfEventsFactory::new()?;
+        let run = Running::new()?;
+        let factory = BpfEventsFactory::new(run.clone())?;
         let probes = ProbeManager::new()?;
 
         Ok(Collectors {
@@ -129,11 +126,10 @@ impl Collectors {
             probes,
             factory,
             known_kernel_types: HashSet::new(),
-            run: Running::new()?,
+            run,
             tracking_gc: None,
             tracking_config_map: None,
             stack_tracking_config_map: None,
-            events_factory: Arc::new(RetisEventsFactory::default()),
             monotonic_offset: monotonic_clock_offset()?,
         })
     }
@@ -258,6 +254,7 @@ impl Collectors {
     fn init_collectors(
         &mut self,
         section_factories: &mut SectionFactories,
+        events_factory: &Arc<RetisEventsFactory>,
         collect: &Collect,
     ) -> Result<()> {
         // Check if we need to report stack traces in the events.
@@ -317,7 +314,7 @@ impl Collectors {
             c.init(
                 collect,
                 self.probes.builder_mut()?,
-                Arc::clone(&self.events_factory),
+                Arc::clone(events_factory),
                 section_factories,
             )
             .context(format!("Could not initialize the {name} collector"))?;
@@ -345,6 +342,29 @@ impl Collectors {
                     .join(", ")
             );
         }
+
+        #[cfg(not(test))]
+        {
+            let sm = init_stack_map()?;
+            self.probes
+                .builder_mut()?
+                .reuse_map("stack_map", sm.as_fd().as_raw_fd())?;
+            self.probes
+                .builder_mut()?
+                .reuse_map("events_map", self.factory.map_fd())?;
+            self.probes
+                .builder_mut()?
+                .reuse_map("log_map", self.factory.log_map_fd())?;
+
+            section_factories
+                .get_mut::<KernelEventFactory>(&crate::core::events::FactoryId::Kernel)?
+                .stack_map = Some(sm);
+        }
+
+        if let Some(gc) = &mut self.tracking_gc {
+            gc.start(self.run.clone())?;
+        }
+
         Ok(())
     }
 
@@ -445,29 +465,7 @@ impl Collectors {
     /// Start the event retrieval for all collectors by calling
     /// their `start()` function.
     #[cfg_attr(test, allow(unused_mut))]
-    fn start_collectors(&mut self, mut section_factories: SectionFactories) -> Result<()> {
-        #[cfg(not(test))]
-        {
-            let sm = init_stack_map()?;
-            self.probes
-                .builder_mut()?
-                .reuse_map("stack_map", sm.as_fd().as_raw_fd())?;
-            self.probes
-                .builder_mut()?
-                .reuse_map("events_map", self.factory.map_fd())?;
-            self.probes
-                .builder_mut()?
-                .reuse_map("log_map", self.factory.log_map_fd())?;
-
-            section_factories
-                .get_mut::<KernelEventFactory>(&crate::core::events::FactoryId::Kernel)?
-                .stack_map = Some(sm);
-        }
-
-        if let Some(gc) = &mut self.tracking_gc {
-            gc.start(self.run.clone())?;
-        }
-
+    fn start_collectors(&mut self) -> Result<()> {
         // Attach probes and start collectors. We're using an open coded take &
         // replace combination. We could use a Cell<> instead but that would
         // complicate the use of self.probes (additional .get() calls) while
@@ -481,27 +479,6 @@ impl Collectors {
                 warn!("Could not start collector {name}: {e}");
             }
         }
-
-        // Start factory
-        self.factory.start(section_factories)?;
-
-        Ok(())
-    }
-
-    /// Configure collection.
-    pub(super) fn config(&mut self, collect: &Collect, main_config: &MainConfig) -> Result<()> {
-        let mut section_factories = section_factories()?;
-
-        self.init_collectors(&mut section_factories, collect)?;
-        self.config_filters(collect)?;
-        self.register_probes(collect, main_config)?;
-        let (formatter, offset) = if collect.utc {
-            (TimeFormat::UtcDate, Some(self.monotonic_offset))
-        } else {
-            Default::default()
-        };
-        self.factory.config_logger(formatter, offset);
-        self.start_collectors(section_factories)?;
 
         Ok(())
     }
@@ -534,11 +511,14 @@ impl Collectors {
         Ok(())
     }
 
-    /// Starts the processing loop and block until we get a single SIGINT
-    /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
-    /// collector cmd loop.
-    pub(super) fn process(&mut self, collect: &Collect, main_config: &MainConfig) -> Result<()> {
-        let mut printers = Vec::new();
+    #[allow(clippy::type_complexity)]
+    fn setup_formatters(
+        &self,
+        collect: &Collect,
+        main_config: &MainConfig,
+    ) -> Result<(Vec<EventFormatter>, Vec<Box<dyn Write>>)> {
+        let mut formatters = Vec::new();
+        let mut writers = Vec::<Box<dyn Write>>::new();
 
         // Write events to stdout if we don't write to a file (--out) or if
         // explicitly asked to (--print).
@@ -553,35 +533,136 @@ impl Collectors {
                 .monotonic_offset(self.monotonic_offset)
                 .print_ll(collect.print_ll);
 
-            printers.push(PrintEvent::new(
-                Box::new(io::stdout()),
-                PrintEventFormat::Text(format),
+            formatters.push(EventFormatter::new(
+                self.run.clone(),
+                1,
+                EventFormat::Text(format),
             ));
+            writers.push(Box::new(io::stdout()));
         }
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            printers.push(PrintEvent::new(
-                Box::new(
-                    RotateWriter::new(
-                        out,
-                        match &collect.out_rotate {
-                            Some(s) => Some(rotation_policy_from_str(s)?),
-                            None => None,
-                        },
-                        collect.out_rotate_count,
-                        &main_config.cmdline,
-                        self.monotonic_offset,
-                    )
-                    .or_else(|e| bail!("Could not create or open '{}': {e}", out.display()))?,
-                ),
-                PrintEventFormat::Json,
+            formatters.push(EventFormatter::new(self.run.clone(), 1, EventFormat::Json));
+            writers.push(Box::new(
+                RotateWriter::new(
+                    out,
+                    match &collect.out_rotate {
+                        Some(s) => Some(rotation_policy_from_str(s)?),
+                        None => None,
+                    },
+                    collect.out_rotate_count,
+                    &main_config.cmdline,
+                    self.monotonic_offset,
+                )
+                .or_else(|e| bail!("Could not create or open '{}': {e}", out.display()))?,
             ));
         }
 
+        Ok((formatters, writers))
+    }
+
+    /// Starts the processing loop and block until we get a single SIGINT
+    /// (e.g. ctrl+c), then return after properly cleaning up. This is the main
+    /// collector cmd loop.
+    pub(super) fn process(&mut self, collect: &Collect, main_config: &MainConfig) -> Result<()> {
+        let (mut ecount, mut icount) = (0, 0);
+        let threads = 1;
+
+        let events_factory = Arc::new(RetisEventsFactory::default());
+        let mut section_factories = section_factories()?;
+        let (formatters, mut writers) = self.setup_formatters(collect, main_config)?;
+
+        self.init_collectors(&mut section_factories, &events_factory, collect)?;
+        self.config_filters(collect)?;
+
+        self.register_probes(collect, main_config)?;
+        let (format, offset) = if collect.utc {
+            (TimeFormat::UtcDate, Some(self.monotonic_offset))
+        } else {
+            Default::default()
+        };
+        self.factory.config_logger(format, offset);
+
+        // Create the infrastructure to handle --probe-stack.
+        let (psf_txc, psf_rxc) = crossbeam_channel::unbounded::<String>();
+        let psf = ProbeStackFilter::new(
+            collect.stack,
+            Arc::new(
+                self.probes
+                    .builder()?
+                    .probes()
+                    .iter()
+                    .filter(|p| p.has_option(ProbeOption::ReportStack))
+                    .map(|p| format!("{p}"))
+                    .collect(),
+            ),
+            Arc::new(self.known_kernel_types.clone()),
+            psf_txc,
+        );
+
+        // Create the channel for conveying raw events. Reserve just enough
+        // space for queuing a single raw event while another one is being
+        // processed (the sending side is using a synchronous call).
+        let (txc, rxc) = crossbeam_channel::bounded::<Vec<u8>>(threads * 2);
+
+        // Threads to handle and parse raw events.
+        let section_factories = Arc::new(section_factories);
+        for i in 0..threads {
+            let run = self.run.clone();
+            let rxc = rxc.clone();
+            let factories = Arc::clone(&section_factories);
+            let formatters = formatters.clone();
+            let psf = psf.clone();
+            let probe_stack = collect.probe_stack;
+
+            let thread = thread::Builder::new().name(format!("retis-event-{i}"));
+            thread.spawn(move || {
+                while run.running() {
+                    let raw = match rxc.recv_timeout(Duration::from_millis(CALL_TIMEOUT_MS)) {
+                        Ok(raw) => raw,
+                        _ => continue,
+                    };
+
+                    // Parse the raw event.
+                    let mut event = match parse_raw_event(&raw, &factories) {
+                        Ok(event) => event,
+                        Err(e) => {
+                            error!("Could not parse raw event: {e}");
+                            continue;
+                        }
+                    };
+
+                    if probe_stack {
+                        if let Err(e) = psf.process_event(&mut event) {
+                            warn!("Could not process event for --probe-stack: {e}");
+                        }
+                    }
+
+                    // Process events.
+                    if let Err(e) = formatters.iter().try_for_each(|f| f.process_event(&event)) {
+                        error!("Could not format event {e}");
+                    }
+                }
+            })?;
+        }
+
+        // Handle internal events generated at init time first, to make sure
+        // they end up in the start of the output.
+        if let Some(event) = events_factory.next_event() {
+            formatters
+                .iter()
+                .try_for_each(|f| f.process_event(&event))?;
+            icount += 1;
+        }
+
+        self.factory.start(txc)?;
+        self.start_collectors()?;
+
+        // Start the sub-command, if any.
         if let Some(cmd) = collect.cmd.to_owned() {
             let run = self.run.clone();
-            let thread = std::thread::Builder::new().name("retis-collect-cmd".to_string());
+            let thread = thread::Builder::new().name("retis-collect-cmd".to_string());
             thread.spawn(move || {
                 match Command::new("sh")
                     .arg("-c")
@@ -600,45 +681,66 @@ impl Collectors {
             })?;
         }
 
-        let (mut iccount, mut eccount) = (0, 0);
-        let mut probe_stack = ProbeStack::new(self.known_kernel_types.clone());
         let stop_count = collect.stop_after.unwrap_or_default();
 
-        use EventResult::*;
         while self.run.running() {
             // First always try to dequeue all Retis events. This is not a
             // blocking call.
-            while let Some(event) = self.events_factory.next_event() {
-                printers
-                    .iter_mut()
-                    .try_for_each(|p| p.process_one(&event))?;
-                iccount += 1;
+            if let Some(event) = events_factory.next_event() {
+                formatters
+                    .iter()
+                    .try_for_each(|f| f.process_event(&event))?;
+                icount += 1;
             }
 
-            // Then get raw events, if any.
-            match self.factory.next_event(Some(Duration::from_secs(1)))? {
-                Event(mut event) => {
-                    if collect.probe_stack {
-                        probe_stack.process_event(self.probes.runtime_mut()?, &mut event)?;
+            // Then process formatted eBPF events, if any.
+            formatters
+                .iter()
+                .enumerate()
+                .try_for_each(|(index, f)| -> Result<()> {
+                    if let Ok(event) = f.rxc.recv_timeout(Duration::from_millis(CALL_TIMEOUT_MS)) {
+                        writers.get_mut(index).unwrap().write_all(&event)?;
+                        ecount += 1;
                     }
+                    Ok(())
+                })?;
 
-                    printers
-                        .iter_mut()
-                        .try_for_each(|p| p.process_one(&event))?;
-                    eccount += 1;
+            // Finally handle --probe-stack candidates, if any.
+            #[cfg_attr(test, allow(unused_mut))]
+            let mut new_probes = psf_rxc
+                .try_iter()
+                .map(|candidate| Symbol::from_name(&candidate).and_then(Probe::kprobe))
+                .collect::<Result<Vec<_>>>()?;
+            if !new_probes.is_empty() {
+                let mgr = self.probes.runtime_mut()?;
+                #[cfg(not(test))]
+                new_probes
+                    .drain(..)
+                    .try_for_each(|p| mgr.add_generic_probe(p))?;
+                mgr.attach_probes()?;
+            }
 
-                    if stop_count > 0 && eccount >= stop_count {
-                        self.run.terminate();
-                        info!("Reached stop count ({stop_count}), terminating...");
-                    }
-                }
-                Timeout => continue,
+            if stop_count > 0 && ecount - icount >= stop_count {
+                self.run.terminate();
+                info!("Reached stop count ({stop_count}), terminating...");
             }
         }
 
-        printers.iter_mut().try_for_each(|p| p.flush())?;
-        info!("{eccount} event(s) processed");
-        debug!("{iccount} internal event(s) processed");
+        // Drain remaining events.
+        formatters
+            .iter()
+            .enumerate()
+            .try_for_each(|(index, f)| -> Result<()> {
+                while let Ok(event) = f.rxc.recv_timeout(Duration::from_millis(10)) {
+                    writers.get_mut(index).unwrap().write_all(&event)?;
+                    ecount += 1;
+                }
+                Ok(())
+            })?;
+
+        writers.iter_mut().try_for_each(|w| w.flush())?;
+        debug!("{icount} internal event(s) processed");
+        info!("{ecount} event(s) processed");
 
         self.stop()
     }

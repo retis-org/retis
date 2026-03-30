@@ -8,11 +8,43 @@ use std::{
         Arc, Mutex,
     },
     thread,
+    time::Duration,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use log::info;
 use signal_hook::iterator::Signals;
+
+/// Unified timeout to use when using blocking calls.
+pub(crate) const CALL_TIMEOUT_MS: u64 = 200;
+
+/// Provides a blocking call similar to `crossbeam_channel::Sender<T>::send`
+/// while handling potential `Running` completion.
+pub(crate) fn channel_send<T: Send + Sync>(
+    txc: &crossbeam_channel::Sender<T>,
+    run: &Running,
+    mut msg: T,
+) -> Result<()> {
+    loop {
+        let res = txc.send_timeout(msg, Duration::from_millis(CALL_TIMEOUT_MS));
+
+        // Only handle errors if we're not shutting down.
+        if run.running() {
+            match res {
+                Err(crossbeam_channel::SendTimeoutError::Timeout(unsent)) => {
+                    msg = unsent;
+                    continue;
+                }
+                Err(crossbeam_channel::SendTimeoutError::Disconnected(_)) => {
+                    return Err(anyhow!("Channel disconnected"));
+                }
+                Ok(()) => (),
+            }
+        }
+
+        return Ok(());
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct Running {
