@@ -218,6 +218,10 @@ impl Collectors {
             }
         }
 
+        if collect.event_threads == 0 {
+            bail!("Retis should have at least 1 processing thread");
+        }
+
         // Check prerequisites.
         collection_prerequisites()
     }
@@ -534,7 +538,11 @@ impl Collectors {
                 .print_ll(collect.print_ll);
 
             formatters.push((
-                EventFormatter::new(self.run.clone(), 1, EventFormat::Text(format)),
+                EventFormatter::new(
+                    self.run.clone(),
+                    collect.event_threads,
+                    EventFormat::Text(format),
+                ),
                 Box::new(io::stdout()),
             ));
         }
@@ -542,7 +550,7 @@ impl Collectors {
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
             formatters.push((
-                EventFormatter::new(self.run.clone(), 1, EventFormat::Json),
+                EventFormatter::new(self.run.clone(), collect.event_threads, EventFormat::Json),
                 Box::new(
                     RotateWriter::new(
                         out,
@@ -567,7 +575,6 @@ impl Collectors {
     /// collector cmd loop.
     pub(super) fn process(&mut self, collect: &Collect, main_config: &MainConfig) -> Result<()> {
         let (mut ecount, mut icount) = (0, 0);
-        let threads = 1;
 
         let events_factory = Arc::new(RetisEventsFactory::default());
         let mut section_factories = section_factories()?;
@@ -604,11 +611,11 @@ impl Collectors {
         // Create the channel for conveying raw events. Reserve just enough
         // space for queuing a single raw event while another one is being
         // processed (the sending side is using a synchronous call).
-        let (txc, rxc) = crossbeam_channel::bounded::<Vec<u8>>(threads * 2);
+        let (txc, rxc) = crossbeam_channel::bounded::<Vec<u8>>(collect.event_threads * 2);
 
         // Threads to handle and parse raw events.
         let section_factories = Arc::new(section_factories);
-        for i in 0..threads {
+        for i in 0..collect.event_threads {
             let run = self.run.clone();
             let rxc = rxc.clone();
             let factories = Arc::clone(&section_factories);
