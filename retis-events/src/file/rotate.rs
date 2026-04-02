@@ -84,7 +84,8 @@ impl RotateWriter {
     }
 
     fn new_file(target: &Path, head: &[u8]) -> io::Result<(BufWriter<File>, usize)> {
-        let mut w = BufWriter::new(
+        let mut w = BufWriter::with_capacity(
+            1024 * 1024, // 1MB
             OpenOptions::new()
                 .create(true)
                 .write(true)
