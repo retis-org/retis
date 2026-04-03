@@ -32,11 +32,11 @@ DEFINE_HOOK_RAW(
 
 	if (bpf_probe_read_kernel(&ret->n_mask_hit, sizeof(ret->n_mask_hit),
 				  ectx->n_mask_hit))
-		log_error("Failed to retrieve n_mask_hit");
+		log_error_rl("Failed to retrieve n_mask_hit");
 
 	if (bpf_probe_read_kernel(&ret->n_cache_hit, sizeof(ret->n_cache_hit),
 				  ectx->n_cache_hit))
-		log_error("Failed to retrieve n_cache_hit");
+		log_error_rl("Failed to retrieve n_cache_hit");
 
 	flow = (struct sw_flow *)ctx->regs.ret;
 	if (!flow) {
@@ -50,16 +50,16 @@ DEFINE_HOOK_RAW(
 
 	ufid_len = BPF_CORE_READ(flow, id.ufid_len);
 	if (!ufid_len)
-		log_error("Expected ufid representation");
+		log_error_rl("Expected ufid representation");
 
 
 	if (BPF_CORE_READ_INTO(&ret->ufid, flow, id.ufid))
-		log_error("Failed to read ufid");
+		log_error_rl("Failed to read ufid");
 
 	ret->flow = flow;
 
 	if (bpf_core_read(&ret->sf_acts, sizeof(ret->sf_acts), &flow->sf_acts))
-		log_error("Failed to read sf_acts");
+		log_error_rl("Failed to read sf_acts");
 
 	return 0;
 )
