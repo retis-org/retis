@@ -56,11 +56,6 @@ enum {
 	RETIS_F_PASS(STACK, 2),
 };
 
-/* Filters chain is an and */
-#define F_AND		0
-/* Filters chain is an or */
-#define F_OR		1
-
 #define RETIS_ALL_FILTERS	(RETIS_F_PACKET_PASS | RETIS_F_META_PASS)
 
 #define RETIS_TRACKABLE(ctx)	(!(ctx->flags ^ RETIS_ALL_FILTERS))
@@ -73,7 +68,7 @@ enum {
  * ```
  * #include <common.h>
  *
- * DEFINE_NAMED_HOOK(hook_name, AND_OR_SEL, FILTER_FLAG1 | FILTER_FLAG2 | ...,
+ * DEFINE_NAMED_HOOK(hook_name, FILTER_FLAG1 | FILTER_FLAG2 | ...,
  *	do_something(ctx);
  *	return 0;
  * )
@@ -81,16 +76,14 @@ enum {
  * char __license[] SEC("license") = "GPL";
  * ```
  */
-#define DEFINE_NAMED_HOOK(hook_name, fmode, fflags, statements)			\
+#define DEFINE_NAMED_HOOK(hook_name, fflags, statements)			\
 	SEC("ext/hook")								\
 	int hook_name(struct retis_context *ctx, struct retis_raw_event *event) \
 	{									\
 		/* Let the verifier be happy */					\
 		if (!ctx || !event)						\
 			return 0;						\
-		if (!((fmode == F_OR) ?						\
-		      (ctx->flags & (fflags)) :				\
-		      ((ctx->flags & (fflags)) == (fflags))))		\
+		if ((ctx->flags & (fflags)) != (fflags))			\
 			return 0;						\
 		statements							\
 	}
@@ -98,13 +91,13 @@ enum {
 /* Simple wrapper for DEFINE_NAMED_HOOK() that use file base name as
  * default name.
  */
-#define DEFINE_HOOK(fmode, fflags, statements)				\
-	DEFINE_NAMED_HOOK(__PROG_NAME, fmode, fflags, statements)
+#define DEFINE_HOOK(fflags, statements)					\
+	DEFINE_NAMED_HOOK(__PROG_NAME, fflags, statements)
 
 /* Helper that defines a hook that doesn't depend on any filtering
  * result and runs regardless.  Filtering outcome is still available
  * through ctx->flags for actions that need special handling not
- * covered by DEFINE_HOOK([F_AND|F_OR], flags, ...).
+ * covered by DEFINE_HOOK(flags, ...).
  *
  * To define a hook in a collector hook, say hook.bpf.c,
  * ```
@@ -119,7 +112,7 @@ enum {
  * ```
  */
 #define DEFINE_HOOK_RAW(statements)				\
-	DEFINE_NAMED_HOOK(__PROG_NAME, F_AND, 0, statements)
+	DEFINE_NAMED_HOOK(__PROG_NAME, 0, statements)
 
 /* Number of hooks installed, used to micro-optimize the call chain */
 const volatile u32 nhooks = 0;

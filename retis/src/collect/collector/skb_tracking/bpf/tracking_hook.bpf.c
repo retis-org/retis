@@ -10,7 +10,7 @@ struct skb_tracking_event {
 	u64 skb;
 } __binding;
 
-DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
+DEFINE_HOOK(RETIS_ALL_FILTERS,
 	struct skb_tracking_event *e;
 	struct tracking_info *ti;
 	struct sk_buff *skb;

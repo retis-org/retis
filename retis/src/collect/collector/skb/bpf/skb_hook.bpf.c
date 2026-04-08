@@ -285,7 +285,7 @@ skip_gso:
 	return 0;
 }
 
-DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
+DEFINE_HOOK(RETIS_ALL_FILTERS,
 	struct sk_buff *skb;
 
 	skb = retis_get_sk_buff(ctx);
