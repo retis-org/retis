@@ -403,11 +403,11 @@ static __always_inline int chain(struct retis_context *ctx)
  */
 #define ENOMSG	42
 #define CALL_HOOK(x)				\
-	if (x < nhooks) {			\
-		int ret = hook##x(ctx, event);	\
-		if (ret == -ENOMSG)		\
-			goto discard_event;	\
-	}
+	if (x >= nhooks)			\
+		goto exit;			\
+	ret = hook##x(ctx, event);		\
+	if (unlikely(ret == -ENOMSG))		\
+		goto discard_event;
 	CALL_HOOK(0)
 	CALL_HOOK(1)
 	CALL_HOOK(2)
