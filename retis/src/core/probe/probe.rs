@@ -29,6 +29,7 @@ pub(crate) enum ProbeOption {
     ProbeStack,
     ReportStack,
     NoGenericHook,
+    Ftrace,
 }
 
 impl TryFrom<&str> for ProbeOption {
@@ -37,6 +38,7 @@ impl TryFrom<&str> for ProbeOption {
     fn try_from(option: &str) -> Result<Self> {
         Ok(match option {
             "stack" => Self::ReportStack,
+            "ftrace" => Self::Ftrace,
             _ => bail!("'{option}' is an invalid probe option."),
         })
     }
@@ -203,6 +205,9 @@ impl Probe {
             self.options.insert(opt);
         }
         if let Some(opt) = other.options.take(&ProbeOption::ReportStack) {
+            self.options.insert(opt);
+        }
+        if let Some(opt) = other.options.take(&ProbeOption::Ftrace) {
             self.options.insert(opt);
         }
         if !other.options.contains(&ProbeOption::NoGenericHook) {
