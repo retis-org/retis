@@ -336,8 +336,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	cfg = bpf_map_lookup_elem(&config_map, &ctx->ksym);
 	if (!cfg)
 		return 0;
-
-	ctx->offsets = cfg->offsets;
+	__builtin_memcpy(&ctx->offsets, &cfg->offsets, sizeof(cfg->offsets));
 
 	ret = extend_ctx(ctx);
 	if (ret)
