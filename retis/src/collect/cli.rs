@@ -179,9 +179,7 @@ pub(crate) struct CollectorsArgs {
 
 impl SubCommandParserRunner for Collect {
     fn run(&mut self, main_config: &MainConfig) -> Result<()> {
-        if let Some(kconf) = &self.kconf {
-            init_inspector(kconf)?;
-        }
+        init_inspector(self.kconf.as_ref(), false)?;
         let mut collectors = Collectors::new()?;
 
         collectors.check(self)?;

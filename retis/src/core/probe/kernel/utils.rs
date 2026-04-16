@@ -73,7 +73,7 @@ pub(crate) fn parse_cli_probe(input: &str) -> Result<(CliProbeType, &str, HashSe
 /// probe representation (`Probe`).
 pub(crate) fn probe_from_cli<F>(probe: &str, filter: F) -> Result<Vec<Probe>>
 where
-    F: Fn(&Symbol) -> bool,
+    F: Fn(&Symbol) -> Result<bool>,
 {
     use CliProbeType::*;
 
@@ -89,7 +89,7 @@ where
     let mut probes = Vec::new();
     for symbol in symbols.drain(..) {
         // Check if the symbol matches the filter.
-        if !filter(&symbol) {
+        if !filter(&symbol)? {
             continue;
         }
 
@@ -113,7 +113,7 @@ where
 mod tests {
     #[test]
     fn probe_from_cli() {
-        let filter = |_: &_| true;
+        let filter = |_: &_| Ok(true);
 
         // Valid probes.
         assert!(super::probe_from_cli("consume_skb", filter).is_ok());

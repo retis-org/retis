@@ -102,11 +102,11 @@ impl<'a> RawTracepointBuilder<'a> {
     // as well as the cookie support itself, as the two are part of unrelated
     // commits that could be backported separately.
     fn cookie_support() -> Result<bool> {
-        let get_cookie = inspect::inspector()?
+        let get_cookie = !inspect::inspector()?
             .kernel
             .btf
-            .resolve_types_by_name("bpf_get_attach_cookie_tracing")
-            .is_ok();
+            .resolve_types_by_name("bpf_get_attach_cookie_tracing")?
+            .is_empty();
         let raw_tp_cookie = inspect::parse_struct("bpf_raw_tp_link")?
             .iter()
             .any(|field| field == "cookie");
