@@ -51,13 +51,13 @@ pub(super) fn bench(ci: bool) -> Result<()> {
 
     let mut factory = FileEventsFactory::from_path("retis/test_data/test_events_bench.json")?;
     let mut tracker = AddTracking::new();
-    let mut series = EventSorter::new();
+    let mut series = EventSorter::default();
 
     while let Some(mut event) = factory.next_event()? {
         tracker.process_one(&mut event)?;
         series.add(event);
     }
-    let series = series.pop_oldest()?.unwrap();
+    let series = series.pop();
 
     let mut p = PrintSeries::new(
         Box::new(OpenOptions::new().write(true).open("/dev/null")?),
@@ -65,7 +65,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     );
     let now = Instant::now();
     for _ in 0..iters {
-        p.process_one(&series)?;
+        series.iter().try_for_each(|e| p.process_one(e))?;
     }
     println!(
         "1M_print_series_singleline_us {}",
@@ -78,7 +78,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     );
     let now = Instant::now();
     for _ in 0..iters {
-        p.process_one(&series)?;
+        series.iter().try_for_each(|e| p.process_one(e))?;
     }
     println!("1M_print_series_multiline_us {}", now.elapsed().as_micros());
 
@@ -88,7 +88,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     );
     let now = Instant::now();
     for _ in 0..iters {
-        p.process_one(&series)?;
+        series.iter().try_for_each(|e| p.process_one(e))?;
     }
     println!("1M_print_series_json_us {}", now.elapsed().as_micros());
 

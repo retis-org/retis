@@ -83,7 +83,7 @@ impl SubCommandParserRunner for Sort {
             return Ok(());
         }
 
-        let mut series = EventSorter::new();
+        let mut series = EventSorter::default();
         let mut tracker = AddTracking::new();
         let mut printers = Vec::new();
 
@@ -152,24 +152,20 @@ impl SubCommandParserRunner for Sort {
                     // Flush to stdout the latest series if needed
                     if self.max_buffer != 0 {
                         while series.len() >= self.max_buffer {
-                            // Flush the oldest series
-                            match series.pop_oldest()? {
-                                Some(series) => {
-                                    for p in printers.iter_mut() {
-                                        if let Err(e) = p.process_one(&series) {
-                                            match e.downcast_ref::<io::Error>() {
-                                                Some(io_error)
-                                                    if io_error.kind() == ErrorKind::BrokenPipe =>
-                                                {
-                                                    return Ok(());
-                                                }
-                                                _ => return Err(e),
+                            for s in series.pop().drain(..) {
+                                for p in printers.iter_mut() {
+                                    if let Err(e) = p.process_one(&s) {
+                                        match e.downcast_ref::<io::Error>() {
+                                            Some(io_error)
+                                                if io_error.kind() == ErrorKind::BrokenPipe =>
+                                            {
+                                                return Ok(());
                                             }
+                                            _ => return Err(e),
                                         }
                                     }
                                 }
-                                None => break,
-                            };
+                            }
                         }
                     }
                 }
@@ -178,21 +174,18 @@ impl SubCommandParserRunner for Sort {
         }
         // Flush remaining events
         while series.len() > 0 {
-            match series.pop_oldest()? {
-                Some(series) => {
-                    for p in printers.iter_mut() {
-                        if let Err(e) = p.process_one(&series) {
-                            match e.downcast_ref::<io::Error>() {
-                                Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
-                                    return Ok(());
-                                }
-                                _ => return Err(e),
+            for s in series.pop().drain(..) {
+                for p in printers.iter_mut() {
+                    if let Err(e) = p.process_one(&s) {
+                        match e.downcast_ref::<io::Error>() {
+                            Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
+                                return Ok(());
                             }
+                            _ => return Err(e),
                         }
                     }
                 }
-                None => break,
-            };
+            }
         }
 
         // Flush writers
