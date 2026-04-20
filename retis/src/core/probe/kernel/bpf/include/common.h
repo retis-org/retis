@@ -26,6 +26,7 @@ struct kernel_event {
 struct retis_probe_config {
 	struct retis_probe_offsets offsets;
 	u8 stack_trace;
+	u8 ftrace;
 } __binding;
 
 /* Probe configuration; the key is the target symbol address */
@@ -56,11 +57,6 @@ enum {
 	RETIS_F_PASS(STACK, 2),
 };
 
-/* Filters chain is an and */
-#define F_AND		0
-/* Filters chain is an or */
-#define F_OR		1
-
 #define RETIS_ALL_FILTERS	(RETIS_F_PACKET_PASS | RETIS_F_META_PASS)
 
 #define RETIS_TRACKABLE(ctx)	(!(ctx->flags ^ RETIS_ALL_FILTERS))
@@ -73,7 +69,7 @@ enum {
  * ```
  * #include <common.h>
  *
- * DEFINE_NAMED_HOOK(hook_name, AND_OR_SEL, FILTER_FLAG1 | FILTER_FLAG2 | ...,
+ * DEFINE_NAMED_HOOK(hook_name, FILTER_FLAG1 | FILTER_FLAG2 | ...,
  *	do_something(ctx);
  *	return 0;
  * )
@@ -81,16 +77,15 @@ enum {
  * char __license[] SEC("license") = "GPL";
  * ```
  */
-#define DEFINE_NAMED_HOOK(hook_name, fmode, fflags, statements)			\
+#define DEFINE_NAMED_HOOK(hook_name, fflags, statements)			\
 	SEC("ext/hook")								\
 	int hook_name(struct retis_context *ctx, struct retis_raw_event *event) \
 	{									\
 		/* Let the verifier be happy */					\
 		if (!ctx || !event)						\
 			return 0;						\
-		if (!((fmode == F_OR) ?						\
-		      (ctx->flags & (fflags)) :				\
-		      ((ctx->flags & (fflags)) == (fflags))))		\
+		if (!((ctx->flags & RETIS_F_STACK_PASS) ||			\
+		      (ctx->flags & (fflags)) == (fflags)))			\
 			return 0;						\
 		statements							\
 	}
@@ -98,13 +93,13 @@ enum {
 /* Simple wrapper for DEFINE_NAMED_HOOK() that use file base name as
  * default name.
  */
-#define DEFINE_HOOK(fmode, fflags, statements)				\
-	DEFINE_NAMED_HOOK(__PROG_NAME, fmode, fflags, statements)
+#define DEFINE_HOOK(fflags, statements)					\
+	DEFINE_NAMED_HOOK(__PROG_NAME, fflags, statements)
 
 /* Helper that defines a hook that doesn't depend on any filtering
  * result and runs regardless.  Filtering outcome is still available
  * through ctx->flags for actions that need special handling not
- * covered by DEFINE_HOOK([F_AND|F_OR], flags, ...).
+ * covered by DEFINE_HOOK(flags, ...).
  *
  * To define a hook in a collector hook, say hook.bpf.c,
  * ```
@@ -119,7 +114,7 @@ enum {
  * ```
  */
 #define DEFINE_HOOK_RAW(statements)				\
-	DEFINE_NAMED_HOOK(__PROG_NAME, F_AND, 0, statements)
+	DEFINE_NAMED_HOOK(__PROG_NAME, 0, statements)
 
 /* Number of hooks installed, used to micro-optimize the call chain */
 const volatile u32 nhooks = 0;
@@ -312,6 +307,9 @@ static __always_inline int chain(struct retis_context *ctx)
 	struct common_event *e;
 	struct kernel_event *k;
 	struct sk_buff *skb;
+	bool in_window;
+	u64 *cur_ref;
+	u64 *ref;
 	int ret;
 
 	/* Check if the collection is enabled, otherwise bail out. Once we have
@@ -346,9 +344,15 @@ static __always_inline int chain(struct retis_context *ctx)
 	 * logic runs even if later ops fail: we don't want to miss information
 	 * because of non-fatal errors!
 	 */
-	if (RETIS_TRACKABLE(ctx))
-		track_skb_start(ctx);
-	else if (skb)
+	if (RETIS_TRACKABLE(ctx)) {
+		cur_ref = stack_get_skb_ref(ctx->stack_base);
+		in_window = cur_ref &&
+			(*cur_ref & (FTRACE_SENTINEL | FTRACE_WINDOW));
+		ref = track_skb_start(ctx);
+		if (ref && (in_window || (cfg->ftrace &&
+			    ctx->probe_type == KERNEL_PROBE_KPROBE)))
+			*ref |= FTRACE_WINDOW;
+	} else if (skb) {
 		/* Terminate any potentially existing entry not
 		 * associated with a tracked skb. Blind termination
 		 * approach is supposed to be more performing in the
@@ -357,6 +361,10 @@ static __always_inline int chain(struct retis_context *ctx)
 		 * collection (e.g. skb_tracking stale entry hanging).
 		 */
 		track_stack_end(ctx->stack_base);
+	} else if (cfg->ftrace && ctx->probe_type == KERNEL_PROBE_KPROBE) {
+		track_stack_update(ctx->stack_base, FTRACE_SENTINEL,
+				   BPF_ANY);
+	}
 
 	/* Shortcut when there are no hooks (e.g. tracking-only probe); no need
 	 * to allocate and fill an event to drop it later on.
@@ -436,6 +444,16 @@ exit:
 	 */
 	if (RETIS_TRACKABLE(ctx))
 		track_skb_end(ctx);
+
+	/* Close the ftrace window by stripping the ftrace tag bits so that
+	 * potentially subsequent consumers that rely on stack tracking are
+	 * not affected.
+	 */
+	if (cfg->ftrace && ctx->probe_type == KERNEL_PROBE_KRETPROBE) {
+		ref = stack_get_skb_ref(ctx->stack_base);
+		if (ref && (*ref & (FTRACE_SENTINEL | FTRACE_WINDOW)))
+			*ref &= ~(FTRACE_SENTINEL | FTRACE_WINDOW);
+	}
 
 	return 0;
 }

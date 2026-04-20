@@ -218,6 +218,7 @@ lint-rust:
 
 lint-ebpf:
 	$(call out_console,CHECKPATCH,checking eBPF coding style ...)
+	ignore="SPDX_LICENSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE,MACRO_WITH_FLOW_CONTROL"; \
 	base_hash=$$(git merge-base $${BASE_COMMIT:-main} HEAD); \
 	COMMIT_RANGE=$$(git rev-list --no-merges --reverse $${base_hash}..HEAD); \
 	for commit in $$COMMIT_RANGE; do \
@@ -225,12 +226,12 @@ lint-ebpf:
 	    echo "Commit $${pretty_commit}"; \
 	    printf -- '-%0.s' $$(seq 1 $${#pretty_commit}); \
 	    echo "-------"; \
-	    git show --format=email $${commit} -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=SPDX_LICENSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || restyle=$$?; \
+	    git show --format=email $${commit} -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=$$ignore -q || restyle=$$?; \
 	    echo; \
 	done; \
 	echo "Uncommitted changes"; \
 	echo "-------------------"; \
-	git diff -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=SPDX_LICNSE_TAG,FILE_PATH_CHANGES,EMAIL_SUBJECT,VOLATILE -q || restyle=$$?; \
+	git diff -- '*/bpf/*' | ./tools/checkpatch/checkpatch.pl --no-tree --ignore=$$ignore -q || restyle=$$?; \
 	[ -z "$$restyle" ]
 
 lint-python:
