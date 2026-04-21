@@ -36,6 +36,12 @@ def test_event_reader():
     verify_event_reader(r)
 
 
+def test_event_rotation_reader():
+    """Test event reader is capable of reading rotated events"""
+    r = EventReader.with_rotation("test_data/test_events.json")
+    verify_event_reader(r)
+
+
 def test_series_reader():
     """Test SeriesReader is capable of reading sorted events"""
     r = SeriesReader("test_data/test_events_sorted.json")
