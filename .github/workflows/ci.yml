@@ -30,8 +30,8 @@ jobs:
 
       - name: Rust fmt and clippy
         run: |
-          cargo fmt --check
-          cargo clippy -- -D warnings
+          make fmt-rust V=1
+          make clippy V=1 CARGO_CMD_OPTS="-- -D warnings"
 
       - name: eBPF style check
         if: github.event_name == 'pull_request'
@@ -78,7 +78,7 @@ jobs:
           ./target/release/retis benchmark --ci events_output
 
       - name: Clippy (benchmark feature)
-        run: cargo clippy -F benchmark -- -D warnings
+        run: make clippy V=1 CARGO_CMD_OPTS="-F benchmark -- -D warnings"
 
   aarch64:
     name: aarch64 build & basic tests
@@ -111,15 +111,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Lint
+      - name: Lint and format check
         run: |
-          python3 -m pip install flake8
-          cd tests && python3 -m flake8
-
-      - name: Format check
-        run: |
-          python3 -m pip install black
-          python3 -m black --check --diff tests/*.py
+          apt-get update && apt-get install -y make
+          python3 -m pip install flake8 black
+          make lint-python V=1
 
   build-python-lib:
     runs-on: ubuntu-latest
