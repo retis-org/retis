@@ -8,7 +8,7 @@ DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
 
 	ectx.skb = retis_get_sk_buff(ctx);
 	if (!ectx.skb) {
-		log_error("Invalid skb while ovs is processing the packet");
+		log_error_rl("Invalid skb while ovs is processing the packet");
 		return 0;
 	}
 

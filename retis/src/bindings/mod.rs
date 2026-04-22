@@ -72,6 +72,11 @@ pub(crate) mod user_recv_upcall_hook_uapi;
 pub(crate) mod dev_hook_uapi;
 pub(crate) mod netns_hook_uapi;
 
+pub(crate) mod common_defs_uapi;
+use common_defs_uapi::log_ratelimit;
+
+unsafe impl plain::Plain for log_ratelimit {}
+
 pub(crate) mod events_uapi;
 use events_uapi::retis_log_event;
 
