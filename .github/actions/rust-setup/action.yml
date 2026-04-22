@@ -1,0 +1,34 @@
+name: Rust setup
+description: Install system dependencies, Rust components, and restore the Cargo cache
+
+inputs:
+  components:
+    description: Space-separated list of rustup components to install
+    required: false
+    default: ""
+  install-cargo-llvm-cov:
+    description: Whether to install cargo-llvm-cov
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        apt-get update
+        apt-get -y install llvm clang curl libelf-dev libpcap-dev locales python3-pip python3-venv make jq
+        ln -s /usr/include/asm-generic /usr/include/asm
+
+    - name: Install Rust components
+      if: inputs.components != ''
+      shell: bash
+      run: rustup component add ${{ inputs.components }}
+
+    - name: Install cargo-llvm-cov
+      if: inputs.install-cargo-llvm-cov == 'true'
+      shell: bash
+      run: cargo install cargo-llvm-cov
+
+    - uses: Swatinem/rust-cache@v2

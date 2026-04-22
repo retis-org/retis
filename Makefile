@@ -210,11 +210,10 @@ endef
 
 $(foreach tgt,check clippy,$(eval $(call analyzer_tmpl,$(tgt))))
 
-lint-rust:
+fmt-rust:
 	$(call build, fmt --check, check format)
-	# No need to run `check` in addition to `clippy`, it's a superset.
-	$(call build, clippy $(if $(VERBOSITY),,--quiet), running clippy)
-	$(call build, clippy $(if $(VERBOSITY),,--quiet) -F benchmark, running clippy on benchmarks)
+
+lint-rust: fmt-rust clippy
 
 lint-ebpf:
 	$(call out_console,CHECKPATCH,checking eBPF coding style ...)
@@ -292,6 +291,7 @@ help:
 	$(call help_once, clean-cov             --  Deletes all the files generated during code coverage testing.)
 	$(call help_once)
 	$(call help_once,Testing targets:)
+	$(call help_once, fmt-rust              --  Runs Rust format check.)
 	$(call help_once, lint-rust             --  Runs format and linter checks.)
 	$(call help_once, lint-ebpf             --  Checks eBPF coding style for commits in current branch.)
 	$(call help_once,                       --  Requires `BASE_COMMIT` env variable to be set otherwise `main` is assumed.)
@@ -321,5 +321,5 @@ help:
 	$(call help_once,                           Requires llvm-cov and preferably rustup toolchain.)
 
 .PHONY: all bench ebpf ebpf-prereqs $(EBPF_PROBES) $(EBPF_HOOKS) gen-bindings help install release pylib report-cov wireshark wireshark-install wireshark-clean
-.PHONY: test pytest-deps pytest lint-ebpf functional-tests functional-tests-list lint-rust lint-python lints
+.PHONY: test pytest-deps pytest lint-ebpf functional-tests functional-tests-list fmt-rust lint-rust lint-python lints
 .PHONY: clean clean-bindings clean-cov clean-ebpf
