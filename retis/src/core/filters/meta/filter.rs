@@ -509,7 +509,7 @@ impl<'a> MetaExpr<'a> {
     ) -> Result<XlateCtx> {
         let mut ctx: XlateCtx = XlateCtx::new();
         let mut t = self.btf_type.clone();
-        let mut type_iter = self.btf.type_iter(
+        let mut type_iter = self.btf.chained_type_iter(
             self.btf_type
                 .as_btf_type()
                 .ok_or_else(|| anyhow!("Unable to retrieve iterable BTF type"))?,
@@ -1304,7 +1304,7 @@ impl<'a> MetaExpr<'a> {
             anyhow!("cannot convert to iterable type while retrieving next walkable")
         })?;
 
-        for x in btf.type_iter(btf_type) {
+        for x in btf.chained_type_iter(btf_type) {
             if Self::check_one_walkable(&x, &mut ind, casted)? {
                 return Ok((ind, x));
             }
