@@ -15,6 +15,8 @@ use std::{
 
 use anyhow::Result;
 
+use crate::helpers::logger::set_libbpf_rs_prog_log_level;
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ProgHandlerOpts {
     /// Custom user-provided value accessible in the callbacks, if needed.
@@ -158,8 +160,10 @@ impl<'a, T> SkelStorage<T> {
     where
         O: libbpf_rs::skel::OpenSkel<'a, Output = T>,
     {
-        let skel = ManuallyDrop::into_inner(from.skel);
+        let mut skel = ManuallyDrop::into_inner(from.skel);
         let storage = ManuallyDrop::into_inner(from.storage);
+
+        set_libbpf_rs_prog_log_level(skel.open_object_mut());
 
         Ok(SkelStorage {
             storage: ManuallyDrop::new(storage),
