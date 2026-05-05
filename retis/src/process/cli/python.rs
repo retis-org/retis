@@ -3,7 +3,7 @@ use std::{env, path::PathBuf};
 use anyhow::{bail, Result};
 use clap::Parser;
 
-use crate::{cli::*, events::python::shell::shell_execute};
+use crate::{cli::*, events::python::shell::shell_execute, helpers::file_rotate::*};
 
 #[derive(Parser, Debug, Default)]
 #[command(name = "python", about = "Runs Python scripts with events imported.")]
@@ -11,10 +11,9 @@ pub(crate) struct PythonCli {
     #[arg(
         long,
         short,
-        default_value = "retis.data",
-        help = "File from which to read events"
+        help = InputDataFile::help()
     )]
-    pub(super) input: PathBuf,
+    pub(super) input: Option<InputDataFile>,
     #[arg(
         help = "Python script to execute. Omit to drop into an interactive shell. Alternatively scripts can be stored in $HOME/.config/retis/python and /usr/share/retis/python, in which case the file name only (without the .py extension) can be provided."
     )]
@@ -49,7 +48,8 @@ impl SubCommandParserRunner for PythonCli {
             }
         }
 
-        shell_execute(self.input.clone(), script_path.as_ref(), &self.args)
+        let input = self.input.clone().unwrap_or_default();
+        shell_execute(input.0, script_path.as_ref(), &self.args)
     }
 }
 

@@ -13,6 +13,15 @@ use nix::sys::utsname::uname;
 
 use crate::{compat::json, file::guess_version, helpers::time::*, *};
 
+/// Represent an event file and how it should be used wrt rotation.
+#[derive(Clone, Debug)]
+pub struct EventFile {
+    /// Path to the event file.
+    pub path: PathBuf,
+    /// Read split event files in sequence, if any.
+    pub use_rotation: bool,
+}
+
 /// Rotation policy
 ///
 /// How the output files are split depending on internal rules.
@@ -224,8 +233,8 @@ pub struct RotateReader {
 }
 
 impl RotateReader {
-    pub fn new<P: AsRef<Path>>(file: P, try_split: bool) -> Result<Self> {
-        let (target, index, policy) = Self::detect_policy(file.as_ref(), try_split)?;
+    pub fn new<P: AsRef<Path>>(file: P) -> Result<Self> {
+        let (target, index, policy) = Self::detect_policy(file.as_ref().to_path_buf())?;
         if let Some(policy) = &policy {
             log::debug!(
                 "Opening {} with rotation policy {policy:?}",
@@ -242,38 +251,16 @@ impl RotateReader {
         })
     }
 
-    /// Detects a rotation policy given an input file name.
-    fn detect_policy(
-        path: &Path,
-        try_split: bool,
-    ) -> Result<(PathBuf, u32, Option<RotationPolicy>)> {
-        // First, try the target file.
-        if path.is_file() {
-            return Self::detect_policy_from_events(&path.to_path_buf());
-        }
-
-        // If allowed, fallback to trying using a known split file extension.
-        if try_split {
-            let target = PathBuf::from(format!("{}.0", path.display()));
-            if target.is_file() {
-                return Self::detect_policy_from_events(&target);
-            }
-        }
-
-        Err(anyhow!("Cannot open {}", path.display()))
-    }
-
     /// Given a file, detect the rotation policy reading the startup event, if
     /// any. It's important to check for the file existence before to throw real
     /// errors from this.
     ///
     /// Returns the target file base (filename w/o the split extension), index
     /// and rotation policy).
-    fn detect_policy_from_events(path: &PathBuf) -> Result<(PathBuf, u32, Option<RotationPolicy>)> {
+    fn detect_policy(mut path: PathBuf) -> Result<(PathBuf, u32, Option<RotationPolicy>)> {
         // Use a temporary BufReader to benefit from the `read_line`
         // implementation.
-        let mut reader = BufReader::new(File::open(path)?);
-        let mut path = path.clone();
+        let mut reader = BufReader::new(File::open(&path)?);
 
         let mut line = String::new();
         if reader.read_line(&mut line)? == 0 {
