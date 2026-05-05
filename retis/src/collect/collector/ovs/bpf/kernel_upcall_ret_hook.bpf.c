@@ -8,7 +8,7 @@ struct upcall_ret_event {
 } __binding;
 
 /* Hook for kretprobe:ovs_dp_upcall */
-DEFINE_HOOK(F_AND, RETIS_ALL_FILTERS,
+DEFINE_HOOK(RETIS_ALL_FILTERS,
 	struct upcall_ret_event *ret;
 	struct upcall_context *uctx;
 	u64 sb = ctx->stack_base;

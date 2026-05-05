@@ -43,11 +43,11 @@ impl KernelProbe {
     pub(crate) fn gen_config(&self, options: &[ProbeOption]) -> Result<retis_probe_config> {
         let mut config = inspect_symbol(&self.symbol)?;
 
-        #[allow(clippy::single_match)]
         options.iter().for_each(|o| match o {
             ProbeOption::ProbeStack | ProbeOption::ReportStack => {
                 config.stack_trace = 1;
             }
+            ProbeOption::Ftrace => config.ftrace = 1,
             _ => (),
         });
 

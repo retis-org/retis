@@ -79,6 +79,10 @@ where
 
     let (r#type, target, options) = parse_cli_probe(probe)?;
 
+    if options.contains(&ProbeOption::Ftrace) && !matches!(r#type, Kprobe) {
+        bail!("The 'ftrace' option is only available for kprobes");
+    }
+
     // Convert the target to a list of matching ones for probe types
     // supporting it.
     let mut symbols = match r#type {
@@ -94,7 +98,16 @@ where
         }
 
         let mut probe = match r#type {
-            Kprobe => Probe::kprobe(symbol)?,
+            Kprobe => {
+                let p = Probe::kprobe(symbol.clone())?;
+                // Paired kretprobe to close the ftrace window.
+                if options.contains(&ProbeOption::Ftrace) {
+                    let mut kret = Probe::kretprobe(symbol)?;
+                    kret.set_option(ProbeOption::Ftrace)?;
+                    probes.push(kret);
+                }
+                p
+            }
             Kretprobe => Probe::kretprobe(symbol)?,
             RawTracepoint => Probe::raw_tracepoint(symbol)?,
         };
@@ -103,7 +116,7 @@ where
             .iter()
             .try_for_each(|o| probe.set_option(o.clone()))?;
 
-        probes.push(probe)
+        probes.push(probe);
     }
 
     Ok(probes)

@@ -48,6 +48,22 @@ This tracking information, which is basically a unique "id", can be used at
 post-processing time to reconstruct in-kernel packets flow using the `sort`
 post-processing command.
 
+When a probe is configured with the `ftrace` option (see `retis collect --help`),
+it opens a tracking window for the duration of the probed function call. Inner
+probes on functions that do not take any known type as a parameter can then emit
+tracking events by inheriting the context established by the outer probe. Two
+sub-cases exist depending on the outer probe:
+
+- If the outer function takes a known type (e.g. `struct sk_buff`), the tracking
+  context is established immediately at entry and tagged so that inner probes can
+  find it. Inner probes that fire within the window will emit a tracking event
+  with the tracking id inherited from the outer; the skb address in those events
+  will be `0` since no known type is directly available at the inner probe site.
+- If the outer function does not take any known type, a sentinel is stored
+  instead to mark the window as open. If an inner SKB-aware probe fires within
+  that frame it replaces the sentinel with a real tracking reference; if no such
+  probe fires the window closes without producing any tracking event.
+
 The `skb-tracking` collector produces the
 [skb-tracking](../events/skb_tracking.md) event section.
 

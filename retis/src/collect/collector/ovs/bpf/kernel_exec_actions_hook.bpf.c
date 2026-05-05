@@ -2,7 +2,7 @@
 #include <ovs_common.h>
 
 /* Hook for kprobe:ovs_execute_actions. */
-DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
+DEFINE_HOOK(RETIS_F_PACKET_PASS,
 	u32 queue_id;
 	struct execute_actions_ctx ectx = {};
 	struct execute_actions_ctx *pectx;

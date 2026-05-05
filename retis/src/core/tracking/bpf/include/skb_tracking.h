@@ -80,7 +80,7 @@ struct tracking_info *skb_tracking_info_by_skb(struct sk_buff *skb)
 	return ti;
 }
 
-static __always_inline int track_skb_start(struct retis_context *ctx)
+static __always_inline u64 *track_skb_start(struct retis_context *ctx)
 {
 	bool inv_head = false, no_tracking = false, deferred_update = false;
 	struct tracking_info *ti = NULL, new;
@@ -90,7 +90,7 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 
 	skb = retis_get_sk_buff(ctx);
 	if (!skb)
-		return 0;
+		return NULL;
 
 	/* Try to retrieve the tracking configuration for this symbol. Only
 	 * specific ones will be found while we want to track skb in all
@@ -106,7 +106,7 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 
 	head = (u64)BPF_CORE_READ(skb, head);
 	if (!head)
-		return 0;
+		return NULL;
 
 	ti = bpf_map_lookup_elem(&tracking_map, &head);
 
@@ -136,13 +136,13 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 		 * there.
 		 */
 		if (ctx->probe_type == KERNEL_PROBE_KRETPROBE)
-			return 0;
+			return NULL;
 
 		/* Tracking info doesn't exist and we don't want to add one,
 		 * nothing more we can do here.
 		 */
 		if (no_tracking)
-			return 0;
+			return NULL;
 
 		ti = &new;
 		ti->timestamp = ctx->timestamp;
@@ -164,10 +164,10 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 	if (ti->stack_ref != ctx->stack_base)
 		ti->stack_ref = ctx->stack_base;
 
-	if (!track_stack_update(ctx->stack_base,
-			       inv_head
-			       ? (u64)skb
-			       : (u64)head))
+	u64 *ref = track_stack_update(ctx->stack_base,
+				      inv_head ? (u64)skb : (u64)head,
+				      BPF_ANY);
+	if (!ref)
 		log_error("While tracking stack. Unable to update the entry");
 
 	if (deferred_update)
@@ -179,7 +179,7 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 	if (inv_head)
 		bpf_map_update_elem(&tracking_map, (u64 *)&skb, ti, BPF_NOEXIST);
 
-	return 0;
+	return ref;
 }
 
 static __always_inline int track_skb_end(struct retis_context *ctx)
