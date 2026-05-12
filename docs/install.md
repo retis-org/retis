@@ -1,26 +1,15 @@
 # Installation
 
-Retis can be installed from a container image,
-[COPR](https://copr.fedorainfracloud.org/coprs/g/retis/retis/) for
-rpm-compatible distributions, or from sources.
+Retis can be installed from a container image, using pre-built packages on
+supported Linux distributions or from sources.
 
-### Fedora
+## Container image
 
-Starting with Fedora 43, Retis is available as an official package.
-
-```none
-$ dnf -y install retis
-$ retis --help
-```
-
-### Container image
-
-We provide a script to run Retis in a container for x86_64 and aarch64 targets,
+We provide a script to run Retis in a container for `x86_64` and `aarch64` targets,
 [retis_in_container.sh](https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh).
 The current directory is mounted with read-write permissions to the container
 working directory. This allows Retis to read and write files (eg. events, pcap).
-Both the Podman and Docker runtimes are supported (which is auto-detected by the
-above script).
+Both the Podman and Docker runtimes are supported (which is auto-detected).
 
 ```none
 $ curl -O https://raw.githubusercontent.com/retis-org/retis/main/tools/retis_in_container.sh
@@ -52,26 +41,24 @@ $ RETIS_IMAGE=my-registry.example.com/retis ./retis_in_container.sh --help
 `OVS_RUNDIR` environment variable can also be specified if the default one
 (/var/run/openvswitch) does not point to OVS's runtime directory.
 
-### COPR
+## Pre-built packages on Linux distributions
 
-RPM packages for Fedora (currently supported releases including Rawhide), RHEL (>=
-8) and EPEL (>= 8) are available.
+### Fedora (>= 43)
+
+```none
+$ dnf -y install retis
+```
+
+### Fedora (<= 42), RHEL (>= 8.6), CentOS Stream (>= 8.6), EPEL (>= 8.6)
 
 ```none
 $ dnf -y copr enable @retis/retis
 $ dnf -y install retis
-$ retis --help
 ```
 
-Or on older distributions,
+Use `yum` instead of `dnf` on older distributions (e.g. CentOS Stream 8).
 
-```none
-$ yum -y copr enable @retis/retis
-$ yum -y install retis
-$ retis --help
-```
-
-### From sources
+## From sources
 
 Retis depends on the following (in addition to Git and Cargo):
 
@@ -87,27 +74,21 @@ Retis depends on the following (in addition to Git and Cargo):
 If the `python` feature is used (which is by default), the Python3 shared
 libraries and headers must be available.
 
-On Fedora, one can run:
+To download Retis' sources:
 
 ```none
-$ dnf -y install git cargo clang elfutils-libelf-devel python3-devel \
-        jq libpcap-devel llvm make pkgconf-pkg-config
+$ git clone https://github.com/retis-org/retis    # Consider using --depth 1.
+$ cd retis
 ```
 
-On Ubuntu:
+To build Retis:
 
 ```none
-$ apt update
-$ apt -y install git cargo clang jq libelf-dev libpcap-dev python3-dev \
-        llvm make pkg-config
-```
+$ make -j$(nproc) release       # Release build.
+$ ./target/release/retis -V
 
-Then, to download and build Retis:
-
-```none
-$ git clone --depth 1 https://github.com/retis-org/retis; cd retis
-$ make release
-$ ./target/release/retis --help
+$ make -j$(nproc)               # Debug build.
+$ ./target/debug/retis -V
 ```
 
 Finally, profiles should be installed in either `/usr/share/retis/profiles` or
@@ -118,7 +99,30 @@ $ mkdir -p /usr/share/retis/profiles
 $ cp retis/profiles/* /usr/share/retis/profiles
 ```
 
-#### Cross-compilation
+### Fedora
+
+```none
+$ dnf -y install git cargo clang elfutils-libelf-devel python3-devel \
+        jq libpcap-devel llvm make pkgconf-pkg-config
+$ make -j$(nproc) release
+```
+
+### Debian based
+
+```none
+$ apt update
+$ apt -y install git cargo clang jq libelf-dev libpcap-dev python3-dev \
+        llvm make pkg-config
+```
+
+On Debian based systems `asm/errno.h` does not live in a path known to the
+compiler, in turn an additional header location must be configured. For example:
+
+```none
+$ CPATH=/usr/include/x86_64-linux-gnu make -j$(nproc) release
+```
+
+### Cross-compilation
 
 Retis can be cross-compiled and is currently supported on x86, x86-64 and
 aarch64. The target is defined using the `CARGO_BUILD_TARGET` environment
@@ -138,18 +142,7 @@ $ file ./target/aarch64-unknown-linux-gnu/release/retis
 [...] ARM aarch64, [...]
 ```
 
-### Running as non-root
-
-Retis can run as non-root if it has the right capabilities. Note that doing this
-alone often means `tracefs` won't be available as it's usually owned by `root`
-only and Retis won't be able to fully filter probes.
-
-```none
-$ sudo setcap cap_sys_admin,cap_bpf,cap_syslog=ep $(which retis)
-$ retis collect
-```
-
-### Shell auto-completion
+## Shell auto-completion
 
 Retis can generate completion files for shells (Bash, Zsh, Fish...).
 For example to enable auto-completion of Retis command in Bash, you can
