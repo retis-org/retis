@@ -142,17 +142,6 @@ $ file ./target/aarch64-unknown-linux-gnu/release/retis
 [...] ARM aarch64, [...]
 ```
 
-## Running as non-root
-
-Retis can run as non-root if it has the right capabilities. Note that doing this
-alone often means `tracefs` won't be available as it's usually owned by `root`
-only and Retis won't be able to fully filter probes.
-
-```none
-$ sudo setcap cap_sys_admin,cap_bpf,cap_syslog=ep $(which retis)
-$ retis collect
-```
-
 ## Shell auto-completion
 
 Retis can generate completion files for shells (Bash, Zsh, Fish...).
