@@ -10,13 +10,13 @@ static INSPECTOR: OnceCell<Inspector> = OnceCell::new();
 
 /// Gets a reference on the inspector.
 pub(crate) fn inspector() -> Result<&'static Inspector> {
-    INSPECTOR.get_or_try_init(|| Inspector::from(None))
+    INSPECTOR.get_or_try_init(|| Inspector::from(None, false))
 }
 
 /// Initialize the inspector with custom parameters, fail is already
 /// initialized.
-pub(crate) fn init_inspector(kconf: &PathBuf) -> Result<()> {
-    let inspector = Inspector::from(Some(kconf))?;
+pub(crate) fn init_inspector(kconf: Option<&PathBuf>, btf_cache: bool) -> Result<()> {
+    let inspector = Inspector::from(kconf, btf_cache)?;
     if INSPECTOR.set(inspector).is_err() {
         bail!("Could not init inspector: was already initialized.");
     }
@@ -31,9 +31,9 @@ pub(crate) struct Inspector {
 }
 
 impl Inspector {
-    fn from(kconf: Option<&PathBuf>) -> Result<Inspector> {
+    fn from(kconf: Option<&PathBuf>, btf_cache: bool) -> Result<Inspector> {
         Ok(Inspector {
-            kernel: KernelInspector::from(kconf)?,
+            kernel: KernelInspector::from(kconf, btf_cache)?,
         })
     }
 }

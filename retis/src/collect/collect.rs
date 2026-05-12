@@ -399,18 +399,18 @@ impl Collectors {
 
         // Setup user defined probes.
         let filter = |symbol: &Symbol| {
+            let params = symbol.get_parameters()?;
             // Skip probes not being compatible with the loaded collectors.
-            let ok = self.known_kernel_types.iter().any(|t| {
-                symbol
-                    .parameter_offset(t)
-                    .is_ok_and(|offset| offset.is_some())
-            });
+            let ok = self
+                .known_kernel_types
+                .iter()
+                .any(|t| params.iter().any(|(_, p)| p == t));
             if !ok {
                 info!(
                     "No probe was attached to {symbol} as no collector could retrieve data from it"
                 );
             }
-            ok
+            Ok(ok)
         };
         collect.probes.iter().try_for_each(|p| -> Result<()> {
             probe_from_cli(p, filter)?
