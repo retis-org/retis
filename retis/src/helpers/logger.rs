@@ -134,6 +134,13 @@ impl log::Log for Logger {
     }
 }
 
+/// Set verifier log level on all programs in an open object.
+pub(crate) fn set_libbpf_rs_prog_log_level(open_obj: &mut libbpf_rs::OpenObject) {
+    if log::max_level() == LevelFilter::Trace {
+        open_obj.progs_mut().for_each(|mut p| p.set_log_level(2));
+    }
+}
+
 pub(crate) fn set_libbpf_rs_print_callback(level: LevelFilter) {
     let libbpf_rs_print = |level, msg: String| {
         let msg = msg.trim_end_matches('\n');

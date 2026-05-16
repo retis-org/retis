@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 
-use crate::core::probe::*;
+use crate::{core::probe::*, helpers::logger::set_libbpf_rs_prog_log_level};
 
 /// Trait representing the interface used to create and handle probes. We use a
 /// trait here as we're supporting various attach types.
@@ -75,6 +75,7 @@ pub(super) fn replace_hook(fd: RawFd, hook: &Hook, target: String) -> Result<lib
     open_prog.set_prog_type(libbpf_rs::ProgramType::Ext);
     open_prog.set_attach_target(fd, Some(target))?;
 
+    set_libbpf_rs_prog_log_level(&mut open_obj);
     let obj = open_obj.load()?;
     let link = obj
         .progs_mut()
