@@ -1,0 +1,197 @@
+name: Build and test
+
+on:
+  pull_request:
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    container:
+      image: rust:bookworm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/rust-setup
+        with:
+          components: rustfmt clippy llvm-tools-preview
+          install-cargo-llvm-cov: "true"
+
+      - name: Build
+        run: make V=1 CARGO_OPTS=--verbose
+
+      - name: Test (with coverage)
+        run: |
+          curl -Os https://uploader.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          make test V=1 COV=1 CARGO_CMD_OPTS="--verbose --codecov --output-path retis.codecov"
+          ./codecov --verbose upload-process --disable-search --fail-on-error --git-service github -F x86_64 -f ./retis.codecov
+
+      - name: Rust fmt and clippy
+        run: |
+          make fmt-rust V=1
+          make clippy V=1 CARGO_CMD_OPTS="-- -D warnings"
+
+      - name: eBPF style check
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && locale-gen
+          make lint-ebpf BASE_COMMIT=origin/${{ github.base_ref }}
+
+      - name: Docs check
+        shell: bash
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python3 -m pip install -r docs/requirements.txt
+          mkdocs build --site-dir="/tmp/mkdocs-build"
+          rm -rf /tmp/mkdocs-build
+          deactivate && rm -rf .venv
+
+      - name: Generate schema
+        run: ./target/debug/retis schema > retis_schema.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retis-schema
+          path: retis_schema.json
+          retention-days: 7
+
+  benchmark:
+    runs-on: ubuntu-latest
+    container:
+      image: rust:bookworm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/rust-setup
+        with:
+          components: rustfmt clippy
+
+      - name: Build
+        run: make bench V=1 CARGO_OPTS=--verbose
+
+      - name: Run benchmarks
+        run: |
+          ./target/release/retis benchmark --ci events_parsing
+          ./target/release/retis benchmark --ci events_output
+
+      - name: Clippy (benchmark feature)
+        run: make clippy V=1 CARGO_CMD_OPTS="-F benchmark -- -D warnings"
+
+  aarch64:
+    name: aarch64 build & basic tests
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: rust:bookworm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/rust-setup
+        with:
+          components: rustfmt llvm-tools-preview
+          install-cargo-llvm-cov: "true"
+
+      - name: Build
+        run: make V=1 CARGO_OPTS=--verbose
+
+      - name: Test (with coverage)
+        run: |
+          curl -Os https://uploader.codecov.io/latest/aarch64/codecov
+          chmod +x codecov
+          make test V=1 COV=1 CARGO_CMD_OPTS="--verbose --codecov --output-path retis.codecov"
+          ./codecov --verbose upload-process --disable-search --fail-on-error --git-service github -F aarch64 -f ./retis.codecov
+
+  python:
+    name: Python lint & format
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.11-slim
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint and format check
+        run: |
+          apt-get update && apt-get install -y make
+          python3 -m pip install flake8 black
+          make lint-python V=1
+
+  build-python-lib:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release -m retis-events/Cargo.toml -F python-lib
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-wheels
+          path: target/wheels/*
+          retention-days: 7
+
+  test-python-lib:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    container:
+      image: python:${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install curl
+        run: |
+          apt-get update
+          apt-get install -y curl
+
+      - name: Install Rust (minimal)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup-init.sh
+          chmod +x rustup-init.sh && ./rustup-init.sh -y --profile minimal
+
+      - name: Run tox
+        shell: bash
+        run: |
+          source $HOME/.cargo/env
+          python -m pip install tox
+          make pytest
+
+  wireshark:
+    name: Build and test wireshark plugin
+    runs-on: ubuntu-latest
+    needs: [unittest]
+    container:
+      image: fedora:41
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: dnf install -y gcc make pkg-config wireshark-cli wireshark-devel json-c-devel
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: retis-schema
+          path: .
+
+      - name: Stage schema for tests
+        run: mv retis_schema.json retis/test_data/
+
+      - name: Build plugin
+        run: |
+          make wireshark
+          WIRESHARK_PLUGIN_BASE_DIR=/usr/lib64/wireshark/plugins/ make wireshark-install
+
+      - name: Test plugin
+        run: |
+          test $(tshark -r retis/test_data/test_events_packets.pcap -V | grep -c "Retis Metadata") -eq 26
+          test $(tshark -r retis/test_data/test_events_packets.pcap -o "retis.schema:retis/test_data/retis_schema.json" -Y 'retis.ct.state=="new"' | wc -l) -eq 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wireshark-plugin
+          path: tools/wireshark/*.so
+          retention-days: 7
