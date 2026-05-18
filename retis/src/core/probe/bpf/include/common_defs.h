@@ -48,6 +48,13 @@ static __always_inline bool collection_enabled() {
 #define COMMON_SECTION_CORE	0
 #define COMMON_SECTION_TASK	1
 
+extern int CONFIG_HZ __kconfig;
+
+/* Minimum interval between two log messages when using the rate limited
+ * logging macros.
+ */
+#define LOG_JIFFIES_RL	(CONFIG_HZ / 5)
+
 /* Aligned with the log crate. */
 enum {
 	LOG_ERROR = 1,
@@ -64,20 +71,26 @@ const volatile u8 log_level = LOG_INFO;
  * {error,slow} path.
  * Useful exceptions must use a high log level (ideally LOG_TRACE).
  */
+
+/* Internal helper: emit a single log entry unconditionally (no level check). */
+#define __retis_log(lvl, fmt, args...) \
+({ \
+	struct retis_log_event *__log = \
+	bpf_ringbuf_reserve(&log_map, \
+			    sizeof(struct retis_log_event), 0); \
+	if (__log) { \
+		__log->level = lvl; \
+		__log->ts = bpf_ktime_get_ns(); \
+		BPF_SNPRINTF(__log->msg, sizeof(__log->msg), fmt, \
+			     ##args); \
+		bpf_ringbuf_submit(__log, BPF_RB_FORCE_WAKEUP); \
+	} \
+})
+
 #define retis_log(lvl, fmt, args...) \
 ({ \
-	if (lvl <= log_level) { \
-		struct retis_log_event *__log = \
-		bpf_ringbuf_reserve(&log_map, \
-				    sizeof(struct retis_log_event), 0); \
-		if (__log) { \
-			__log->level = lvl; \
-			__log->ts = bpf_ktime_get_ns(); \
-			BPF_SNPRINTF(__log->msg, sizeof(__log->msg), fmt, \
-				     ##args); \
-			bpf_ringbuf_submit(__log, BPF_RB_FORCE_WAKEUP); \
-		} \
-	} \
+	if (lvl <= log_level) \
+		__retis_log(lvl, fmt, ##args); \
 })
 
 #define log_error(fmt, args...)	retis_log(LOG_ERROR, fmt, ##args)
@@ -85,6 +98,78 @@ const volatile u8 log_level = LOG_INFO;
 #define log_info(fmt, args...)		retis_log(LOG_INFO, fmt, ##args)
 #define log_debug(fmt, args...)	retis_log(LOG_DEBUG, fmt, ##args)
 #define log_trace(fmt, args...)	retis_log(LOG_TRACE, fmt, ##args)
+
+/* State shared across all CPUs and all probe programs for rate limiting. */
+struct log_ratelimit {
+	u64 last_log_jiffies;
+	u64 suppressed;
+} __binding;
+
+struct {
+	__uint(type, BPF_MAP_TYPE_ARRAY);
+	__uint(max_entries, 1);
+	__type(key, u32);
+	__type(value, struct log_ratelimit);
+} log_ratelimit_map SEC(".maps");
+
+/* Returns true if a log message should be allowed through, false if it should
+ * be suppressed.
+ *
+ * Usage:
+ *   if (rate_limit())
+ *       log_error(...);
+ */
+static __always_inline bool rate_limit(void)
+{
+	struct log_ratelimit *rl;
+	u64 now, last;
+	u32 key = 0;
+
+	rl = bpf_map_lookup_elem(&log_ratelimit_map, &key);
+	if (!rl)
+		return true;
+
+	now = bpf_jiffies64();
+	last = rl->last_log_jiffies;
+
+	if (now - last < LOG_JIFFIES_RL) {
+		__sync_fetch_and_add(&rl->suppressed, 1);
+		return false;
+	}
+
+	if (__sync_val_compare_and_swap(&rl->last_log_jiffies, last, now) == last)
+		return true;
+
+	/* Another CPU won the CAS race for this interval. */
+	__sync_fetch_and_add(&rl->suppressed, 1);
+	return false;
+}
+
+/* Rate-limited variant of retis_log(). Checks rate_limit() before attempting
+ * to reserve a ring buffer slot, so suppressed messages pay only the cost of
+ * the rate_limit() check itself.
+ */
+#define retis_log_rl(lvl, fmt, args...) \
+({ \
+	if (lvl <= log_level && rate_limit()) { \
+		struct log_ratelimit *__rl; \
+		u64 __suppressed = 0; \
+		u32 __zero = 0; \
+		__rl = bpf_map_lookup_elem(&log_ratelimit_map, &__zero); \
+		if (__rl) \
+			__suppressed = __sync_fetch_and_and(&__rl->suppressed, 0); \
+		if (__suppressed > 0) \
+			__retis_log(lvl, "[%llu message(s) suppressed]", \
+					 __suppressed); \
+		__retis_log(lvl, fmt, ##args); \
+	} \
+})
+
+#define log_error_rl(fmt, args...)	retis_log_rl(LOG_ERROR, fmt, ##args)
+#define log_warning_rl(fmt, args...)	retis_log_rl(LOG_WARN, fmt, ##args)
+#define log_info_rl(fmt, args...)	retis_log_rl(LOG_INFO, fmt, ##args)
+#define log_debug_rl(fmt, args...)	retis_log_rl(LOG_DEBUG, fmt, ##args)
+#define log_trace_rl(fmt, args...)	retis_log_rl(LOG_TRACE, fmt, ##args)
 
 struct retis_counters_key {
 	/* Symbol address. */

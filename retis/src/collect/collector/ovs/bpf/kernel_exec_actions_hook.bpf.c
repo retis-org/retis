@@ -30,7 +30,7 @@ DEFINE_HOOK(F_AND, RETIS_F_PACKET_PASS,
 	bpf_map_delete_elem(&flow_exec_tracking, &queue_id);
 
 	if (pectx->skb && pectx->skb != skb) {
-		log_error("skb stored while processing differs when executing actions");
+		log_error_rl("skb stored while processing differs when executing actions");
 		pectx->skb = skb;
 	}
 

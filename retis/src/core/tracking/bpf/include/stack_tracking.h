@@ -51,7 +51,7 @@ static __always_inline u64 get_stack_addr(void *ctx, enum kernel_probe_type type
 
 	/* Sanity check mostly against pt_regs. */
 	if (!addr)
-		log_error("Unexpected kernel stack base address (0).");
+		log_error_rl("Unexpected kernel stack base address (0).");
 
 	return addr;
 }

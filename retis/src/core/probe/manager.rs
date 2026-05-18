@@ -139,6 +139,8 @@ impl ProbeManager {
             config_map: builder.config_map,
             #[cfg(not(test))]
             counters_map: builder.counters_map,
+            #[cfg(not(test))]
+            log_ratelimit_map: builder.log_ratelimit_map,
             map_fds: builder.maps.into_iter().collect(),
             hooks: builder.generic_hooks.into_iter().collect(),
             generic_builders: HashMap::new(),
@@ -204,6 +206,9 @@ pub(crate) struct ProbeBuilderManager {
     /// Global per-probe map used to report counters.
     #[cfg(not(test))]
     counters_map: libbpf_rs::MapHandle,
+    /// Shared map holding the rate-limit state for eBPF log messages.
+    #[cfg(not(test))]
+    log_ratelimit_map: libbpf_rs::MapHandle,
 }
 
 impl ProbeBuilderManager {
@@ -223,6 +228,8 @@ impl ProbeBuilderManager {
             config_map: init_config_map()?,
             #[cfg(not(test))]
             counters_map: init_counters_map()?,
+            #[cfg(not(test))]
+            log_ratelimit_map: init_log_ratelimit_map()?,
         };
 
         #[cfg(not(test))]
@@ -239,6 +246,12 @@ impl ProbeBuilderManager {
         mgr.maps.insert(
             "counters_map".to_string(),
             mgr.counters_map.as_fd().as_raw_fd(),
+        );
+
+        #[cfg(not(test))]
+        mgr.maps.insert(
+            "log_ratelimit_map".to_string(),
+            mgr.log_ratelimit_map.as_fd().as_raw_fd(),
         );
 
         Ok(mgr)
@@ -378,6 +391,9 @@ pub(crate) struct ProbeRuntimeManager {
     /// Global per-probe map used to report counters.
     #[cfg(not(test))]
     counters_map: libbpf_rs::MapHandle,
+    /// Shared map holding the rate-limit state for eBPF log messages.
+    #[cfg(not(test))]
+    log_ratelimit_map: libbpf_rs::MapHandle,
     generic_builders: HashMap<ProbeTypeKey, Box<dyn ProbeBuilder>>,
     targeted_nohook_builders: HashMap<ProbeTypeKey, Box<dyn ProbeBuilder>>,
     targeted_builders: Vec<Box<dyn ProbeBuilder>>,

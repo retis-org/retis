@@ -168,7 +168,7 @@ static __always_inline int track_skb_start(struct retis_context *ctx)
 			       inv_head
 			       ? (u64)skb
 			       : (u64)head))
-		log_error("While tracking stack. Unable to update the entry");
+		log_error_rl("While tracking stack. Unable to update the entry");
 
 	if (deferred_update)
 		bpf_map_update_elem(&tracking_map, &head, ti, BPF_NOEXIST);
