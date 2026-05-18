@@ -86,6 +86,7 @@ endif
 
 INCLUDES_ALL := $(abspath $(wildcard $(shell find retis/src -type d -path '*/bpf/include')))
 INCLUDES_ALL += $(LIBBPF_INCLUDES)
+INCLUDES_ALL += /usr/include/$(ARCH)-linux-gnu
 
 INCLUDES := $(addprefix -I, $(INCLUDES_ALL))
 
