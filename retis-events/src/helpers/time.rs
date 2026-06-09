@@ -81,6 +81,12 @@ impl From<TimeSpec> for i64 {
     }
 }
 
+impl From<TimeSpec> for i128 {
+    fn from(ts: TimeSpec) -> Self {
+        i64::from(ts).into()
+    }
+}
+
 pub fn format_date_time(
     format: TimeFormat,
     timestamp: u64,

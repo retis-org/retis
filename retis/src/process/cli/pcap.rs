@@ -4,7 +4,6 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     path::PathBuf,
-    time::Duration,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -13,10 +12,12 @@ use log::{info, warn};
 use pcap_file::{
     pcapng::{
         blocks::{
-            custom::CustomCopiable,
+            custom::{CustomPayloadBlock, CustomPayloadCopiable, CustomUtf8Option},
             enhanced_packet::{EnhancedPacketBlock, EnhancedPacketOption},
-            interface_description::{InterfaceDescriptionBlock, InterfaceDescriptionOption},
-            opt_common::{CommonOption, CustomUtf8Option},
+            interface_description::{
+                InterfaceDescriptionBlock, InterfaceDescriptionOption, TsResolution,
+            },
+            opt_common::CommonOption,
             Block,
         },
         PcapNgBlock, PcapNgWriter,
@@ -76,6 +77,15 @@ macro_rules! some_or_return {
 // TODO: Register with IANA?
 const RETIS_PEN: u32 = 70000;
 
+// Custom error used for pcap-file API.
+#[derive(thiserror::Error, Debug)]
+enum SchemaBlockError {
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("i/o error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
 /// Custom block containing the JSON-Schema of events.
 struct SchemaBlock {
     schema: Schema,
@@ -89,31 +99,30 @@ impl SchemaBlock {
     }
 }
 
-impl CustomCopiable<'_> for SchemaBlock {
+impl CustomPayloadCopiable<'_> for SchemaBlock {
     const PEN: u32 = RETIS_PEN;
+
     type FromSliceError = SchemaBlockError;
     type WriteToError = SchemaBlockError;
 
-    fn write_to<W: Write>(&self, writer: &mut W) -> Result<(), SchemaBlockError> {
+    fn from_slice(
+        slice: &[u8],
+    ) -> Result<Option<Self>, <Self as CustomPayloadCopiable<'_>>::FromSliceError> {
+        let schema: Schema = serde_json::from_slice(slice)?;
+        Ok(Some(SchemaBlock { schema }))
+    }
+
+    fn write_to<W: Write>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), <Self as CustomPayloadCopiable<'_>>::WriteToError> {
         let bytes = serde_json::to_vec(&self.schema)?;
         writer.write_all(&bytes[..])?;
         Ok(())
     }
-
-    fn from_slice(slice: &[u8]) -> Result<Option<Self>, SchemaBlockError> {
-        let schema: Schema = serde_json::from_slice(slice)?;
-        Ok(Some(SchemaBlock { schema }))
-    }
 }
 
-// Custom error used for pcap-file API.
-#[derive(thiserror::Error, Debug)]
-enum SchemaBlockError {
-    #[error("json error: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("i/o error: {0}")]
-    Io(#[from] std::io::Error),
-}
+impl CustomPayloadBlock<'_> for SchemaBlock {}
 
 impl EventParser {
     /// Creates a new EventParser from a PcapNgWriter<W: Write>.
@@ -149,7 +158,7 @@ impl EventParser {
                         options: vec![
                             InterfaceDescriptionOption::IfName(iface.into()),
                             InterfaceDescriptionOption::IfDescription(desc.into()),
-                            InterfaceDescriptionOption::IfTsResol(9),
+                            InterfaceDescriptionOption::IfTsResol(TsResolution::from_u8(9)?),
                         ],
                     }
                     .into_block(),
@@ -189,7 +198,11 @@ impl EventParser {
 
         // If we see this iface for the first time, add a description block.
         if !self.wrote_header {
-            v.push(SchemaBlock::new()?.into_custom_block()?.into_block());
+            v.push(
+                SchemaBlock::new()?
+                    .into_custom_block_copiable()?
+                    .into_block(),
+            );
             self.wrote_header = true;
         }
 
@@ -199,9 +212,9 @@ impl EventParser {
         v.push(
             EnhancedPacketBlock {
                 interface_id: id,
-                timestamp: Duration::from_nanos(i64::from(
+                timestamp: i128::from(
                     TimeSpec::new(0, common.timestamp as i64) + self.ts_off.unwrap_or_default(),
-                ) as u64),
+                ),
                 original_len: packet.len,
                 data: Cow::Borrowed(&packet.data.0),
                 options: vec![
@@ -367,7 +380,7 @@ mod tests {
                 vec![
                     SchemaBlock::new()
                         .expect("Failed to create SchemaBlock")
-                        .into_custom_block()
+                        .into_custom_block_copiable()
                         .expect("Failed to convert SchemaBlock into block")
                         .into_block(),
                     Block::InterfaceDescription(InterfaceDescriptionBlock {
@@ -380,7 +393,7 @@ mod tests {
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
                                 "Fake interface for probe kretprobe/ovs_dp_upcall".to_string(),
                             )),
-                            InterfaceDescriptionOption::IfTsResol(9),
+                            InterfaceDescriptionOption::IfTsResol(TsResolution::from_u8(9).unwrap()),
                         ],
                     }),
                     Block::EnhancedPacket(EnhancedPacketBlock {
@@ -393,7 +406,7 @@ mod tests {
                             46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
                         ]),
                         interface_id: 0,
-                        timestamp: Duration::from_nanos(1742339565860167909),
+                        timestamp: 1742339565860167909,
                         original_len: 98,
                         options: vec![
                             EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned("30419169125909 (6) [ping] 11330 [kr] ovs_dp_upcall #1baa83c42ba1ffff8e95c3b67c00 (skb ffff8e95d3009100)\n  192.168.125.10 > 192.168.125.11 tos 0x0 ttl 64 id 41977 off 0 [DF] len 84 proto ICMP (1) type 8 code 0\n  ns 0x1/4026531840 if 10 (veth-ns01-ovs) rxif 10\n  skb [csum none hash 0x7e2c5976 len 98 priority 0 users 1 dataref 1]\n  upcall_ret (6/30419169098548) ret 0".to_string()))),
@@ -416,7 +429,7 @@ mod tests {
                             47, 48, 49, 50, 51, 52, 53, 54, 55,
                         ]),
                         interface_id: 0,
-                        timestamp: Duration::from_nanos(1742339565860414774),
+                        timestamp: 1742339565860414774,
                         original_len: 98,
                         options: vec![
                             EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned("30419169372774 (6) [handler8] 985/995 [kr] ovs_dp_upcall #1baa83c8a025ffff8e95c3b67c00 (skb ffff8e95d3009200)\n  192.168.125.11 > 192.168.125.10 tos 0x0 ttl 64 id 19491 off 0 len 84 proto ICMP (1) type 0 code 0\n  ns 0x1/4026531840 if 12 (veth-ns02-ovs) rxif 12\n  skb [csum none hash 0x7e2c5976 len 98 priority 0 users 1 dataref 1]\n  upcall_ret (6/30419169364667) ret 0".to_string()
@@ -441,7 +454,7 @@ mod tests {
                 vec![
                     SchemaBlock::new()
                         .expect("Failed to create SchemaBlock")
-                        .into_custom_block()
+                        .into_custom_block_copiable()
                         .expect("Failed to convert SchemaBlock into block")
                         .into_block(),
                     Block::InterfaceDescription(InterfaceDescriptionBlock {
@@ -454,7 +467,7 @@ mod tests {
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
                                 "Fake interface for probe raw_tracepoint/net:net_dev_start_xmit".to_string(),
                             )),
-                            InterfaceDescriptionOption::IfTsResol(9),
+                            InterfaceDescriptionOption::IfTsResol(TsResolution::from_u8(9).unwrap()),
                         ],
                     }),
                     Block::EnhancedPacket(EnhancedPacketBlock {
@@ -467,7 +480,7 @@ mod tests {
                             46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
                         ]),
                         interface_id: 0,
-                        timestamp: Duration::from_nanos(1742339565860103793),
+                        timestamp: 1742339565860103793,
                         original_len: 98,
                         options: vec![
                             EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned("30419169061793 (6) [ping] 11330 [tp] net:net_dev_start_xmit #1baa83c42ba1ffff8e95c3b67c00 (skb ffff8e95d3009100)\n  192.168.125.10 > 192.168.125.11 tos 0x0 ttl 64 id 41977 off 0 [DF] len 84 proto ICMP (1) type 8 code 0\n  ns 0x3/4026532741 if 11 (veth-ns01)\n  skb [csum none len 98 priority 0 users 1 dataref 1]\n  ct_state NEW status 0x8 icmp orig [192.168.125.10 > 192.168.125.11 type 8 code 0 id 29004] reply [192.168.125.11 > 192.168.125.10 type 0 code 0 id 29004] zone 0 mark 0".to_string()))),
@@ -488,7 +501,7 @@ mod tests {
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
                                 "Fake interface for probe raw_tracepoint/net:netif_receive_skb".to_string(),
                             )),
-                            InterfaceDescriptionOption::IfTsResol(9),
+                            InterfaceDescriptionOption::IfTsResol(TsResolution::from_u8(9).unwrap()),
                         ],
                     }),
                     Block::EnhancedPacket(EnhancedPacketBlock {
@@ -501,7 +514,7 @@ mod tests {
                             46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
                         ]),
                         interface_id: 1,
-                        timestamp: Duration::from_nanos(1742339565860124348),
+                        timestamp: 1742339565860124348,
                         original_len: 98,
                         options: vec![
                             EnhancedPacketOption::Common(CommonOption::Comment(Cow::Owned("30419169082348 (6) [ping] 11330 [tp] net:netif_receive_skb #1baa83c42ba1ffff8e95c3b67c00 (skb ffff8e95d3009100)\n  192.168.125.10 > 192.168.125.11 tos 0x0 ttl 64 id 41977 off 0 [DF] len 84 proto ICMP (1) type 8 code 0\n  ns 0x1/4026531840 if 10 (veth-ns01-ovs)\n  skb [csum none len 84 priority 0 users 1 dataref 1]".to_string()
