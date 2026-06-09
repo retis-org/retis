@@ -9,6 +9,7 @@ use crate::ip::IpNextHeaderProtocol;
 ///
 /// AH header:
 ///
+/// ```test
 ///    0                   1                   2                   3
 ///    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -22,6 +23,7 @@ use crate::ip::IpNextHeaderProtocol;
 ///   +                Integrity Check Value-ICV (variable)           |
 ///   |                                                               |
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// ```
 #[packet]
 pub struct Ah {
     #[construct_with(u8)]
@@ -45,6 +47,8 @@ fn ah_icv_len(ah: &AhPacket) -> usize {
 /// See [RFC 4303](https://datatracker.ietf.org/doc/html/rfc4303)
 ///
 /// ESP header:
+///
+/// ```text
 ///    0                   1                   2                   3
 ///    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+ ----
@@ -64,6 +68,7 @@ fn ah_icv_len(ah: &AhPacket) -> usize {
 ///   ~                                                               ~
 ///   |                                                               |
 ///   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+/// ```
 #[packet]
 pub struct Esp {
     pub spi: u32be,
