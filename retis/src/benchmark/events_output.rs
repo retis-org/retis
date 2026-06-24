@@ -50,7 +50,7 @@ pub(super) fn bench(ci: bool) -> Result<()> {
     // PrintSeries benchmark
 
     let mut factory = FileEventsFactory::from_path("retis/test_data/test_events_bench.json")?;
-    let mut tracker = AddTracking::new();
+    let mut tracker = AddTracking::default();
     let mut series = EventSorter::default();
 
     while let Some(mut event) = factory.next_event()? {
