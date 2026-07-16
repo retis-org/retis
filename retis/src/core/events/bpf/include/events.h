@@ -94,8 +94,8 @@ static __always_inline void *get_event_section(struct retis_raw_event *event,
 	left = sizeof(event->data) - event->size;
 
 	if (unlikely(requested > left)) {
-		log_error("Failed to get event section (%u): no space left (%u > %u)",
-			  owner, requested, left);
+		log_error_rl("Failed to get event section (%u): no space left (%u > %u)",
+			     owner, requested, left);
 		return NULL;
 	}
 

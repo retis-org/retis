@@ -331,7 +331,7 @@ static __always_inline int chain(struct retis_context *ctx)
 
 	ret = extend_ctx(ctx);
 	if (ret)
-		log_warning("ctx extension failed: %d", ret);
+		log_warning_rl("ctx extension failed: %d", ret);
 
 	skb = retis_get_sk_buff(ctx);
 	if (skb)

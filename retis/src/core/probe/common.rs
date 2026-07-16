@@ -2,8 +2,12 @@
 //!
 //! Module providing infrastructure shared by all probes
 use anyhow::{bail, Result};
+use libbpf_rs::MapCore;
 
-use crate::core::{inspect, probe::PROBE_MAX};
+use crate::{
+    bindings::common_defs_uapi::log_ratelimit,
+    core::{inspect, probe::PROBE_MAX},
+};
 
 // Please keep in sync with its BPF counterpart in bpf/include/common_defs.h
 #[repr(C)]
@@ -66,6 +70,32 @@ pub(crate) fn init_counters_map() -> Result<libbpf_rs::MapHandle> {
         PROBE_MAX as u32,
         &opts,
     )?)
+}
+
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn init_log_ratelimit_map() -> Result<libbpf_rs::MapHandle> {
+    let opts = libbpf_sys::bpf_map_create_opts {
+        sz: std::mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
+        ..Default::default()
+    };
+
+    let map = libbpf_rs::MapHandle::create(
+        libbpf_rs::MapType::Array,
+        Some("log_ratelimit_map"),
+        std::mem::size_of::<u32>() as u32,
+        std::mem::size_of::<log_ratelimit>() as u32,
+        1,
+        &opts,
+    )?;
+
+    let state = log_ratelimit::default();
+    map.update(
+        &0u32.to_ne_bytes(),
+        unsafe { plain::as_bytes(&state) },
+        libbpf_rs::MapFlags::ANY,
+    )?;
+
+    Ok(map)
 }
 
 #[cfg_attr(test, allow(dead_code))]
