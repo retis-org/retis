@@ -131,9 +131,6 @@ struct {
 #define DEFINE_HOOK_RAW(statements)					\
 	DEFINE_NAMED_HOOK(__PROG_NAME, F_ALWAYS, statements)
 
-/* Number of hooks installed, used to micro-optimize the call chain */
-const volatile u32 nhooks = 0;
-
 /* Hook definition, aimed at being replaced before the program is attached. The
  * temporary retval is volatile to not let the compiler think he can optimize
  * it. Credits to the XDP dispatcher.

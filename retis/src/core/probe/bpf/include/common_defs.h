@@ -24,6 +24,9 @@
 /* Keep in sync with its Rust counterpart in crate::core::probe */
 #define PROBE_MAX	1024
 
+/* Number of hooks installed */
+const volatile u32 nhooks = 0;
+
 /* Global probe configuration, shared between kernel and user probes. Please
  * keep in sync with its Rust counterpart in crate::core::probe::common.
  */
