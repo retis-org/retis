@@ -11,7 +11,7 @@ struct upcall_event {
 } __binding;
 
 /* Hook for raw_tracepoint:openvswitch:ovs_dp_upcall. */
-DEFINE_HOOK(F_GROUPS(RETIS_ALL_FILTERS),
+DEFINE_HOOK(
 	struct dp_upcall_info *upcall;
 	struct upcall_context uctx = {};
 	struct upcall_event *upcall_event;
