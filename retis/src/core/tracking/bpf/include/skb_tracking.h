@@ -4,6 +4,7 @@
 #include <vmlinux.h>
 #include <bpf/bpf_core_read.h>
 
+#include <common_defs.h>
 #include <retis_context.h>
 #include <stack_tracking.h>
 
@@ -174,7 +175,7 @@ static __always_inline void track_skb_start(struct retis_context *ctx,
 		/* Tracking info doesn't exist and we don't want to add one,
 		 * nothing more we can do here.
 		 */
-		if (no_tracking)
+		if (nhooks == 0 || no_tracking)
 			return;
 
 		ti = &new;
