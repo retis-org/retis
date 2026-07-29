@@ -153,8 +153,7 @@ static __always_inline void track_skb_start(struct retis_context *ctx,
 
 			}
 
-			bpf_map_update_elem(&tracking_map, &head, ti,
-					    BPF_NOEXIST);
+			bpf_map_update_elem(&tracking_map, &head, ti, BPF_ANY);
 		}
 	}
 
@@ -199,13 +198,13 @@ static __always_inline void track_skb_start(struct retis_context *ctx,
 		ti->stack_ref = ctx->stack_base;
 
 	if (deferred_update)
-		bpf_map_update_elem(&tracking_map, &head, ti, BPF_NOEXIST);
+		bpf_map_update_elem(&tracking_map, &head, ti, BPF_ANY);
 
 	/* If the function invalidates the skb head, we can't know what will be
 	 * the new head value. Temporarily track the skb using its skb address.
 	 */
 	if (inv_head)
-		bpf_map_update_elem(&tracking_map, (u64 *)&skb, ti, BPF_NOEXIST);
+		bpf_map_update_elem(&tracking_map, (u64 *)&skb, ti, BPF_ANY);
 
 	/* Get the existing stack ref before updating, and compute the new ref
 	 * value. Tag it as part of an ftrace window if we are already inside
