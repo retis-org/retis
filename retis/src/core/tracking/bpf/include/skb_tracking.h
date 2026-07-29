@@ -95,7 +95,7 @@ static __always_inline struct tracking_info *skb_tracking_info_by_stack(u64 stac
 static __always_inline void track_skb_start(struct retis_context *ctx,
 					    bool ftrace)
 {
-	bool inv_head = false, no_tracking = false, deferred_update = false;
+	bool inv_head = false, no_tracking = false, deferred_update = false, free = false;
 	struct tracking_info *ti = NULL, new;
 	struct tracking_config *cfg;
 	u64 head, ksym = ctx->ksym;
@@ -116,6 +116,7 @@ static __always_inline void track_skb_start(struct retis_context *ctx,
 	if (cfg) {
 		inv_head = cfg->inv_head;
 		no_tracking = cfg->no_tracking;
+		free = cfg->free;
 	}
 
 	head = (u64)BPF_CORE_READ(skb, head);
@@ -132,7 +133,25 @@ static __always_inline void track_skb_start(struct retis_context *ctx,
 			/* If found, index it by its data address from now on,
 			 * as others.
 			 */
-			bpf_map_delete_elem(&tracking_map, (u64 *)&skb);
+			bpf_map_delete_elem(&tracking_map, &skb);
+
+			/* If freeing the data area, we know the skb is not
+			 * shared. Clean up potential dangling entries. This
+			 * won't work if the skb was invalidated more than once,
+			 * but we have GC for that.
+			 */
+			if (free) {
+				struct tracking_info *ti2 =
+					bpf_map_lookup_elem(&tracking_map, &ti->orig_head);
+
+				/* Avoid deleting unrelated entries */
+				if (ti2 &&
+				    ti->timestamp == ti2->timestamp &&
+				    ti->orig_head == ti2->orig_head)
+					bpf_map_delete_elem(&tracking_map, &ti->orig_head);
+
+			}
+
 			bpf_map_update_elem(&tracking_map, &head, ti,
 					    BPF_NOEXIST);
 		}
