@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=quay.io/centos/centos:stream9
+ARG BASE_IMAGE=quay.io/centos/centos:stream10
 FROM ${BASE_IMAGE} as builder
 
 WORKDIR /retis
