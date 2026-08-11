@@ -21,6 +21,8 @@
    1. `podman run --rm --env MATURIN_PYPI_TOKEN=$(cat ~/.my_pypi_token)
        -v $(pwd):/io:z ghcr.io/pyo3/maturin publish -m retis-events/Cargo.toml
        -F python-lib`.
+       It is best practice to test your package on TestPyPI before publishing it to the
+       official index. For testing purposes, append `-r testpypi` to the options.
 
 ## After the release
 
