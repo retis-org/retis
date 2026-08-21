@@ -311,17 +311,17 @@ ret:
  */
 static __always_inline int chain(struct retis_context *ctx)
 {
+	struct retis_raw_event *event = NULL;
 	struct retis_probe_config *cfg;
-	struct retis_raw_event *event;
 	/* volatile needed here to prevent from optimizing the
 	 * event usage length read before and after the hook chain.
 	 */
 	struct common_task_event *ti;
 	static bool enabled = false;
-	volatile u16 pass_threshold;
 	struct common_event *e;
 	struct kernel_event *k;
 	struct sk_buff *skb;
+	long stack_id;
 	int ret;
 
 	/* Check if the collection is enabled, otherwise bail out. Once we have
@@ -336,8 +336,7 @@ static __always_inline int chain(struct retis_context *ctx)
 	cfg = bpf_map_lookup_elem(&config_map, &ctx->ksym);
 	if (!cfg)
 		return 0;
-
-	ctx->offsets = cfg->offsets;
+	__builtin_memcpy(&ctx->offsets, &cfg->offsets, sizeof(cfg->offsets));
 
 	ret = extend_ctx(ctx);
 	if (ret)
@@ -384,6 +383,57 @@ static __always_inline int chain(struct retis_context *ctx)
 		goto exit;
 	}
 
+	/* We retrieve the stack id early as the verifier looses its tracking of
+	 * the original context and calling bpf_get_stackid later will be
+	 * rejected. It's not a big deal as stack trace retrieval is enabled
+	 * per-probe and is impacting performances already.
+	 */
+	stack_id = unlikely(cfg->stack_trace) ?
+		bpf_get_stackid(ctx->orig_ctx, &stack_map, BPF_F_FAST_STACK_CMP) :
+		-1;
+
+/* Defines the logic to call hooks one by one.
+ *
+ * As a temporary quirk we do handle -ENOMSG and drop the event in this case.
+ * This should not be used too much and a proper long term solution should be
+ * found. The use case is to let hooks do some filtering otherwise we can end up
+ * being flooded with events in some cases as w/o this hooks can only filter
+ * themselves.
+ */
+#define ENOMSG	42
+#define CALL_HOOK(x)				\
+	if (x >= nhooks)			\
+		goto exit;			\
+	ret = hook##x(ctx, event);		\
+	if (unlikely(ret == -ENOMSG))		\
+		goto discard_event;
+	CALL_HOOK(0)
+	CALL_HOOK(1)
+	CALL_HOOK(2)
+	CALL_HOOK(3)
+	CALL_HOOK(4)
+	CALL_HOOK(5)
+	CALL_HOOK(6)
+	CALL_HOOK(7)
+	CALL_HOOK(8)
+	CALL_HOOK(9)
+
+exit:
+	/* Cleanup stage while tracking an skb. If no skb is available this is a
+	 * no-op.
+	 */
+	if (RETIS_TRACKABLE(ctx))
+		track_skb_end(ctx, cfg->ftrace);
+
+	if (!event)
+		return 0;
+
+	if (!get_event_size(event)) {
+discard_event:
+		discard_event(event);
+		return 0;
+	}
+
 	e = get_event_section(event, COMMON, COMMON_SECTION_CORE, sizeof(*e));
 	if (!e)
 		goto discard_event;
@@ -404,53 +454,9 @@ static __always_inline int chain(struct retis_context *ctx)
 
 	k->symbol = ctx->ksym;
 	k->type = ctx->probe_type;
-	if (cfg->stack_trace)
-		k->stack_id = bpf_get_stackid(ctx->orig_ctx, &stack_map, BPF_F_FAST_STACK_CMP);
-	else
-		k->stack_id = -1;
+	k->stack_id = stack_id;
 
-	pass_threshold = get_event_size(event);
-	barrier_var(pass_threshold);
-
-/* Defines the logic to call hooks one by one.
- *
- * As a temporary quirk we do handle -ENOMSG and drop the event in this case.
- * This should not be used too much and a proper long term solution should be
- * found. The use case is to let hooks do some filtering otherwise we can end up
- * being flooded with events in some cases as w/o this hooks can only filter
- * themselves.
- */
-#define ENOMSG	42
-#define CALL_HOOK(x)				\
-	if (x < nhooks) {			\
-		int ret = hook##x(ctx, event);	\
-		if (ret == -ENOMSG)		\
-			goto discard_event;	\
-	}
-	CALL_HOOK(0)
-	CALL_HOOK(1)
-	CALL_HOOK(2)
-	CALL_HOOK(3)
-	CALL_HOOK(4)
-	CALL_HOOK(5)
-	CALL_HOOK(6)
-	CALL_HOOK(7)
-	CALL_HOOK(8)
-	CALL_HOOK(9)
-
-	if (get_event_size(event) > pass_threshold)
-		send_event(event);
-	else
-discard_event:
-		discard_event(event);
-
-exit:
-	/* Cleanup stage while tracking an skb. If no skb is available this is a
-	 * no-op.
-	 */
-	if (RETIS_TRACKABLE(ctx))
-		track_skb_end(ctx, cfg->ftrace);
-
+	send_event(event);
 	return 0;
 }
 

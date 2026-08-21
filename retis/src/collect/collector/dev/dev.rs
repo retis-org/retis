@@ -42,7 +42,7 @@ impl Collector for DevCollector {
 pub(crate) struct DevEventFactory {}
 
 impl RawEventSectionFactory for DevEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let raw = parse_single_raw_section::<dev_event>(&raw_sections)?;
 
         // Retrieving information from `skb->dev` is tricky as this is inside an

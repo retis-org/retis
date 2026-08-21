@@ -1,6 +1,6 @@
 #![allow(dead_code)] // FIXME
 
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, sync::RwLock};
 
 use anyhow::{bail, Result};
 #[cfg(not(test))]
@@ -78,7 +78,7 @@ pub(crate) struct KernelEventFactory {
     #[cfg(not(test))]
     pub(crate) stack_map: Option<libbpf_rs::MapHandle>,
     // Cache of symbol addr -> name
-    symbols_cache: HashMap<u64, String>,
+    symbols_cache: RwLock<HashMap<u64, String>>,
 }
 
 impl KernelEventFactory {
@@ -120,20 +120,31 @@ impl KernelEventFactory {
 }
 
 impl RawEventSectionFactory for KernelEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let raw = parse_single_raw_section::<kernel_event>(&raw_sections)?;
         let mut kernel = KernelEvent::default();
 
         let symbol_addr = raw.symbol;
-        kernel.symbol = match self.symbols_cache.get(&symbol_addr) {
-            Some(name) => name.clone(),
-            None => {
-                let name = Symbol::from_addr(symbol_addr)?.name();
-                self.symbols_cache.insert(symbol_addr, name.clone());
-                name
-            }
-        };
+        if !self
+            .symbols_cache
+            .read()
+            .unwrap()
+            .contains_key(&symbol_addr)
+        {
+            self.symbols_cache
+                .write()
+                .unwrap()
+                .insert(symbol_addr, Symbol::from_addr(symbol_addr)?.name());
+        }
 
+        // Unwrap as we just made sure the key exists.
+        kernel.symbol = self
+            .symbols_cache
+            .read()
+            .unwrap()
+            .get(&symbol_addr)
+            .unwrap()
+            .clone();
         kernel.probe_type = match raw.type_ {
             0 => "kprobe",
             1 => "kretprobe",
