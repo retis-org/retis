@@ -277,23 +277,11 @@ impl eBpfInsn {
     }
 
     fn endian(dst: u8, order: EndianInfo) -> eBpfInsn {
-        let endian_type;
-        let imm;
-
-        match order {
-            EndianInfo::E16 { r#type } => {
-                imm = 16;
-                endian_type = r#type;
-            }
-            EndianInfo::E32 { r#type } => {
-                imm = 32;
-                endian_type = r#type;
-            }
-            EndianInfo::E64 { r#type } => {
-                imm = 64;
-                endian_type = r#type;
-            }
-        }
+        let (imm, endian_type) = match order {
+            EndianInfo::E16 { r#type } => (16, r#type),
+            EndianInfo::E32 { r#type } => (32, r#type),
+            EndianInfo::E64 { r#type } => (64, r#type),
+        };
 
         Self::insn(
             bpf_sys::BPF_ALU | bpf_sys::BPF_END | endian_type as u8,
