@@ -433,4 +433,49 @@ EOF
 	python test.py
 }
 
-run_tests skb_sanity skb_tcp_cc skb_vlan
+skb_l2_l3() {
+	two_ns
+
+	# The ARP request will generate a packet event with a fake Ethernet
+	# header.
+	ip -net ns0 neigh flush all
+	$retis collect -o \
+		-p arp_xmit \
+		--cmd "ip netns exec ns0 ping -c1 10.0.42.2; sleep 1"
+	$retis print -e |\
+		grep -E "^  request who-has 10.0.42.2 tell 10.0.42.1"
+	$retis pcap -p arp_xmit | tcpdump -ennr - |\
+		grep -E "f0:c4:cc:14:00:00 > f0:c4:cc:14:00:00, ethertype ARP \(0x0806\), .* Request who-has 10.0.42.2 tell 10.0.42.1"
+
+	# Start the server for the next tests.
+	ip netns exec ns1 socat TCP-LISTEN:80 /dev/null &
+
+	# Collecting on ip_output will collect L3-only packets while the ip_rcv
+	# probe will collect L2 packets.
+	$retis collect -o \
+		-f "tcp port 80 or arp" \
+		-p ip_output -p ip_rcv \
+		--cmd "ip netns exec ns0 socat - TCP:10.0.42.2:80"
+
+	# Check the ip_output handling (with -e).
+	head -1 retis.data > ip_output.data
+	grep \"ip_output\" retis.data >> ip_output.data
+	$retis print -e ip_output.data |\
+		grep -E "^  10.0.42.1.[0-9]{4,5} > 10.0.42.2.80 .* proto TCP \(6\) flags \[S\]"
+
+	# Check the ip_rcv handling (with -e).
+	head -1 retis.data > ip_rcv.data
+	grep \"ip_rcv\" retis.data >> ip_rcv.data
+	$retis print -e ip_rcv.data |\
+		grep -E "^  ([0-9a-f]{2}:?){6} > ([0-9a-f]{2}:?){6} ethertype IPv4 \(0x0800\) 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80 .* proto TCP \(6\) flags \[S\]"
+
+	# Check PCAP content from ip_output.
+	$retis pcap -p ip_output | tcpdump -nnr - |\
+		grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[S\]"
+
+	# Check PCAP content from ip_rcv.
+	$retis pcap -p ip_rcv | tcpdump -nnr - |\
+		grep -E "IP 10.0.42.1.[0-9]{4,5} > 10.0.42.2.80: Flags \[S\]"
+}
+
+run_tests skb_sanity skb_tcp_cc skb_vlan skb_l2_l3

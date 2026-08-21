@@ -23,92 +23,44 @@ pub struct PacketEvent {
     pub len: u32,
     /// Capture length. <= len.
     pub capture_len: u32,
+    /// Packet kind.
+    pub kind: PacketKind,
     /// Raw packet data.
     pub data: RawPacket,
+}
+
+/// Describes the kind of packet that was captured as raw data.
+#[event_type]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum PacketKind {
+    #[default]
+    Ethernet,
+    FakeEthernet,
+    Ipv4,
+    Ipv6,
 }
 
 #[allow(dead_code)]
 #[cfg(feature = "python")]
 #[cfg_attr(feature = "python", pymethods)]
 impl PacketEvent {
-    /// Forward the `to_scapy` method down to the RawPacket.
-    fn to_scapy(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        self.data.to_scapy(py)
-    }
-}
-
-impl EventFmt for PacketEvent {
-    fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
-        self.data.event_fmt(f, format)
-    }
-}
-
-/// Represents a raw packet. Stored internally as a `Vec<u8>`.
-/// We don't use #[event_type] as we're implementing serde::Serialize and
-/// serde::Deserialize manually.
-#[derive(Clone, Debug, schemars::JsonSchema)]
-#[cfg_attr(feature = "python", pyclass(from_py_object))]
-pub struct RawPacket(pub Vec<u8>);
-
-impl serde::Serialize for RawPacket {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.collect_str(&Base64Display::new(&self.0, &STANDARD))
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for RawPacket {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct RawPacketVisitor;
-
-        impl serde::de::Visitor<'_> for RawPacketVisitor {
-            type Value = RawPacket;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("raw packet as base64 string")
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                match BASE64_STANDARD.decode(value).map(RawPacket) {
-                    Ok(v) => Ok(v),
-                    Err(_) => Err(serde::de::Error::invalid_value(
-                        serde::de::Unexpected::Str(value),
-                        &self,
-                    )),
-                }
-            }
-        }
-
-        deserializer.deserialize_str(RawPacketVisitor)
-    }
-}
-
-#[allow(dead_code)]
-#[cfg(feature = "python")]
-#[cfg_attr(feature = "python", pymethods)]
-impl RawPacket {
-    fn __repr__(&self, py: Python<'_>) -> String {
-        self.__bytes__(py).to_string()
-    }
-
     fn __bytes__(&self, py: Python<'_>) -> Py<PyBytes> {
-        PyBytes::new(py, &self.0).into()
+        PyBytes::new(py, &self.data.0).into()
     }
 
     pub(crate) fn to_scapy(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         match py.import("scapy.all") {
             Ok(scapy) => {
                 let locals = [("scapy", scapy)].into_py_dict(py)?;
-                let packet = PyBytes::new(py, &self.0);
-                let ins = CString::new(format!("scapy.Ether({packet})"))?;
+                let packet = PyBytes::new(py, &self.data.0);
+                let ins = CString::new(match self.kind {
+                    PacketKind::Ethernet | PacketKind::FakeEthernet => {
+                        format!("scapy.Ether({packet})")
+                    }
+                    PacketKind::Ipv4 => format!("scapy.IP({packet})"),
+                    PacketKind::Ipv6 => format!("scapy.IPv6({packet})"),
+                })?;
                 Ok(py.eval(ins.as_c_str(), None, Some(&locals))?.into())
             }
             Err(_) => Err(PyImportError::new_err("Could not import scapy.all")),
@@ -128,7 +80,7 @@ enum PacketFmtError {
 
 type FmtResult<T> = std::result::Result<T, PacketFmtError>;
 
-impl EventFmt for RawPacket {
+impl EventFmt for PacketEvent {
     fn event_fmt(&self, f: &mut Formatter, format: &DisplayFormat) -> fmt::Result {
         // Do not propagate errors on parsing: keep things best effort (except
         // for real formatting issues).
@@ -142,11 +94,26 @@ impl EventFmt for RawPacket {
     }
 }
 
-impl RawPacket {
+impl PacketEvent {
     fn format_packet(&self, f: &mut Formatter, format: &DisplayFormat) -> FmtResult<()> {
-        match EthernetPacket::new(&self.0) {
-            Some(eth) => self.format_ethernet(f, format, &eth),
-            None => Err(PacketFmtError::Truncated),
+        let data = &self.data.0;
+        match self.kind {
+            PacketKind::Ethernet | PacketKind::FakeEthernet => self.format_ethernet(
+                f,
+                format,
+                &EthernetPacket::new(data).ok_or(PacketFmtError::Truncated)?,
+                self.kind == PacketKind::FakeEthernet,
+            ),
+            PacketKind::Ipv4 => self.format_ipv4(
+                f,
+                format,
+                &Ipv4Packet::new(data).ok_or(PacketFmtError::Truncated)?,
+            ),
+            PacketKind::Ipv6 => self.format_ipv6(
+                f,
+                format,
+                &Ipv6Packet::new(data).ok_or(PacketFmtError::Truncated)?,
+            ),
         }
     }
 
@@ -155,6 +122,7 @@ impl RawPacket {
         f: &mut Formatter,
         format: &DisplayFormat,
         eth: &EthernetPacket,
+        fake: bool,
     ) -> FmtResult<()> {
         let etype = match helpers::net::etype_str(eth.get_ethertype()) {
             Some(etype) => etype,
@@ -169,7 +137,7 @@ impl RawPacket {
             }
         };
 
-        if format.print_ll {
+        if format.print_ll && !fake {
             write!(
                 f,
                 "{} > {} ethertype {etype} ({:#06x})",
@@ -179,7 +147,7 @@ impl RawPacket {
             )?;
         }
 
-        self.traverse_vlan(f, format, eth.get_ethertype(), eth.payload())
+        self.traverse_vlan(f, format, eth.get_ethertype(), eth.payload(), fake)
     }
 
     fn traverse_vlan(
@@ -188,6 +156,7 @@ impl RawPacket {
         format: &DisplayFormat,
         etype: EtherType,
         payload: &[u8],
+        fake: bool,
     ) -> FmtResult<()> {
         match etype {
             EtherTypes::Vlan | EtherTypes::PBridge | EtherTypes::QinQ => {
@@ -201,12 +170,13 @@ impl RawPacket {
                             format,
                             vlan.get_ethertype(),
                             &payload[vlan.packet_size()..],
+                            fake,
                         )
                     }
                     None => Err(PacketFmtError::Truncated),
                 }
             }
-            _ => self.format_etype(f, format, etype, payload),
+            _ => self.format_etype(f, format, etype, payload, fake),
         }
     }
 
@@ -238,10 +208,11 @@ impl RawPacket {
         format: &DisplayFormat,
         etype: EtherType,
         payload: &[u8],
+        fake: bool,
     ) -> FmtResult<()> {
         // In case link-layer information is printed this is not the start of
         // the output.
-        if format.print_ll {
+        if format.print_ll && !fake {
             write!(f, " ")?;
         }
 
@@ -548,7 +519,7 @@ impl RawPacket {
 
         let payload = macsec.payload();
         let protocol = EtherType::new(u16::from_be_bytes(payload[0..2].try_into().unwrap()));
-        self.traverse_vlan(f, format, protocol, &payload[2..])
+        self.traverse_vlan(f, format, protocol, &payload[2..], false)
     }
 
     fn format_protocol(
@@ -982,7 +953,7 @@ impl RawPacket {
 
         write!(f, " ")?;
         match EthernetPacket::new(vxlan.payload()) {
-            Some(eth) => self.format_ethernet(f, format, &eth),
+            Some(eth) => self.format_ethernet(f, format, &eth, false),
             None => Err(PacketFmtError::Truncated),
         }
     }
@@ -1062,10 +1033,10 @@ impl RawPacket {
         write!(f, " ")?;
         match protocol {
             EtherTypes::Teb => match EthernetPacket::new(geneve.payload()) {
-                Some(eth) => self.format_ethernet(f, format, &eth),
+                Some(eth) => self.format_ethernet(f, format, &eth, false),
                 None => Err(PacketFmtError::Truncated),
             },
-            _ => self.format_etype(f, format, protocol, geneve.payload()),
+            _ => self.format_etype(f, format, protocol, geneve.payload(), false),
         }
     }
 }
@@ -1082,10 +1053,15 @@ mod tests {
             "ukoiHKOOzikYufsvCABFAACGORIAAEAR2VIKACoBCgAqAkL5F8EAcmiGAABlWAAAAQAO2mLRzBfW99tozRgIAEUAAFRH90AAQAGIrwoAKwEKACsCCAA5rgUFAAE5cv5nAAAAAL+eAwAAAAAAEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nw==",
             &mut buf,
         ).unwrap();
-        let raw = RawPacket(buf);
+        let packet = PacketEvent {
+            len: 0,
+            capture_len: 0,
+            kind: PacketKind::Ethernet,
+            data: RawPacket(buf),
+        };
 
         assert_eq!(
-            &format!("{}", raw.display(&DisplayFormat::new(), &FormatterConf::new())),
+            &format!("{}", packet.display(&DisplayFormat::new(), &FormatterConf::new())),
             "10.0.42.1.17145 > 10.0.42.2.6081 tos 0x0 ttl 64 id 14610 off 0 len 134 proto UDP (17) len 106 geneve [] vni 0x1 10.0.43.1 > 10.0.43.2 tos 0x0 ttl 64 id 18423 off 0 [DF] len 84 proto ICMP (1) type 8 code 0",
         );
     }
@@ -1097,10 +1073,15 @@ mod tests {
             "rrBKar+vnh09MZ47ht1gBvSKACgGQBERAAAAAAAAAAAAAAAAAAEREQAAAAAAAAAAAAAAAAAC22QAULIRwcAAAAAAoAL9ICJTAAACBAWgBAIIClP9HoIAAAAAAQMDBw==",
             &mut buf,
         ).unwrap();
-        let raw = RawPacket(buf);
+        let packet = PacketEvent {
+            len: 0,
+            capture_len: 0,
+            kind: PacketKind::Ethernet,
+            data: RawPacket(buf),
+        };
 
         assert_eq!(
-            &format!("{}", raw.display(&DisplayFormat::new().print_ll(true), &FormatterConf::new())),
+            &format!("{}", packet.display(&DisplayFormat::new().print_ll(true), &FormatterConf::new())),
             "9e:1d:3d:31:9e:3b > ae:b0:4a:6a:bf:af ethertype IPv6 (0x86dd) 1111::1.56164 > 1111::2.80 ttl 64 label 0x6f48a len 40 proto TCP (6) flags [S] seq 2987508160 win 64800 [mss 1440,sackOK,TS val 1409097346 ecr 0,nop,wscale 7]"
         );
     }
@@ -1112,11 +1093,64 @@ mod tests {
             "Oh7dUvtE6h3Fhm4TCABFAgBEAABAAECE0jEKACoBCgAqAoVME8QAAAAAAAAAAAEAACTFizMuAAGgAAAK///40kCcAAwABgAFAACAAAAEwAAABA==",
             &mut buf,
         ).unwrap();
-        let raw = RawPacket(buf);
+        let packet = PacketEvent {
+            len: 0,
+            capture_len: 0,
+            kind: PacketKind::Ethernet,
+            data: RawPacket(buf),
+        };
 
         assert_eq!(
-            &format!("{}", raw.display(&DisplayFormat::new(), &FormatterConf::new())),
+            &format!("{}", packet.display(&DisplayFormat::new(), &FormatterConf::new())),
             "10.0.42.1.34124 > 10.0.42.2.5060 tos 0x0 ECT(0) ttl 64 id 0 off 0 [DF] len 68 proto SCTP (132) vtag 0x0 [INIT init_tag 0xc58b332e rwnd 106496 OS 10 MIS 65535 init_TSN 4174528668]"
         );
+    }
+}
+
+/// Represents a raw packet. Stored internally as a `Vec<u8>`.
+/// We don't use #[event_type] as we're implementing serde::Serialize and
+/// serde::Deserialize manually.
+#[derive(Clone, Debug, schemars::JsonSchema)]
+#[cfg_attr(feature = "python", pyclass(from_py_object))]
+pub struct RawPacket(pub Vec<u8>);
+
+impl serde::Serialize for RawPacket {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(&Base64Display::new(&self.0, &STANDARD))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for RawPacket {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RawPacketVisitor;
+
+        impl serde::de::Visitor<'_> for RawPacketVisitor {
+            type Value = RawPacket;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("raw packet as base64 string")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match BASE64_STANDARD.decode(value).map(RawPacket) {
+                    Ok(v) => Ok(v),
+                    Err(_) => Err(serde::de::Error::invalid_value(
+                        serde::de::Unexpected::Str(value),
+                        &self,
+                    )),
+                }
+            }
+        }
+
+        deserializer.deserialize_str(RawPacketVisitor)
     }
 }
