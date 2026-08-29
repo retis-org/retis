@@ -1,0 +1,687 @@
+%YAML 1.2
+---
+# Retis event output syntax highlighting for bat.
+#
+# Install:
+#   mkdir -p ~/.config/bat/syntaxes
+#   cp tools/retis.sublime-syntax ~/.config/bat/syntaxes/
+#   bat cache --build
+#
+# Usage:
+#   retis print retis.data | bat --language retis
+#
+
+name: Retis
+file_extensions: []
+scope: source.retis
+version: 2
+
+variables:
+
+  # Addresses
+  # =========
+  #
+  # Ordering rules (critical for correct matching):
+  #   1. MAC before IPv6 (both use ':')
+  #   2. IPv4.port before bare IPv4
+  #   3. IPv6.port before bare IPv6
+  #
+  # These patterns are ONLY used inside address-aware contexts
+  # (packet-src, packet-dst, ct-tuple, ovs-body, arp-body).
+  # They must NOT be used in field/value contexts where colons
+  # can appear in non-address roles (e.g. TCP seq ranges 123:456).
+
+  # MAC address (lowercase hex, as retis always outputs)
+  mac: '(?:[0-9a-f]{2}:){5}[0-9a-f]{2}'
+
+  # IPv4 with port (retis format: a.b.c.d.port — port is last dotted segment)
+  ipv4_port: '\b(?:\d{1,3}\.){3}\d{1,3}\.\d+\b'
+
+  # IPv4 bare
+  ipv4: '\b(?:\d{1,3}\.){3}\d{1,3}\b'
+
+  # IPv6 with port (addr contains ':', port after last '.', e.g. 2606::1111.53)
+  ipv6_port: '[0-9a-f]*:[0-9a-f:]*\.[0-9]+'
+
+  # IPv6 bare (at least one ':')
+  ipv6: '[0-9a-f]*:[0-9a-f:]+[0-9a-f]*'
+
+  # Header
+  # ======
+
+  probe_type: '\[(?:k|tp|kr|u)\]'
+
+  header_pattern: |-
+    (?x)
+    (\d+)                       # timestamp
+    (\s+\(\d+\))?               # (cpu), optional
+    (\s+\[[^\]]+\])?            # [comm], optional
+    (\s+\S+\s+)?                # pid[/tgid], optional
+    ({{probe_type}})            # [k]/[tp]/[kr]/[u]
+    (\s+\S+)?                   # symbol name, optional
+    (\s+\#[0-9a-f]+)?           # #hexid, optional
+    (\s+\(skb\s+[0-9a-f]+\))?   # (skb addr), optional
+    (\s+n\s+\d+)?               # n idx, optional
+
+  # Packet fields
+  # =============
+  #
+  # Tunnel keywords trigger re-entry into address-matching contexts.
+  # Everything else stays in the field context where IPv6-like
+  # patterns (e.g. TCP seq ranges with ':') are never tried.
+
+  tunnel_keywords: 'geneve|vxlan'
+
+  # IPv4 fields (always present after dst address):
+  #   tos {val} [ECN] ttl {val} id {val} off {val} [[flags]] [len {val}] [opts [...]] proto NAME (num)
+  # IPv6 fields:
+  #   [ECN] ttl {val} label {val} [len {val}] [exts [...]] proto NAME (num)
+  # Transport fields (appended after proto):
+  #   TCP: flags [...] seq {val}[:{val}] [ack {val}] win {val} [{tcp_opts}]
+  #   UDP: len {val} [tunnel ...]
+  #   ICMP/ICMPv6: type {val} code {val}
+  #   ESP: spi {val} seq {val}
+  #   AH: spi {val} seq {val} icv {val} proto NAME (num)
+  #   SCTP: vtag {val} [{chunks}]
+
+  packet_field_keywords: |-
+    (?x)\b(
+      proto | ethertype | vlan
+    | ttl | tos | id | off | len | label
+    | type | code | flags
+    | seq | ack | win
+    | mss | wscale | sackOK | nop
+    | vni | an | pn | sl | sci | spi
+    | vtag | rwnd | init_tag
+    )\b
+
+##############################################################################
+
+contexts:
+
+  # =========================================================================
+  # Utility contexts
+  # =========================================================================
+
+  immediately-pop:
+    - match: ''
+      pop: 1
+
+  # =========================================================================
+  # Top-level router — order matters: more-specific patterns first
+  # =========================================================================
+  main:
+    - include: series-continuation
+    - include: header
+    - include: packet
+    - include: arp
+    - include: ns-if
+    - include: ct-state
+    - include: nft-line
+    - include: skb-line
+    - include: ovs-line
+    - include: startup-line
+    - include: drop-line
+
+  # =========================================================================
+  # Shared address patterns — used ONLY in address-aware contexts
+  #
+  # All addresses share scope entity.other.attribute-name.* so they all
+  # receive the same color from the theme.
+  # =========================================================================
+  addresses:
+    # MAC (before IPv6 — both use ':')
+    - match: '{{mac}}'
+      scope: entity.other.attribute-name.mac.retis
+
+    # IPv4 with port
+    - match: '{{ipv4_port}}'
+      scope: entity.other.attribute-name.ip-port.retis
+
+    # IPv4 bare
+    - match: '{{ipv4}}'
+      scope: entity.other.attribute-name.ip.retis
+
+    # IPv6 with port
+    - match: '{{ipv6_port}}'
+      scope: entity.other.attribute-name.ip-port.retis
+
+    # IPv6 bare
+    - match: '{{ipv6}}'
+      scope: entity.other.attribute-name.ip.retis
+
+  # IPv4-only addresses — used in ct-body where IPv6 patterns would
+  # false-positive on non-address colon-separated values.
+  addresses-ipv4:
+    - match: '{{ipv4_port}}'
+      scope: entity.other.attribute-name.ip-port.retis
+
+    - match: '{{ipv4}}'
+      scope: entity.other.attribute-name.ip.retis
+
+  # =========================================================================
+  # Shared per-protocol name patterns
+  #
+  # All protocol names left unscoped (neutral fg).
+  # =========================================================================
+  proto-names:
+    - match: '\b(TCP|tcp|UDP|udp|ICMPv6|ICMP|icmp|SCTP|sctp)\b'
+
+###[ HEADER LINE ]############################################################
+  #
+  # Composed of multiple core event sections (see docs/events/core.md):
+  #
+  #   Common:   {timestamp} ({smp id}) [{comm}] {pid}/{tgid}
+  #   Kernel:   [{probe type}] {symbol name}
+  #   User:     [u] {symbol name}
+  #   Tracking: #{tracking id} (skb {skb address}) n {event index}
+
+  header:
+    - match: '{{header_pattern}}'
+      captures:
+        # group 1 (timestamp) intentionally left unscoped — neutral fg
+        # group 2 (cpu) intentionally left unscoped — neutral fg
+        3: entity.name.tag.task.retis              # [task/comm]  — coloured
+        # group 4 (pid[/tgid]) intentionally left unscoped — neutral fg
+        5: entity.name.function.probe-type.retis   # [k]/[tp]/[kr]/[u] — same as symbol
+        6: entity.name.function.symbol.retis       # symbol name  — coloured
+        # group 7 (#hexid) intentionally left unscoped — neutral fg
+        # group 8 (skb hexaddr) intentionally left unscoped — neutral fg
+        # group 9 (n {idx}) intentionally left unscoped — neutral fg
+
+###[ SERIES CONTINUATION MARKER ]#############################################
+  #
+  # The ↳ marker is emitted by PrintSeries (retis/src/process/display.rs)
+  # via inc_level(4) + set_item(Some('↳')).
+
+  series-continuation:
+    - match: '^(\s+)(↳)(\s+)'
+      captures:
+        2: punctuation.separator.continuation.retis   # ↳ — orange
+      push: header-inner
+
+  header-inner:
+    - match: '{{header_pattern}}'
+      captures:
+        # group 1 (timestamp) intentionally left unscoped — neutral fg
+        # group 2 (cpu) intentionally left unscoped — neutral fg
+        3: entity.name.tag.task.retis
+        # group 4 (pid[/tgid]) intentionally left unscoped — neutral fg
+        5: entity.name.function.probe-type.retis
+        6: entity.name.function.symbol.retis
+        # group 7 (#hexid) intentionally left unscoped — neutral fg
+        # group 8 (skb hexaddr) intentionally left unscoped — neutral fg
+        # group 9 (n {idx}) intentionally left unscoped — neutral fg
+    - match: '$'
+      pop: 1
+
+###[ PACKET LINE ]############################################################
+  #
+  # Structure (left to right through the protocol stack):
+  #
+  #   [LL]  {src_mac} > {dst_mac} ethertype NAME (0xHHHH) [vlan ...]
+  #   [NET] {src_addr}[.port] > {dst_addr}[.port] fields... proto NAME (N)
+  #   [TRA] transport-specific fields...
+  #   [TUN] tunnel_kw ... {src_addr}[.port] > {dst_addr}[.port] fields...
+  #
+  # Address patterns (IPv6 in particular) are ONLY valid in the src/dst
+  # positions.  After the destination address we transition to packet-fields
+  # where colons in e.g. TCP seq ranges are never mistaken for IPv6.
+  #
+  # Tunnel keywords (geneve, vxlan) push back into address-matching contexts
+  # for the inner packet.
+
+  packet:
+    - match: '^\s+(?=(?:[0-9a-f]{2}:){5}|(?:\d{1,3}\.){3}|\[)'
+      push: packet-src
+
+  # --- Source address --------------------------------------------------------
+
+  packet-src:
+    # MAC source (LL header) — after match, expect ' > '
+    - match: '{{mac}}'
+      scope: entity.other.attribute-name.mac.retis
+      set: packet-expect-gt
+
+    # IPv4 with port
+    - match: '{{ipv4_port}}'
+      scope: entity.other.attribute-name.ip-port.retis
+      set: packet-expect-gt
+
+    # IPv4 bare
+    - match: '{{ipv4}}'
+      scope: entity.other.attribute-name.ip.retis
+      set: packet-expect-gt
+
+    # IPv6 with port
+    - match: '{{ipv6_port}}'
+      scope: entity.other.attribute-name.ip-port.retis
+      set: packet-expect-gt
+
+    # IPv6 bare
+    - match: '{{ipv6}}'
+      scope: entity.other.attribute-name.ip.retis
+      set: packet-expect-gt
+
+    # [redacted] or other bracket-prefixed source
+    - match: '\[[^\]]*\]'
+      set: packet-expect-gt
+
+    # Fallback — skip to EOL
+    - match: '$'
+      pop: 1
+
+  # --- Arrow separator -------------------------------------------------------
+
+  packet-expect-gt:
+    - match: '\s+>\s+'
+      set: packet-dst
+    - match: '$'
+      pop: 1
+
+  # --- Destination address ----------------------------------------------------
+
+  packet-dst:
+    # MAC destination (LL header) — after match, expect ethertype + network layer
+    - match: '{{mac}}'
+      scope: entity.other.attribute-name.mac.retis
+      set: packet-ll-fields
+
+    # IPv4 with port
+    - match: '{{ipv4_port}}'
+      scope: entity.other.attribute-name.ip-port.retis
+      set: packet-fields
+
+    # IPv4 bare
+    - match: '{{ipv4}}'
+      scope: entity.other.attribute-name.ip.retis
+      set: packet-fields
+
+    # IPv6 with port
+    - match: '{{ipv6_port}}'
+      scope: entity.other.attribute-name.ip-port.retis
+      set: packet-fields
+
+    # IPv6 bare
+    - match: '{{ipv6}}'
+      scope: entity.other.attribute-name.ip.retis
+      set: packet-fields
+
+    # Fallback
+    - match: '$'
+      pop: 1
+
+  # --- Link-layer fields (after MAC dst) --------------------------------------
+  #
+  # Format: ethertype NAME (0xHHHH) [vlan {id} p {pcp} [DEI] ethertype ...]
+  # After LL fields, the network-layer src address follows.
+
+  packet-ll-fields:
+    - match: '\b(ethertype)\b'
+      scope: keyword.other.field.retis
+
+    - match: '\b(vlan)\b'
+      scope: keyword.other.field.retis
+
+    - match: '\b(DEI)\b'
+      scope: keyword.other.flag-bit.retis
+
+    # When we see the network-layer source address, transition
+    - match: '(?={{mac}})'
+      set: packet-src
+    - match: '(?={{ipv4_port}})'
+      set: packet-src
+    - match: '(?={{ipv4}})'
+      set: packet-src
+    - match: '(?={{ipv6_port}})'
+      set: packet-src
+    - match: '(?={{ipv6}})'
+      set: packet-src
+
+    - match: '$'
+      pop: 1
+
+  # --- Packet fields (after dst address) --------------------------------------
+  #
+  # NO IPv6 patterns here.  Colons in TCP seq ranges, timestamps, etc.
+  # are safe because address matching only happens in src/dst contexts.
+
+  packet-fields:
+    # Per-protocol names — left unscoped (neutral fg)
+    - include: proto-names
+
+    # Field keywords
+    - match: '{{packet_field_keywords}}'
+      scope: keyword.other.field.retis
+
+    # ECN markers (appear after tos value)
+    - match: '\b(ECT\(\d\)|CE)\b'
+      scope: keyword.other.ecn.retis
+
+    # IPv4 flag abbreviations
+    - match: '\b(DF|MF|DEI)\b'
+      scope: keyword.other.flag-bit.retis
+
+    # TCP option keywords
+    - match: '\b(TS val|TS ecr|ecr)\b'
+      scope: keyword.other.tcp-opt.retis
+
+    # drop (can appear in truncated/error packet notes)
+    - match: '\bdrop\b'
+      scope: invalid.illegal.drop.retis
+
+    # Tunnel keywords — push back into address matching for inner packet
+    - match: '\b({{tunnel_keywords}})\b'
+      scope: keyword.other.field.retis
+      push: packet-tunnel
+
+    - match: '$'
+      pop: 1
+
+  # --- Tunnel inner packet ----------------------------------------------------
+  #
+  # After geneve/vxlan keyword and its fields (flags, vni, proto...),
+  # the inner packet restarts from the address layer.  We match tunnel-specific
+  # fields until we see an address, then transition to packet-src.
+
+  packet-tunnel:
+    # Tunnel field keywords (vni, proto, etc.) — already covered in parent,
+    # but we need them here for the tunnel preamble before inner addresses
+    - match: '{{packet_field_keywords}}'
+      scope: keyword.other.field.retis
+
+    # Inner packet starts with an address — transition to src matching
+    - match: '(?={{mac}})'
+      set: packet-src
+    - match: '(?={{ipv4_port}})'
+      set: packet-src
+    - match: '(?={{ipv4}})'
+      set: packet-src
+    - match: '(?={{ipv6_port}})'
+      set: packet-src
+    - match: '(?={{ipv6}})'
+      set: packet-src
+
+    - match: '$'
+      pop: 1
+
+###[ ARP LINE ]###############################################################
+  #
+  # Format (from packet.rs format_arp):
+  #   request who-has {ip} [({mac})] tell {ip}
+  #   reply {ip} is-at {mac}
+  #   reverse request who-is {mac} tell {mac}
+  #   reverse reply {mac} at {ip}
+
+  arp:
+    - match: '^\s+(reverse\s+)?(request|reply)\b'
+      captures:
+        1: keyword.other.arp.retis
+        2: keyword.other.arp.retis
+      push: arp-body
+
+  arp-body:
+    - include: addresses
+
+    - match: '\b(who-has|tell|is-at|who-is|at)\b'
+      scope: keyword.other.arp-field.retis
+
+    - match: '$'
+      pop: 1
+
+###[ NAMESPACE / INTERFACE LINE ]#############################################
+  #
+  # Format (ns.rs + dev.rs, printed on one line by events.rs):
+  #   ns {0xCOOKIE}/{inum}              — cookie: Option<u64>, optional
+  #   ns {inum}                          — when no cookie available
+  #   [if {ifindex} ({ifname})]          — DevEvent, optional
+  #   [rxif {rx_ifindex}]               — rx interface, optional
+  #   [drop (reason {REASON})]           — if dropped, optional
+
+  ns-if:
+    - match: '^\s+(ns)\b'
+      captures:
+        1: keyword.other.ns.retis
+      push: ns-body
+
+  ns-body:
+    # ns value: 0xhex/inum  or  plain inum — left unscoped (neutral fg)
+    - match: '\S+'
+      set: if-body
+
+  if-body:
+    # rxif before plain 'if' to avoid partial match
+    # index value left unscoped (neutral fg)
+    - match: '\b(rxif)\s+(\d+)\b'
+      captures:
+        1: keyword.other.rxif.retis
+
+    # index and name left unscoped (neutral fg)
+    - match: '\b(if)\s+(\d+)(\s+\([^)]+\))?'
+      captures:
+        1: keyword.other.if.retis
+
+    - match: '\b(drop)\b'
+      scope: invalid.illegal.drop.retis
+      push: drop-reason-inline
+
+    - match: '$'
+      pop: 1
+
+  drop-reason-inline:
+    - match: '\)'
+      pop: 1
+    - match: '[^)]+'
+      scope: invalid.illegal.drop-reason.retis
+
+###[ CONNTRACK STATE LINE ]###################################################
+  #
+  # Format (ct.rs CtEvent::event_fmt + format_conn):
+  #   ct_state {STATE} status {0xHEX} {proto} [({proto_state})]
+  #     orig [{ip}[.{port}] > {ip}[.{port}] [type N code N id N] [vtag N]]
+  #     reply [...]
+  #     [{orig-zone|reply-zone|zone} {id}]
+  #     [mark {mark}] [labels {0xHEX}]
+  #     [\ parent [...]]
+  #
+  # States: ESTABLISHED, RELATED, NEW, REPLY, RELATED_REPLY, UNTRACKED
+  # Proto keywords (lowercase): tcp, udp, icmp, sctp
+  # proto_state (tcp/sctp only): ESTABLISHED, SYN_SENT, CLOSE_WAIT, etc.
+  #
+  # Addresses appear ONLY inside [...] after orig/reply keywords.
+  # We use a structural approach: ct-body handles keywords, and
+  # ct-tuple handles the bracketed address sections.
+
+  ct-state:
+    - match: '^\s+(ct_state)\s+'
+      captures:
+        1: keyword.other.ct-state-kw.retis
+      push: ct-state-value
+
+  ct-state-value:
+    # State value left unscoped (neutral fg)
+    - match: '(ESTABLISHED|RELATED_REPLY|RELATED|NEW|REPLY|UNTRACKED)\b'
+      set: ct-body
+    # Fallback for unknown state
+    - match: '\S+'
+      set: ct-body
+
+  ct-body:
+    # Per-protocol names — left unscoped (neutral fg)
+    - include: proto-names
+
+    # ct field keywords — when followed by '[', push into tuple context
+    - match: '\b(orig|reply|parent)\b'
+      scope: keyword.other.ct-field.retis
+      push: ct-maybe-tuple
+
+    # Other ct field keywords
+    - match: '\b(status|zone|orig-zone|reply-zone|mark|labels|vtag|type|code)\b'
+      scope: keyword.other.ct-field.retis
+
+    - match: '$'
+      pop: 1
+
+  ct-maybe-tuple:
+    # Opening bracket — enter address-aware tuple context
+    - match: '\s*\['
+      set: ct-tuple
+    # No bracket follows (e.g. bare keyword) — pop back
+    - match: '(?=\S)'
+      pop: 1
+    - match: '$'
+      pop: 1
+
+  ct-tuple:
+    # Addresses inside ct tuples — safe to use full address patterns here
+    - include: addresses
+
+    # Tuple-internal keywords (type/code/id for ICMP, vtag for SCTP)
+    - match: '\b(type|code|id|vtag)\b'
+      scope: keyword.other.ct-field.retis
+
+    # Closing bracket — pop back to ct-body
+    - match: '\]'
+      pop: 1
+
+    - match: '$'
+      pop: 1
+
+###[ NFTABLES LINE ]##########################################################
+  #
+  # Format (nft.rs NftEvent::event_fmt):
+  #   table {name} ({handle}) chain {name} ({handle}) [handle {rule_handle}]
+  #     {verdict} [(policy)] [chain {chain_name}]
+  #
+  # Verdicts: accept, drop, continue, return, jump, goto
+  # rule_handle and verdict_chain_name are optional (Option<i64>, Option<String>)
+
+  nft-line:
+    - match: '^\s+(table)\b'
+      captures:
+        1: keyword.other.nft-table.retis
+      push: nft-body
+
+  nft-body:
+    - match: '\b(chain|handle)\b'
+      scope: keyword.other.nft-kw.retis
+
+    # accept — green (positive verdict)
+    - match: '\baccept\b'
+      scope: markup.inserted.nft-verdict-accept.retis
+
+    # drop — red (error/block verdict)
+    - match: '\b(drop)\b'
+      scope: invalid.illegal.drop.retis
+
+    # continue/return/jump/goto/(policy) — left unscoped (neutral fg)
+
+    # Numeric handle in parens — left unscoped (neutral fg)
+
+    - match: '$'
+      pop: 1
+
+###[ SKB METADATA LINE ]######################################################
+  #
+  # Format (skb.rs SkbEvent::event_fmt):
+  #   vlan_accel (ethertype {name} ({0xHHHH}) vlan {id} p {prio} [DEI])
+  #   skb [csum {none|unnecessary|complete|partial} [hash {0xH}]
+  #        len {n} [data_len {n}] priority {n}
+  #        [nohdr] [cloned] [fclone {n}] users {n} dataref {n}]
+  #   gso [type {0xH} [flags {0xH}] [frags {n}] [segs {n}] size {n}]
+  #
+  # vlan_accel only shown when -e/--print-ll is set.
+
+  skb-line:
+    - match: '^\s+(vlan_accel|skb|gso)\b'
+      captures:
+        1: keyword.other.skb-section.retis
+      push: skb-body
+
+  skb-body:
+    # Protocol names inside vlan_accel ethertype — use shared proto scopes
+    - include: proto-names
+
+    # Sub-field keywords
+    - match: '\b(ethertype|vlan|csum|hash|len|data_len|priority|nohdr|cloned|fclone|users|dataref|type|flags|frags|segs|size)\b'
+      scope: keyword.other.skb-field.retis
+
+    # Checksum state values — left unscoped (neutral fg)
+
+    # DEI flag — left unscoped (neutral fg)
+
+    - match: '$'
+      pop: 1
+
+###[ OVS EVENT LINES ]########################################################
+  #
+  # Types and formats (ovs.rs):
+  #   upcall (miss|action|exec) port {n} cpu {n}
+  #   upcall_enqueue (miss|action|exec) ({cpu}/{ts}) q {n} ret {n}
+  #   upcall_ret ({cpu}/{ts}) ret {n}
+  #   upcall_recv q {n} pkt_size {n}
+  #   flow_exec q {n} ts {ts} ({batch_idx})
+  #   flow_put q {n} ts {ts} ({batch_idx})
+  #   flow miss mask {n} cache {n}
+  #   flow hit ufid {uuid} mask {n} cache {n} flow {hex} sf_acts {hex}
+  #   [recirc_id {0xH}] exec [oport {n}|userspace|tunnel_set|…|drop {n}|unspec] [q {n}]
+  #   ufid:{uuid} {dpflow}
+  #
+  # OVS ct actions can contain NAT address ranges:
+  #   ct zone {id} nat(src=ADDR[-ADDR][:PORT[-PORT]])
+
+  ovs-line:
+    - match: '^\s+(upcall_enqueue|upcall_recv|upcall_ret|upcall|flow_exec|flow_put|flow|exec|ufid:)'
+      captures:
+        1: keyword.other.ovs-event-type.retis
+      push: ovs-body
+
+  ovs-body:
+    # Addresses (NAT ranges use IPv4 only — no IPv6 in OVS NAT syntax)
+    - include: addresses-ipv4
+
+    # drop — red
+    - match: '\b(drop)\b'
+      scope: invalid.illegal.drop.retis
+
+    # OVS field keywords
+    - match: '\b(port|cpu|q|ret|pkt_size|mask|cache|hit|miss|flow|sf_acts|odpflow|openflow|zone|nat|src|dst|commit|force|persistent|recirc_id|ct|hash|random)\b'
+      scope: keyword.other.ovs-field.retis
+
+    # upcall command classification in parens — left unscoped (neutral fg)
+
+    - match: '$'
+      pop: 1
+
+###[ STARTUP EVENT LINE ]#####################################################
+  #
+  # Format (common.rs StartupEvent::event_fmt):
+  #   collected with Retis {version}
+  #   on machine {kernel_release} {kernel_version} {machine}
+  #   [file id {id}]
+  #   cmdline {cmdline}
+
+  startup-line:
+    - match: '^\s+(collected with Retis|on machine|file id|cmdline)\b'
+      captures:
+        1: keyword.other.startup-kw.retis
+
+###[ STANDALONE DROP LINE ]###################################################
+  #
+  # Format (skb_drop.rs SkbDropEvent::event_fmt):
+  #   drop (reason {DROP_REASON_NAME})
+  #
+  # Reason can be plain (e.g. NOT_SPECIFIED) or subsystem-qualified
+  # (e.g. ovs/OVS_DROP_LAST_ACTION).
+
+  drop-line:
+    - match: '^\s+(drop)\s+\('
+      captures:
+        1: invalid.illegal.drop.retis
+      push: drop-reason-body
+
+  drop-reason-body:
+    - match: '\)'
+      pop: 1
+    - match: '[^)]+'
+      scope: invalid.illegal.drop-reason.retis
