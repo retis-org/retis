@@ -47,45 +47,17 @@ struct {
 } stack_map SEC(".maps");
 
 
-/* All bits in the mask. */
-#define F_ALL(fmask)	((ctx->flags & (fmask)) == (fmask))
-/* Always true. Used by raw hooks. */
-#define F_ALWAYS	1
-
-/* OR of AND-groups: each argument is a bitmask that must be fully set (AND),
- * and the groups are OR'd together. Up to 4 groups are supported.
- *
- *   F_GROUPS(A)       ->  F_ALL(A)
- *   F_GROUPS(A, B)    ->  F_ALL(A) || F_ALL(B)
- */
-#define _F_GROUPS1(a)		(F_ALL(a))
-#define _F_GROUPS2(a, b)	(F_ALL(a) || F_ALL(b))
-#define _F_GROUPS3(a, b, c)	(F_ALL(a) || F_ALL(b) || F_ALL(c))
-#define _F_GROUPS4(a, b, c, d)	(F_ALL(a) || F_ALL(b) || F_ALL(c) || F_ALL(d))
-
-#define _F_GROUPS_SEL(_1, _2, _3, _4, N, ...)	N
-#define F_GROUPS(...)						\
-	_F_GROUPS_SEL(__VA_ARGS__,				\
-		      _F_GROUPS4, _F_GROUPS3,			\
-		      _F_GROUPS2, _F_GROUPS1)(__VA_ARGS__)
-
 #define RETIS_TRACKABLE(ctx)	((ctx->flags & RETIS_ALL_FILTERS) == RETIS_ALL_FILTERS)
 
 /* Helper to define a hook (mostly in collectors) while not having to duplicate
  * the common part everywhere. This also ensure hooks are doing the right thing
  * and should help with maintenance.
  *
- * fexpr is a boolean expression over ctx->flags, built using the F_ALL()
- * helper or the F_GROUPS() macro for disjunctions of flag groups:
- *
- *   F_GROUPS(flags)      -- all bits in the mask
- *   F_GROUPS(A, B)       -- all of mask A, or all of mask B
- *
  * To define a hook in a collector hook, say hook.bpf.c,
  * ```
  * #include <common.h>
  *
- * DEFINE_NAMED_HOOK(hook_name, F_GROUPS(RETIS_ALL_FILTERS),
+ * DEFINE_NAMED_HOOK(hook_name,
  *	do_something(ctx);
  *	return 0;
  * )
@@ -93,23 +65,29 @@ struct {
  * char __license[] SEC("license") = "GPL";
  * ```
  */
-#define DEFINE_NAMED_HOOK(hook_name, fexpr, statements)				\
+#define __DEFINE_NAMED_HOOK(hook_name, is_raw, statements)			\
 	SEC("ext/hook")								\
 	int hook_name(struct retis_context *ctx, struct retis_raw_event *event) \
 	{									\
 		/* Let the verifier be happy */					\
 		if (!ctx || !event)						\
 			return 0;						\
-		if (!(fexpr))							\
-			return 0;						\
+		if (!is_raw) {							\
+			struct sk_buff *skb = retis_get_sk_buff(ctx);		\
+			barrier_var(ctx);					\
+			/* RETIS_F_WINDOW_PASS guarantees the skb is tracked */	\
+			if ((skb && !RETIS_TRACKABLE(ctx)) &&			\
+			    !(ctx->flags & RETIS_F_WINDOW_PASS))		\
+				return 0;					\
+		}								\
 		statements							\
 	}
 
 /* Simple wrapper for DEFINE_NAMED_HOOK() that use file base name as
  * default name.
  */
-#define DEFINE_HOOK(fexpr, statements)					\
-	DEFINE_NAMED_HOOK(__PROG_NAME, fexpr, statements)
+#define DEFINE_HOOK(statements)						\
+	__DEFINE_NAMED_HOOK(__PROG_NAME, false, statements)
 
 /* Helper that defines a hook that doesn't depend on any filtering
  * result and runs regardless.  Filtering outcome is still available
@@ -129,7 +107,7 @@ struct {
  * ```
  */
 #define DEFINE_HOOK_RAW(statements)					\
-	DEFINE_NAMED_HOOK(__PROG_NAME, F_ALWAYS, statements)
+	__DEFINE_NAMED_HOOK(__PROG_NAME, true, statements)
 
 /* Number of hooks installed, used to micro-optimize the call chain */
 const volatile u32 nhooks = 0;

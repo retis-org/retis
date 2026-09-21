@@ -244,7 +244,7 @@ static __always_inline int process_nf_conn(struct ct_event *e,
 	return 0;
 }
 
-DEFINE_HOOK(F_GROUPS(RETIS_ALL_FILTERS),
+DEFINE_HOOK(
 	struct nf_conn *nf_conn;
 	struct ct_meta_event *m;
 	struct sk_buff *skb;

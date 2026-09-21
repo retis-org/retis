@@ -8,7 +8,7 @@ struct skb_drop_event {
 	s32 drop_reason;
 } __binding;
 
-DEFINE_HOOK(F_GROUPS(RETIS_ALL_FILTERS, RETIS_F_WINDOW_PASS),
+DEFINE_HOOK(
 	struct skb_drop_event *e;
 
 	/* Check if the kernel knows about skb drop reasons, and if so check we

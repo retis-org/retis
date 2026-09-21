@@ -2,7 +2,7 @@
 #include <ovs_common.h>
 
 /* Hook for kprobe:ovs_dp_process_packet. */
-DEFINE_HOOK(F_GROUPS(RETIS_ALL_FILTERS),
+DEFINE_HOOK(
 	struct execute_actions_ctx ectx = {};
 	u64 sb = ctx->stack_base;
 
