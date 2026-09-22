@@ -3,6 +3,7 @@ use anyhow::Result;
 use std::{
     cmp::{Eq, Ord, Ordering, PartialEq},
     fmt,
+    hash::{Hash, Hasher},
 };
 
 use super::*;
@@ -77,12 +78,19 @@ impl PartialOrd for TrackingInfo {
         Some(self.cmp(other))
     }
 }
+
 impl Ord for TrackingInfo {
     fn cmp(&self, other: &Self) -> Ordering {
         self.skb
             .timestamp
             .cmp(&other.skb.timestamp)
             .then_with(|| self.skb.orig_head.cmp(&other.skb.orig_head))
+    }
+}
+
+impl Hash for TrackingInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.skb.tracking_id().hash(state)
     }
 }
 

@@ -27,6 +27,7 @@ struct UpcallKey {
 
 /// AddTracking is a helper that looks at the events' tracking information and inserts
 /// information about the previous event of the same series.
+#[derive(Default)]
 pub(crate) struct AddTracking {
     /// Skb tracking map. Indexed by skb tracking id, this map used to access the TrackingInfo for
     /// each tracking id. Also, it allows us to "overwrite" the tracking information of certain
@@ -42,14 +43,6 @@ pub(crate) struct AddTracking {
 }
 
 impl AddTracking {
-    pub(crate) fn new() -> Self {
-        AddTracking {
-            skb_tracking: HashMap::new(),
-            ovs_queue_tracking: HashMap::new(),
-            ovs_upcalls_tracking: HashMap::new(),
-        }
-    }
-
     /// Process one event adding TrackingInfo section.
     pub(crate) fn process_one(&mut self, event: &mut Event) -> Result<()> {
         if let Some(ovs) = &event.ovs {
