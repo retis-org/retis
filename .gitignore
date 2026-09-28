@@ -6,3 +6,4 @@ retis.data*
 retis-events/.tox
 tools/wireshark/retis.so
 .vagrant
+*.pcap
