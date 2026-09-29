@@ -77,7 +77,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "x86_64-f44" do |fedora|
     fedora.vm.box = "fedora-44-cloud"
-    fedora.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
+    fedora.vm.box_url = get_box("https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
     grow_vm_disk(fedora, 4, "btrfs")
 
@@ -92,7 +92,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "x86_64-rawhide" do |rawhide|
     rawhide.vm.box = "fedora-rawhide-cloud"
-    rawhide.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
+    rawhide.vm.box_url = get_box("https://download.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
     grow_vm_disk(rawhide, 4, "btrfs")
 
