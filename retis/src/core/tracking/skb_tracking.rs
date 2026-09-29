@@ -201,6 +201,27 @@ pub(crate) fn init_tracking(
     p.set_option(ProbeOption::NoGenericHook)?;
     probes.register_probe(p)?;
 
+    // Netlink sockets use the skb destructor to free the data buffer and set
+    // skb->head to NULL (which is not meant to do this). As this is conditional
+    // within netlink_skb_destructor and as the normal free path follows, mark
+    // the probe as invalidating the head so the skb is tracked using its own
+    // address. This will prevent from having dangling entries in the skb
+    // tracking map.
+    //
+    let symbol = Symbol::from_name("netlink_skb_destructor")?;
+    let key = symbol.addr()?.to_ne_bytes();
+    let cfg = tracking_config {
+        free: 0,
+        partial_free: 0,
+        inv_head: 1,
+        no_tracking: 0,
+    };
+    let cfg = unsafe { plain::as_bytes(&cfg) };
+    config_map.update(&key, cfg, libbpf_rs::MapFlags::NO_EXIST)?;
+    let mut p = Probe::kprobe(symbol)?;
+    p.set_option(ProbeOption::NoGenericHook)?;
+    probes.register_probe(p)?;
+
     // Special case for skb_release_head_state, which can't be tracked as it is
     // being called by kfree_skb_partial where we have a hook removing the
     // tracking id.
