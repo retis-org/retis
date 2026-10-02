@@ -9,8 +9,12 @@ __noinline
 int hook0(struct user_ctx *ctx, struct retis_raw_event *event)
 {
 	volatile int ret = 0;
+
 	if (!ctx || !event)
 		return 0;
+
+	barrier_var(ctx);
+
 	return ret;
 }
 
