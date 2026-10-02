@@ -28,9 +28,6 @@ mod hooks {
     pub(super) mod kernel_process_packet {
         include!("bpf/.out/kernel_process_packet_hook.rs");
     }
-    pub(super) mod kernel_tbl_lookup {
-        include!("bpf/.out/kernel_flow_tbl_lookup_hook.rs");
-    }
     pub(super) mod kernel_tbl_lookup_ctx {
         include!("bpf/.out/kernel_flow_tbl_lookup_ctx_hook.rs");
     }

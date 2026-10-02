@@ -53,8 +53,6 @@ struct {
 /* Context saved between the begining and end of ovs_execute_actions calls. */
 struct execute_actions_ctx {
 	BINDING_PTR(struct sk_buff *, skb);
-	u32 *n_mask_hit;
-	u32 *n_cache_hit;
 	u32 queue_id;
 	bool command;
 } __binding;
