@@ -7,6 +7,7 @@
 #define VERD_SCALE (NFT_RETURN * -1)
 #define ALLOWED_VERDICTS(verd, mask) (1 << (verd + VERD_SCALE) & mask)
 #define NFT_NAME_SIZE 128
+#define NFT_MEMSET_MAX_CHUNK 256
 
 #define retis_get_nft_chain(ctx, cfg)		\
 	RETIS_HOOK_GET(ctx, cfg->offsets, nft_chain, struct nft_chain *)
@@ -34,6 +35,18 @@ struct nft_config {
 	u64 verdicts;
 	struct nft_offsets offsets;
 } __binding;
+
+#define NFT_MEMSET_EVENT(ptr, value, chunk) \
+	do { \
+		_Static_assert(sizeof(*(ptr)) > (chunk) && \
+			       sizeof(*(ptr)) <= 2 * (chunk) && \
+			       (chunk) <= NFT_MEMSET_MAX_CHUNK, \
+			       "memset chunk is outside supported limits"); \
+		__builtin_memset((ptr), (value), (chunk)); \
+		__builtin_memset((char *)(ptr) + (chunk), (value), \
+				 sizeof(*(ptr)) - (chunk)); \
+	} while (0)
+
 struct {
 	__uint(type, BPF_MAP_TYPE_ARRAY);
 	__uint(max_entries, 1);
@@ -106,9 +119,16 @@ static __always_inline int nft_trace(struct nft_config *cfg,
 	if (!ALLOWED_VERDICTS(code, cfg->verdicts))
 		return -ENOMSG;
 
-	e = get_event_zsection(event, COLLECTOR_NFT, 1, sizeof(*e));
+	/* Event reservetion and initialization has to be split because
+	 * nft requires a buffer that cannot be initialized in a single
+	 * __builtin_memset() step given it exceeds the maximum number
+	 * after which the builtin becomes a "call memset".
+	 */
+	e = get_event_section(event, COLLECTOR_NFT, 1, sizeof(*e));
 	if (!e)
 		return 0;
+
+	NFT_MEMSET_EVENT(e, 0, NFT_MEMSET_MAX_CHUNK);
 
 	e->policy = policy;
 	e->verdict = code;
