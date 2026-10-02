@@ -373,15 +373,6 @@ impl OvsCollector {
         probe.add_hook(ovs_dp_process_packet_hook)?;
         probes.register_probe(probe)?;
 
-        // ovs_flow_tbl_lookup_stats kprobe
-        let mut ovs_flow_tbl_lookup_stats = Hook::from(hooks::kernel_tbl_lookup::DATA);
-        ovs_flow_tbl_lookup_stats
-            .reuse_map("inflight_exec", inflight_exec_map.as_fd().as_raw_fd())?;
-        let mut probe = Probe::kprobe(Symbol::from_name("ovs_flow_tbl_lookup_stats")?)?;
-        probe.set_option(ProbeOption::NoGenericHook)?;
-        probe.add_hook(ovs_flow_tbl_lookup_stats)?;
-        probes.register_probe(probe)?;
-
         // ovs_flow_tbl_lookup_stats kretprobe
         let mut ovs_flow_tbl_lookup_stats = Hook::from(hooks::kernel_tbl_lookup_ret::DATA);
         ovs_flow_tbl_lookup_stats
