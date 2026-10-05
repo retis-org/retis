@@ -8,11 +8,43 @@ use std::{
         Arc, Mutex,
     },
     thread,
+    time::Duration,
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use log::info;
 use signal_hook::iterator::Signals;
+
+/// Unified timeout to use when using blocking calls.
+pub(crate) const CALL_TIMEOUT_MS: u64 = 200;
+
+/// Provides a blocking call similar to `crossbeam_channel::Sender<T>::send`
+/// while handling potential `Running` completion.
+pub(crate) fn channel_send<T: Send + Sync>(
+    txc: &crossbeam_channel::Sender<T>,
+    run: &Running,
+    mut msg: T,
+) -> Result<()> {
+    loop {
+        let res = txc.send_timeout(msg, Duration::from_millis(CALL_TIMEOUT_MS));
+
+        // Continue trying sending the message if we're not shutting down.
+        if run.running() {
+            if let Err(crossbeam_channel::SendTimeoutError::Timeout(unsent)) = res {
+                msg = unsent;
+                continue;
+            }
+        // Forward the disconnected error only if we're not shutting down.
+        } else if matches!(
+            res,
+            Err(crossbeam_channel::SendTimeoutError::Disconnected(_))
+        ) {
+            return Err(anyhow!("Channel disconnected"));
+        }
+
+        return Ok(());
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct Running {
@@ -34,11 +66,12 @@ impl Running {
         let run = Self::ignore_signals();
         let condition = Arc::clone(&run.condition);
 
-        thread::spawn(move || {
+        let thread = thread::Builder::new().name("retis-signals-handler".to_string());
+        thread.spawn(move || {
             sigs.wait();
             condition.store(true, Ordering::Relaxed);
             info!("Received signal, terminating...");
-        });
+        })?;
 
         Ok(run)
     }
