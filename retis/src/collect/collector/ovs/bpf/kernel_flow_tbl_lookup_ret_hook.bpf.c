@@ -31,11 +31,11 @@ DEFINE_HOOK_RAW(
 		return 0;
 
 	if (bpf_probe_read_kernel(&ret->n_mask_hit, sizeof(ret->n_mask_hit),
-				  ectx->n_mask_hit))
+				  (u32 *)ctx->regs.reg[3]))
 		log_error("Failed to retrieve n_mask_hit");
 
 	if (bpf_probe_read_kernel(&ret->n_cache_hit, sizeof(ret->n_cache_hit),
-				  ectx->n_cache_hit))
+				  (u32 *)ctx->regs.reg[4]))
 		log_error("Failed to retrieve n_cache_hit");
 
 	flow = (struct sw_flow *)ctx->regs.ret;
