@@ -41,25 +41,37 @@ sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 SCRIPT
 
 # Grow disk on rhel-like distros.
-def grow_vm_disk(centos, id, fs)
+def grow_vm_disk(centos)
   centos.vm.provider "libvirt" do |libvirt|
     libvirt.machine_virtual_size = 20
   end
 
   centos.vm.provision "shell" do |s|
     s.inline = <<-SHELL
-      dnf install -y cloud-utils-growpart
-      growpart /dev/vda $1
+      # Make it fail early in case of errors.
+      set -euxo pipefail
+      dnf install -y cloud-utils-growpart util-linux
+      root_device=$(findmnt -n --nofsroot -o SOURCE /)
+      root_disk=$(lsblk -no PKNAME "$root_device")
+      # Mimic `lsblk --output PARTN`, which is unavailable in c9s' and
+      # older util-linux package.
+      root_name=$(lsblk --raw --noheadings --output NAME "$root_device")
+      root_part=${root_name#"$root_disk"}
+      root_part=${root_part#p}
+      growpart "/dev/$root_disk" "$root_part"
 
-      if [[ "$2" == "xfs" ]]; then
-        xfs_growfs /dev/vda$1
-      elif [[ "$2" == "ext" ]]; then
-        resize2fs /dev/vda$1
-      elif [[ "$2" == "btrfs" ]]; then
+      case "$(findmnt -n -o FSTYPE /)" in
+      xfs)
+        xfs_growfs /
+        ;;
+      ext*)
+        resize2fs "$root_device"
+        ;;
+      btrfs)
         btrfs filesystem resize max /
-      fi
+        ;;
+      esac
     SHELL
-    s.args = [id, fs]
   end
 end
 
@@ -77,9 +89,9 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "x86_64-f44" do |fedora|
     fedora.vm.box = "fedora-44-cloud"
-    fedora.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
+    fedora.vm.box_url = get_box("https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
-    grow_vm_disk(fedora, 4, "btrfs")
+    grow_vm_disk(fedora)
 
     fedora.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
     fedora.vm.provision "common", type: "shell", inline: $bootstrap_common
@@ -92,9 +104,9 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "x86_64-rawhide" do |rawhide|
     rawhide.vm.box = "fedora-rawhide-cloud"
-    rawhide.vm.box_url = get_box("https://dl.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
+    rawhide.vm.box_url = get_box("https://download.fedoraproject.org/pub/fedora/linux/development/rawhide/Cloud/x86_64/images/", /.*vagrant\.libvirt\.box$/)
 
-    grow_vm_disk(rawhide, 4, "btrfs")
+    grow_vm_disk(rawhide)
 
     rawhide.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
     rawhide.vm.provision "common", type: "shell", inline: $bootstrap_common
@@ -116,7 +128,7 @@ Vagrant.configure("2") do |config|
        alternatives --set python3 /usr/bin/python3.9
     SHELL
 
-    grow_vm_disk(centos, 1, "xfs")
+    grow_vm_disk(centos)
 
     centos.vm.provision "rhel-common", type: "shell", inline: $bootstrap_rhel_common
     centos.vm.provision "common", type: "shell", inline: $bootstrap_common
@@ -133,7 +145,7 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-9-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/9-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
-    grow_vm_disk(centos, 1, "ext")
+    grow_vm_disk(centos)
 
     # The CRB repository is needed for libpcap-devel.
     centos.vm.provision "shell", inline: <<-SHELL
@@ -153,7 +165,7 @@ Vagrant.configure("2") do |config|
     centos.vm.box = "centos-10-stream"
     centos.vm.box_url = get_box("https://cloud.centos.org/centos/10-stream/x86_64/images/", /.*latest\.x86_64\.vagrant-libvirt\.box$/)
 
-    grow_vm_disk(centos, 2, "ext")
+    grow_vm_disk(centos)
 
     # The CRB repository is needed for libpcap-devel.
     centos.vm.provision "shell", inline: <<-SHELL

@@ -106,7 +106,7 @@ jobs:
           vagrant box update -f ${DISTRO}
           vagrant box prune -f
           # Retry once to overcome transient network glitches.
-          vagrant up ${DISTRO} --no-tty || vagrant up ${DISTRO} --no-tty
+          vagrant up ${DISTRO} --no-tty --provision || vagrant up ${DISTRO} --no-tty --provision
           vagrant halt --no-tty ${DISTRO} || vagrant halt --no-tty --force ${DISTRO}
           # Restart the VM after the update without reprovisioning.
           vagrant up --no-tty --no-provision ${DISTRO}
