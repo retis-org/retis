@@ -299,7 +299,7 @@ impl OvsEventFactory {
         self.ufid_sender = Some(ufid_sender)
     }
 
-    fn unmarshall_flow_lookup(&mut self, raw_section: &BpfRawSection) -> Result<OvsEvent> {
+    fn unmarshall_flow_lookup(&self, raw_section: &BpfRawSection) -> Result<OvsEvent> {
         let raw = parse_raw_section::<flow_lookup_ret_event>(raw_section)?;
         let ufid = Ufid::from(raw.ufid);
         let flow = raw.flow as usize as u64;
@@ -391,7 +391,7 @@ impl OvsEventFactory {
 }
 
 impl RawEventSectionFactory for OvsEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let mut ovs = None; // = OvsEvent::default();
 
         for section in raw_sections.iter() {

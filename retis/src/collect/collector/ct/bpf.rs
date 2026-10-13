@@ -28,7 +28,7 @@ pub(crate) struct CtEventFactory {
 }
 
 impl RawEventSectionFactory for CtEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let mut ct = CtEvent {
             state: {
                 let raw = parse_raw_section::<ct_meta_event>(
@@ -103,7 +103,7 @@ impl CtEventFactory {
         Ok(me)
     }
 
-    pub(super) fn unmarshal_ct(&mut self, raw_section: &BpfRawSection) -> Result<CtConnEvent> {
+    pub(super) fn unmarshal_ct(&self, raw_section: &BpfRawSection) -> Result<CtConnEvent> {
         let raw = parse_raw_section::<ct_event>(raw_section)?;
         let flags = raw.flags;
 
