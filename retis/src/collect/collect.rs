@@ -2,7 +2,7 @@
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::{HashMap, HashSet},
-    io,
+    io::{self, ErrorKind},
     path::Path,
     process::{Command, Stdio},
     sync::Arc,
@@ -603,14 +603,23 @@ impl Collectors {
         let mut probe_stack = ProbeStack::new(self.known_kernel_types.clone());
         let stop_count = collect.stop_after.unwrap_or_default();
 
+        let is_broken_pipe = |e: &anyhow::Error| -> bool {
+            e.downcast_ref::<io::Error>()
+                .is_some_and(|e| e.kind() == ErrorKind::BrokenPipe)
+        };
+
         use EventResult::*;
-        while self.run.running() {
+        'outer: while self.run.running() {
             // First always try to dequeue all Retis events. This is not a
             // blocking call.
             while let Some(event) = self.events_factory.next_event() {
-                printers
-                    .iter_mut()
-                    .try_for_each(|p| p.process_one(&event))?;
+                if let Err(e) = printers.iter_mut().try_for_each(|p| p.process_one(&event)) {
+                    if is_broken_pipe(&e) {
+                        self.run.terminate();
+                        break 'outer;
+                    }
+                    return Err(e);
+                }
                 iccount += 1;
             }
 
@@ -621,9 +630,13 @@ impl Collectors {
                         probe_stack.process_event(self.probes.runtime_mut()?, &mut event)?;
                     }
 
-                    printers
-                        .iter_mut()
-                        .try_for_each(|p| p.process_one(&event))?;
+                    if let Err(e) = printers.iter_mut().try_for_each(|p| p.process_one(&event)) {
+                        if is_broken_pipe(&e) {
+                            self.run.terminate();
+                            break;
+                        }
+                        return Err(e);
+                    }
                     eccount += 1;
 
                     if stop_count > 0 && eccount >= stop_count {
@@ -635,7 +648,11 @@ impl Collectors {
             }
         }
 
-        printers.iter_mut().try_for_each(|p| p.flush())?;
+        if let Err(e) = printers.iter_mut().try_for_each(|p| p.flush()) {
+            if !is_broken_pipe(&e) {
+                return Err(e);
+            }
+        }
         info!("{eccount} event(s) processed");
         debug!("{iccount} internal event(s) processed");
 
