@@ -24,6 +24,10 @@ progresses, the output falls into one of three cases:
 {src mac} > {dst mac} ethertype {etype name} ({etype hex})
 ```
 
+In case the capture of the packet happened in a transmit path at L3 when the
+Ethernet header was not constructed yet, there won't be Ethernet information to
+display.
+
 ## VLAN
 
 ```none
