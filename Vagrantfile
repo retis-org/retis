@@ -186,6 +186,8 @@ Vagrant.configure("2") do |config|
 
     jammy.vm.provision "shell", inline: <<-SHELL
       set -euxo pipefail
+      # The box points at a third-party mirror which can be unreachable.
+      sed -i 's/mirrors.edge.kernel.org/archive.ubuntu.com/g' /etc/apt/sources.list
       apt-get update -y && apt-get install -y \
           clang \
           curl \
