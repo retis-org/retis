@@ -40,17 +40,26 @@ sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo
 sed -i s/^mirrorlist=http/#mirrorlist=http/g /etc/yum.repos.d/*.repo
 SCRIPT
 
-# Grow disk on rhel-like distros.
-def grow_vm_disk(centos)
-  centos.vm.provider "libvirt" do |libvirt|
+# Grow the root filesystem after resizing the libvirt disk.
+def grow_vm_disk(vm, package_manager = :rpm)
+  install_command = case package_manager
+                    when :rpm
+                      "dnf install -y cloud-utils-growpart util-linux"
+                    when :dpkg
+                      "apt-get update -y && apt-get install -y cloud-guest-utils util-linux"
+                    else
+                      raise ArgumentError, "unsupported package manager: #{package_manager}"
+                    end
+
+  vm.vm.provider "libvirt" do |libvirt|
     libvirt.machine_virtual_size = 20
   end
 
-  centos.vm.provision "shell" do |s|
+  vm.vm.provision "shell" do |s|
     s.inline = <<-SHELL
       # Make it fail early in case of errors.
       set -euxo pipefail
-      dnf install -y cloud-utils-growpart util-linux
+      #{install_command}
       root_device=$(findmnt -n --nofsroot -o SOURCE /)
       root_disk=$(lsblk -no PKNAME "$root_device")
       # Mimic `lsblk --output PARTN`, which is unavailable in c9s' and
@@ -182,10 +191,14 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.define "x86_64-jammy" do |jammy|
-    jammy.vm.box = "generic/ubuntu2204"
+    jammy.vm.box = "ubuntu-jammy-libvirt"
+    grow_vm_disk(jammy, :dpkg)
 
     jammy.vm.provision "shell", inline: <<-SHELL
       set -euxo pipefail
+      mkdir -p /sys/kernel/tracing
+      mountpoint -q /sys/kernel/tracing || \
+        mount -t tracefs tracefs /sys/kernel/tracing
       apt-get update -y && apt-get install -y \
           clang \
           curl \

@@ -69,7 +69,9 @@ jobs:
       - name: Cache Vagrant boxes
         uses: actions/cache@v4
         with:
-          path: ~/.vagrant.d/boxes
+          path: |
+            ~/.vagrant.d/boxes
+            ~/.cache/retis-vagrant
           key: vagrant-boxes-${{ matrix.distro }}-${{ env.WEEK_KEY }}-${{ hashFiles('Vagrantfile') }}
           restore-keys: |
             vagrant-boxes-${{ matrix.distro }}-${{ env.WEEK_KEY }}
@@ -99,11 +101,91 @@ jobs:
           # avoiding the need for group membership and re-login.
           sudo chmod a+rw /var/run/libvirt/libvirt-sock
 
+      - name: Prepare Ubuntu libvirt box
+        if: matrix.distro == 'x86_64-jammy'
+        env:
+          VAGRANTFILE_HASH: ${{ hashFiles('Vagrantfile') }}
+        run: |
+          set -euxo pipefail
+
+          marker="$HOME/.cache/retis-vagrant/ubuntu-jammy-build"
+          expected="$WEEK_KEY $VAGRANTFILE_HASH"
+
+          if [ -f "$marker" ] &&
+             [ "$(cat "$marker")" = "$expected" ] &&
+             vagrant box list | grep -q '^ubuntu-jammy-libvirt '; then
+            echo "Using cached Ubuntu box"
+            exit 0
+          fi
+
+          sudo DEBIAN_FRONTEND=noninteractive apt-get -y install \
+            libguestfs-tools qemu-utils jq
+
+          workdir=$(mktemp -d)
+          trap 'rm -rf "$workdir"' EXIT
+          cd "$workdir"
+
+          base_url=https://cloud-images.ubuntu.com/jammy/current
+          curl -fsSLO "$base_url/jammy-server-cloudimg-amd64.img"
+          curl -fsSLO "$base_url/SHA256SUMS"
+          sha256sum --ignore-missing --check SHA256SUMS
+
+          mv jammy-server-cloudimg-amd64.img box.img
+          vagrant_pubkey=$(find /opt/vagrant/embedded -name vagrant.pub -type f -print -quit)
+
+          cat > network.yaml <<'EOF'
+          network:
+            version: 2
+            renderer: networkd
+            ethernets:
+              all:
+                match:
+                  name: "en*"
+                dhcp4: true
+                dhcp6: false
+          EOF
+
+          sudo virt-customize --no-network -a box.img \
+            --run-command 'id -u vagrant >/dev/null 2>&1 || useradd --create-home --shell /bin/bash vagrant' \
+            --run-command 'usermod --append --groups sudo vagrant' \
+            --run-command 'printf "vagrant ALL=(ALL) NOPASSWD: ALL\\n" > /etc/sudoers.d/vagrant' \
+            --run-command 'ssh-keygen -A' \
+            --run-command 'systemctl enable ssh' \
+            --mkdir /home/vagrant/.ssh \
+            --upload "$vagrant_pubkey:/home/vagrant/.ssh/authorized_keys" \
+            --upload network.yaml:/etc/netplan/99-vagrant.yaml \
+            --run-command 'chown -R vagrant:vagrant /home/vagrant/.ssh' \
+            --run-command 'chmod 700 /home/vagrant/.ssh && chmod 600 /home/vagrant/.ssh/authorized_keys'
+
+          virtual_size=$(qemu-img info --output=json box.img | \
+            jq -r '."virtual-size" / 1073741824 | ceil')
+          cat > metadata.json <<EOF
+          {"provider":"libvirt","format":"qcow2","virtual_size":$virtual_size}
+          EOF
+          cat > Vagrantfile <<'EOF'
+          Vagrant.configure("2") do |config|
+            config.ssh.username = "vagrant"
+            config.ssh.insert_key = false
+            config.vm.provider "libvirt" do |libvirt|
+              libvirt.machine_virtual_size = 20
+            end
+          end
+          EOF
+
+          tar czf ubuntu-jammy-libvirt.box box.img metadata.json Vagrantfile
+          vagrant box remove ubuntu-jammy-libvirt --all || true
+          vagrant box add ubuntu-jammy-libvirt ubuntu-jammy-libvirt.box
+
+          mkdir -p "$(dirname "$marker")"
+          echo "$expected" > "$marker"
+
       - name: Boot VM
         env:
           DISTRO: ${{ matrix.distro }}
         run: |
-          vagrant box update -f ${DISTRO}
+          if [ "${DISTRO}" != x86_64-jammy ]; then
+            vagrant box update -f ${DISTRO}
+          fi
           vagrant box prune -f
           # Retry once to overcome transient network glitches.
           vagrant up ${DISTRO} --no-tty --provision || vagrant up ${DISTRO} --no-tty --provision
