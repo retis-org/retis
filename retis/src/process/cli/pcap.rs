@@ -133,9 +133,23 @@ impl EventParser {
 
     /// Extract interface information adding any necessary block and updating internal cache
     /// accordingly.
-    fn process_interface(&mut self, event: &Event, blocks: &mut Vec<Block<'_>>) -> Result<u32> {
+    fn process_interface(
+        &mut self,
+        event: &Event,
+        kind: PacketKind,
+        blocks: &mut Vec<Block<'_>>,
+    ) -> Result<u32> {
         let iface = if let Some(kernel) = &event.kernel {
-            format!("{}/{}", kernel.probe_type, kernel.symbol)
+            format!(
+                "{}/{}/{}",
+                kernel.probe_type,
+                kernel.symbol,
+                match kind {
+                    PacketKind::Ethernet | PacketKind::FakeEthernet => "eth",
+                    PacketKind::Ipv4 => "ip4",
+                    PacketKind::Ipv6 => "ip6",
+                }
+            )
         } else {
             bail!("only events with kernel sections are currently supported");
         };
@@ -149,7 +163,11 @@ impl EventParser {
             false => {
                 blocks.push(
                     InterfaceDescriptionBlock {
-                        linktype: DataLink::ETHERNET,
+                        linktype: match kind {
+                            PacketKind::Ethernet | PacketKind::FakeEthernet => DataLink::ETHERNET,
+                            PacketKind::Ipv4 => DataLink::IPV4,
+                            PacketKind::Ipv6 => DataLink::IPV6,
+                        },
                         snaplen: 0xffff,
                         options: vec![
                             InterfaceDescriptionOption::IfName(iface.into()),
@@ -202,7 +220,7 @@ impl EventParser {
             self.wrote_header = true;
         }
 
-        let id = self.process_interface(event, &mut v)?;
+        let id = self.process_interface(event, packet.kind, &mut v)?;
 
         // Add the packet itself.
         v.push(
@@ -384,10 +402,10 @@ mod tests {
                         snaplen: 65535,
                         options: vec![
                             InterfaceDescriptionOption::IfName(Cow::Owned(
-                                "kretprobe/ovs_dp_upcall".to_string(),
+                                "kretprobe/ovs_dp_upcall/eth".to_string(),
                             )),
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
-                                "Fake interface for probe kretprobe/ovs_dp_upcall".to_string(),
+                                "Fake interface for probe kretprobe/ovs_dp_upcall/eth".to_string(),
                             )),
                             InterfaceDescriptionOption::IfTsResol(InterfaceTsResolution::NANO),
                         ],
@@ -458,10 +476,10 @@ mod tests {
                         snaplen: 65535,
                         options: vec![
                             InterfaceDescriptionOption::IfName(Cow::Owned(
-                                "raw_tracepoint/net:net_dev_start_xmit".to_string(),
+                                "raw_tracepoint/net:net_dev_start_xmit/eth".to_string(),
                             )),
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
-                                "Fake interface for probe raw_tracepoint/net:net_dev_start_xmit".to_string(),
+                                "Fake interface for probe raw_tracepoint/net:net_dev_start_xmit/eth".to_string(),
                             )),
                             InterfaceDescriptionOption::IfTsResol(InterfaceTsResolution::NANO),
                         ],
@@ -492,10 +510,10 @@ mod tests {
                         snaplen: 65535,
                         options: vec![
                             InterfaceDescriptionOption::IfName(Cow::Owned(
-                                "raw_tracepoint/net:netif_receive_skb".to_string(),
+                                "raw_tracepoint/net:netif_receive_skb/eth".to_string(),
                             )),
                             InterfaceDescriptionOption::IfDescription(Cow::Owned(
-                                "Fake interface for probe raw_tracepoint/net:netif_receive_skb".to_string(),
+                                "Fake interface for probe raw_tracepoint/net:netif_receive_skb/eth".to_string(),
                             )),
                             InterfaceDescriptionOption::IfTsResol(InterfaceTsResolution::NANO),
                         ],
