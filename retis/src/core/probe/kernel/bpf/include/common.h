@@ -219,14 +219,13 @@ static __noinline unsigned int filter_##x(void *ctx)				\
 	 * some reason.								\
 	 */									\
 	register void *ctx_reg asm("r1") = ctx;					\
-	volatile unsigned int ret;						\
+	register unsigned int ret asm("r0");					\
 	asm volatile (								\
 		"call " s(x) ";"						\
-		"*(u32 *)%[ret] = r0"						\
-		: [ret] "=m" (ret)						\
-		: "r" (ctx_reg)							\
-		: "r0", "r1", "r2", "r3", "r4",					\
-		  "r5", "r6", "r7", "r8", "memory");				\
+		: "=r" (ret), "+r" (ctx_reg)					\
+		:								\
+		: "r2", "r3", "r4", "r5", "r6",					\
+		  "r7", "r8", "r9", "memory");					\
 	return ret;								\
 }
 FILTER(l2)
