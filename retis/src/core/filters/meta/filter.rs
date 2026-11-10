@@ -1393,10 +1393,15 @@ impl FilterMeta {
         let mut insn;
 
         for pos in list.iter() {
-            if target > *pos {
-                insn = self.filter.get_raw_insn_mut(*pos)?;
-                insn.set_off_raw(i16::try_from(target - *pos - 1)?);
+            // True/false lists are forward references: they point at code
+            // emitted after the jump. A non-forward target means a list
+            // was built incorrectly.
+            if target <= *pos {
+                bail!("invalid backpatch target {target} for jump at {pos}");
             }
+
+            insn = self.filter.get_raw_insn_mut(*pos)?;
+            insn.set_off_raw(i16::try_from(target - *pos - 1)?);
         }
 
         Ok(())
@@ -1456,7 +1461,7 @@ impl FilterMeta {
         let mut mf = FilterMeta::new();
         let tf_list = mf.generate(&ast)?;
 
-        let exit_label = mf.filter.len() - 1;
+        let exit_label = mf.filter.len();
 
         mf.backpatch(&tf_list.true_list, exit_label)?;
         mf.backpatch(&tf_list.false_list, exit_label)?;
