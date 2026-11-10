@@ -1031,7 +1031,7 @@ impl<'a> MetaExpr<'a> {
                 if ctx.load.is_signed() {
                     eBpfJmpOpExt::eBpf(eBpfJmpOp::LeS)
                 } else {
-                    eBpfJmpOpExt::eBpf(eBpfJmpOp::Lt)
+                    eBpfJmpOpExt::eBpf(eBpfJmpOp::Le)
                 }
             }
             RelOp::Ne => eBpfJmpOpExt::eBpf(eBpfJmpOp::Ne),
@@ -1715,6 +1715,10 @@ mod tests {
     #[test_case("sk_buff._nfct:0x7 == 0x2 and sk_buff._nfct:~0x7:nf_conn.mark != 3" => false; "negative two fields with cast and mask+cast (true and true)")]
     #[test_case("sk_buff.vlan_tci == 1 and sk_buff.dev.name == 'foo' or sk_buff.dev.name == 'verylongtruncat'" => true; "three field default precedence (false and false) or true")]
     #[test_case("sk_buff.vlan_tci == 1 and (sk_buff.dev.name == 'foo' or sk_buff.dev.name == 'verylongtruncat')" => false; "negative three field false and (false or true)")]
+    #[test_case("sk_buff.len <= 2048" => true; "unsigned le boundary equal")]
+    #[test_case("sk_buff.len < 2048" => false; "unsigned lt boundary equal")]
+    #[test_case("sk_buff.len >= 2048" => true; "unsigned ge boundary equal")]
+    #[test_case("sk_buff.len <= 2047" => false; "unsigned le just below")]
     fn meta_filter_runtime(expr: &'static str) -> bool {
         let (skb, _net_dev, _nfct) = init_sk_buff();
 
