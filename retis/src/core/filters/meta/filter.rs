@@ -67,6 +67,15 @@ enum MetaType {
 
 const META_TARGET_MAX: usize = 32;
 
+// CURSOR is set from SKB_BASE for every term and only changes when
+// walking through a pointer. R7 is later reused to hold the comparison
+// target, which is why those are referenced using the raw register.
+// SCRATCH0 and SCRATCH1 are generic scratch.
+const SKB_BASE: BpfReg = BpfReg::R6;
+const CURSOR: BpfReg = BpfReg::R7;
+const SCRATCH0: BpfReg = BpfReg::R8;
+const SCRATCH1: BpfReg = BpfReg::R9;
+
 #[derive(Copy, Clone, Default)]
 struct TargetCtx {
     md: [u8; META_TARGET_MAX],
@@ -467,15 +476,15 @@ impl<'a> MetaExpr<'a> {
             // The assumption is that this remains untouched.
             filter.add(eBpfInsn::mov(MovInfo::Reg {
                 src: BpfReg::R1,
-                dst: BpfReg::R6,
+                dst: SKB_BASE,
             }));
         }
 
-        // R7 will be used as new base in each
+        // CURSOR will be used as new base in each
         // iteration.
         filter.add(eBpfInsn::mov(MovInfo::Reg {
-            src: BpfReg::R6,
-            dst: BpfReg::R7,
+            src: SKB_BASE,
+            dst: CURSOR,
         }));
 
         filter
@@ -679,23 +688,23 @@ impl<'a> MetaExpr<'a> {
             ),
             eBpfInsn::mov(MovInfo::Reg {
                 src: BpfReg::R1,
-                dst: BpfReg::R8,
+                dst: SCRATCH0,
             }),
             eBpfInsn::mov(MovInfo::Imm {
                 dst: BpfReg::ARG2,
                 imm: ctx.load.nmemb as i32,
             }),
+            eBpfInsn::mov(MovInfo::Reg {
+                src: CURSOR,
+                dst: BpfReg::ARG3,
+            }),
             eBpfInsn::alu(
                 BpfAluOp::Add,
                 AluInfo::Imm {
-                    dst: BpfReg::R7,
+                    dst: BpfReg::ARG3,
                     imm: (ctx.load.offt / 8) as i32,
                 },
             ),
-            eBpfInsn::mov(MovInfo::Reg {
-                src: BpfReg::R7,
-                dst: BpfReg::ARG3,
-            }),
             eBpfInsn::call(bpf_sys::bpf_func_id::BPF_FUNC_probe_read_kernel_str as u32),
             eBpfInsn::jmp(
                 eBpfJmpOpExt::eBpf(eBpfJmpOp::GtS),
@@ -716,7 +725,7 @@ impl<'a> MetaExpr<'a> {
         self.filter.add_multi(&[
             eBpfInsn::jmp_a(0),
             eBpfInsn::mov(MovInfo::Reg {
-                src: BpfReg::R8,
+                src: SCRATCH0,
                 dst: BpfReg::R5,
             }),
             eBpfInsn::mov(MovInfo::Reg {
@@ -777,7 +786,7 @@ impl<'a> MetaExpr<'a> {
             eBpfInsn::ld(
                 LdInfo::Reg {
                     src: BpfReg::R5,
-                    dst: BpfReg::R8,
+                    dst: SCRATCH0,
                     off: 0,
                 },
                 ld_size,
@@ -785,7 +794,7 @@ impl<'a> MetaExpr<'a> {
             eBpfInsn::ld(
                 LdInfo::Reg {
                     src: BpfReg::R4,
-                    dst: BpfReg::R9,
+                    dst: SCRATCH1,
                     off: 0,
                 },
                 ld_size,
@@ -807,8 +816,8 @@ impl<'a> MetaExpr<'a> {
             eBpfInsn::jmp(
                 eBpfJmpOpExt::Bpf(BpfJmpOp::Eq),
                 JmpInfo::Reg {
-                    src: BpfReg::R8,
-                    dst: BpfReg::R9,
+                    src: SCRATCH0,
+                    dst: SCRATCH1,
                     off: 1,
                 },
             ),
@@ -821,7 +830,7 @@ impl<'a> MetaExpr<'a> {
             eBpfInsn::jmp(
                 eBpfJmpOpExt::eBpf(eBpfJmpOp::Ne),
                 JmpInfo::Imm {
-                    dst: BpfReg::R8,
+                    dst: SCRATCH0,
                     imm: 0,
                     off: 1,
                 },
@@ -830,7 +839,7 @@ impl<'a> MetaExpr<'a> {
             eBpfInsn::jmp(
                 eBpfJmpOpExt::eBpf(eBpfJmpOp::Ne),
                 JmpInfo::Imm {
-                    dst: BpfReg::R9,
+                    dst: SCRATCH1,
                     imm: 0,
                     off: 1,
                 },
@@ -917,17 +926,17 @@ impl<'a> MetaExpr<'a> {
                 dst: BpfReg::ARG2,
                 imm: sz as i32,
             }),
+            eBpfInsn::mov(MovInfo::Reg {
+                src: CURSOR,
+                dst: BpfReg::ARG3,
+            }),
             eBpfInsn::alu(
                 BpfAluOp::Add,
                 AluInfo::Imm {
-                    dst: BpfReg::R7,
+                    dst: BpfReg::ARG3,
                     imm: offset as i32,
                 },
             ),
-            eBpfInsn::mov(MovInfo::Reg {
-                src: BpfReg::R7,
-                dst: BpfReg::ARG3,
-            }),
             eBpfInsn::call(bpf_sys::bpf_func_id::BPF_FUNC_probe_read_kernel as u32),
             eBpfInsn::jmp(
                 eBpfJmpOpExt::Bpf(BpfJmpOp::Eq),
@@ -987,12 +996,12 @@ impl<'a> MetaExpr<'a> {
         // Apply the mask, if set.
         if ctx.load.mask > 0 {
             self.filter
-                .add_multi(&eBpfInsn::ld64_imm(BpfReg::R8, ctx.load.mask as i64));
+                .add_multi(&eBpfInsn::ld64_imm(SCRATCH0, ctx.load.mask as i64));
 
             self.filter.add(eBpfInsn::alu(
                 BpfAluOp::And,
                 AluInfo::Reg {
-                    src: BpfReg::R8,
+                    src: SCRATCH0,
                     dst: BpfReg::R5,
                 },
             ));
@@ -1031,7 +1040,7 @@ impl<'a> MetaExpr<'a> {
                 if ctx.load.is_signed() {
                     eBpfJmpOpExt::eBpf(eBpfJmpOp::LeS)
                 } else {
-                    eBpfJmpOpExt::eBpf(eBpfJmpOp::Lt)
+                    eBpfJmpOpExt::eBpf(eBpfJmpOp::Le)
                 }
             }
             RelOp::Ne => eBpfJmpOpExt::eBpf(eBpfJmpOp::Ne),
@@ -1194,7 +1203,7 @@ impl<'a> MetaExpr<'a> {
     }
 
     // R1 = skb
-    // R7 = Base address
+    // CURSOR = Base address
     fn emit_load_ptr(&mut self, offt: u32, mask: u64) -> Result<TFlist> {
         let mut tf_list = TFlist::default();
 
@@ -1214,17 +1223,17 @@ impl<'a> MetaExpr<'a> {
                 dst: BpfReg::ARG2,
                 imm: 8,
             }),
+            eBpfInsn::mov(MovInfo::Reg {
+                src: CURSOR,
+                dst: BpfReg::R3,
+            }),
             eBpfInsn::alu(
                 BpfAluOp::Add,
                 AluInfo::Imm {
-                    dst: BpfReg::R7,
+                    dst: BpfReg::R3,
                     imm: offt as i32,
                 },
             ),
-            eBpfInsn::mov(MovInfo::Reg {
-                src: BpfReg::R7,
-                dst: BpfReg::R3,
-            }),
             eBpfInsn::call(bpf_sys::bpf_func_id::BPF_FUNC_probe_read_kernel as u32),
         ]);
 
@@ -1247,7 +1256,7 @@ impl<'a> MetaExpr<'a> {
             eBpfInsn::ld(
                 LdInfo::Reg {
                     src: BpfReg::FP,
-                    dst: BpfReg::R7,
+                    dst: CURSOR,
                     off: -8,
                 },
                 BpfSize::Double,
@@ -1278,7 +1287,7 @@ impl<'a> MetaExpr<'a> {
                     BpfAluOp::And,
                     AluInfo::Reg {
                         src: BpfReg::R5,
-                        dst: BpfReg::R7,
+                        dst: CURSOR,
                     },
                 ),
             ]);
@@ -1393,10 +1402,15 @@ impl FilterMeta {
         let mut insn;
 
         for pos in list.iter() {
-            if target > *pos {
-                insn = self.filter.get_raw_insn_mut(*pos)?;
-                insn.set_off_raw(i16::try_from(target - *pos - 1)?);
+            // True/false lists are forward references: they point at code
+            // emitted after the jump. A non-forward target means a list
+            // was built incorrectly.
+            if target <= *pos {
+                bail!("invalid backpatch target {target} for jump at {pos}");
             }
+
+            insn = self.filter.get_raw_insn_mut(*pos)?;
+            insn.set_off_raw(i16::try_from(target - *pos - 1)?);
         }
 
         Ok(())
@@ -1456,7 +1470,7 @@ impl FilterMeta {
         let mut mf = FilterMeta::new();
         let tf_list = mf.generate(&ast)?;
 
-        let exit_label = mf.filter.len() - 1;
+        let exit_label = mf.filter.len();
 
         mf.backpatch(&tf_list.true_list, exit_label)?;
         mf.backpatch(&tf_list.false_list, exit_label)?;
@@ -1715,6 +1729,10 @@ mod tests {
     #[test_case("sk_buff._nfct:0x7 == 0x2 and sk_buff._nfct:~0x7:nf_conn.mark != 3" => false; "negative two fields with cast and mask+cast (true and true)")]
     #[test_case("sk_buff.vlan_tci == 1 and sk_buff.dev.name == 'foo' or sk_buff.dev.name == 'verylongtruncat'" => true; "three field default precedence (false and false) or true")]
     #[test_case("sk_buff.vlan_tci == 1 and (sk_buff.dev.name == 'foo' or sk_buff.dev.name == 'verylongtruncat')" => false; "negative three field false and (false or true)")]
+    #[test_case("sk_buff.len <= 2048" => true; "unsigned le boundary equal")]
+    #[test_case("sk_buff.len < 2048" => false; "unsigned lt boundary equal")]
+    #[test_case("sk_buff.len >= 2048" => true; "unsigned ge boundary equal")]
+    #[test_case("sk_buff.len <= 2047" => false; "unsigned le just below")]
     fn meta_filter_runtime(expr: &'static str) -> bool {
         let (skb, _net_dev, _nfct) = init_sk_buff();
 
