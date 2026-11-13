@@ -951,9 +951,9 @@ dependencies = [
 
 [[package]]
 name = "pcap-file"
-version = "3.0.0-rc.3"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f2597dac7aa753b38f831d2cd882d0ff71bfe20b0e1b72f607e8ec096bba76b"
+checksum = "3900579bc38e335a54d52a21470bb62bf59609cd9dd45306573a3598320c0429"
 dependencies = [
  "byteorder_slice",
  "derive-into-owned",
