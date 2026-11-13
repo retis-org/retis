@@ -86,7 +86,7 @@ pub(super) fn unmarshal_packet(raw_section: &BpfRawSection) -> Result<PacketEven
 pub(crate) struct SkbEventFactory {}
 
 impl RawEventSectionFactory for SkbEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let mut skb: Option<SkbEvent> = None;
 
         for section in raw_sections.iter() {

@@ -5,7 +5,7 @@
 
 #include <common_defs.h>
 
-BINDING_DEF(EVENTS_MAX, 8 * 1024)
+BINDING_DEF(EVENTS_MAX, 512)
 BINDING_DEF(RAW_EVENT_DATA_SIZE, 2048 - 2 /* Remove the size field */)
 BINDING_DEF(LOG_EVENTS_MAX, 128)
 

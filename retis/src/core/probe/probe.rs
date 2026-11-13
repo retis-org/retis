@@ -171,6 +171,10 @@ impl Probe {
         Ok(())
     }
 
+    pub(crate) fn has_option(&self, option: ProbeOption) -> bool {
+        self.options.contains(&option)
+    }
+
     /// Get all probe's options.
     #[cfg_attr(test, allow(dead_code))]
     pub(crate) fn options(&self) -> Vec<ProbeOption> {

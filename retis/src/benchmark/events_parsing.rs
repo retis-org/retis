@@ -12,14 +12,14 @@ pub(super) fn bench(ci: bool) -> Result<()> {
         true => 1,
     };
 
-    let mut factories = section_factories()?;
+    let factories = section_factories()?;
 
     // Build a raw event for later consumption by factories.
     let data = build_raw_event()?;
 
     let now = Instant::now();
     for _ in 0..iters {
-        parse_raw_event(&data, &mut factories)?;
+        parse_raw_event(&data, &factories)?;
     }
     println!("1M_raw_events_parsing_us {}", now.elapsed().as_micros());
 

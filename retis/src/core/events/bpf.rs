@@ -9,7 +9,6 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     os::fd::{AsFd, AsRawFd, RawFd},
-    sync::mpsc,
     thread,
     time::Duration,
 };
@@ -25,15 +24,12 @@ use crate::{
         helpers::time::{TimeSpec, *},
         *,
     },
-    helpers::signals::Running,
+    helpers::signals::*,
 };
 
 /// Raw event sections for common.
 pub(super) const COMMON_SECTION_CORE: u64 = 0;
 pub(super) const COMMON_SECTION_TASK: u64 = 1;
-
-/// Timeout when polling for new events from BPF.
-const BPF_EVENTS_POLL_TIMEOUT_MS: u64 = 200;
 
 /// Macro used to convert c_char into String.
 /// The macro returns error if the conversion fails.
@@ -80,26 +76,14 @@ macro_rules! raw_to_string_opt {
     }};
 }
 
-/// The return value of EventFactory::next_event()
-pub(crate) enum EventResult {
-    /// The Factory was able to create a new event.
-    Event(Box<Event>),
-    /// The timeout went off but a new attempt to retrieve an event might succeed.
-    Timeout,
-}
-
 /// BPF events factory retrieving and unmarshaling events coming from the BPF
 /// parts.
 #[cfg(not(test))]
 pub(crate) struct BpfEventsFactory {
     map: libbpf_rs::MapHandle,
     log_map: libbpf_rs::MapHandle,
-    /// Receiver channel to retrieve events from the processing loop.
-    rxc: Option<mpsc::Receiver<Event>>,
-    /// Polling thread handle.
-    handle: Option<thread::JoinHandle<()>>,
-    log_handle: Option<thread::JoinHandle<()>>,
-    run_state: Running,
+    handles: Vec<thread::JoinHandle<()>>,
+    run: Running,
     /// Time formatter selector.
     time_format: TimeFormat,
     /// Offset of the monotonic clock to the wall-clock time.
@@ -108,7 +92,7 @@ pub(crate) struct BpfEventsFactory {
 
 #[cfg(not(test))]
 impl BpfEventsFactory {
-    pub(crate) fn new() -> Result<BpfEventsFactory> {
+    pub(crate) fn new(run: Running) -> Result<BpfEventsFactory> {
         let opts = libbpf_sys::bpf_map_create_opts {
             sz: mem::size_of::<libbpf_sys::bpf_map_create_opts>() as libbpf_sys::size_t,
             ..Default::default()
@@ -140,16 +124,14 @@ impl BpfEventsFactory {
         Ok(BpfEventsFactory {
             map,
             log_map,
-            rxc: None,
-            handle: None,
-            log_handle: None,
-            run_state: Running::ignore_signals(),
+            handles: Vec::new(),
+            run,
             time_format: Default::default(),
             monotonic_offset: None,
         })
     }
 
-    /// Configure logger timestamp formatting
+    /// Configure logger timestamp formatting.
     pub(crate) fn config_logger(&mut self, format: TimeFormat, monotonic_offset: Option<TimeSpec>) {
         self.time_format = format;
         self.monotonic_offset = monotonic_offset;
@@ -169,6 +151,7 @@ impl BpfEventsFactory {
         &self,
         map: &libbpf_rs::MapHandle,
         rb_handler: CB,
+        name: &str,
     ) -> Result<thread::JoinHandle<()>>
     where
         CB: FnMut(&[u8]) -> i32 + 'static,
@@ -176,11 +159,12 @@ impl BpfEventsFactory {
         let mut rb = libbpf_rs::RingBufferBuilder::new();
         rb.add(map, rb_handler)?;
         let rb = rb.build()?;
-        let rs = self.run_state.clone();
+        let run = self.run.clone();
         // Start an event polling thread.
-        Ok(thread::spawn(move || {
-            while rs.running() {
-                if let Err(e) = rb.poll(Duration::from_millis(BPF_EVENTS_POLL_TIMEOUT_MS)) {
+        let thread = thread::Builder::new().name(format!("retis-ringbuf-{name}"));
+        Ok(thread.spawn(move || {
+            while run.running() {
+                if let Err(e) = rb.poll(Duration::from_millis(CALL_TIMEOUT_MS)) {
                     match e.kind() {
                         // Received EINTR while polling the
                         // ringbuffer. This could normally be
@@ -192,52 +176,56 @@ impl BpfEventsFactory {
                     }
                 }
             }
-        }))
+        })?)
     }
-}
 
-#[cfg(not(test))]
-impl BpfEventsFactory {
     /// This starts the event polling mechanism. A dedicated thread is started
     /// for events to be retrieved and processed.
-    pub(crate) fn start(&mut self, mut section_factories: SectionFactories) -> Result<()> {
-        if section_factories.is_empty() {
-            bail!("No section factory, can't parse events, aborting");
-        }
+    pub(crate) fn start(&mut self, txc: crossbeam_channel::Sender<Vec<u8>>) -> Result<()> {
+        self.start_log_handler()?;
+        self.start_events_handler(txc)
+    }
 
-        // Create the sending and receiving channels.
-        let (txc, rxc) = mpsc::channel();
-        self.rxc = Some(rxc);
-
-        let run_state = self.run_state.clone();
-        // Closure to handle the raw events coming from the BPF part.
+    fn start_events_handler(&mut self, txc: crossbeam_channel::Sender<Vec<u8>>) -> Result<()> {
+        // Closure to dequeue and dispatch the raw events coming from the BPF
+        // part.
+        let run = self.run.clone();
         let process_event = move |data: &[u8]| -> i32 {
             // If a termination signal got received, return (EINTR)
             // from the callback in order to trigger the event thread
             // termination. This is useful in the case we're
             // processing a huge number of buffers and rb.poll() never
             // times out.
-            if !run_state.running() {
+            if !run.running() {
                 return -4;
             }
-            // Parse the raw event.
-            let event = match parse_raw_event(data, &mut section_factories) {
-                Ok(event) => event,
-                Err(e) => {
-                    error!("Could not parse raw event: {e}");
-                    return 0;
-                }
-            };
 
-            // Send the event into the events channel for future retrieval.
-            if let Err(e) = txc.send(event) {
-                error!("Could not send event: {e}");
+            // Get the full size of the event to avoid sending padding bytes in
+            // the channel.
+            let size =
+                u16::from_ne_bytes(data[..2].try_into().unwrap()) as usize + mem::size_of::<u16>();
+
+            // Send the event into the events channel for future retrieval. We
+            // use a syncrhonous call here on purpose to put pressure on the
+            // eBPF side and use the eBPF map as a buffer for bursts. This is
+            // crutial to drop events in the eBPF side to:
+            // - Reduce processing for discarded events.
+            // - Reduce eBPF runtime for discarded events, leading to better
+            //   performances for the impacted flows.
+            if let Err(e) = channel_send(&txc, &run, data[..size].to_vec()) {
+                error!("Could not send eBPF event to parsers: {e}");
             }
 
             0
         };
+        self.handles
+            .push(self.ringbuf_handler(&self.map, process_event, "events")?);
 
-        let run_state = self.run_state.clone();
+        Ok(())
+    }
+
+    fn start_log_handler(&mut self) -> Result<()> {
+        let run = self.run.clone();
         let time_format = self.time_format;
         let monotonic_offset = self.monotonic_offset;
         // Closure to handle the log events coming from the BPF part.
@@ -251,7 +239,7 @@ impl BpfEventsFactory {
             // termination. This is useful in the case we're
             // processing a huge number of buffers and rb.poll() never
             // times out.
-            if !run_state.running() {
+            if !run.running() {
                 return -4;
             }
 
@@ -287,50 +275,25 @@ impl BpfEventsFactory {
             0
         };
 
-        // Finally make our ring buffers and associate maps to their
-        // respective events processing closure.
-        self.handle = Some(self.ringbuf_handler(&self.map, process_event)?);
-        self.log_handle = Some(self.ringbuf_handler(&self.log_map, process_log)?);
-
+        self.handles
+            .push(self.ringbuf_handler(&self.log_map, process_log, "logs")?);
         Ok(())
     }
 
     /// Stops the event polling mechanism. The dedicated thread is stopped
     /// joining the execution
     pub(crate) fn stop(&mut self) -> Result<()> {
-        self.handle.take().map_or(Ok(()), |th| {
-            self.run_state.terminate();
-            th.join()
-                .map_err(|_| anyhow!("while joining bpf event thread"))
-        })?;
-
-        self.log_handle.take().map_or(Ok(()), |th| {
-            th.join()
-                .map_err(|_| anyhow!("while joining bpf log event thread"))
-        })
-    }
-
-    /// Retrieve the next event. This is a blocking call and never returns EOF.
-    pub(crate) fn next_event(&mut self, timeout: Option<Duration>) -> Result<EventResult> {
-        let rxc = match &self.rxc {
-            Some(rxc) => rxc,
-            None => bail!("Can't get event, no rx channel found."),
-        };
-
-        Ok(match timeout {
-            Some(timeout) => match rxc.recv_timeout(timeout) {
-                Ok(event) => EventResult::Event(Box::new(event)),
-                Err(mpsc::RecvTimeoutError::Timeout) => EventResult::Timeout,
-                Err(e) => return Err(anyhow!(e)),
-            },
-            None => EventResult::Event(Box::new(rxc.recv()?)),
+        self.run.terminate();
+        self.handles.drain(..).try_for_each(|t| {
+            t.join()
+                .map_err(|_| anyhow!("Failed joining BPF events factory thread"))
         })
     }
 }
 
 pub(crate) fn parse_raw_event<'a>(
     data: &'a [u8],
-    factories: &'a mut SectionFactories,
+    factories: &'a SectionFactories,
 ) -> Result<Event> {
     // First retrieve the buffer length.
     let data_size = data.len();
@@ -407,7 +370,7 @@ pub(crate) fn parse_raw_event<'a>(
     raw_sections.drain().try_for_each(|(owner, sections)| {
         let factory = factories
             .0
-            .get_mut(&owner)
+            .get(&owner)
             .ok_or_else(|| anyhow!("Unknown factory {}", owner as u8))?;
 
         factory
@@ -449,7 +412,7 @@ pub(crate) fn parse_single_raw_section<'a, T>(raw_sections: &'a [BpfRawSection])
 pub(crate) struct CommonEventFactory {}
 
 impl RawEventSectionFactory for CommonEventFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
         let mut common = CommonEvent::default();
 
         for section in raw_sections.iter() {
@@ -486,7 +449,7 @@ pub(super) fn unmarshal_task(raw_section: &BpfRawSection) -> Result<TaskEvent> {
 pub(crate) struct BpfEventsFactory;
 #[cfg(test)]
 impl BpfEventsFactory {
-    pub(crate) fn new() -> Result<BpfEventsFactory> {
+    pub(crate) fn new(_: Running) -> Result<BpfEventsFactory> {
         Ok(BpfEventsFactory {})
     }
     pub(crate) fn config_logger(
@@ -501,11 +464,8 @@ impl BpfEventsFactory {
 }
 #[cfg(test)]
 impl BpfEventsFactory {
-    pub(crate) fn start(&mut self, _: SectionFactories) -> Result<()> {
+    pub(crate) fn start(&mut self, _: crossbeam_channel::Sender<Vec<u8>>) -> Result<()> {
         Ok(())
-    }
-    pub(crate) fn next_event(&mut self, _: Option<Duration>) -> Result<EventResult> {
-        Ok(EventResult::Event(Box::new(Event::new())))
     }
     pub(crate) fn stop(&mut self) -> Result<()> {
         Ok(())
@@ -547,18 +507,20 @@ unsafe impl Plain for BpfRawSectionHeader {}
 ///
 /// Please use `#[retis_derive::event_section_factory]` to implement the common
 /// traits.
-pub(crate) trait EventSectionFactory: RawEventSectionFactory {
+pub(crate) trait EventSectionFactory: RawEventSectionFactory + Send + Sync {
     #[allow(dead_code)]
     fn id() -> u8
     where
         Self: Sized;
+    /// This should only be used during initialization, before factories are
+    /// shared between threads!
     fn as_any_mut(&mut self) -> &mut dyn any::Any;
 }
 
 /// Event section factory helpers to convert from BPF raw events. Requires a
 /// per-object implementation.
 pub(crate) trait RawEventSectionFactory {
-    fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()>;
+    fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()>;
 }
 
 /// Identifier for factories. Should match their counterparts in the BPF side.
@@ -703,7 +665,7 @@ mod tests {
     struct TestEventFactory {}
 
     impl RawEventSectionFactory for TestEventFactory {
-        fn create(&mut self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
+        fn create(&self, raw_sections: Vec<BpfRawSection>, event: &mut Event) -> Result<()> {
             let mut test = TestEvent::default();
 
             for raw in raw_sections.iter() {
