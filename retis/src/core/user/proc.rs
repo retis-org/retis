@@ -494,11 +494,7 @@ fn is_shared_library(path: &Path) -> bool {
         _ => return false,
     };
 
-    if elf.ehdr.e_type == elf::abi::ET_DYN {
-        return true;
-    }
-
-    false
+    elf.ehdr.e_type == elf::abi::ET_DYN
 }
 
 /// An entry (line) in /proc/{PID}/maps file.
