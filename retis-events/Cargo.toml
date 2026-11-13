@@ -3,7 +3,6 @@ name = "retis-events"
 version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 edition.workspace = true
 
 [features]
