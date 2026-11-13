@@ -107,10 +107,7 @@ impl Logger {
                 return false;
             }
         }
-        if !matches!(env::var("TERM"), Ok(x) if x != "dumb") {
-            return false;
-        }
-        true
+        matches!(env::var("TERM"), Ok(x) if x != "dumb")
     }
 }
 

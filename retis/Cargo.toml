@@ -9,7 +9,6 @@ include = ["src/", "build.rs", "profiles/",  "LICENSE"]
 version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 edition.workspace = true
 
 [package.metadata.misc]
@@ -31,7 +30,6 @@ base64 = "0.23"
 btf-rs = "2.0"
 byteorder = "1.5"
 caps = "0.5"
-cargo-platform = "0.3"
 clap = { version = "4.0", features = ["derive", "string", "wrap_help"] }
 clap_complete = "4.4"
 elf = "0.8"
