@@ -289,10 +289,7 @@ impl SubCommandParserRunner for Pcap {
 
             // Filtering logic.
             &move |r#type: &str, name: &str| -> bool {
-                if name == symbol.name() && r#type == probe_type.to_str() {
-                    return true;
-                }
-                false
+                name == symbol.name() && r#type == probe_type.to_str()
             }
         } else {
             &|_t: &str, _n: &str| -> bool { true }
