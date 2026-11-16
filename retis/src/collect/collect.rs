@@ -520,7 +520,7 @@ impl Collectors {
         &self,
         collect: &Collect,
         main_config: &MainConfig,
-    ) -> Result<(Vec<EventFormatter>, Vec<Box<dyn Write>>)> {
+    ) -> Result<(Vec<ItemFormatter>, Vec<Box<dyn Write>>)> {
         let mut formatters = Vec::new();
         let mut writers = Vec::<Box<dyn Write>>::new();
 
@@ -537,20 +537,20 @@ impl Collectors {
                 .monotonic_offset(self.monotonic_offset)
                 .print_ll(collect.print_ll);
 
-            formatters.push(EventFormatter::new(
-                self.run.clone(),
-                collect.event_threads,
+            formatters.push(ItemFormatter::new(
                 EventFormat::Text(format),
+                collect.event_threads,
+                self.run.clone(),
             ));
             writers.push(Box::new(io::stdout()));
         }
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            formatters.push(EventFormatter::new(
-                self.run.clone(),
-                collect.event_threads,
+            formatters.push(ItemFormatter::new(
                 EventFormat::Json,
+                collect.event_threads,
+                self.run.clone(),
             ));
             writers.push(Box::new(
                 RotateWriter::new(
@@ -647,7 +647,7 @@ impl Collectors {
                     }
 
                     // Process events.
-                    if let Err(e) = formatters.iter().try_for_each(|f| f.process_event(&event)) {
+                    if let Err(e) = formatters.iter().try_for_each(|f| f.process_one(&event)) {
                         error!("Could not format event {e}");
                     }
                 }
@@ -657,9 +657,7 @@ impl Collectors {
         // Handle internal events generated at init time first, to make sure
         // they end up in the start of the output.
         if let Some(event) = events_factory.next_event() {
-            formatters
-                .iter()
-                .try_for_each(|f| f.process_event(&event))?;
+            formatters.iter().try_for_each(|f| f.process_one(&event))?;
             icount += 1;
         }
 
@@ -694,9 +692,7 @@ impl Collectors {
             // First always try to dequeue all Retis events. This is not a
             // blocking call.
             if let Some(event) = events_factory.next_event() {
-                formatters
-                    .iter()
-                    .try_for_each(|f| f.process_event(&event))?;
+                formatters.iter().try_for_each(|f| f.process_one(&event))?;
                 icount += 1;
             }
 

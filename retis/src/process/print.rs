@@ -1,9 +1,13 @@
 //! Common logic to handle and output events and series from an input file. This
 //! is used in both the print and sort commands.
 
-use std::io::{self, ErrorKind};
+use std::{
+    io::{ErrorKind, Write},
+    thread,
+    time::Duration,
+};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Args;
 
 use super::{display::*, series::EventSorter, tracking::*};
@@ -57,26 +61,89 @@ impl PrintArgs {
 pub(super) fn do_print(
     args: &PrintArgs,
     run: Running,
-    mut printers: Vec<PrintSeries>,
+    mut formatters: Vec<ItemFormatter>,
+    mut writers: Vec<Box<dyn Write>>,
     add_tracking: bool,
 ) -> Result<()> {
     // Get the event factory and output format from the args.
     let factory = args.input.clone().unwrap_or_default().to_factory()?;
-    match factory.file_type() {
-        FileType::Event => {
-            do_print_events(run, factory, &mut printers, args.max_buffer, add_tracking)?
+
+    let max_buffer = args.max_buffer;
+    let mut formatters_tx = formatters.clone();
+    let run_tx = run.clone();
+
+    let thread = thread::Builder::new().name("retis-print".to_string());
+    thread.spawn(move || -> Result<()> {
+        match factory.file_type() {
+            FileType::Event => do_format_events(
+                run_tx.clone(),
+                factory,
+                &mut formatters_tx,
+                max_buffer,
+                add_tracking,
+            )?,
+            FileType::Series => do_format_series(run_tx.clone(), factory, &mut formatters_tx)?,
         }
-        FileType::Series => do_print_series(run, factory, &mut printers)?,
+        run_tx.terminate();
+        Ok(())
+    })?;
+
+    while run.running() {
+        let mut to_remove = Vec::new();
+
+        formatters
+            .iter()
+            .enumerate()
+            .try_for_each(|(index, f)| -> Result<()> {
+                if let Ok(event) = f.rxc.recv_timeout(Duration::from_millis(CALL_TIMEOUT_MS)) {
+                    let w = writers
+                        .get_mut(index)
+                        .ok_or_else(|| anyhow!("Cannot get writer"))?;
+                    match w.write_all(&event) {
+                        Err(e) if e.kind() == ErrorKind::BrokenPipe => to_remove.push(index),
+                        Err(e) => return Err(e.into()),
+                        _ => (),
+                    }
+                }
+                Ok(())
+            })?;
+
+        to_remove.drain(..).for_each(|index| {
+            formatters.remove(index);
+            writers.remove(index);
+        });
+
+        if writers.is_empty() {
+            return Ok(());
+        }
     }
 
-    // Flush printers before exiting.
-    printers.iter_mut().try_for_each(|p| p.flush())
+    // Dequeue pending events and flush writers before exiting.
+    formatters
+        .iter()
+        .enumerate()
+        .try_for_each(|(index, f)| -> Result<()> {
+            while let Ok(event) = f.rxc.recv_timeout(Duration::from_millis(10)) {
+                let w = writers
+                    .get_mut(index)
+                    .ok_or_else(|| anyhow!("Cannot get writer"))?;
+                match w.write_all(&event) {
+                    Err(e) if e.kind() == ErrorKind::BrokenPipe => break,
+                    Err(e) => return Err(e.into()),
+                    _ => (),
+                }
+            }
+            Ok(())
+        })?;
+
+    writers.iter_mut().try_for_each(|w| w.flush())?;
+    Ok(())
 }
 
-fn do_print_events(
+fn do_format_events(
     run: Running,
     mut factory: FileEventsFactory,
-    printers: &mut Vec<PrintSeries>,
+    formatters: &mut [ItemFormatter],
     max_buffer: usize,
     add_tracking: bool,
 ) -> Result<()> {
@@ -108,13 +175,11 @@ fn do_print_events(
 
                 // Flush the latest events / series, if needed.
                 while sorter.len() >= max_buffer {
-                    sorter
-                        .pop()
-                        .drain(..)
-                        .try_for_each(|series| output_series(printers, series))?;
-                    if printers.is_empty() {
-                        return Ok(());
-                    }
+                    sorter.pop().drain(..).try_for_each(|series| {
+                        formatters
+                            .iter_mut()
+                            .try_for_each(|f| f.process_one(&series))
+                    })?;
                 }
             }
             None => break,
@@ -123,54 +188,29 @@ fn do_print_events(
 
     // Flush all the events before exiting.
     while sorter.len() > 0 {
-        sorter
-            .pop()
-            .drain(..)
-            .try_for_each(|series| output_series(printers, series))?;
-        if printers.is_empty() {
-            break;
-        }
+        sorter.pop().drain(..).try_for_each(|series| {
+            formatters
+                .iter_mut()
+                .try_for_each(|f| f.process_one(&series))
+        })?;
     }
 
     Ok(())
 }
 
-fn do_print_series(
+fn do_format_series(
     run: Running,
     mut factory: FileEventsFactory,
-    printers: &mut Vec<PrintSeries>,
+    formatters: &mut [ItemFormatter],
 ) -> Result<()> {
     while run.running() {
         match factory.next_series()? {
-            Some(series) => output_series(printers, series)?,
+            Some(series) => formatters
+                .iter_mut()
+                .try_for_each(|f| f.process_one(&series))?,
             None => break,
-        }
-        if printers.is_empty() {
-            break;
         }
     }
 
     Ok(())
-}
-
-fn output_series(printers: &mut Vec<PrintSeries>, series: EventSeries) -> Result<()> {
-    let mut to_remove = Vec::new();
-    let mut ret = Ok(());
-
-    for (index, p) in printers.iter_mut().enumerate() {
-        if let Err(e) = p.process_one(&series) {
-            match e.downcast_ref::<io::Error>() {
-                Some(io_error) if io_error.kind() == ErrorKind::BrokenPipe => {
-                    to_remove.push(index);
-                }
-                _ => {
-                    ret = Err(e);
-                    break;
-                }
-            }
-        }
-    }
-
-    to_remove.drain(..).for_each(|index| _ = printers.remove(index));
-    ret
 }

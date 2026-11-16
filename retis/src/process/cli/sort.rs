@@ -4,7 +4,7 @@
 
 use std::{
     fs::OpenOptions,
-    io::{stdout, BufWriter},
+    io::{stdout, BufWriter, Write},
     path::PathBuf,
 };
 
@@ -41,6 +41,9 @@ pub(crate) struct Sort {
 impl SubCommandParserRunner for Sort {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
         let mut printers = Vec::new();
+        let mut writers = Vec::<Box<dyn Write>>::new();
+        let run = Running::new()?;
+
         if let Some(out) = &self.out {
             // Try to detect if the same file is used for the input and the
             // output, as this would result in the deletion of the original
@@ -69,26 +72,26 @@ impl SubCommandParserRunner for Sort {
                 }
             }
 
-            printers.push(PrintSeries::new(
-                Box::new(BufWriter::new(
-                    OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(out)
-                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-                )),
-                EventFormat::Json,
-            ));
+            printers.push(ItemFormatter::new(EventFormat::Json, 1, run.clone()));
+            writers.push(Box::new(BufWriter::new(
+                OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(out)
+                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+            )));
         }
 
         if self.out.is_none() || self.print {
-            printers.push(PrintSeries::new(
-                Box::new(stdout()),
+            printers.push(ItemFormatter::new(
                 EventFormat::Text(self.args.get_print_format()),
+                1,
+                run.clone(),
             ));
+            writers.push(Box::new(stdout()));
         }
 
-        do_print(&self.args, Running::new()?, printers, true)
+        do_print(&self.args, run, printers, writers, true)
     }
 }

@@ -22,13 +22,16 @@ pub(crate) struct Print {
 
 impl SubCommandParserRunner for Print {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
+        let run = Running::new()?;
         do_print(
             &self.args,
-            Running::new()?,
-            vec![PrintSeries::new(
-                Box::new(stdout()),
+            run.clone(),
+            vec![ItemFormatter::new(
                 EventFormat::Text(self.args.get_print_format()),
+                1,
+                run.clone(),
             )],
+            vec![Box::new(stdout())],
             false,
         )
     }
