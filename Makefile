@@ -99,7 +99,7 @@ install: release
 	$(CARGO) install $(CARGO_INSTALL_OPTS) --path=$(ROOT_DIR)/retis --offline --frozen
 
 # Skip out path and vmlinux.h
-BINDINGS := $(shell find $(ROOT_DIR)/retis/src -name '*.[ch]' -not -name 'vmlinux.h' -not -path '*/.out/*' -exec grep -l "__binding" {} \;)
+BINDINGS := $(shell find $(ROOT_DIR)/retis/src -name '*.[ch]' -not -name 'vmlinux.h' -not -path '*/.out/*' -exec grep -lE '__binding|BINDING_DEF' {} \;)
 gen-bindings: clean-bindings ebpf-prereqs
 	-mkdir -p $(ROOT_DIR)/retis/src/bindings; \
 	for binding in $(BINDINGS); do \
