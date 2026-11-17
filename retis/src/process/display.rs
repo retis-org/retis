@@ -1,4 +1,5 @@
 use std::{
+    io::Write,
     slice,
     sync::{Arc, RwLock},
 };
@@ -43,6 +44,23 @@ pub(crate) enum EventFormat {
     Text(DisplayFormat),
     /// Json: display the event as JSON.
     Json,
+}
+
+/// Binds item formatters and writers.
+pub(crate) struct ItemDisplayPipe(ItemFormatter, Box<dyn Write>);
+
+impl ItemDisplayPipe {
+    pub(crate) fn new(formatter: ItemFormatter, writer: Box<dyn Write>) -> Self {
+        Self(formatter, writer)
+    }
+
+    pub(crate) fn formatter(&self) -> &ItemFormatter {
+        &self.0
+    }
+
+    pub(crate) fn writer_mut(&mut self) -> &mut dyn Write {
+        &mut self.1
+    }
 }
 
 /// Handles item formatting. The result is available on the exposed receive

@@ -1,13 +1,9 @@
 //! Common logic to handle and output events and series from an input file. This
 //! is used in both the print and sort commands.
 
-use std::{
-    io::{ErrorKind, Write},
-    thread,
-    time::Duration,
-};
+use std::{io::ErrorKind, thread, time::Duration};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use clap::Args;
 
 use super::{display::*, series::EventSorter, tracking::*};
@@ -61,15 +57,17 @@ impl PrintArgs {
 pub(super) fn do_print(
     args: &PrintArgs,
     run: Running,
-    mut formatters: Vec<ItemFormatter>,
-    mut writers: Vec<Box<dyn Write>>,
+    mut pipes: Vec<ItemDisplayPipe>,
     add_tracking: bool,
 ) -> Result<()> {
     // Get the event factory and output format from the args.
     let factory = args.input.clone().unwrap_or_default().to_factory()?;
 
     let max_buffer = args.max_buffer;
-    let mut formatters_tx = formatters.clone();
+    let mut formatters_tx = pipes
+        .iter()
+        .map(|p| p.formatter().clone())
+        .collect::<Vec<_>>();
     let run_tx = run.clone();
 
     let thread = thread::Builder::new().name("retis-print".to_string());
@@ -91,15 +89,16 @@ pub(super) fn do_print(
     while run.running() {
         let mut to_remove = Vec::new();
 
-        formatters
-            .iter()
+        pipes
+            .iter_mut()
             .enumerate()
-            .try_for_each(|(index, f)| -> Result<()> {
-                if let Ok(event) = f.rxc.recv_timeout(Duration::from_millis(CALL_TIMEOUT_MS)) {
-                    let w = writers
-                        .get_mut(index)
-                        .ok_or_else(|| anyhow!("Cannot get writer"))?;
-                    match w.write_all(&event) {
+            .try_for_each(|(index, p)| -> Result<()> {
+                if let Ok(event) = p
+                    .formatter()
+                    .rxc
+                    .recv_timeout(Duration::from_millis(CALL_TIMEOUT_MS))
+                {
+                    match p.writer_mut().write_all(&event) {
                         Err(e) if e.kind() == ErrorKind::BrokenPipe => to_remove.push(index),
                         Err(e) => return Err(e.into()),
                         _ => (),
@@ -108,35 +107,26 @@ pub(super) fn do_print(
                 Ok(())
             })?;
 
-        to_remove.drain(..).for_each(|index| {
-            formatters.remove(index);
-            writers.remove(index);
-        });
-
-        if writers.is_empty() {
+        to_remove
+            .drain(..)
+            .for_each(|index| _ = pipes.remove(index));
+        if pipes.is_empty() {
             return Ok(());
         }
     }
 
     // Dequeue pending events and flush writers before exiting.
-    formatters
-        .iter()
-        .enumerate()
-        .try_for_each(|(index, f)| -> Result<()> {
-            while let Ok(event) = f.rxc.recv_timeout(Duration::from_millis(10)) {
-                let w = writers
-                    .get_mut(index)
-                    .ok_or_else(|| anyhow!("Cannot get writer"))?;
-                match w.write_all(&event) {
-                    Err(e) if e.kind() == ErrorKind::BrokenPipe => break,
-                    Err(e) => return Err(e.into()),
-                    _ => (),
-                }
+    pipes.iter_mut().try_for_each(|p| -> Result<()> {
+        while let Ok(event) = p.formatter().rxc.recv_timeout(Duration::from_millis(10)) {
+            match p.writer_mut().write_all(&event) {
+                Err(e) if e.kind() == ErrorKind::BrokenPipe => break,
+                Err(e) => return Err(e.into()),
+                _ => (),
             }
-            Ok(())
-        })?;
-
-    writers.iter_mut().try_for_each(|w| w.flush())?;
+        }
+        p.writer_mut().flush()?;
+        Ok(())
+    })?;
     Ok(())
 }
 
