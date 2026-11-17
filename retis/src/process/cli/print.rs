@@ -26,12 +26,14 @@ impl SubCommandParserRunner for Print {
         do_print(
             &self.args,
             run.clone(),
-            vec![ItemFormatter::new(
-                EventFormat::Text(self.args.get_print_format()),
-                1,
-                run.clone(),
+            vec![ItemDisplayPipe::new(
+                ItemFormatter::new(
+                    EventFormat::Text(self.args.get_print_format()),
+                    1,
+                    run.clone(),
+                ),
+                Box::new(stdout()),
             )],
-            vec![Box::new(stdout())],
             false,
         )
     }

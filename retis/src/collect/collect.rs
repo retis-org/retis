@@ -2,7 +2,7 @@
 use std::os::fd::{AsFd, AsRawFd};
 use std::{
     collections::{HashMap, HashSet},
-    io::{self, Write},
+    io,
     path::Path,
     process::{Command, Stdio},
     sync::Arc,
@@ -516,13 +516,12 @@ impl Collectors {
     }
 
     #[allow(clippy::type_complexity)]
-    fn setup_formatters(
+    fn setup_display_pipes(
         &self,
         collect: &Collect,
         main_config: &MainConfig,
-    ) -> Result<(Vec<ItemFormatter>, Vec<Box<dyn Write>>)> {
-        let mut formatters = Vec::new();
-        let mut writers = Vec::<Box<dyn Write>>::new();
+    ) -> Result<Vec<ItemDisplayPipe>> {
+        let mut pipes = Vec::new();
 
         // Write events to stdout if we don't write to a file (--out) or if
         // explicitly asked to (--print).
@@ -537,37 +536,37 @@ impl Collectors {
                 .monotonic_offset(self.monotonic_offset)
                 .print_ll(collect.print_ll);
 
-            formatters.push(ItemFormatter::new(
-                EventFormat::Text(format),
-                collect.event_threads,
-                self.run.clone(),
+            pipes.push(ItemDisplayPipe::new(
+                ItemFormatter::new(
+                    EventFormat::Text(format),
+                    collect.event_threads,
+                    self.run.clone(),
+                ),
+                Box::new(io::stdout()),
             ));
-            writers.push(Box::new(io::stdout()));
         }
 
         // Write the events to a file if asked to.
         if let Some(out) = collect.out.as_ref() {
-            formatters.push(ItemFormatter::new(
-                EventFormat::Json,
-                collect.event_threads,
-                self.run.clone(),
-            ));
-            writers.push(Box::new(
-                RotateWriter::new(
-                    out,
-                    match &collect.out_rotate {
-                        Some(s) => Some(rotation_policy_from_str(s)?),
-                        None => None,
-                    },
-                    collect.out_rotate_count,
-                    &main_config.cmdline,
-                    self.monotonic_offset,
-                )
-                .or_else(|e| bail!("Could not create or open '{}': {e}", out.display()))?,
+            pipes.push(ItemDisplayPipe::new(
+                ItemFormatter::new(EventFormat::Json, collect.event_threads, self.run.clone()),
+                Box::new(
+                    RotateWriter::new(
+                        out,
+                        match &collect.out_rotate {
+                            Some(s) => Some(rotation_policy_from_str(s)?),
+                            None => None,
+                        },
+                        collect.out_rotate_count,
+                        &main_config.cmdline,
+                        self.monotonic_offset,
+                    )
+                    .or_else(|e| bail!("Could not create or open '{}': {e}", out.display()))?,
+                ),
             ));
         }
 
-        Ok((formatters, writers))
+        Ok(pipes)
     }
 
     /// Starts the processing loop and block until we get a single SIGINT
@@ -578,7 +577,7 @@ impl Collectors {
 
         let events_factory = Arc::new(RetisEventsFactory::default());
         let mut section_factories = section_factories()?;
-        let (formatters, mut writers) = self.setup_formatters(collect, main_config)?;
+        let mut pipes = self.setup_display_pipes(collect, main_config)?;
 
         self.init_collectors(&mut section_factories, &events_factory, collect)?;
         self.config_filters(collect)?;
@@ -619,7 +618,10 @@ impl Collectors {
             let run = self.run.clone();
             let rxc = rxc.clone();
             let factories = Arc::clone(&section_factories);
-            let formatters = formatters.clone();
+            let formatters = pipes
+                .iter()
+                .map(|p| p.formatter().clone())
+                .collect::<Vec<_>>();
             let psf = psf.clone();
             let probe_stack = collect.probe_stack;
 
@@ -657,7 +659,9 @@ impl Collectors {
         // Handle internal events generated at init time first, to make sure
         // they end up in the start of the output.
         if let Some(event) = events_factory.next_event() {
-            formatters.iter().try_for_each(|f| f.process_one(&event))?;
+            pipes
+                .iter()
+                .try_for_each(|p| p.formatter().process_one(&event))?;
             icount += 1;
         }
 
@@ -692,21 +696,24 @@ impl Collectors {
             // First always try to dequeue all Retis events. This is not a
             // blocking call.
             if let Some(event) = events_factory.next_event() {
-                formatters.iter().try_for_each(|f| f.process_one(&event))?;
+                pipes
+                    .iter()
+                    .try_for_each(|p| p.formatter().process_one(&event))?;
                 icount += 1;
             }
 
             // Then process formatted eBPF events, if any.
-            formatters
-                .iter()
-                .enumerate()
-                .try_for_each(|(index, f)| -> Result<()> {
-                    if let Ok(event) = f.rxc.recv_timeout(Duration::from_millis(CALL_TIMEOUT_MS)) {
-                        writers.get_mut(index).unwrap().write_all(&event)?;
-                        ecount += 1;
-                    }
-                    Ok(())
-                })?;
+            pipes.iter_mut().try_for_each(|p| -> Result<()> {
+                if let Ok(event) = p
+                    .formatter()
+                    .rxc
+                    .recv_timeout(Duration::from_millis(CALL_TIMEOUT_MS))
+                {
+                    p.writer_mut().write_all(&event)?;
+                    ecount += 1;
+                }
+                Ok(())
+            })?;
 
             // Finally handle --probe-stack candidates, if any.
             #[cfg_attr(test, allow(unused_mut))]
@@ -730,18 +737,15 @@ impl Collectors {
         }
 
         // Drain remaining events.
-        formatters
-            .iter()
-            .enumerate()
-            .try_for_each(|(index, f)| -> Result<()> {
-                while let Ok(event) = f.rxc.recv_timeout(Duration::from_millis(10)) {
-                    writers.get_mut(index).unwrap().write_all(&event)?;
-                    ecount += 1;
-                }
-                Ok(())
-            })?;
+        pipes.iter_mut().try_for_each(|p| -> Result<()> {
+            while let Ok(event) = p.formatter().rxc.recv_timeout(Duration::from_millis(10)) {
+                p.writer_mut().write_all(&event)?;
+                ecount += 1;
+            }
+            p.writer_mut().flush()?;
+            Ok(())
+        })?;
 
-        writers.iter_mut().try_for_each(|w| w.flush())?;
         debug!("{icount} internal event(s) processed");
         info!("{ecount} event(s) processed");
 

@@ -4,7 +4,7 @@
 
 use std::{
     fs::OpenOptions,
-    io::{stdout, BufWriter, Write},
+    io::{stdout, BufWriter},
     path::PathBuf,
 };
 
@@ -40,8 +40,7 @@ pub(crate) struct Sort {
 
 impl SubCommandParserRunner for Sort {
     fn run(&mut self, _: &MainConfig) -> Result<()> {
-        let mut printers = Vec::new();
-        let mut writers = Vec::<Box<dyn Write>>::new();
+        let mut pipes = Vec::new();
         let run = Running::new()?;
 
         if let Some(out) = &self.out {
@@ -72,26 +71,30 @@ impl SubCommandParserRunner for Sort {
                 }
             }
 
-            printers.push(ItemFormatter::new(EventFormat::Json, 1, run.clone()));
-            writers.push(Box::new(BufWriter::new(
-                OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .truncate(true)
-                    .open(out)
-                    .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
-            )));
+            pipes.push(ItemDisplayPipe::new(
+                ItemFormatter::new(EventFormat::Json, 1, run.clone()),
+                Box::new(BufWriter::new(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(out)
+                        .or_else(|_| bail!("Could not create or open '{}'", out.display()))?,
+                )),
+            ));
         }
 
         if self.out.is_none() || self.print {
-            printers.push(ItemFormatter::new(
-                EventFormat::Text(self.args.get_print_format()),
-                1,
-                run.clone(),
+            pipes.push(ItemDisplayPipe::new(
+                ItemFormatter::new(
+                    EventFormat::Text(self.args.get_print_format()),
+                    1,
+                    run.clone(),
+                ),
+                Box::new(stdout()),
             ));
-            writers.push(Box::new(stdout()));
         }
 
-        do_print(&self.args, run, printers, writers, true)
+        do_print(&self.args, run, pipes, true)
     }
 }
