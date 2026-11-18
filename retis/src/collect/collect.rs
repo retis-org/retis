@@ -44,7 +44,7 @@ use crate::{
     },
     events::{file::rotate::*, helpers::time::*, *},
     helpers::{file_rotate::*, signals::*},
-    process::display::*,
+    process::{display::*, print::write_pipes},
 };
 
 #[cfg(not(test))]
@@ -690,7 +690,7 @@ impl Collectors {
             })?;
         }
 
-        let stop_count = collect.stop_after.unwrap_or_default();
+        let stop_count = collect.stop_after.unwrap_or_default() as usize;
 
         while self.run.running() {
             // First always try to dequeue all Retis events. This is not a
@@ -702,20 +702,7 @@ impl Collectors {
                 icount += 1;
             }
 
-            // Then process formatted eBPF events, if any.
-            pipes.iter_mut().try_for_each(|p| -> Result<()> {
-                if let Ok(event) = p
-                    .formatter()
-                    .rxc
-                    .recv_timeout(Duration::from_millis(CALL_TIMEOUT_MS))
-                {
-                    p.writer_mut().write_all(&event)?;
-                    ecount += 1;
-                }
-                Ok(())
-            })?;
-
-            // Finally handle --probe-stack candidates, if any.
+            // Then handle --probe-stack candidates, if any.
             #[cfg_attr(test, allow(unused_mut))]
             let mut new_probes = psf_rxc
                 .try_iter()
@@ -730,6 +717,12 @@ impl Collectors {
                 mgr.attach_probes()?;
             }
 
+            // Finally process formatted eBPF events, if any. Try to dequeue 64
+            // events from each queue, if any. Note: the below is bounded by a
+            // timeout.
+            let budget = pipes.len() * 64;
+            ecount += write_pipes(&mut pipes, Some(&self.run), Some(budget), Some(CALL_TIMEOUT_MS))?;
+
             if stop_count > 0 && ecount - icount >= stop_count {
                 self.run.terminate();
                 info!("Reached stop count ({stop_count}), terminating...");
@@ -737,14 +730,8 @@ impl Collectors {
         }
 
         // Drain remaining events.
-        pipes.iter_mut().try_for_each(|p| -> Result<()> {
-            while let Ok(event) = p.formatter().rxc.recv_timeout(Duration::from_millis(10)) {
-                p.writer_mut().write_all(&event)?;
-                ecount += 1;
-            }
-            p.writer_mut().flush()?;
-            Ok(())
-        })?;
+        ecount += write_pipes(&mut pipes, None, None, Some(10))?;
+        pipes.iter_mut().try_for_each(|p| p.writer_mut().flush())?;
 
         debug!("{icount} internal event(s) processed");
         info!("{ecount} event(s) processed");

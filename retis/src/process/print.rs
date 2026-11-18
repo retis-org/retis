@@ -86,47 +86,12 @@ pub(super) fn do_print(
         Ok(())
     })?;
 
-    while run.running() {
-        let mut to_remove = Vec::new();
-
-        pipes
-            .iter_mut()
-            .enumerate()
-            .try_for_each(|(index, p)| -> Result<()> {
-                if let Ok(event) = p
-                    .formatter()
-                    .rxc
-                    .recv_timeout(Duration::from_millis(CALL_TIMEOUT_MS))
-                {
-                    match p.writer_mut().write_all(&event) {
-                        Err(e) if e.kind() == ErrorKind::BrokenPipe => to_remove.push(index),
-                        Err(e) => return Err(e.into()),
-                        _ => (),
-                    }
-                }
-                Ok(())
-            })?;
-
-        to_remove
-            .drain(..)
-            .for_each(|index| _ = pipes.remove(index));
-        if pipes.is_empty() {
-            return Ok(());
-        }
-    }
+    write_pipes(&mut pipes, Some(&run), None, None)?;
 
     // Dequeue pending events and flush writers before exiting.
-    pipes.iter_mut().try_for_each(|p| -> Result<()> {
-        while let Ok(event) = p.formatter().rxc.recv_timeout(Duration::from_millis(10)) {
-            match p.writer_mut().write_all(&event) {
-                Err(e) if e.kind() == ErrorKind::BrokenPipe => break,
-                Err(e) => return Err(e.into()),
-                _ => (),
-            }
-        }
-        p.writer_mut().flush()?;
-        Ok(())
-    })?;
+    while write_pipes(&mut pipes, None, None, Some(10))? > 0 {}
+    pipes.iter_mut().try_for_each(|p| p.writer_mut().flush())?;
+
     Ok(())
 }
 
@@ -203,4 +168,43 @@ fn do_format_series(
     }
 
     Ok(())
+}
+
+pub(crate) fn write_pipes(
+    pipes: &mut Vec<ItemDisplayPipe>,
+    run: Option<&Running>,
+    budget: Option<usize>,
+    timeout_ms: Option<u64>,
+) -> Result<usize> {
+    let mut i = 0;
+    while run.is_some_and(|run| run.running())
+        && !pipes.is_empty()
+        && (budget.is_some_and(|b| b - i > 0) || budget.is_none())
+    {
+        let mut sel = crossbeam_channel::Select::new();
+        pipes.iter().for_each(|p| _ = sel.recv(&p.formatter().rxc));
+
+        let op = match sel
+            .select_timeout(Duration::from_millis(timeout_ms.unwrap_or(CALL_TIMEOUT_MS)))
+        {
+            Ok(op) => op,
+            Err(crossbeam_channel::SelectTimeoutError) => {
+                if timeout_ms.is_some() {
+                    return Ok(i);
+                } else {
+                    continue;
+                }
+            }
+        };
+        let index = op.index();
+
+        if let Ok(event) = op.recv(&pipes[index].formatter().rxc) {
+            match pipes[index].writer_mut().write_all(&event) {
+                Err(e) if e.kind() == ErrorKind::BrokenPipe => _ = pipes.remove(index),
+                Err(e) => return Err(e.into()),
+                _ => i += 1,
+            }
+        }
+    }
+    Ok(i)
 }
