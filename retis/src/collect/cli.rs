@@ -125,6 +125,14 @@ Events from the same series might end up on different files. If a previous colle
     )]
     pub(super) stack: bool,
     #[arg(
+        short = 'j',
+        long,
+        default_value = "1",
+        value_parser = parse_threads,
+        help = "Number of event processing threads in userspace. Increase the default value for processing more events."
+    )]
+    pub(crate) event_threads: usize,
+    #[arg(
         long,
         help = "When set, evaluates where Retis could add additional probes based on functions reported in the events stack traces (their display is still controlled by --stack). All matching functions are probed at runtime using kprobes.
 
@@ -196,11 +204,20 @@ impl SubCommandParserRunner for Collect {
         let mut collectors = Collectors::new()?;
 
         collectors.check(self)?;
-        collectors.config(self, main_config)?;
 
-        // Starts a loop.
+        // Process events in a loop.
         collectors.process(self, main_config)?;
 
         Ok(())
     }
+}
+
+fn parse_threads(s: &str) -> Result<usize, String> {
+    let threads = s
+        .parse::<usize>()
+        .map_err(|e| format!("failed to parse: {e}"))?;
+    if threads < 1 {
+        return Err("value should be >= 1".to_string());
+    }
+    Ok(threads)
 }
