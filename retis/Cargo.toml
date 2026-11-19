@@ -72,6 +72,5 @@ memmap2 = "0.9"
 [dev-dependencies]
 probe = "0.5"
 rbpf = "0.4"
-serial_test = "4.0"
 test-case = "3.2"
 events = {version = "1.5", path = "../retis-events", package="retis-events", features = ["test-events"]}
