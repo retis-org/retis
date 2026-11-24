@@ -46,7 +46,7 @@ def grow_vm_disk(vm, package_manager = :rpm)
                     when :rpm
                       "dnf install -y cloud-utils-growpart util-linux"
                     when :dpkg
-                      "apt-get update -y && apt-get install -y cloud-guest-utils util-linux"
+                      "rm -rf /var/lib/apt/lists/* && apt-get update -y && apt-get install -y cloud-guest-utils util-linux"
                     else
                       raise ArgumentError, "unsupported package manager: #{package_manager}"
                     end
