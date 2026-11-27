@@ -1,53 +1,62 @@
 #![cfg_attr(test, allow(unused_imports, unused_variables, unused_mut))]
 
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    sync::{Arc, RwLock},
+};
 
 use anyhow::Result;
-use btf_rs::Type;
-use log::{debug, warn};
 
 use crate::{
-    core::{
-        inspect::inspector,
-        kernel::Symbol,
-        probe::{Probe, ProbeOption, ProbeRuntimeManager},
-    },
+    core::kernel::Symbol,
     events::{Event, KernelEvent},
 };
 
-/// Probe-stack consume stack traces and add additional probes for compatible
-/// functions found there.
-pub(crate) struct ProbeStack {
+/// Consumes stack traces and filter potential probes to add.
+#[derive(Clone)]
+pub(crate) struct ProbeStackFilter {
+    /// Symbols we already saw.
+    symbols: Arc<RwLock<HashSet<String>>>,
+    /// Should all stack be kept?
+    stack_all: bool,
+    /// Otherwise, a list of symbols were the stack trace should be kept.
+    stack_symbols: Arc<HashSet<String>>,
     /// Set of kernel types known by collectors, so we only probe functions that
     /// can generate an event.
-    known_kernel_types: HashSet<String>,
+    known_kernel_types: Arc<HashSet<String>>,
+    /// Channel to send symbol candidates.
+    txc: crossbeam_channel::Sender<String>,
 }
 
-impl ProbeStack {
-    pub(crate) fn new(known_kernel_types: HashSet<String>) -> Self {
-        Self { known_kernel_types }
+impl ProbeStackFilter {
+    pub(crate) fn new(
+        stack_all: bool,
+        stack_symbols: Arc<HashSet<String>>,
+        known_kernel_types: Arc<HashSet<String>>,
+        txc: crossbeam_channel::Sender<String>,
+    ) -> Self {
+        Self {
+            symbols: Arc::new(RwLock::new(HashSet::new())),
+            stack_all,
+            stack_symbols,
+            known_kernel_types,
+            txc,
+        }
     }
 
-    fn keep_stack(&mut self, mgr: &mut ProbeRuntimeManager, evt: &KernelEvent) -> bool {
+    fn keep_stack(&self, evt: &KernelEvent) -> bool {
         let r#type = match evt.probe_type.as_str() {
             "raw_tracepoint" => "tp",
             s => s,
         };
-
         let sym = format!("{}:{}", r#type, evt.symbol);
-
-        mgr.get_probe_opts(&sym)
-            .is_some_and(|opts| opts.contains(&ProbeOption::ReportStack))
+        self.stack_symbols.contains(&sym)
     }
 
     /// Process a new event and detect additional functions to add a probe too.
     /// This is called in the event retrieval logic and should try not to
     /// propagate non-fatal errors.
-    pub(crate) fn process_event(
-        &mut self,
-        mgr: &mut ProbeRuntimeManager,
-        event: &mut Event,
-    ) -> Result<()> {
+    pub(crate) fn process_event(&self, event: &mut Event) -> Result<()> {
         let kernel = match &mut event.kernel {
             Some(kernel) => kernel,
             None => return Ok(()),
@@ -63,24 +72,11 @@ impl ProbeStack {
                 _ => return Ok(()),
             };
 
-            if mgr
-                .attached_probes()
-                .iter()
-                .any(|p| p == &format!("kprobe:{func}"))
-            {
+            // Check if we already saw the symbol.
+            if self.symbols.read().unwrap().contains(func) {
                 return Ok(());
             }
-
-            // Filter out functions not having a BTF representation.
-            let types = inspector()?.kernel.btf.resolve_types_by_name(func);
-            if types.is_err()
-                || !types
-                    .unwrap()
-                    .iter()
-                    .any(|(_, t)| matches!(t, Type::Func(_)))
-            {
-                return Ok(());
-            }
+            self.symbols.write().unwrap().insert(func.to_string());
 
             let symbol = match Symbol::from_name(func) {
                 Ok(symbol) => symbol,
@@ -98,28 +94,12 @@ impl ProbeStack {
                 return Ok(());
             }
 
-            let probe = match Probe::kprobe(symbol) {
-                Ok(probe) => probe,
-                _ => return Ok(()),
-            };
-
-            #[cfg(not(test))]
-            if let Err(e) = mgr.add_generic_probe(probe) {
-                warn!("Could not attach additional probe: {e}");
-                return Ok(());
-            }
-
-            debug!("Added probe to {func}");
-
+            let _ = self.txc.send(func.to_string());
             Ok(())
         })?;
 
-        if let Err(e) = mgr.attach_probes() {
-            warn!("Could not attach additional probes: {e}");
-            return Ok(());
-        }
-
-        if !self.keep_stack(mgr, kernel) {
+        // Remove the stack trace from the event if not explicity wanted.
+        if !self.stack_all && !self.keep_stack(kernel) {
             kernel.stack_trace = None;
         }
 
